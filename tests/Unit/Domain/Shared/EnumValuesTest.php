@@ -10,6 +10,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\EnumBacking;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaType;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\AbstractEnum;
 use MSSTC4PHP\DtoGenerator\Domain\Target\AccessorStyle;
+use MSSTC4PHP\DtoGenerator\Domain\Target\AllOfStrategy;
 use MSSTC4PHP\DtoGenerator\Domain\Target\DateTimeClass;
 use MSSTC4PHP\DtoGenerator\Domain\Target\MetadataMode;
 use MSSTC4PHP\DtoGenerator\Domain\Target\Mutability;
@@ -45,6 +46,7 @@ final class EnumValuesTest extends TestCase
             'class kind' => [ClassKind::class, ['final', 'open', 'abstract']],
             'enum backing' => [EnumBacking::class, ['string', 'int']],
             'severity' => [Severity::class, ['error', 'warning']],
+            'allOf strategy' => [AllOfStrategy::class, ['extends', 'merge']],
         ];
     }
 }

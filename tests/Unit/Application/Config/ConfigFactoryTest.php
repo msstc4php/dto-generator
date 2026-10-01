@@ -1,0 +1,182 @@
+<?php
+
+declare(strict_types=1);
+
+namespace MSSTC4PHP\DtoGenerator\Tests\Unit\Application\Config;
+
+use MSSTC4PHP\DtoGenerator\Application\Config\ConfigFactory;
+use MSSTC4PHP\DtoGenerator\Application\Config\GeneratorConfig;
+use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostic;
+use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
+use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
+use PHPUnit\Framework\TestCase;
+
+final class ConfigFactoryTest extends TestCase
+{
+    private const PATH = '/project/config/dto-generator.yaml';
+
+    private const MINIMAL = [
+        'version' => 1,
+        'sources' => [['spec' => '../api/openapi.yaml', 'namespace' => 'App\Dto', 'outputDir' => '../src/Dto']],
+    ];
+
+    public function testAppliesDefaultsToAMinimalConfig(): void
+    {
+        $config = $this->valid(self::MINIMAL);
+
+        self::assertSame(self::PATH, $config->path());
+        self::assertSame('/project/config', $config->baseDir());
+        self::assertNull($config->target()->php());
+        self::assertNull($config->target()->metadata());
+        self::assertTrue($config->target()->isStrict());
+        self::assertSame('immutable', $config->dto()->mutability()->value());
+        self::assertSame('auto', $config->dto()->accessors()->value());
+        self::assertSame('DateTimeImmutable', $config->dto()->dateTimeClass()->value());
+        self::assertSame('extends', $config->dto()->allOfStrategy()->value());
+        self::assertSame([], $config->formats());
+        self::assertSame([], $config->extensions()->classes());
+        self::assertTrue($config->extensions()->discover());
+        self::assertNull($config->extensions()->verifyClasses());
+
+        $source = $config->sources()[0];
+        self::assertSame('/project/api/openapi.yaml', $source->spec());
+        self::assertSame('App\Dto', $source->namespace());
+        self::assertSame('/project/src/Dto', $source->outputDir());
+        self::assertSame(['*'], $source->include());
+        self::assertSame([], $source->exclude());
+    }
+
+    public function testReadsAFullConfig(): void
+    {
+        $config = $this->valid([
+            'version' => 1,
+            'target' => ['php' => '8.2', 'metadata' => 'annotations', 'strict' => false],
+            'dto' => ['mutability' => 'mutable', 'accessors' => 'getters', 'dateTimeClass' => 'DateTime', 'allOfStrategy' => 'merge'],
+            'formats' => ['uuid' => ['type' => '\Symfony\Component\Uid\Uuid']],
+            'attributeAliases' => ['x-audit' => ['class' => 'App\Attr\Audited']],
+            'verifyClasses' => false,
+            'discoverExtensions' => false,
+            'extensions' => ['MSSTC4PHP\DtoGeneratorBridgeSymfony\SymfonyExtension'],
+            'extensionConfig' => ['symfony' => ['version' => 'auto']],
+            'sources' => [[
+                'spec' => '/abs/openapi.yaml',
+                'namespace' => '\App\Dto\Public',
+                'outputDir' => 'src/Dto',
+                'include' => ['User*'],
+                'exclude' => ['UserInternal'],
+            ]],
+        ]);
+
+        self::assertNotNull($config->target()->php());
+        self::assertSame('8.2', $config->target()->php()->toString());
+        self::assertNotNull($config->target()->metadata());
+        self::assertSame('annotations', $config->target()->metadata()->value());
+        self::assertFalse($config->target()->isStrict());
+        self::assertSame('mutable', $config->dto()->mutability()->value());
+        self::assertSame('merge', $config->dto()->allOfStrategy()->value());
+        self::assertSame('Symfony\Component\Uid\Uuid', $config->formats()['uuid']->fqcn());
+        self::assertSame(['x-audit' => ['class' => 'App\Attr\Audited']], $config->extensions()->aliases());
+        self::assertFalse($config->extensions()->verifyClasses());
+        self::assertFalse($config->extensions()->discover());
+        self::assertSame(
+            ['MSSTC4PHP\DtoGeneratorBridgeSymfony\SymfonyExtension'],
+            array_map(static fn (ClassName $class): string => $class->fqcn(), $config->extensions()->classes()),
+        );
+        self::assertSame(['symfony' => ['version' => 'auto']], $config->extensions()->config());
+        self::assertSame('/abs/openapi.yaml', $config->sources()[0]->spec());
+        self::assertSame('App\Dto\Public', $config->sources()[0]->namespace());
+        self::assertSame(['User*'], $config->sources()[0]->include());
+        self::assertSame(['UserInternal'], $config->sources()[0]->exclude());
+    }
+
+    /**
+     * @dataProvider unquotedVersions
+     */
+    public function testAcceptsUnquotedYamlVersions(float $php, string $expected): void
+    {
+        $config = $this->valid(['target' => ['php' => $php]] + self::MINIMAL);
+
+        self::assertNotNull($config->target()->php());
+        self::assertSame($expected, $config->target()->php()->toString());
+    }
+
+    /**
+     * @return array<string, array{float|string, string}>
+     */
+    public static function unquotedVersions(): array
+    {
+        return [
+            'float 8.2' => [8.2, '8.2'],
+            'float 8.0' => [8.0, '8.0'],
+            'float 7.4' => [7.4, '7.4'],
+        ];
+    }
+
+    /**
+     * @dataProvider invalidConfigs
+     *
+     * @param array<array-key, mixed> $raw
+     */
+    public function testReportsProblemsWithTheirLocation(array $raw, string $message, string $pointer): void
+    {
+        $diagnostics = new Diagnostics();
+
+        self::assertNull((new ConfigFactory())->create($raw, self::PATH, $diagnostics));
+        $matching = array_values(array_filter(
+            $diagnostics->errors(),
+            static fn (Diagnostic $error): bool => strpos($error->message(), $message) !== false,
+        ));
+        self::assertCount(1, $matching, implode("\n", array_map(static fn (Diagnostic $d): string => $d->toString(), $diagnostics->all())));
+        self::assertNotNull($matching[0]->location());
+        self::assertSame(self::PATH . '#' . $pointer, $matching[0]->location()->toString());
+    }
+
+    /**
+     * @return array<string, array{array<array-key, mixed>, string, string}>
+     */
+    public static function invalidConfigs(): array
+    {
+        $source = ['spec' => 'a.yaml', 'namespace' => 'App\Dto', 'outputDir' => 'src'];
+
+        return [
+            'missing version' => [['sources' => [$source]], '"version" is required', ''],
+            'wrong version' => [['version' => 2, 'sources' => [$source]], '"version" must be 1', '/version'],
+            'unknown root key' => [['version' => 1, 'sorces' => [], 'sources' => [$source]], 'Unknown key "sorces"', '/sorces'],
+            'unknown target key' => [['version' => 1, 'target' => ['phpp' => '8.2'], 'sources' => [$source]], 'Unknown key "phpp"', '/target/phpp'],
+            'unsupported php' => [['version' => 1, 'target' => ['php' => '9.9'], 'sources' => [$source]], 'PHP 9.9 is not supported', '/target/php'],
+            'php as list' => [['version' => 1, 'target' => ['php' => ['8.2']], 'sources' => [$source]], 'must be "auto" or a version', '/target/php'],
+            'bad metadata' => [['version' => 1, 'target' => ['metadata' => 'attribute'], 'sources' => [$source]], 'must be one of: auto, attributes, annotations, none', '/target/metadata'],
+            'strict not bool' => [['version' => 1, 'target' => ['strict' => 'yes'], 'sources' => [$source]], '"strict" must be true or false', '/target/strict'],
+            'target list' => [['version' => 1, 'target' => ['8.2'], 'sources' => [$source]], '"target" must be an object', '/target'],
+            'bad mutability' => [['version' => 1, 'dto' => ['mutability' => 'frozen'], 'sources' => [$source]], 'must be one of: immutable, mutable', '/dto/mutability'],
+            'format without type' => [['version' => 1, 'formats' => ['uuid' => []], 'sources' => [$source]], '"type" is required', '/formats/uuid'],
+            'format bad class' => [['version' => 1, 'formats' => ['uuid' => ['type' => 'Not A Class']], 'sources' => [$source]], 'is not a valid class name', '/formats/uuid/type'],
+            'reserved alias prefix' => [['version' => 1, 'attributeAliases' => ['x-php-audit' => []], 'sources' => [$source]], 'outside the reserved', '/attributeAliases/x-php-audit'],
+            'alias not object' => [['version' => 1, 'attributeAliases' => ['x-audit' => 'App\A'], 'sources' => [$source]], 'An alias must be an object', '/attributeAliases/x-audit'],
+            'bad verifyClasses' => [['version' => 1, 'verifyClasses' => 'yes', 'sources' => [$source]], 'must be "auto", true or false', '/verifyClasses'],
+            'bad extension class' => [['version' => 1, 'extensions' => ['Not A Class'], 'sources' => [$source]], 'is not a valid class name', '/extensions/0'],
+            'missing sources' => [['version' => 1], '"sources" is required', ''],
+            'empty sources' => [['version' => 1, 'sources' => []], '"sources" must be a non-empty list', '/sources'],
+            'source not object' => [['version' => 1, 'sources' => ['a.yaml']], 'Expected an object', '/sources/0'],
+            'source missing spec' => [['version' => 1, 'sources' => [['namespace' => 'App', 'outputDir' => 'src']]], '"spec" is required', '/sources/0'],
+            'unknown source key' => [['version' => 1, 'sources' => [$source + ['output' => 'x']]], 'Unknown key "output"', '/sources/0/output'],
+            'bad namespace' => [['version' => 1, 'sources' => [['namespace' => 'App\1Dto'] + $source]], 'is not a valid namespace', '/sources/0/namespace'],
+            'empty include' => [['version' => 1, 'sources' => [$source + ['include' => []]]], '"include" must not be empty', '/sources/0/include'],
+            'include not strings' => [['version' => 1, 'sources' => [$source + ['include' => [1]]]], 'Expected a non-empty string', '/sources/0/include/0'],
+        ];
+    }
+
+    /**
+     * @param array<array-key, mixed> $raw
+     */
+    private function valid(array $raw): GeneratorConfig
+    {
+        $diagnostics = new Diagnostics();
+        $config = (new ConfigFactory())->create($raw, self::PATH, $diagnostics);
+
+        self::assertSame([], array_map(static fn (Diagnostic $d): string => $d->toString(), $diagnostics->all()));
+        self::assertNotNull($config);
+
+        return $config;
+    }
+}
