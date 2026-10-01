@@ -50,7 +50,10 @@ if (method_exists($sample, 'withId')) {
     check(read($copy, 'id') === 8 && read($sample, 'id') === 7 && read($copy, 'code') === 'A', 'wither');
 }
 
-$properties = array_map(static fn (ReflectionProperty $property): string => $property->getName(), (new ReflectionClass($sample))->getProperties());
+$properties = array_map(
+    static fn (ReflectionProperty $property): string => $property->getName(),
+    (new ReflectionClass($sample))->getProperties(),
+);
 check(count($properties) === 9, 'every Sample property is exercised');
 
 foreach ($properties as $property) {

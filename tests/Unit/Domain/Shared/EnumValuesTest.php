@@ -14,6 +14,8 @@ use MSSTC4PHP\DtoGenerator\Domain\Target\AllOfStrategy;
 use MSSTC4PHP\DtoGenerator\Domain\Target\DateTimeClass;
 use MSSTC4PHP\DtoGenerator\Domain\Target\MetadataMode;
 use MSSTC4PHP\DtoGenerator\Domain\Target\Mutability;
+use MSSTC4PHP\DtoGenerator\Domain\Target\ReadonlyMode;
+use MSSTC4PHP\DtoGenerator\Domain\Target\WitherStyle;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -47,6 +49,8 @@ final class EnumValuesTest extends TestCase
             'enum backing' => [EnumBacking::class, ['string', 'int']],
             'severity' => [Severity::class, ['error', 'warning']],
             'allOf strategy' => [AllOfStrategy::class, ['extends', 'merge']],
+            'wither style' => [WitherStyle::class, ['none', 'clone-assign', 'new-self', 'clone-with']],
+            'readonly mode' => [ReadonlyMode::class, ['none', 'properties', 'class']],
         ];
     }
 }

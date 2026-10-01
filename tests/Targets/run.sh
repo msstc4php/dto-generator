@@ -4,7 +4,9 @@
 set -eu
 
 workdir=$(mktemp -d "${TMPDIR:-/tmp}/dto-generator-targets.XXXXXX")
-trap 'rm -rf "$workdir"' EXIT INT TERM
+trap 'rm -rf "$workdir"' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 for profile in tests/Fixtures/Emitter/*/; do
     version=$(basename "$profile" | cut -d- -f1)

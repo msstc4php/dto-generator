@@ -61,13 +61,13 @@ final class GeneratedCodePrinter extends Standard
 
     protected function pParams(array $params): string
     {
-        return $this->breakIfLong($params, parent::pParams($params), $this->phpVersion->supportsTrailingCommaInParamList());
+        return $this->pList($params, $this->phpVersion->supportsTrailingCommaInParamList());
     }
 
     protected function pMaybeMultiline(array $nodes, bool $trailingComma = false): string
     {
         // A trailing comma in calls and arrays is valid from PHP 7.3, so every target gets one once the list breaks.
-        return $this->breakIfLong($nodes, parent::pMaybeMultiline($nodes, $trailingComma), true);
+        return $this->pList($nodes, true);
     }
 
     protected function pStmts(array $nodes, bool $indent = true): string
@@ -87,15 +87,31 @@ final class GeneratedCodePrinter extends Standard
     }
 
     /**
+     * Prints every element once, at the inner indentation, then joins the results on one line when they are short
+     * and single-line, or one per line otherwise (a long array default, a PHPDoc, a long list).
+     *
      * @param array<Node> $nodes
      */
-    private function breakIfLong(array $nodes, string $printed, bool $trailingComma): string
+    private function pList(array $nodes, bool $trailingComma): string
     {
-        // A list holding a multi-line element (a long array default) breaks too, one element per line.
-        if (strpos($printed, "\n") === false && strlen($printed) <= self::LIST_LIMIT) {
-            return $printed;
+        $this->indent();
+        $items = [];
+        foreach ($nodes as $node) {
+            $comments = $node->getComments();
+            // A comment ends with a line break, so a commented element always breaks the list.
+            $items[] = ($comments !== [] ? $this->pComments($comments) . $this->nl : '') . $this->p($node);
         }
 
-        return $this->pCommaSeparatedMultiline($nodes, $trailingComma) . $this->nl;
+        $single = implode(', ', $items);
+        if (strpos($single, "\n") === false && strlen($single) <= self::LIST_LIMIT) {
+            $this->outdent();
+
+            return $single;
+        }
+
+        $result = $this->nl . implode(',' . $this->nl, $items) . ($trailingComma && $items !== [] ? ',' : '');
+        $this->outdent();
+
+        return $result . $this->nl;
     }
 }

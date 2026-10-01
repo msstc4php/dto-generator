@@ -15,9 +15,7 @@ final class ClassForm
 
     private bool $publicProperties;
 
-    private bool $readonlyProperties;
-
-    private bool $readonlyClass;
+    private ReadonlyMode $readonly;
 
     private bool $getters;
 
@@ -28,15 +26,13 @@ final class ClassForm
     private function __construct(
         bool $promoted,
         bool $publicProperties,
-        bool $readonlyProperties,
-        bool $readonlyClass,
+        ReadonlyMode $readonly,
         bool $setters,
         WitherStyle $withers
     ) {
         $this->promoted = $promoted;
         $this->publicProperties = $publicProperties;
-        $this->readonlyProperties = $readonlyProperties;
-        $this->readonlyClass = $readonlyClass;
+        $this->readonly = $readonly;
         $this->getters = !$publicProperties;
         $this->setters = $setters;
         $this->withers = $withers;
@@ -47,7 +43,7 @@ final class ClassForm
      */
     public static function mutable(bool $promoted, bool $publicProperties): self
     {
-        return new self($promoted, $publicProperties, false, false, !$publicProperties, WitherStyle::from(WitherStyle::NONE));
+        return new self($promoted, $publicProperties, ReadonlyMode::from(ReadonlyMode::NONE), !$publicProperties, WitherStyle::from(WitherStyle::NONE));
     }
 
     /**
@@ -59,13 +55,12 @@ final class ClassForm
         ReadonlyMode $readonly,
         WitherStyle $withers
     ): self {
-        $none = $readonly->equals(ReadonlyMode::from(ReadonlyMode::NONE));
         // Untyped 7.4-style declarations cannot be readonly, and every target with readonly also promotes.
-        if (!$none && !$promoted) {
+        if (!$readonly->isNone() && !$promoted) {
             throw new InvalidModel('Readonly properties and classes need promoted properties.');
         }
 
-        if (!$none && $withers->equals(WitherStyle::from(WitherStyle::CLONE_ASSIGN))) {
+        if (!$readonly->isNone() && $withers->equals(WitherStyle::from(WitherStyle::CLONE_ASSIGN))) {
             throw new InvalidModel('A wither cannot assign to a readonly clone before PHP 8.5; use new self or clone with.');
         }
 
@@ -73,14 +68,7 @@ final class ClassForm
             throw new InvalidModel('An immutable class needs withers to produce modified copies.');
         }
 
-        return new self(
-            $promoted,
-            $publicProperties,
-            $readonly->equals(ReadonlyMode::from(ReadonlyMode::PROPERTIES)),
-            $readonly->equals(ReadonlyMode::from(ReadonlyMode::CLASS_)),
-            false,
-            $withers,
-        );
+        return new self($promoted, $publicProperties, $readonly, false, $withers);
     }
 
     public function isPromoted(): bool
@@ -95,12 +83,12 @@ final class ClassForm
 
     public function hasReadonlyProperties(): bool
     {
-        return $this->readonlyProperties;
+        return $this->readonly->equals(ReadonlyMode::from(ReadonlyMode::PROPERTIES));
     }
 
     public function isReadonlyClass(): bool
     {
-        return $this->readonlyClass;
+        return $this->readonly->equals(ReadonlyMode::from(ReadonlyMode::CLASS_));
     }
 
     public function hasGetters(): bool

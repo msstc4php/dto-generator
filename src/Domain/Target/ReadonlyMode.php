@@ -18,6 +18,11 @@ final class ReadonlyMode extends AbstractEnum
 
     public const CLASS_ = 'class';
 
+    public function isNone(): bool
+    {
+        return $this->value() === self::NONE;
+    }
+
     protected static function values(): array
     {
         return [self::NONE, self::PROPERTIES, self::CLASS_];

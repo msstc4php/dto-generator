@@ -12,6 +12,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\DiscriminatorModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\DocModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ListType;
+use MSSTC4PHP\DtoGenerator\Domain\Model\MixedType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\NullableType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ScalarType;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
@@ -228,11 +229,13 @@ final class PhpParserEmitterTest extends TestCase
         $class = EmitterFixture::model('App\Dto\Note', null, [
             EmitterFixture::property('text', new NullableType(ScalarType::string()), false, new DefaultValue("x\n)\n{")),
             EmitterFixture::property('lines', new NullableType(new ListType(ScalarType::string())), false, new DefaultValue(["a\tb", 'plain'])),
+            EmitterFixture::property('map', new MixedType(), false, new DefaultValue(["a\nb" => 1])),
         ]);
         $code = (new PhpParserEmitter())->emit($class, EmitterFixture::target('8.2', Mutability::IMMUTABLE));
 
         self::assertStringContainsString('public ?string $text = "x\\n)\\n{",', $code);
         self::assertStringContainsString("public ?array \$lines = [\"a\\tb\", 'plain'],", $code);
+        self::assertStringContainsString('public mixed $map = ["a\\nb" => 1],', $code);
     }
 
     private function emit(string $mutability, string $php, string $accessors = AccessorStyle::AUTO): string

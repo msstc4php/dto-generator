@@ -18,7 +18,6 @@ use MSSTC4PHP\DtoGenerator\Domain\Target\ClassForm;
 use MSSTC4PHP\DtoGenerator\Domain\Target\TargetProfile;
 use MSSTC4PHP\DtoGenerator\Domain\Target\WitherStyle;
 use PhpParser\BuilderFactory;
-use PhpParser\BuilderHelpers;
 use PhpParser\Comment;
 use PhpParser\Comment\Doc;
 use PhpParser\Modifiers;
@@ -277,7 +276,7 @@ final class PhpParserEmitter implements CodeEmitter
 
         $param = $builder->getNode();
         if ($default instanceof DefaultValue) {
-            $param->default = self::readable(BuilderHelpers::normalizeValue($default->value()));
+            $param->default = self::readable($this->factory->val($default->value()));
         }
 
         return $param;
@@ -343,13 +342,16 @@ final class PhpParserEmitter implements CodeEmitter
      */
     private static function readable(Expr $value): Expr
     {
-        if ($value instanceof String_ && preg_match('/[\x00-\x1f\x7f]/', $value->value) === 1) {
+        if ($value instanceof String_ && preg_match('/[\x00-\x1f]/', $value->value) === 1) {
             $value->setAttribute('kind', String_::KIND_DOUBLE_QUOTED);
         }
 
         if ($value instanceof Array_) {
             foreach ($value->items as $item) {
                 $item->value = self::readable($item->value);
+                if ($item->key instanceof Expr) {
+                    $item->key = self::readable($item->key);
+                }
             }
         }
 

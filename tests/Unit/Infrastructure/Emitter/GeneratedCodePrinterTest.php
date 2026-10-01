@@ -154,4 +154,24 @@ final class GeneratedCodePrinterTest extends TestCase
 
         self::assertSame("#[Pure]\npublic function &run()\n{\n}", (new GeneratedCodePrinter(['phpVersion' => PhpVersion::fromString('8.0')]))->prettyPrint([$method]));
     }
+
+    public function testPrintsDeeplyNestedListsInLinearTime(): void
+    {
+        $items = [];
+        foreach (range(1, 12) as $index) {
+            $items[] = new ArrayItem(new String_('value-' . $index));
+        }
+
+        $value = new Array_($items);
+        foreach (range(1, 30) as $level) {
+            $value = new Array_([new ArrayItem($value)]);
+        }
+
+        $started = microtime(true);
+        $code = (new GeneratedCodePrinter())->prettyPrint([new Expression($value)]);
+
+        // Printing each level twice would take hours at this depth; once, it takes milliseconds.
+        self::assertLessThan(2.0, microtime(true) - $started);
+        self::assertSame(12, substr_count($code, "'value-"));
+    }
 }
