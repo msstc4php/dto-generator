@@ -35,7 +35,9 @@ final class PathTest extends TestCase
             'drive letter case' => ['c:/a', 'C:/a'],
             'drive-relative' => ['c:foo', 'C:foo'],
             'unc cannot climb above the share' => ['//server/share/../../x', '//server/share/x'],
-            'unc server only' => ['//server/..', '//server'],
+            'leading double slash without a share' => ['//dto.yaml', '/dto.yaml'],
+            'double slash' => ['//', '/'],
+            'dot server' => ['//../x', '/x'],
         ];
     }
 
@@ -82,7 +84,7 @@ final class PathTest extends TestCase
             'root itself' => ['/', '/'],
             'unc' => ['//server/share/b.yaml', '//server/share'],
             'unc share root' => ['//server/share', '//server/share'],
-            'unc server root' => ['//server', '//server'],
+            'leading double slash without a share' => ['//dto.yaml', '/'],
             'relative file' => ['b.yaml', '.'],
             'windows drive' => ['C:/b.yaml', 'C:/'],
             'drive-like directory name' => ['/xC:/b.yaml', '/xC:'],

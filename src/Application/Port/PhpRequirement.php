@@ -57,4 +57,12 @@ final class PhpRequirement
     {
         return $this->problem;
     }
+
+    /**
+     * "<file> <problem>" when the file could not be used.
+     */
+    public function problemDescription(): ?string
+    {
+        return $this->file === null || $this->problem === null ? null : $this->file . ' ' . $this->problem;
+    }
 }

@@ -58,12 +58,19 @@ final class Json
     }
 
     /**
-     * Shortest decimal form of a YAML/JSON float, unaffected by serialize_precision and the locale.
+     * Shortest round-trip form of a YAML/JSON float ("8.0", "99.99", "1.0E-20"), whatever the php.ini
+     * serialize_precision; var_export() never uses the locale's decimal separator.
      */
     public static function floatToString(float $value): string
     {
-        $text = rtrim(sprintf('%.14F', $value), '0');
+        $precision = ini_set('serialize_precision', '-1');
 
-        return substr($text, -1) === '.' ? $text . '0' : $text;
+        try {
+            return var_export($value, true);
+        } finally {
+            if ($precision !== false) {
+                ini_set('serialize_precision', $precision);
+            }
+        }
     }
 }

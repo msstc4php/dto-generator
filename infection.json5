@@ -69,6 +69,8 @@
         // Equivalent: the result is only iterated.
         "UnwrapArrayValues": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Domain\\Schema\\Schema::subschemas"] },
         // Equivalent: the json_decode depth only matters for 512-level nesting.
+        // Equivalent: ini_set() cannot fail for serialize_precision, so the restore guard always holds.
+        "FalseValue": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Domain\\Shared\\Json::floatToString"] },
         "IncrementInteger": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Infrastructure\\Environment\\ComposerJsonPhpConstraint::read"] },
         "DecrementInteger": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Infrastructure\\Environment\\ComposerJsonPhpConstraint::read"] }
     },

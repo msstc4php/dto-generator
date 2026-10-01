@@ -55,6 +55,7 @@ final class TargetResolverTest extends TestCase
             'caret 8.1' => ['^8.1', '8.1', 'attributes'],
             'no composer.json' => [null, '7.4', 'annotations'],
             'wildcard' => ['*', '7.4', 'annotations'],
+            'wildcard with spaces' => [' * ', '7.4', 'annotations'],
         ];
     }
 
@@ -189,5 +190,18 @@ final class TargetResolverTest extends TestCase
 
         self::assertNull((new TargetResolver(new FixedPhpConstraint('^7.4')))->resolve($this->config(null, MetadataMode::ATTRIBUTES), $diagnostics));
         self::assertStringContainsString('requires attributes (PHP 8.0+)', $diagnostics->errors()[0]->message());
+    }
+
+    public function testWarnsWhenComposerNamesNoLowerBound(): void
+    {
+        $diagnostics = new Diagnostics();
+        $profile = (new TargetResolver(new FixedPhpConstraint('<8.0')))->resolve($this->config(null), $diagnostics);
+
+        self::assertNotNull($profile);
+        self::assertSame('7.4', $profile->php()->toString());
+        self::assertSame(
+            ['warning /project/dto-generator.yaml#/target/php: composer.json requires PHP "<8.0", which names no lower bound; generating for PHP 7.4.'],
+            array_map(static fn (Diagnostic $d): string => $d->toString(), $diagnostics->all()),
+        );
     }
 }

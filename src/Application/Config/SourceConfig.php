@@ -42,6 +42,9 @@ final class SourceConfig
         $this->exclude = $exclude;
     }
 
+    /**
+     * Absolute and normalized, so it can be compared with document paths directly.
+     */
     public function spec(): string
     {
         return $this->spec;

@@ -16,7 +16,6 @@ use MSSTC4PHP\DtoGenerator\Domain\Schema\ReferenceUse;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\ResolvedSchema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
-use MSSTC4PHP\DtoGenerator\Domain\Shared\Path;
 
 /**
  * Loads every selected component schema of every source, then follows `$ref`s until the graph is closed.
@@ -46,7 +45,7 @@ final class Action
 
         foreach ($config->sources() as $index => $source) {
             $specAt = $config->location()->child('sources', (string) $index, 'spec');
-            $spec = Path::normalize($source->spec());
+            $spec = $source->spec();
             if (isset($owners[$spec])) {
                 $diagnostics->error(sprintf('The specification is already used by source #%d.', $owners[$spec]), $specAt);
 

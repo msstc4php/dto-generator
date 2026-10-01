@@ -19,4 +19,10 @@ final class PhpRequirementTest extends TestCase
         self::assertSame(['/p/composer.json', '^8.1', null], [$found->file(), $found->constraint(), $found->problem()]);
         self::assertSame(['/p/composer.json', null, 'is not valid JSON'], [$unusable->file(), $unusable->constraint(), $unusable->problem()]);
     }
+
+    public function testDescribesItsProblemWithTheFile(): void
+    {
+        self::assertSame('/p/composer.json is not valid JSON', PhpRequirement::unusable('/p/composer.json', 'is not valid JSON')->problemDescription());
+        self::assertNull(PhpRequirement::found('/p/composer.json', '^8.1')->problemDescription());
+    }
 }

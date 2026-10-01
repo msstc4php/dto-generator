@@ -9,7 +9,8 @@ namespace MSSTC4PHP\DtoGenerator\Domain\Shared;
  */
 final class Path
 {
-    private const UNC_ROOT = '#^//[^/]+(?:/(?!\\.\\.?(?:/|\\z))[^/]+)?#';
+    // Server and share are both required, so a POSIX "//x" stays an ordinary absolute path.
+    private const UNC_ROOT = '#^//(?!\\.\\.?/)[^/]+/(?!\\.\\.?(?:/|\\z))[^/]+#';
 
     private function __construct()
     {
@@ -24,7 +25,7 @@ final class Path
 
     public static function resolve(string $baseDir, string $path): string
     {
-        return self::normalize(self::isAbsolute($path) ? $path : rtrim($baseDir, '/\\') . '/' . $path);
+        return self::normalize(self::isAbsolute($path) ? $path : $baseDir . '/' . $path);
     }
 
     public static function normalize(string $path): string
@@ -50,7 +51,7 @@ final class Path
     public static function directory(string $path): string
     {
         $normalized = self::normalize($path);
-        if (preg_match(self::UNC_ROOT . 'D', $normalized, $matches) === 1 && $matches[0] === $normalized) {
+        if (preg_match(self::UNC_ROOT, $normalized, $matches) === 1 && $matches[0] === $normalized) {
             return $normalized;
         }
         $position = strrpos($normalized, '/');

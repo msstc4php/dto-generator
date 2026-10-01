@@ -57,12 +57,16 @@ final class JsonTest extends TestCase
     public function testPrintsFloatsIndependentlyOfIniAndLocale(float $value, string $expected): void
     {
         $precision = ini_get('serialize_precision');
+        $locale = setlocale(LC_NUMERIC, '0');
         ini_set('serialize_precision', '17');
+        setlocale(LC_NUMERIC, 'de_DE.UTF-8', 'de_DE', 'German');
 
         try {
             self::assertSame($expected, Json::floatToString($value));
+            self::assertSame('17', ini_get('serialize_precision'), 'the setting is restored');
         } finally {
             ini_set('serialize_precision', (string) $precision);
+            setlocale(LC_NUMERIC, (string) $locale);
         }
     }
 
@@ -76,6 +80,10 @@ final class JsonTest extends TestCase
             'zero decimal' => [8.0, '8.0'],
             'two decimals' => [8.05, '8.05'],
             'negative' => [-1.5, '-1.5'],
+            'two-digit integer part' => [99.99, '99.99'],
+            'three-digit integer part' => [123.4, '123.4'],
+            'tiny' => [1e-20, '1.0E-20'],
+            'huge' => [1e25, '1.0E+25'],
         ];
     }
 }

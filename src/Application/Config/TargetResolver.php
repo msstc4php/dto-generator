@@ -56,10 +56,10 @@ final class TargetResolver
     {
         $requirement = $this->constraints->find($config->baseDir());
         $constraint = $requirement->constraint();
-        $file = $requirement->file();
-        if ($file !== null && $requirement->problem() !== null) {
+        $problem = $requirement->problemDescription();
+        if ($problem !== null) {
             $diagnostics->warning(
-                sprintf('%s %s; generating for PHP %s.', $file, $requirement->problem(), PhpVersion::oldest()->toString()),
+                sprintf('%s; generating for PHP %s.', $problem, PhpVersion::oldest()->toString()),
                 $config->location()->child('target', 'php'),
             );
         }
@@ -70,6 +70,13 @@ final class TargetResolver
 
         $lowest = PhpConstraint::lowestMinor($constraint);
         if ($lowest === null) {
+            if (trim($constraint) !== '*') {
+                $diagnostics->warning(
+                    sprintf('composer.json requires PHP "%s", which names no lower bound; generating for PHP %s.', $constraint, PhpVersion::oldest()->toString()),
+                    $config->location()->child('target', 'php'),
+                );
+            }
+
             return PhpVersion::oldest();
         }
 
