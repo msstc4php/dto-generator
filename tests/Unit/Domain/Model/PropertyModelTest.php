@@ -73,6 +73,8 @@ final class PropertyModelTest extends TestCase
             'dash' => ['user-name'],
             'leading digit' => ['2fa'],
             'this' => ['this'],
+            'superglobal' => ['GLOBALS'],
+            'request superglobal' => ['_REQUEST'],
             'trailing newline' => ["email\n"],
         ];
     }

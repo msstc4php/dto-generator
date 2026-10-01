@@ -141,11 +141,11 @@ final class ClassBuilder
     {
         if ($schema->extensions()->has('x-php-name')) {
             $override = $schema->extensions()->get('x-php-name');
-            if (is_string($override) && Identifier::isValid($override) && $override !== 'this') {
+            if (is_string($override) && Identifier::isValid($override) && $override !== 'this' && !Identifier::isSuperglobal($override)) {
                 return $override;
             }
 
-            $diagnostics->error('"x-php-name" must be a PHP identifier other than "this".', $schema->location()->child('x-php-name'));
+            $diagnostics->error('"x-php-name" must be a PHP identifier other than "this" and the superglobals.', $schema->location()->child('x-php-name'));
         }
 
         $name = $this->names->propertyName($wireName);

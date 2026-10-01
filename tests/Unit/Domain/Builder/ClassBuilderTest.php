@@ -112,10 +112,15 @@ final class ClassBuilderTest extends TestCase
                 ['login' => 'user_name: string|null = NULL'],
                 [],
             ],
+            'superglobal x-php-name' => [
+                ['type' => 'object', 'properties' => ['g' => ['type' => 'string', 'x-php-name' => 'GLOBALS']]],
+                ['g' => 'g: string|null = NULL'],
+                ["error {$at}/properties/g/x-php-name: \"x-php-name\" must be a PHP identifier other than \"this\" and the superglobals."],
+            ],
             'invalid x-php-name' => [
                 ['type' => 'object', 'properties' => ['user_name' => ['type' => 'string', 'x-php-name' => '1x']]],
                 ['userName' => 'user_name: string|null = NULL'],
-                ["error {$at}/properties/user_name/x-php-name: \"x-php-name\" must be a PHP identifier other than \"this\"."],
+                ["error {$at}/properties/user_name/x-php-name: \"x-php-name\" must be a PHP identifier other than \"this\" and the superglobals."],
             ],
             'no usable name' => [
                 ['type' => 'object', 'properties' => ['---' => ['type' => 'string'], 'id' => ['type' => 'string']]],

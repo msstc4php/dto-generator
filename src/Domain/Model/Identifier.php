@@ -34,6 +34,9 @@ final class Identifier
         'string', 'true', 'void',
     ];
 
+    /** Variables PHP forbids as parameters, so no promoted or assigned property may use them. */
+    private const SUPERGLOBALS = ['GLOBALS', '_SERVER', '_GET', '_POST', '_FILES', '_COOKIE', '_SESSION', '_REQUEST', '_ENV'];
+
     private function __construct()
     {
     }
@@ -102,5 +105,10 @@ final class Identifier
         }
 
         return strtr($value[0], 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz') . substr($value, 1);
+    }
+
+    public static function isSuperglobal(string $name): bool
+    {
+        return in_array($name, self::SUPERGLOBALS, true);
     }
 }

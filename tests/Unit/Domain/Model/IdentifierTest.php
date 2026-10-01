@@ -86,4 +86,13 @@ final class IdentifierTest extends TestCase
         self::assertSame('', Identifier::asciiUpperFirst(''));
         self::assertSame('', Identifier::asciiLowerFirst(''));
     }
+
+    public function testRecognisesSuperglobalsCaseSensitively(): void
+    {
+        self::assertTrue(Identifier::isSuperglobal('GLOBALS'));
+        self::assertTrue(Identifier::isSuperglobal('_GET'));
+        self::assertTrue(Identifier::isSuperglobal('_ENV'));
+        self::assertFalse(Identifier::isSuperglobal('globals'));
+        self::assertFalse(Identifier::isSuperglobal('_get'));
+    }
 }
