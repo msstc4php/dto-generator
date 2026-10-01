@@ -1,0 +1,22 @@
+parameters:
+    level: max
+    phpVersion: 70400
+    treatPhpDocTypesAsCertain: false
+    reportUnmatchedIgnoredErrors: true
+    editorUrl: 'phpstorm://open?file=%%file%%&line=%%line%%'
+    bootstrapFiles:
+        - vendor/autoload.php
+    paths:
+        - src/
+        - tests/
+    disallowedFunctionCalls:
+        -
+            function:
+                - 'var_dump()'
+                - 'print_r()'
+                - 'dump()'
+                - 'dd()'
+            message: 'debug artefact'
+        -
+            function: 'error_log()'
+            message: 'the library reports through diagnostics, not the PHP error log'

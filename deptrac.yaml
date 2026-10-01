@@ -1,0 +1,55 @@
+deptrac:
+  paths:
+    - ./src
+  layers:
+    - name: Domain
+      collectors:
+        - type: directory
+          value: src/Domain/(Schema|Model|Target|Shared|Exception)/.*
+    - name: DomainService
+      collectors:
+        - type: directory
+          value: src/Domain/Builder/.*
+    - name: Contract
+      collectors:
+        - type: directory
+          value: src/Contract/.*
+    - name: Application
+      collectors:
+        - type: directory
+          value: src/Application/.*
+    - name: Infrastructure
+      collectors:
+        - type: directory
+          value: src/Infrastructure/.*
+    - name: Presentation
+      collectors:
+        - type: directory
+          value: src/Presentation/.*
+    - name: Extension
+      collectors:
+        - type: directory
+          value: src/Extension/.*
+    - name: Symfony
+      collectors:
+        - type: classNameRegex
+          value: '#^Symfony\\#'
+    - name: PhpParser
+      collectors:
+        - type: classNameRegex
+          value: '#^PhpParser\\#'
+    - name: Composer
+      collectors:
+        - type: classNameRegex
+          value: '#^Composer\\#'
+  ruleset:
+    Domain: ~
+    DomainService: [Domain]
+    Contract: [Domain]
+    Application: [Domain, DomainService, Contract]
+    Infrastructure: [Domain, Application, Contract, Symfony, PhpParser, Composer]
+    Presentation: [Application, Domain, Contract, Symfony, Composer]
+    Extension: [Contract, Domain]
+    Symfony: ~
+    PhpParser: ~
+    Composer: ~

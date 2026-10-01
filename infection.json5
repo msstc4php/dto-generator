@@ -1,0 +1,22 @@
+{
+    "$schema": "tools/vendor/infection/infection/resources/schema.json",
+    "source": {
+        "directories": ["src"]
+    },
+    "timeout": 10,
+    // Raised to just below the measured level in Task 9.
+    "minMsi": 0,
+    "minCoveredMsi": 0,
+    "logs": {
+        "text": "var/infection/infection.log",
+        "json": "var/infection/infection.json"
+    },
+    "mutators": {
+        "@default": true
+    },
+    "phpUnit": {
+        "customPath": "vendor/bin/phpunit"
+    },
+    "testFramework": "phpunit",
+    "testFrameworkOptions": "--testsuite=unit"
+}
