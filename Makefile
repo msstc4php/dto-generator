@@ -22,6 +22,9 @@ test: ## Run tests on the local PHP
 test-74: ## Run tests on PHP 7.4
 	$(PHP74) vendor/bin/phpunit
 
+test-targets: ## Lint and run the golden emitter output on each target PHP version (Docker)
+	sh tests/Targets/run.sh
+
 verify: check test test-74 ## Full gate: static checks + tests on local PHP and PHP 7.4
 
 infection: ## Mutation testing
@@ -35,4 +38,4 @@ help: ## List commands
 	@grep -E '^[a-zA-Z_0-9-]+:.*?## ' Makefile | awk 'BEGIN {FS = ":.*?## "}; {printf "%-12s %s\n", $$1, $$2}'
 
 .DEFAULT_GOAL := help
-.PHONY: install check lint-74 test test-74 verify infection fix help
+.PHONY: install check lint-74 test test-74 test-targets verify infection fix help

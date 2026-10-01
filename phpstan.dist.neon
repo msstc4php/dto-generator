@@ -9,6 +9,9 @@ parameters:
     paths:
         - src/
         - tests/
+    excludePaths:
+        # Runs on the target PHP against generated classes that PHPStan cannot load (*.php.golden).
+        - tests/Targets/
     disallowedFunctionCalls:
         -
             function:
