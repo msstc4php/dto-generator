@@ -15,6 +15,8 @@ return (new PhpCsFixer\Config())
         'phpdoc_align' => ['align' => 'left'],
         'method_argument_space' => ['on_multiline' => 'ensure_fully_multiline'],
         'phpdoc_to_comment' => false,
+        // PHP 7.4 has no native mixed, so a `@param mixed` is the only type a decoder boundary can declare.
+        'no_superfluous_phpdoc_tags' => ['allow_mixed' => true],
         'linebreak_after_opening_tag' => false,
         'blank_line_after_opening_tag' => false,
         'concat_space' => ['spacing' => 'one'],
