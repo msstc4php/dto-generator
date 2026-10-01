@@ -14,7 +14,7 @@ final class ComposerJsonPhpConstraint implements ProjectPhpConstraint
     {
         $current = Path::normalize($directory);
         while (true) {
-            $file = rtrim($current, '/') . '/composer.json';
+            $file = $current . '/composer.json';
             if (is_file($file)) {
                 return $this->phpRequirement($file);
             }
@@ -33,7 +33,7 @@ final class ComposerJsonPhpConstraint implements ProjectPhpConstraint
      */
     private function phpRequirement(string $file): ?string
     {
-        $content = file_get_contents($file);
+        $content = is_readable($file) ? file_get_contents($file) : false;
         if ($content === false) {
             return null;
         }

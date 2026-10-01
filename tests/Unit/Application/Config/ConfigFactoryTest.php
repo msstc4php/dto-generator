@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Tests\Unit\Application\Config;
 
+use InvalidArgumentException;
 use MSSTC4PHP\DtoGenerator\Application\Config\ConfigFactory;
 use MSSTC4PHP\DtoGenerator\Application\Config\GeneratorConfig;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostic;
@@ -163,6 +164,15 @@ final class ConfigFactoryTest extends TestCase
             'bad namespace' => [['version' => 1, 'sources' => [['namespace' => 'App\1Dto'] + $source]], 'is not a valid namespace', '/sources/0/namespace'],
             'empty include' => [['version' => 1, 'sources' => [$source + ['include' => []]]], '"include" must not be empty', '/sources/0/include'],
             'include not strings' => [['version' => 1, 'sources' => [$source + ['include' => [1]]]], 'Expected a non-empty string', '/sources/0/include/0'],
+            'unknown dto key' => [['version' => 1, 'dto' => ['mutable' => true], 'sources' => [$source]], 'Unknown key "mutable"', '/dto/mutable'],
+            'unknown format key' => [['version' => 1, 'formats' => ['uuid' => ['type' => 'App\Uuid', 'kind' => 1]], 'sources' => [$source]], 'Unknown key "kind"', '/formats/uuid/kind'],
+            'reserved x-dto alias' => [['version' => 1, 'attributeAliases' => ['x-dto-audit' => []], 'sources' => [$source]], 'outside the reserved', '/attributeAliases/x-dto-audit'],
+            'alias list' => [['version' => 1, 'attributeAliases' => ['x-audit' => ['App\A']], 'sources' => [$source]], 'An alias must be an object', '/attributeAliases/x-audit'],
+            'empty spec' => [['version' => 1, 'sources' => [['spec' => ''] + $source]], '"spec" must be a non-empty string', '/sources/0/spec'],
+            'numeric spec' => [['version' => 1, 'sources' => [['spec' => 5] + $source]], '"spec" must be a non-empty string', '/sources/0/spec'],
+            'include string' => [['version' => 1, 'sources' => [$source + ['include' => 'User*']]], '"include" must be a list of strings', '/sources/0/include'],
+            'source as list' => [['version' => 1, 'sources' => [['a.yaml']]], 'Expected an object', '/sources/0'],
+            'empty source object' => [['version' => 1, 'sources' => [[]]], '"spec" is required', '/sources/0'],
         ];
     }
 
@@ -178,5 +188,64 @@ final class ConfigFactoryTest extends TestCase
         self::assertNotNull($config);
 
         return $config;
+    }
+
+    /**
+     * @dataProvider repeatedProblems
+     *
+     * @param array<array-key, mixed> $raw
+     */
+    public function testReportsEveryOccurrenceOfAProblem(array $raw, string $message, int $count): void
+    {
+        $diagnostics = new Diagnostics();
+        (new ConfigFactory())->create($raw, self::PATH, $diagnostics);
+
+        self::assertCount($count, array_filter(
+            $diagnostics->errors(),
+            static fn (Diagnostic $error): bool => strpos($error->message(), $message) !== false,
+        ));
+    }
+
+    /**
+     * @return array<string, array{array<array-key, mixed>, string, int}>
+     */
+    public static function repeatedProblems(): array
+    {
+        $source = ['spec' => 'a.yaml', 'namespace' => 'App\Dto', 'outputDir' => 'src'];
+
+        return [
+            'formats without type' => [['version' => 1, 'formats' => ['a' => [], 'b' => []], 'sources' => [$source]], '"type" is required', 2],
+            'reserved aliases' => [['version' => 1, 'attributeAliases' => ['x-php-a' => [], 'x-php-b' => []], 'sources' => [$source]], 'outside the reserved', 2],
+            'non-object aliases' => [['version' => 1, 'attributeAliases' => ['x-a' => 1, 'x-b' => 2], 'sources' => [$source]], 'An alias must be an object', 2],
+            'sources without spec' => [['version' => 1, 'sources' => [['namespace' => 'A', 'outputDir' => 'o'], ['namespace' => 'B', 'outputDir' => 'o']]], '"spec" is required', 2],
+            'non-string includes' => [['version' => 1, 'sources' => [$source + ['include' => [1, 2]]]], 'Expected a non-empty string', 2],
+            'non-object sources' => [['version' => 1, 'sources' => ['a', 'b']], 'Expected an object', 2],
+        ];
+    }
+
+    public function testKeepsEveryEntryOfMultiValuedSettings(): void
+    {
+        $config = $this->valid([
+            'version' => 1,
+            'formats' => ['uuid' => ['type' => 'App\Uuid'], '200' => ['type' => 'App\Ok']],
+            'attributeAliases' => ['x-phpstorm' => ['class' => 'App\A'], 'x-dtox' => [], 'x-empty' => []],
+            'sources' => [
+                ['spec' => 'a.yaml', 'namespace' => 'App\A', 'outputDir' => 'a', 'include' => ['A*', 'B*']],
+                ['spec' => 'b.yaml', 'namespace' => 'App\B', 'outputDir' => 'b'],
+            ],
+        ]);
+
+        self::assertSame(['uuid', '200'], array_map('strval', array_keys($config->formats())));
+        self::assertSame(['x-phpstorm', 'x-dtox', 'x-empty'], array_keys($config->extensions()->aliases()));
+        self::assertCount(2, $config->sources());
+        self::assertSame(['A*', 'B*'], $config->sources()[0]->include());
+    }
+
+    public function testRequiresAnAbsoluteConfigPath(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Config path "dto-generator.yaml" must be absolute');
+
+        (new ConfigFactory())->create(self::MINIMAL, 'dto-generator.yaml', new Diagnostics());
     }
 }

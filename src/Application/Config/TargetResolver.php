@@ -55,7 +55,11 @@ final class TargetResolver
     private function detectPhp(GeneratorConfig $config, Diagnostics $diagnostics): PhpVersion
     {
         $constraint = $this->constraints->find($config->baseDir());
-        $lowest = $constraint === null ? null : PhpConstraint::lowestMinor($constraint);
+        if ($constraint === null) {
+            return PhpVersion::oldest();
+        }
+
+        $lowest = PhpConstraint::lowestMinor($constraint);
         if ($lowest === null) {
             return PhpVersion::oldest();
         }
@@ -65,7 +69,7 @@ final class TargetResolver
         } catch (UnsupportedPhpVersion $exception) {
             $fallback = version_compare($lowest, PhpVersion::oldest()->toString(), '<') ? PhpVersion::oldest() : PhpVersion::newest();
             $diagnostics->warning(
-                sprintf('composer.json requires PHP "%s"; generating for PHP %s instead.', (string) $constraint, $fallback->toString()),
+                sprintf('composer.json requires PHP "%s"; generating for PHP %s instead.', $constraint, $fallback->toString()),
                 $config->location()->child('target', 'php'),
             );
 

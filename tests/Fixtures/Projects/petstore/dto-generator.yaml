@@ -1,0 +1,7 @@
+version: 1
+target:
+  php: 8.2
+sources:
+  - spec: api/openapi.yaml
+    namespace: App\Dto
+    outputDir: src/Dto

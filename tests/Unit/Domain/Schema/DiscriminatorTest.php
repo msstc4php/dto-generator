@@ -51,4 +51,9 @@ final class DiscriminatorTest extends TestCase
         self::assertSame('#/components/schemas/Cat', $discriminator->refFor('cat'));
         self::assertSame('dog.yaml#/Dog', $discriminator->refFor('dog'));
     }
+
+    public function testAValueWithASlashButNoHashIsAPathReference(): void
+    {
+        self::assertSame('schemas/cat.yaml', (new Discriminator('kind', ['cat' => 'schemas/cat.yaml']))->refFor('cat'));
+    }
 }

@@ -249,7 +249,7 @@ final class LoadTest extends TestCase
     }
 
     /**
-     * @param array<string, array<array-key, mixed>> $schemas
+     * @param array<int|string, array<array-key, mixed>> $schemas
      *
      * @return array<string, mixed>
      */
@@ -275,5 +275,71 @@ final class LoadTest extends TestCase
             static fn (ResolvedSchema $schema): array => [$schema->name(), $schema->source(), $schema->isSelected()],
             $output->graph()->all(),
         );
+    }
+
+    public function testKeepsLoadingAfterABrokenOrDuplicateSource(): void
+    {
+        $output = $this->load(
+            [self::SPEC => self::spec(['User' => []]), self::OTHER => self::spec(['Pet' => []])],
+            ConfigMother::source('/project/missing.yaml'),
+            ConfigMother::source(self::SPEC, ['*'], [], 'App\\A'),
+            ConfigMother::source(self::SPEC, ['*'], [], 'App\\B'),
+            ConfigMother::source(self::OTHER, ['*'], [], 'App\\C'),
+        );
+
+        self::assertCount(2, $output->diagnostics()->errors());
+        self::assertSame([['User', 1, true], ['Pet', 3, true]], $this->summary($output));
+    }
+
+    public function testKeepsFollowingReferencesAfterABrokenOne(): void
+    {
+        $output = $this->load(
+            [self::SPEC => self::spec([
+                'User' => ['properties' => [
+                    'a' => ['$ref' => 'https://example.com/x.json'],
+                    'b' => ['$ref' => '#/components/schemas/Nope'],
+                    'c' => ['$ref' => '#/components/schemas/Nope'],
+                    'd' => ['$ref' => '#/components/schemas/Tag'],
+                ]],
+                'Tag' => [],
+            ])],
+            ConfigMother::source(self::SPEC, ['User']),
+        );
+
+        self::assertCount(2, $output->diagnostics()->errors(), 'a missing target is reported once');
+        self::assertSame([['User', 0, true], ['Tag', 0, false]], $this->summary($output));
+    }
+
+    public function testDetectsAmbiguityReachedThroughAnotherForeignSchema(): void
+    {
+        $output = $this->load(
+            [
+                self::SPEC => self::spec(['User' => ['$ref' => '../shared/common.json#/A']]),
+                self::OTHER => self::spec(['Pet' => ['$ref' => '../shared/common.json#/F']]),
+                self::SHARED => ['A' => [], 'F' => ['$ref' => '#/A']],
+            ],
+            ConfigMother::source(self::SPEC),
+            ConfigMother::source(self::OTHER, ['*'], [], 'App\\Other'),
+        );
+
+        self::assertSame(
+            ['error /project/shared/common.json#/A: Schema is referenced from sources #0, #1, so its namespace is ambiguous; add its file as a source.'],
+            $this->messages($output),
+        );
+    }
+
+    public function testKeepsNumericComponentNamesAsStrings(): void
+    {
+        $output = $this->load([self::SPEC => self::spec(['200' => ['type' => 'object']])]);
+
+        self::assertSame([['200', 0, true]], $this->summary($output));
+    }
+
+    public function testWarnsAboutAVersionThatOnlyEndsLikeThreeOne(): void
+    {
+        $output = $this->load([self::SPEC => ['openapi' => '13.1', 'components' => ['schemas' => []]]]);
+
+        self::assertCount(1, $output->diagnostics());
+        self::assertStringContainsString('found "13.1"', $output->diagnostics()->all()[0]->message());
     }
 }

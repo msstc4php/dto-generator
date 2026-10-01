@@ -37,6 +37,7 @@ final class ReferenceTest extends TestCase
             'percent-encoded fragment' => ['#/components/schemas/My%20Type', '/spec/api/openapi.yaml#/components/schemas/My Type'],
             'escaped slash stays escaped' => ['#/components/schemas/a~1b', '/spec/api/openapi.yaml#/components/schemas/a~1b'],
             'percent-encoded file' => ['my%20file.yaml#/X', '/spec/api/my file.yaml#/X'],
+            'scheme-like text inside the pointer' => ['#/components/schemas/http://x', '/spec/api/openapi.yaml#/components/schemas/http://x'],
         ];
     }
 

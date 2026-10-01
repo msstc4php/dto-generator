@@ -1,0 +1,13 @@
+{
+    "definitions": {
+        "Money": {
+            "type": "object",
+            "required": ["amount", "currency"],
+            "properties": {
+                "amount": {"type": "string"},
+                "currency": {"$ref": "#/definitions/Currency"}
+            }
+        },
+        "Currency": {"type": "string", "enum": ["EUR", "USD"]}
+    }
+}

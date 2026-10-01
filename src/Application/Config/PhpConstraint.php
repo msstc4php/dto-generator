@@ -17,13 +17,13 @@ final class PhpConstraint
     public static function lowestMinor(string $constraint): ?string
     {
         $lowest = null;
-        $alternatives = preg_split('/\s*\|\|?\s*/', trim($constraint));
-        foreach ($alternatives === false ? [] : $alternatives as $alternative) {
-            if (preg_match('/(\d+)(?:\.(\d+))?/', $alternative, $matches) !== 1) {
+        // "||" yields empty alternatives, which name no version and are skipped.
+        foreach (explode('|', $constraint) as $alternative) {
+            if (preg_match('/(?<major>\d+)(?:\.(?<minor>\d+))?/', $alternative, $matches) !== 1) {
                 continue;
             }
 
-            $candidate = [(int) $matches[1], isset($matches[2]) ? (int) $matches[2] : 0];
+            $candidate = [(int) $matches['major'], isset($matches['minor']) ? (int) $matches['minor'] : 0];
             if ($lowest === null || $candidate < $lowest) {
                 $lowest = $candidate;
             }

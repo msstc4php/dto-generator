@@ -33,11 +33,6 @@ final class RawSection
         $this->diagnostics = $diagnostics;
     }
 
-    public function location(): SchemaLocation
-    {
-        return $this->location;
-    }
-
     /**
      * @param list<string> $known
      */

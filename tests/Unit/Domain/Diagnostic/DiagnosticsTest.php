@@ -58,4 +58,13 @@ final class DiagnosticsTest extends TestCase
 
         new Diagnostic(Severity::from(Severity::ERROR), '  ');
     }
+
+    public function testAcceptsPrebuiltDiagnostics(): void
+    {
+        $diagnostics = new Diagnostics();
+        $diagnostic = new Diagnostic(Severity::from(Severity::WARNING), 'Prebuilt.');
+        $diagnostics->add($diagnostic);
+
+        self::assertSame([$diagnostic], $diagnostics->all());
+    }
 }

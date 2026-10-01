@@ -20,14 +20,19 @@
                 "MSSTC4PHP\\DtoGenerator\\Domain\\Model\\EnumModel::__construct",
                 "MSSTC4PHP\\DtoGenerator\\Domain\\Model\\UnionType::__construct",
                 "MSSTC4PHP\\DtoGenerator\\Domain\\Model\\AttributeArgument::assertWellFormed",
-                "MSSTC4PHP\\DtoGenerator\\Domain\\Schema\\Schema::assertUniqueTypes"
+                "MSSTC4PHP\\DtoGenerator\\Domain\\Schema\\Schema::assertUniqueTypes",
+                "MSSTC4PHP\\DtoGenerator\\Application\\Service\\Schemas\\Load\\GraphBuilder::markFailed",
+                "MSSTC4PHP\\DtoGenerator\\Application\\Service\\Schemas\\Load\\GraphBuilder::propagateOwners"
             ]
         },
-        // Equivalent: substr() offsets are within the validated name, so it never returns false on 7.4.
+        // Equivalent: the substr() offsets stay within the string, so it never returns false on 7.4.
         "CastString": {
             "ignore": [
                 "MSSTC4PHP\\DtoGenerator\\Domain\\Model\\ClassName::fromFqcn",
-                "MSSTC4PHP\\DtoGenerator\\Domain\\Model\\Identifier::normalizeQualifiedName"
+                "MSSTC4PHP\\DtoGenerator\\Domain\\Model\\Identifier::normalizeQualifiedName",
+                "MSSTC4PHP\\DtoGenerator\\Domain\\Schema\\JsonPointer::segments",
+                "MSSTC4PHP\\DtoGenerator\\Domain\\Schema\\Reference::target",
+                "MSSTC4PHP\\DtoGenerator\\Domain\\Shared\\Path::directory"
             ]
         },
         // Equivalent: defensive throws whose preconditions the constructors guarantee.
@@ -44,7 +49,21 @@
                 "MSSTC4PHP\\DtoGenerator\\Domain\\Shared\\AbstractEnum::tryFrom",
                 "MSSTC4PHP\\DtoGenerator\\Domain\\Model\\ArgumentValue::className"
             ]
-        }
+        },
+        // Equivalent: numeric strings compare numerically, and an equal candidate changes nothing.
+        "CastInt": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Application\\Config\\PhpConstraint::lowestMinor"] },
+        "LessThan": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Application\\Config\\PhpConstraint::lowestMinor"] },
+        // Equivalent: every default passed to stringList() has at most one item.
+        "ArrayOneItem": { "ignoreSourceCodeByRegex": [".*return \\$default;.*"] },
+        // Equivalent: enum items are already JSON values; the map only narrows the type for PHPStan.
+        "UnwrapArrayMap": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Domain\\Builder\\SchemaParser::applyStructural"] },
+        // Equivalent: the result is only iterated.
+        "UnwrapArrayValues": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Domain\\Schema\\Schema::subschemas"] },
+        // Equivalent: an unreadable or undecodable composer.json yields null on every path, and the
+        // json_decode depth only matters for 512-level nesting.
+        "FalseValue": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Infrastructure\\Environment\\ComposerJsonPhpConstraint::phpRequirement"] },
+        "IncrementInteger": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Infrastructure\\Environment\\ComposerJsonPhpConstraint::phpRequirement"] },
+        "DecrementInteger": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Infrastructure\\Environment\\ComposerJsonPhpConstraint::phpRequirement"] }
     },
     "phpUnit": {
         "customPath": "vendor/bin/phpunit"

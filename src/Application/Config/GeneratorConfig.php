@@ -17,7 +17,7 @@ final class GeneratorConfig
 
     private DtoSettings $dto;
 
-    /** @var array<string, ClassName> */
+    /** @var array<int|string, ClassName> */
     private array $formats;
 
     private ExtensionSettings $extensions;
@@ -27,7 +27,7 @@ final class GeneratorConfig
 
     /**
      * @param string $path absolute path of the config file; relative paths inside it were resolved against its directory
-     * @param array<string, ClassName> $formats custom format → PHP type
+     * @param array<int|string, ClassName> $formats custom format → PHP type
      * @param non-empty-list<SourceConfig> $sources
      */
     public function __construct(string $path, TargetSettings $target, DtoSettings $dto, array $formats, ExtensionSettings $extensions, array $sources)
@@ -73,7 +73,7 @@ final class GeneratorConfig
     }
 
     /**
-     * @return array<string, ClassName>
+     * @return array<int|string, ClassName>
      */
     public function formats(): array
     {

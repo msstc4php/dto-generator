@@ -56,9 +56,7 @@ final class GraphBuilder
         foreach ($this->schemas as $key => $schema) {
             if ($schema->source() === null) {
                 $candidates = array_keys($owners[$key] ?? []);
-                if (count($candidates) === 1) {
-                    $schema = $schema->withSource($candidates[0]);
-                } elseif (count($candidates) > 1) {
+                if (count($candidates) > 1) {
                     $diagnostics->error(
                         sprintf(
                             'Schema is referenced from sources %s, so its namespace is ambiguous; add its file as a source.',
@@ -66,6 +64,8 @@ final class GraphBuilder
                         ),
                         $schema->location(),
                     );
+                } elseif ($candidates !== []) {
+                    $schema = $schema->withSource($candidates[0]);
                 }
             }
 

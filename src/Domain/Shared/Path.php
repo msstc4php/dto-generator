@@ -22,7 +22,7 @@ final class Path
 
     public static function resolve(string $baseDir, string $path): string
     {
-        return self::normalize(self::isAbsolute($path) ? $path : rtrim($baseDir, '/\\') . '/' . $path);
+        return self::normalize(self::isAbsolute($path) ? $path : $baseDir . '/' . $path);
     }
 
     public static function normalize(string $path): string

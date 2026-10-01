@@ -75,6 +75,7 @@ final class PathTest extends TestCase
             'root itself' => ['/', '/'],
             'relative file' => ['b.yaml', '.'],
             'windows drive' => ['C:/b.yaml', 'C:/'],
+            'drive-like directory name' => ['/xC:/b.yaml', '/xC:'],
         ];
     }
 
@@ -85,5 +86,6 @@ final class PathTest extends TestCase
         self::assertTrue(Path::isAbsolute('\\\\server\\share'));
         self::assertFalse(Path::isAbsolute('a/b'));
         self::assertFalse(Path::isAbsolute('C:a'));
+        self::assertFalse(Path::isAbsolute('dir/C:/x'));
     }
 }

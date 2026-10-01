@@ -107,7 +107,7 @@ final class ConfigFactory
     }
 
     /**
-     * @return array<string, ClassName>
+     * @return array<int|string, ClassName>
      */
     private function formats(RawSection $section): array
     {

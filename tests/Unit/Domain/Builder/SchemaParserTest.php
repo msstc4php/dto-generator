@@ -181,11 +181,30 @@ final class SchemaParserTest extends TestCase
             'discriminator mapping scalar' => [['discriminator' => ['propertyName' => 'kind', 'mapping' => 'x']], '"mapping" must be an object', '/discriminator/mapping'],
             'discriminator bad target' => [['discriminator' => ['propertyName' => 'kind', 'mapping' => ['cat' => 1]]], 'A mapping target must be a non-empty string', '/discriminator/mapping/cat'],
             'nested error keeps its location' => [['properties' => ['id' => ['type' => 'uuid']]], 'Unknown type "uuid"', '/properties/id/type'],
+            'scalar items' => [['items' => 'string'], 'A schema must be an object', '/items'],
+            'numeric type' => [['type' => 5], 'non-empty list of type names', '/type'],
+            'numeric mapping key' => [['discriminator' => ['propertyName' => 'kind', 'mapping' => ['1' => 5]]], 'A mapping target must be a non-empty string', '/discriminator/mapping/1'],
         ];
     }
 
     private function root(): SchemaLocation
     {
         return new SchemaLocation('a.yaml', '/components/schemas/User');
+    }
+
+    public function testKeepsWhatFollowsASkippedEntry(): void
+    {
+        $diagnostics = new Diagnostics();
+        $schema = (new SchemaParser())->parse([
+            'x-first' => 1,
+            200 => 'numeric keyword',
+            'type' => ['text', 'string', 'string', 'integer'],
+            'required' => [true, 'a', 'a', 'b'],
+        ], $this->root(), $diagnostics);
+
+        self::assertSame('numeric keyword', $schema->keyword('200'));
+        self::assertSame([SchemaType::from(SchemaType::STRING), SchemaType::from(SchemaType::INTEGER)], $schema->types());
+        self::assertSame(['a', 'b'], $schema->required());
+        self::assertCount(2, $diagnostics->errors());
     }
 }

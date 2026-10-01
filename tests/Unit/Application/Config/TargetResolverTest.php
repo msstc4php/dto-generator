@@ -126,7 +126,7 @@ final class TargetResolverTest extends TestCase
     }
 
     /**
-     * @param array<string, ClassName> $formats
+     * @param array<int|string, ClassName> $formats
      */
     private function config(?string $php, ?string $metadata = null, string $namespace = 'App\Dto', array $formats = []): GeneratorConfig
     {
@@ -143,5 +143,15 @@ final class TargetResolverTest extends TestCase
             new ExtensionSettings([], true, [], [], null),
             [ConfigMother::source('/project/api/openapi.yaml', ['*'], [], $namespace)],
         );
+    }
+
+    public function testReportsANumericFormatNameWithItsLocation(): void
+    {
+        $diagnostics = new Diagnostics();
+        $config = $this->config('7.4', null, 'App\\Dto', ['200' => ClassName::fromFqcn('Vendor\\List\\Ok')]);
+
+        self::assertNull((new TargetResolver(new FixedPhpConstraint(null)))->resolve($config, $diagnostics));
+        self::assertNotNull($diagnostics->errors()[0]->location());
+        self::assertSame('/formats/200/type', $diagnostics->errors()[0]->location()->pointer());
     }
 }

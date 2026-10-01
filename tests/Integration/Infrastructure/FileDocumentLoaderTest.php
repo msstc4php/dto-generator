@@ -91,4 +91,42 @@ final class FileDocumentLoaderTest extends TestCase
         // Object tags are never instantiated.
         self::assertNull($root['object']);
     }
+
+    public function testCachesTheDecodedContent(): void
+    {
+        $file = $this->temporaryFile('cached.json', '{"version": 1}');
+        $loader = new FileDocumentLoader();
+        $first = $loader->load($file);
+        file_put_contents($file, '{"version": 2}');
+
+        self::assertSame($first->root(), $loader->load($file)->root());
+        unlink($file);
+    }
+
+    public function testReportsAnUnreadableFile(): void
+    {
+        if (function_exists('posix_geteuid') && posix_geteuid() === 0) {
+            self::markTestSkipped('root can read any file');
+        }
+
+        $file = $this->temporaryFile('locked.json', '{}');
+        chmod($file, 0000);
+
+        try {
+            $this->expectException(DocumentLoadFailed::class);
+            $this->expectExceptionMessage('cannot be read');
+            (new FileDocumentLoader())->load($file);
+        } finally {
+            chmod($file, 0644);
+            unlink($file);
+        }
+    }
+
+    private function temporaryFile(string $name, string $content): string
+    {
+        $file = sys_get_temp_dir() . '/dto-generator-' . bin2hex(random_bytes(4)) . '-' . $name;
+        file_put_contents($file, $content);
+
+        return $file;
+    }
 }

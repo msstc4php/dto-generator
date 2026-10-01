@@ -32,6 +32,8 @@ final class PhpConstraintTest extends TestCase
             'major only' => ['>=8', '8.0'],
             'range' => ['>=7.4 <8.3', '7.4'],
             'any' => ['*', null],
+            'versionless alternative first' => ['* || ^8.1', '8.1'],
+            'equal alternatives' => ['^8.1 || ~8.1.0', '8.1'],
             'empty' => ['', null],
         ];
     }

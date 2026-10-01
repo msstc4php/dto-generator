@@ -51,4 +51,20 @@ final class ComposerJsonPhpConstraintTest extends TestCase
 
         self::assertNull((new ComposerJsonPhpConstraint())->find($this->root));
     }
+
+    public function testIgnoresAnUnreadableComposerJson(): void
+    {
+        if (function_exists('posix_geteuid') && posix_geteuid() === 0) {
+            self::markTestSkipped('root can read any file');
+        }
+
+        file_put_contents($this->root . '/composer.json', '{"require": {"php": "^8.1"}}');
+        chmod($this->root . '/composer.json', 0000);
+
+        try {
+            self::assertNull((new ComposerJsonPhpConstraint())->find($this->root));
+        } finally {
+            chmod($this->root . '/composer.json', 0644);
+        }
+    }
 }
