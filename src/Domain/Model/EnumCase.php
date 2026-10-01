@@ -25,10 +25,6 @@ final class EnumCase
             throw new InvalidModel(sprintf('"%s" is not a usable enum case name.', $name));
         }
 
-        if (!is_int($value) && !is_string($value)) {
-            throw new InvalidModel(sprintf('Enum case "%s" must have an int or string value.', $name));
-        }
-
         $this->name = $name;
         $this->value = $value;
         $this->doc = $doc ?? DocModel::none();

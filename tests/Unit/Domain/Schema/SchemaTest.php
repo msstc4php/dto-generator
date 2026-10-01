@@ -14,6 +14,23 @@ use PHPUnit\Framework\TestCase;
 
 final class SchemaTest extends TestCase
 {
+    public function testExposesItsLocation(): void
+    {
+        self::assertSame('a.json#/p', $this->builder('/p')->build()->location()->toString());
+    }
+
+    public function testNonNullTypesIsAListWhenNullComesFirst(): void
+    {
+        $schema = $this->builder()->types(self::type(SchemaType::NULL), self::type(SchemaType::STRING))->build();
+
+        self::assertSame([self::type(SchemaType::STRING)], $schema->nonNullTypes());
+    }
+
+    public function testAcceptsKeywordsThatMerelyStartWithX(): void
+    {
+        self::assertSame(1, $this->builder()->keyword('xmlLength', 1)->build()->keyword('xmlLength'));
+    }
+
     public function testDetectsNullableTypes(): void
     {
         $schema = $this->builder()->types($this->type(SchemaType::STRING), $this->type(SchemaType::NULL))->build();

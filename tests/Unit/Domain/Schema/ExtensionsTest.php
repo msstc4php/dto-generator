@@ -54,6 +54,7 @@ final class ExtensionsTest extends TestCase
         return [
             'plain keyword' => ['format'],
             'prefix only' => ['x-'],
+            'x without dash' => ['xa'],
             'uppercase prefix' => ['X-foo'],
         ];
     }

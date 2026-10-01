@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Tests\Unit\Domain\Model;
 
+use Closure;
 use LogicException;
 use MSSTC4PHP\DtoGenerator\Domain\Exception\InvalidModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ArgumentValue;
@@ -111,6 +112,7 @@ final class ArgumentValueTest extends TestCase
     {
         return [
             'class keyword' => ['class'],
+            'class keyword uppercase' => ['CLASS'],
             'dash' => ['TAIL-END'],
             'empty' => [''],
         ];
@@ -143,6 +145,48 @@ final class ArgumentValueTest extends TestCase
             AttributeArgument::named('min', ArgumentValue::literal(1)),
             AttributeArgument::positional(ArgumentValue::literal(2)),
         );
+    }
+
+    /**
+     * @dataProvider wrongKindAccessors
+     *
+     * @param Closure(ArgumentValue): void $access
+     */
+    public function testEveryAccessorGuardsItsKind(ArgumentValue $value, Closure $access): void
+    {
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessage('is not one of');
+
+        $access($value);
+    }
+
+    /**
+     * @return array<string, array{ArgumentValue, Closure(ArgumentValue): void}>
+     */
+    public static function wrongKindAccessors(): array
+    {
+        $class = ClassName::fromFqcn('App\Rule');
+
+        return [
+            'literalValue on a list' => [ArgumentValue::listOf(), static function (ArgumentValue $value): void {
+                $value->literalValue();
+            }],
+            'items on a literal' => [ArgumentValue::literal(1), static function (ArgumentValue $value): void {
+                $value->items();
+            }],
+            'constantName on a literal' => [ArgumentValue::literal(1), static function (ArgumentValue $value): void {
+                $value->constantName();
+            }],
+            'constantClass on a literal' => [ArgumentValue::literal(1), static function (ArgumentValue $value): void {
+                $value->constantClass();
+            }],
+            'className on a constant' => [ArgumentValue::constant('TAIL', $class), static function (ArgumentValue $value): void {
+                $value->className();
+            }],
+            'arguments on a class reference' => [ArgumentValue::classReference($class), static function (ArgumentValue $value): void {
+                $value->arguments();
+            }],
+        ];
     }
 
     public function testAccessorsOfAnotherKindThrow(): void

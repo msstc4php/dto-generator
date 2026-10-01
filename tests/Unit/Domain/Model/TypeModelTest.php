@@ -55,6 +55,7 @@ final class TypeModelTest extends TestCase
         self::assertSame('int', $type->kind());
         self::assertSame('positive-int', $type->phpDoc());
         self::assertNull(ScalarType::bool()->phpDoc());
+        self::assertSame('float', ScalarType::float('positive-float')->kind());
     }
 
     public function testScalarRejectsABlankRefinement(): void

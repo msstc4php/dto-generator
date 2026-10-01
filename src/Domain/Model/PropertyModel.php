@@ -41,7 +41,7 @@ final class PropertyModel
         SchemaLocation $source,
         array $attributes = []
     ) {
-        if (!Identifier::isValid($name) || strtolower($name) === 'this') {
+        if (!Identifier::isValid($name) || $name === 'this') {
             throw new InvalidModel(sprintf('"%s" is not a usable PHP property name (%s).', $name, $source->toString()));
         }
 

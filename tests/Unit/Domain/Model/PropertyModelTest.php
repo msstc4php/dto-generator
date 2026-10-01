@@ -75,6 +75,11 @@ final class PropertyModelTest extends TestCase
         ];
     }
 
+    public function testOnlyTheExactThisIsReserved(): void
+    {
+        self::assertSame('This', $this->property('This')->name());
+    }
+
     public function testRejectsAnEmptyWireName(): void
     {
         $this->expectException(InvalidModel::class);

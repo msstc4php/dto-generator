@@ -118,6 +118,21 @@ final class ClassModelTest extends TestCase
         $class->withProperties($this->property('id'), $this->property('id'));
     }
 
+    public function testWithAttributesAccumulates(): void
+    {
+        $first = new AttributeModel(ClassName::fromFqcn('App\First'));
+        $second = new AttributeModel(ClassName::fromFqcn('App\Second'));
+
+        self::assertSame([$first, $second], $this->classWith([])->withAttributes($first)->withAttributes($second)->attributes());
+    }
+
+    public function testDiscriminatorNeedsAPropertyName(): void
+    {
+        $this->expectException(InvalidModel::class);
+
+        new DiscriminatorModel('', ['cat' => ClassName::fromFqcn('App\Cat')]);
+    }
+
     /**
      * @param list<PropertyModel> $properties
      */

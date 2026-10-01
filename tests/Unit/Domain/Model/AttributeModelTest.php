@@ -75,6 +75,35 @@ final class AttributeModelTest extends TestCase
         ]);
     }
 
+    public function testDetectsDuplicatesAfterPositionalArguments(): void
+    {
+        $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('Named argument "max" is repeated');
+
+        AttributeArgument::assertWellFormed([
+            AttributeArgument::positional(ArgumentValue::literal(1)),
+            AttributeArgument::named('max', ArgumentValue::literal(10)),
+            AttributeArgument::named('max', ArgumentValue::literal(11)),
+        ]);
+    }
+
+    public function testTheConstructorValidatesArgumentOrder(): void
+    {
+        $this->expectException(InvalidModel::class);
+
+        new AttributeModel(ClassName::fromFqcn('App\Sensitive'), [
+            AttributeArgument::named('max', ArgumentValue::literal(10)),
+            AttributeArgument::positional(ArgumentValue::literal(1)),
+        ]);
+    }
+
+    public function testAnAliasNamespaceMustEndAtASegmentBoundary(): void
+    {
+        $this->expectException(InvalidModel::class);
+
+        new AttributeModel(ClassName::fromFqcn('App\SensitiveData\Mask'), [], new ImportAlias('App\Sensitive', 'S'));
+    }
+
     public function testRejectsAnInvalidArgumentName(): void
     {
         $this->expectException(InvalidModel::class);
