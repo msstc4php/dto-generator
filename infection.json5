@@ -71,7 +71,7 @@
         // Equivalent: the result is only iterated.
         "UnwrapArrayValues": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Domain\\Schema\\Schema::subschemas"] },
         // Equivalent: preg_split() only returns false on a regex error, ini_set() cannot fail for serialize_precision, and
-        // a list that the printer breaks is re-printed with a trailing comma whatever the caller asked for.
+        // pMaybeMultiline() keeps the parent's default for $trailingComma only for signature compatibility; it ignores it.
         "FalseValue": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Domain\\Builder\\NameResolver::words", "MSSTC4PHP\\DtoGenerator\\Domain\\Shared\\Json::floatToString", "MSSTC4PHP\\DtoGenerator\\Infrastructure\\Emitter\\GeneratedCodePrinter::pMaybeMultiline"] },
         // Equivalent: with one side null, either order of the coalesce yields the other side.
         "Coalesce": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Domain\\Builder\\TypeMapper::tightest"] },

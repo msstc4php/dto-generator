@@ -8,8 +8,11 @@ final class Copy
 {
     public int $clone;
 
-    public function __construct(int $clone)
+    public int $deliberatelyLongPropertyNameThatBreaksTheWitherCall;
+
+    public function __construct(int $clone, int $deliberatelyLongPropertyNameThatBreaksTheWitherCall = 0)
     {
         $this->clone = $clone;
+        $this->deliberatelyLongPropertyNameThatBreaksTheWitherCall = $deliberatelyLongPropertyNameThatBreaksTheWitherCall;
     }
 }

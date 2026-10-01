@@ -75,7 +75,11 @@ final class EmitterFixture
      */
     public static function copy(): ClassModel
     {
-        return self::model('Copy', null, [self::property('clone', ScalarType::int(), true)]);
+        return self::model('Copy', null, [
+            self::property('clone', ScalarType::int(), true),
+            // Long enough that `clone($this, [...])` and `new self(...)` break across lines on 8.1+.
+            self::property('deliberatelyLongPropertyNameThatBreaksTheWitherCall', ScalarType::int(), false, new DefaultValue(0)),
+        ]);
     }
 
     public static function tag(): ClassModel

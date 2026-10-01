@@ -6,8 +6,10 @@ declare(strict_types=1);
 
 final class Copy
 {
-    public function __construct(private int $clone)
-    {
+    public function __construct(
+        private int $clone,
+        private int $deliberatelyLongPropertyNameThatBreaksTheWitherCall = 0,
+    ) {
     }
 
     public function getClone(): int
@@ -21,5 +23,18 @@ final class Copy
         $copy->clone = $clone;
 
         return $copy;
+    }
+
+    public function getDeliberatelyLongPropertyNameThatBreaksTheWitherCall(): int
+    {
+        return $this->deliberatelyLongPropertyNameThatBreaksTheWitherCall;
+    }
+
+    public function withDeliberatelyLongPropertyNameThatBreaksTheWitherCall(int $deliberatelyLongPropertyNameThatBreaksTheWitherCall): self
+    {
+        $clone = clone $this;
+        $clone->deliberatelyLongPropertyNameThatBreaksTheWitherCall = $deliberatelyLongPropertyNameThatBreaksTheWitherCall;
+
+        return $clone;
     }
 }

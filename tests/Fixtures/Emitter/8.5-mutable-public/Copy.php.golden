@@ -6,7 +6,9 @@ declare(strict_types=1);
 
 final class Copy
 {
-    public function __construct(public int $clone)
-    {
+    public function __construct(
+        public int $clone,
+        public int $deliberatelyLongPropertyNameThatBreaksTheWitherCall = 0,
+    ) {
     }
 }

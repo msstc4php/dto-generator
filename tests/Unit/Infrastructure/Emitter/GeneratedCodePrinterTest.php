@@ -6,6 +6,8 @@ namespace MSSTC4PHP\DtoGenerator\Tests\Unit\Infrastructure\Emitter;
 
 use LogicException;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Emitter\GeneratedCodePrinter;
+use PhpParser\Comment;
+use PhpParser\Comment\Doc;
 use PhpParser\Modifiers;
 use PhpParser\Node\Arg;
 use PhpParser\Node\ArrayItem;
@@ -13,6 +15,9 @@ use PhpParser\Node\Attribute;
 use PhpParser\Node\AttributeGroup;
 use PhpParser\Node\DeclareItem;
 use PhpParser\Node\Expr\Array_;
+use PhpParser\Node\Expr\Assign;
+use PhpParser\Node\Expr\FuncCall;
+use PhpParser\Node\Expr\List_;
 use PhpParser\Node\Expr\New_;
 use PhpParser\Node\Expr\Variable;
 use PhpParser\Node\Identifier;
@@ -163,15 +168,46 @@ final class GeneratedCodePrinterTest extends TestCase
         }
 
         $value = new Array_($items);
-        foreach (range(1, 30) as $level) {
+        foreach (range(1, 16) as $level) {
             $value = new Array_([new ArrayItem($value)]);
         }
 
         $started = microtime(true);
         $code = (new GeneratedCodePrinter())->prettyPrint([new Expression($value)]);
 
-        // Printing each level twice would take hours at this depth; once, it takes milliseconds.
+        // Printing each level twice takes over ten seconds at this depth; once, it takes milliseconds.
         self::assertLessThan(2.0, microtime(true) - $started);
         self::assertSame(12, substr_count($code, "'value-"));
+        self::assertStringStartsWith("[\n    [\n        [\n", $code);
+        self::assertStringEndsWith("        ],\n    ],\n];", $code);
+    }
+
+    public function testPutsCommentedElementsOnTheirOwnLines(): void
+    {
+        $first = new ArrayItem(new Variable('a'));
+        $first->setAttribute('comments', [new Comment('// first')]);
+
+        $second = new ArrayItem(new Variable('b'));
+        $second->setAttribute('comments', [new Doc("/**\n * Second.\n */")]);
+
+        self::assertSame(
+            "[\n    // first\n    \$a,\n    /**\n     * Second.\n     */\n    \$b,\n];",
+            (new GeneratedCodePrinter())->prettyPrint([new Expression(new Array_([$first, $second]))]),
+        );
+    }
+
+    public function testPrintsEmptyLists(): void
+    {
+        self::assertSame("f();\n[];", (new GeneratedCodePrinter())->prettyPrint([
+            new Expression(new FuncCall(new Name('f'))),
+            new Expression(new Array_([])),
+        ]));
+    }
+
+    public function testKeepsTheHolesOfADestructuringList(): void
+    {
+        $list = new List_([null, new ArrayItem(new Variable('b'))], ['kind' => List_::KIND_ARRAY]);
+
+        self::assertSame('[, $b] = $c;', (new GeneratedCodePrinter())->prettyPrint([new Expression(new Assign($list, new Variable('c')))]));
     }
 }

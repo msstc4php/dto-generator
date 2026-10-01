@@ -64,6 +64,10 @@ final class GeneratedCodePrinter extends Standard
         return $this->pList($params, $this->phpVersion->supportsTrailingCommaInParamList());
     }
 
+    /**
+     * Ignores the caller's $trailingComma: every list this printer breaks is a call, an array or a list(), where a
+     * trailing comma is valid from PHP 7.3 on.
+     */
     protected function pMaybeMultiline(array $nodes, bool $trailingComma = false): string
     {
         // A trailing comma in calls and arrays is valid from PHP 7.3, so every target gets one once the list breaks.
@@ -90,13 +94,19 @@ final class GeneratedCodePrinter extends Standard
      * Prints every element once, at the inner indentation, then joins the results on one line when they are short
      * and single-line, or one per line otherwise (a long array default, a PHPDoc, a long list).
      *
-     * @param array<Node> $nodes
+     * @param array<Node|null> $nodes null is a hole in a destructuring list
      */
     private function pList(array $nodes, bool $trailingComma): string
     {
         $this->indent();
         $items = [];
         foreach ($nodes as $node) {
+            if ($node === null) {
+                $items[] = '';
+
+                continue;
+            }
+
             $comments = $node->getComments();
             // A comment ends with a line break, so a commented element always breaks the list.
             $items[] = ($comments !== [] ? $this->pComments($comments) . $this->nl : '') . $this->p($node);
@@ -109,7 +119,7 @@ final class GeneratedCodePrinter extends Standard
             return $single;
         }
 
-        $result = $this->nl . implode(',' . $this->nl, $items) . ($trailingComma && $items !== [] ? ',' : '');
+        $result = $this->nl . implode(',' . $this->nl, $items) . ($trailingComma ? ',' : '');
         $this->outdent();
 
         return $result . $this->nl;
