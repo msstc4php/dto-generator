@@ -159,10 +159,12 @@ sources:
 | формат из `formats` конфига | указанный класс | — |
 | `type: [T, "null"]` | `?T` | — |
 | `array` + `items` | `array` | `list<T>` |
-| объект только с `additionalProperties: <schema>` | `array` | `array<string, T>` |
-| `properties` + `additionalProperties` | доп. свойство `$additionalProperties` | `array<string, T>` |
+| объект только с `additionalProperties: <schema>` | `array` | `array<array-key, T>` ¹ |
+| `properties` + `additionalProperties` | доп. свойство `$additionalProperties` | `array<array-key, T>` ¹ |
 | `$ref` | класс / enum цели | — |
 | `x-php-type` | указанный FQCN | — |
+
+¹ Ключ — `array-key`, а не `string`: PHP хранит ключи JSON-объекта, похожие на целые числа (`"200"`), как `int`. Решение владельца от 2026-10-01 (UTC).
 
 Неизвестный `format` даёт базовый тип и warning. Расширения регистрируют
 дополнительные форматы через SPI.

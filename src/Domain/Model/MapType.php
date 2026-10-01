@@ -20,6 +20,7 @@ final class MapType implements TypeModel
 
     public function describe(): string
     {
-        return sprintf('array<string, %s>', $this->value->describe());
+        // JSON object keys that look like integers become int keys in PHP arrays.
+        return sprintf('array<array-key, %s>', $this->value->describe());
     }
 }

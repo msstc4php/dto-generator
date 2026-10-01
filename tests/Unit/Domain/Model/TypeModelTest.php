@@ -41,7 +41,7 @@ final class TypeModelTest extends TestCase
             'bool' => [ScalarType::bool(), 'bool'],
             'class' => [$user, 'App\User'],
             'list' => [new ListType($user), 'list<App\User>'],
-            'map' => [new MapType(ScalarType::int()), 'array<string, int>'],
+            'map' => [new MapType(ScalarType::int()), 'array<array-key, int>'],
             'union' => [new UnionType($user, ScalarType::string()), 'App\User|string'],
             'nullable' => [new NullableType(new ListType(ScalarType::string())), 'list<string>|null'],
             'mixed' => [new MixedType(), 'mixed'],
@@ -119,7 +119,7 @@ final class TypeModelTest extends TestCase
     {
         $foo = new ClassType(ClassName::fromFqcn('Foo'));
 
-        self::assertSame('Foo|list<Foo>|array<string, Foo>', (new UnionType($foo, new ListType($foo), new MapType($foo)))->describe());
+        self::assertSame('Foo|list<Foo>|array<array-key, Foo>', (new UnionType($foo, new ListType($foo), new MapType($foo)))->describe());
     }
 
     public function testUnionTreatsClassNamesCaseInsensitively(): void

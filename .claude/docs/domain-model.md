@@ -7,7 +7,7 @@
 - `default` обёрнут в `DefaultValue`: «default = null» ≠ «default нет».
 
 ## IR (`Domain/Model`)
-- `TypeModel`: `ScalarType` (с PHPDoc-уточнением), `ClassType`, `ListType`, `MapType` (ключи всегда string), `UnionType` (≥2 разных, плоский, без nullable/mixed), `NullableType` (не вкладывается, не над mixed), `MixedType`. Равенство типов — по `describe()`.
+- `TypeModel`: `ScalarType` (с PHPDoc-уточнением), `ClassType`, `ListType`, `MapType` (`array<array-key, T>` — числовые ключи JSON становятся int), `UnionType` (≥2 разных, плоский, без nullable/mixed), `NullableType` (не вкладывается, не над mixed), `MixedType`. Равенство типов — по `describe()`.
 - `ClassName` отклоняет зарезервированные слова (включая soft keywords `enum`, `readonly`) только в **коротком имени**; сегменты namespace — лишь синтаксис идентификатора, т.к. с PHP 8.0 `App\Dto\Public` допустим. Отказ для target < 8.0 — обязанность валидации конфига (этап 2). Переименование (суффикс `_`) делает Builder, не модель.
 - `Identifier`: проверка с `\z`; два списка — `PHP74_KEYWORDS` (токены лексера 7.4: ломают и имя класса, и сегмент namespace до 8.0) и `RESERVED_CLASS_NAMES` (`enum`, `match`, `readonly`, имена типов — только для имени класса); `resource`/`numeric` разрешены (soft-reserved, компилируются везде); `normalizeQualifiedName()` — общая проверка FQCN/namespace (ровно один ведущий `\`); `asciiLower()` — локаленезависимый lower.
 - `ClassName::equals()` регистронезависим (как PHP); `reservedNamespaceSegments()` — для проверки target < 8.0. Список зарезервированных включает `die`, `__halt_compiler`, магические константы.
