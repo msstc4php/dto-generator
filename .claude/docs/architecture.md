@@ -22,3 +22,7 @@ Hex-подход, адаптированный под библиотеку; пр
 - deptrac: слой `TypeAlias` — PHPStan-алиасы `JsonValue`/`JsonScalar`, которые deptrac считает классами; анализ с `--fail-on-uncovered`.
 - Инструменты в `tools/` (отдельный `composer.json`), чтобы `require-dev` пакета ставился на PHP 7.4.
 - Открытый вопрос к этапу 3: Presentation (CLI) будет точкой сборки и должен инстанцировать адаптеры Infrastructure — правило deptrac для этого придётся расширить или вынести composition root.
+
+- `Domain/Diagnostic` — отклонение от spec §3: `Diagnostics` живёт в Domain (его используют `SchemaParser` и Application), Contract (этап 5) будет ссылаться на него. Каждая `Diagnostic` обязана иметь `SchemaLocation`; одинаковые диагностики схлопываются.
+- `Domain/Builder/SchemaParser` — «decoded JSON → `Schema`»; «`Schema` → IR» (spec §3 `Builder`) появится в этапе 2b рядом.
+- `SchemaGraph` хранит рёбра `ReferenceUse::key()` → цель, записанные при загрузке; `resolve(ReferenceUse)` — чистый поиск без повторного разбора `$ref`.
