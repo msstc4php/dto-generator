@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Tests\Unit\Domain\Shared;
 
+use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Severity;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassKind;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumBacking;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaType;
@@ -43,6 +44,7 @@ final class EnumValuesTest extends TestCase
             'schema type' => [SchemaType::class, ['string', 'integer', 'number', 'boolean', 'array', 'object', 'null']],
             'class kind' => [ClassKind::class, ['final', 'open', 'abstract']],
             'enum backing' => [EnumBacking::class, ['string', 'int']],
+            'severity' => [Severity::class, ['error', 'warning']],
         ];
     }
 }
