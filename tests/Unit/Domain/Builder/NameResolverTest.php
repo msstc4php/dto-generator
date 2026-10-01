@@ -39,6 +39,7 @@ final class NameResolverTest extends TestCase
             'no-break space' => ["x\u{00A0}y", 'XY'],
             'currency sign' => ['€', null],
             'non-ascii letters' => ["\u{00FC}ber_ma\u{00DF}", "\u{00FC}berMa\u{00DF}"],
+            'combining mark' => ["cafe\u{0301}_x", "Cafe\u{0301}X"],
             'invalid utf-8' => ["ab\xFF", 'Ab'],
         ];
     }
@@ -64,6 +65,9 @@ final class NameResolverTest extends TestCase
             'all caps words' => ['URL_PATH', 'urlPATH'],
             'mixed caps' => ['userID', 'userID'],
             'acronym inside a word' => ['xmlHTTPRequest', 'xmlHTTPRequest'],
+            'decomposed accent' => ["na\u{0308}ive", "na\u{0308}ive"],
+            'leading acronym with a digit' => ['HTTP2Status', 'http2Status'],
+            'short acronym with a digit' => ['S3Bucket', 's3Bucket'],
             'leading acronym' => ['HTTPStatus', 'httpStatus'],
             'leading acronym before a word' => ['URLPath', 'urlPath'],
             'no-break space in a property' => ["x\u{00A0}y", 'xY'],

@@ -254,6 +254,7 @@ final class BuildTest extends TestCase
             'S' => ['type' => 'string', 'x-php-nmae' => 'x', 'x-php-class-name' => 'Foo'],
             'Hidden' => ['type' => 'object', 'x-php-skip' => true, 'x-php-clas-name' => 'X', 'properties' => ['id' => []]],
             'Currency' => ['type' => 'string', 'enum' => ['EUR'], 'x-php-class-name' => 'Money'],
+            'Tags' => ['type' => 'array', 'items' => ['type' => 'string', 'x-php-nmae' => 'x']],
         ]);
 
         self::assertSame(
@@ -264,6 +265,7 @@ final class BuildTest extends TestCase
                 "warning {$at}S/x-php-class-name: \"x-php-class-name\" has no effect here.",
                 "error {$at}Hidden/x-php-clas-name: Unknown extension \"x-php-clas-name\"; {$known}",
                 "warning {$at}Currency: \"enum\" is not supported yet, so no class is generated for \"Currency\".",
+                "error {$at}Tags/items/x-php-nmae: Unknown extension \"x-php-nmae\"; {$known}",
             ],
             ModelFixture::messages($output),
         );
@@ -273,7 +275,7 @@ final class BuildTest extends TestCase
     {
         $at = self::AT;
         $output = ModelFixture::build([
-            'Node' => ['type' => 'object', 'required' => ['parent'], 'properties' => ['parent' => ['$ref' => '#/components/schemas/Node']]],
+            'Node' => ['type' => 'object', 'required' => ['parent'], 'properties' => ['id' => ['type' => 'integer'], 'parent' => ['$ref' => '#/components/schemas/Node']]],
             'A' => ['type' => 'object', 'required' => ['b'], 'properties' => ['b' => ['$ref' => '#/components/schemas/B']]],
             'B' => ['type' => 'object', 'required' => ['a', 'tree'], 'properties' => ['a' => ['$ref' => '#/components/schemas/A'], 'tree' => ['$ref' => '#/components/schemas/Tree']]],
             'Tree' => ['type' => 'object', 'required' => ['id'], 'properties' => ['id' => ['type' => 'integer'], 'parent' => ['$ref' => '#/components/schemas/Tree']]],

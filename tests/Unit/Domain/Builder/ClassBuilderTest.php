@@ -155,6 +155,27 @@ final class ClassBuilderTest extends TestCase
                 ['at' => 'at: DateTimeImmutable|null = NULL'],
                 ["warning {$at}/properties/at/default: A default for DateTimeImmutable cannot be a PHP constant expression; null is used instead."],
             ],
+            'default for a list of dates' => [
+                ['type' => 'object', 'properties' => ['days' => ['type' => 'array', 'items' => ['type' => 'string', 'format' => 'date'], 'default' => ['2020-01-01']]]],
+                ['days' => 'days: list<DateTimeImmutable>|null = NULL'],
+                ["warning {$at}/properties/days/default: A default for DateTimeImmutable cannot be a PHP constant expression; null is used instead."],
+            ],
+            'empty default for a list of dates' => [
+                ['type' => 'object', 'properties' => ['days' => ['type' => 'array', 'items' => ['type' => 'string', 'format' => 'date'], 'default' => []]]],
+                ['days' => 'days: list<DateTimeImmutable>|null = array (
+)'],
+                [],
+            ],
+            'default for a list of nullable dates' => [
+                ['type' => 'object', 'properties' => ['days' => ['type' => 'array', 'items' => ['type' => ['string', 'null'], 'format' => 'date'], 'default' => ['2020-01-01']]]],
+                ['days' => 'days: list<DateTimeImmutable|null>|null = NULL'],
+                ["warning {$at}/properties/days/default: A default for DateTimeImmutable cannot be a PHP constant expression; null is used instead."],
+            ],
+            'default for a list of maps' => [
+                ['type' => 'object', 'properties' => ['metas' => ['type' => 'array', 'items' => ['type' => 'object'], 'default' => [['a' => 1]]]]],
+                ['metas' => 'metas: list<array<array-key, mixed>>|null = NULL'],
+                ["warning {$at}/properties/metas/default: A default for a map is not generated, because JSON object keys do not reliably survive as PHP array keys; null is used instead."],
+            ],
             'default for a map' => [
                 ['type' => 'object', 'properties' => ['meta' => ['type' => 'object', 'default' => ['a' => 1]]]],
                 ['meta' => 'meta: array<array-key, mixed>|null = NULL'],
@@ -322,9 +343,9 @@ final class ClassBuilderTest extends TestCase
             'wrong list item' => [['type' => 'array', 'items' => ['type' => 'integer'], 'default' => [1, 'x']], '[1,"x"]', 'list<int>'],
             'path for int' => [['type' => 'integer', 'default' => "a/\u{00FC}"], "\"a/\u{00FC}\"", 'int'],
             'whole float for int' => [['type' => 'integer', 'default' => 2.0], '2.0', 'int'],
-            'scalar for a list of classes' => [['type' => 'array', 'items' => ['x-php-type' => 'App\\Money'], 'default' => [1]], '[1]', 'list<App\\Money>'],
             'missing item in a list' => [['type' => 'array', 'items' => ['type' => 'integer'], 'default' => [1, null]], '[1,null]', 'list<int>'],
             'wrong nullable item' => [['type' => 'array', 'items' => ['type' => ['integer', 'null']], 'default' => ['x']], '["x"]', 'list<int|null>'],
+            'invalid utf-8 for int' => [['type' => 'integer', 'default' => "\xFF"], "\"\u{FFFD}\"", 'int'],
             'scalar for list' => [['type' => 'array', 'default' => 'x'], '"x"', 'list<mixed>'],
         ];
     }

@@ -48,11 +48,12 @@ final class Action
             $key = $resolved->location()->toString();
             $isClass = SchemaShape::isClass($schema);
             $unsupported = SchemaShape::unsupportedKeyword($schema);
-            ExtensionVocabulary::check(
-                $schema,
-                $isClass || $unsupported !== null ? ExtensionVocabulary::CLASS_SCHEMA : ExtensionVocabulary::ALIAS_SCHEMA,
-                $diagnostics,
-            );
+            if ($isClass || $unsupported !== null) {
+                ExtensionVocabulary::checkClass($schema, $diagnostics);
+            } else {
+                ExtensionVocabulary::checkAlias($schema, $diagnostics);
+            }
+
             if ($source === null) {
                 continue;
             }

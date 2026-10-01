@@ -12,6 +12,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\DocModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\Identifier;
+use MSSTC4PHP\DtoGenerator\Domain\Model\ListType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\MapType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\NullableType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\PropertyModel;
@@ -67,7 +68,7 @@ final class ClassBuilder
         $taken = [];
         foreach ($schema->propertyNames() as $wireName) {
             $propertySchema = $schema->requireProperty($wireName);
-            $this->checkExtensions($propertySchema, $diagnostics);
+            ExtensionVocabulary::checkProperty($propertySchema, $diagnostics);
             if (self::isSkipped($propertySchema, $diagnostics)) {
                 if ($schema->isRequired($wireName)) {
                     $diagnostics->warning(
@@ -164,13 +165,15 @@ final class ClassBuilder
 
         $at = $schema->location()->child('default');
         $inner = $type instanceof NullableType ? $type->inner() : $type;
-        if ($inner instanceof ClassType) {
-            $diagnostics->warning(sprintf('A default for %s cannot be a PHP constant expression; null is used instead.', $inner->describe()), $at);
+        // An empty list needs no item literal, so only a non-empty value can hit an unrepresentable item type.
+        $unrepresentable = $default->value() === [] ? null : self::unrepresentable($inner);
+        if ($unrepresentable instanceof ClassType) {
+            $diagnostics->warning(sprintf('A default for %s cannot be a PHP constant expression; null is used instead.', $unrepresentable->describe()), $at);
 
             return null;
         }
 
-        if ($inner instanceof MapType) {
+        if ($unrepresentable instanceof MapType) {
             $diagnostics->warning('A default for a map is not generated, because JSON object keys do not reliably survive as PHP array keys; null is used instead.', $at);
 
             return null;
@@ -186,7 +189,7 @@ final class ClassBuilder
             $diagnostics->error(
                 sprintf(
                     'Default %s does not match %s; null is used instead.',
-                    json_encode($default->value(), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION),
+                    json_encode($default->value(), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION | JSON_INVALID_UTF8_SUBSTITUTE),
                     $inner->describe(),
                 ),
                 $at,
@@ -196,6 +199,24 @@ final class ClassBuilder
         }
 
         return $default;
+    }
+
+    /**
+     * The class or map type, possibly nested in lists, that no PHP constant expression can produce.
+     *
+     * @return ClassType|MapType|null
+     */
+    private static function unrepresentable(TypeModel $type): ?TypeModel
+    {
+        if ($type instanceof ClassType || $type instanceof MapType) {
+            return $type;
+        }
+
+        if ($type instanceof NullableType) {
+            return self::unrepresentable($type->inner());
+        }
+
+        return $type instanceof ListType ? self::unrepresentable($type->item()) : null;
     }
 
     /**
@@ -243,13 +264,5 @@ final class ClassBuilder
         }
 
         return $mutability;
-    }
-
-    private function checkExtensions(Schema $property, Diagnostics $diagnostics): void
-    {
-        ExtensionVocabulary::check($property, ExtensionVocabulary::PROPERTY, $diagnostics);
-        for ($items = $property->items(); $items instanceof Schema; $items = $items->items()) {
-            ExtensionVocabulary::check($items, ExtensionVocabulary::ITEMS, $diagnostics);
-        }
     }
 }

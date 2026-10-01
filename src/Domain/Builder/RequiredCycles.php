@@ -24,11 +24,16 @@ final class RequiredCycles
     public static function check(array $classes, Diagnostics $diagnostics): void
     {
         $edges = self::edges($classes);
+        $reachable = array_map(static fn (array $targets): array => self::reachableFrom($edges, $targets), $edges);
         foreach ($classes as $class) {
             $owner = $class->name()->fqcn();
             foreach ($class->properties() as $property) {
                 $type = $property->type();
-                if ($property->isRequired() && $type instanceof ClassType && self::reaches($edges, $type->className()->fqcn(), $owner)) {
+                if (!$property->isRequired() || !$type instanceof ClassType) {
+                    continue;
+                }
+
+                if (isset($reachable[$type->className()->fqcn()][$owner])) {
                     $diagnostics->warning(
                         sprintf(
                             'Required property "%s" of %s leads back to it through required properties, so no instance can ever be constructed.',
@@ -66,28 +71,26 @@ final class RequiredCycles
     }
 
     /**
+     * Every class reachable through at least one required property, starting from the given targets.
+     *
      * @param array<string, list<string>> $edges
+     * @param list<string> $pending
+     *
+     * @return array<string, string>
      */
-    private static function reaches(array $edges, string $from, string $to): bool
+    private static function reachableFrom(array $edges, array $pending): array
     {
         $seen = [];
-        $pending = [$from];
         while ($pending !== []) {
             $current = array_pop($pending);
-            if ($current === $to) {
-                return true;
-            }
-
-            if (in_array($current, $seen, true)) {
-                continue;
-            }
-
-            $seen[] = $current;
-            foreach ($edges[$current] ?? [] as $next) {
-                $pending[] = $next;
+            if (!isset($seen[$current])) {
+                $seen[$current] = $current;
+                foreach ($edges[$current] ?? [] as $next) {
+                    $pending[] = $next;
+                }
             }
         }
 
-        return false;
+        return $seen;
     }
 }
