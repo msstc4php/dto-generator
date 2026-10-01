@@ -42,13 +42,7 @@ final class SchemaLocation
 
     public function child(string ...$segments): self
     {
-        $pointer = $this->pointer;
-        foreach ($segments as $segment) {
-            // RFC 6901: "~" must be escaped before "/".
-            $pointer .= '/' . str_replace(['~', '/'], ['~0', '~1'], $segment);
-        }
-
-        return new self($this->file, $pointer);
+        return new self($this->file, $this->pointer . JsonPointer::fromSegments(...$segments));
     }
 
     public function toString(): string

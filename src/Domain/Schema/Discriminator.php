@@ -33,7 +33,13 @@ final class Discriminator
         }
 
         $this->propertyName = $propertyName;
-        $this->mapping = $mapping;
+        $this->mapping = [];
+        foreach ($mapping as $value => $ref) {
+            // OpenAPI: a mapping value without "/" or "#" names a component schema.
+            $this->mapping[$value] = strpos($ref, '#') === false && strpos($ref, '/') === false
+                ? '#/components/schemas/' . $ref
+                : $ref;
+        }
     }
 
     public function propertyName(): string

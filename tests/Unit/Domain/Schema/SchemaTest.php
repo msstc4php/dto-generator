@@ -7,6 +7,7 @@ namespace MSSTC4PHP\DtoGenerator\Tests\Unit\Domain\Schema;
 use MSSTC4PHP\DtoGenerator\Domain\Exception\InvalidModel;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Discriminator;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Extensions;
+use MSSTC4PHP\DtoGenerator\Domain\Schema\ReferenceUse;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaBuilder;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
@@ -217,5 +218,38 @@ final class SchemaTest extends TestCase
     private function type(string $type): SchemaType
     {
         return SchemaType::from($type);
+    }
+
+    public function testListsEveryReferenceWithItsLocation(): void
+    {
+        $tag = $this->builder('/properties/tag')->ref('#/components/schemas/Tag')->build();
+        $item = $this->builder('/properties/list/items')->ref('#/components/schemas/Item')->build();
+        $list = $this->builder('/properties/list')->types($this->type(SchemaType::ARRAY))->items($item)->build();
+        $base = $this->builder('/allOf/0')->ref('base.yaml')->build();
+        $extra = $this->builder('/additionalProperties')->ref('#/components/schemas/Extra')->build();
+        $schema = $this->builder()
+            ->property('tag', $tag)
+            ->property('list', $list)
+            ->allOf($base)
+            ->additionalProperties($extra)
+            ->discriminator(new Discriminator('kind', ['cat' => 'Cat']))
+            ->build()
+        ;
+
+        self::assertSame(
+            [
+                ['#/components/schemas/Tag', '/properties/tag'],
+                ['#/components/schemas/Item', '/properties/list/items'],
+                ['#/components/schemas/Extra', '/additionalProperties'],
+                ['base.yaml', '/allOf/0'],
+                ['#/components/schemas/Cat', '/discriminator/mapping/cat'],
+            ],
+            array_map(static fn (ReferenceUse $use): array => [$use->ref(), $use->location()->pointer()], $schema->references()),
+        );
+    }
+
+    public function testASchemaWithoutReferencesListsNone(): void
+    {
+        self::assertSame([], $this->builder()->types($this->type(SchemaType::STRING))->build()->references());
     }
 }

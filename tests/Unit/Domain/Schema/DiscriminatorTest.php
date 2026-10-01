@@ -43,4 +43,12 @@ final class DiscriminatorTest extends TestCase
 
         new Discriminator('kind', ['cat' => '']);
     }
+
+    public function testABareMappingValueNamesAComponentSchema(): void
+    {
+        $discriminator = new Discriminator('kind', ['cat' => 'Cat', 'dog' => 'dog.yaml#/Dog']);
+
+        self::assertSame('#/components/schemas/Cat', $discriminator->refFor('cat'));
+        self::assertSame('dog.yaml#/Dog', $discriminator->refFor('dog'));
+    }
 }

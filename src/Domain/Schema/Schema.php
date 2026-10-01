@@ -309,6 +309,32 @@ final class Schema
     }
 
     /**
+     * Every `$ref` in this schema and its subschemas, plus discriminator mapping targets.
+     *
+     * @return list<ReferenceUse>
+     */
+    public function references(): array
+    {
+        $uses = $this->ref === null ? [] : [new ReferenceUse($this->ref, $this->location)];
+        foreach ($this->subschemas() as $subschema) {
+            foreach ($subschema->references() as $use) {
+                $uses[] = $use;
+            }
+        }
+
+        if ($this->discriminator instanceof Discriminator) {
+            foreach ($this->discriminator->values() as $value) {
+                $ref = $this->discriminator->refFor($value);
+                if ($ref !== null) {
+                    $uses[] = new ReferenceUse($ref, $this->location->child('discriminator', 'mapping', $value));
+                }
+            }
+        }
+
+        return $uses;
+    }
+
+    /**
      * @param list<SchemaType> $types
      */
     private function assertUniqueTypes(SchemaLocation $location, array $types): void
@@ -356,5 +382,22 @@ final class Schema
                 throw new InvalidModel(sprintf('Schema %s: "%s" has a dedicated field and cannot be a generic keyword.', $location->toString(), $keyword));
             }
         }
+    }
+
+    /**
+     * @return list<Schema>
+     */
+    private function subschemas(): array
+    {
+        $subschemas = array_values($this->properties);
+        if ($this->items instanceof self) {
+            $subschemas[] = $this->items;
+        }
+
+        if ($this->additionalProperties instanceof self) {
+            $subschemas[] = $this->additionalProperties;
+        }
+
+        return array_merge($subschemas, $this->allOf, $this->oneOf, $this->anyOf);
     }
 }
