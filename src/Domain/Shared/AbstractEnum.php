@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Domain\Shared;
 
-use InvalidArgumentException;
 use LogicException;
+use MSSTC4PHP\DtoGenerator\Domain\Exception\InvalidModel;
 
 /**
  * Stand-in for native enums, which need PHP 8.1 while the generator runs on 7.4.
@@ -47,7 +47,7 @@ abstract class AbstractEnum
     {
         $instance = static::tryFrom($value);
         if (!$instance instanceof AbstractEnum) {
-            throw new InvalidArgumentException(sprintf('"%s" is not a valid %s value; expected one of: %s.', $value, static::class, implode(', ', static::values())));
+            throw new InvalidModel(sprintf('"%s" is not a valid %s value; expected one of: %s.', $value, static::class, implode(', ', static::values())));
         }
 
         return $instance;

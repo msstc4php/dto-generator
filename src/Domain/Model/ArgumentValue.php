@@ -34,8 +34,11 @@ final class ArgumentValue
     /** @var JsonScalar */
     private $literal;
 
+    /** @var list<ArgumentValue> */
+    private array $list;
+
     /** @var array<int|string, ArgumentValue> */
-    private array $items;
+    private array $map;
 
     private ?ClassName $class;
 
@@ -47,14 +50,16 @@ final class ArgumentValue
     /**
      * @param self::KIND_* $kind
      * @param JsonScalar $literal
-     * @param array<int|string, ArgumentValue> $items
+     * @param list<ArgumentValue> $list
+     * @param array<int|string, ArgumentValue> $map
      * @param list<AttributeArgument> $arguments
      */
-    private function __construct(string $kind, $literal, array $items, ?ClassName $class, ?string $constant, array $arguments)
+    private function __construct(string $kind, $literal, array $list, array $map, ?ClassName $class, ?string $constant, array $arguments)
     {
         $this->kind = $kind;
         $this->literal = $literal;
-        $this->items = $items;
+        $this->list = $list;
+        $this->map = $map;
         $this->class = $class;
         $this->constant = $constant;
         $this->arguments = $arguments;
@@ -75,12 +80,18 @@ final class ArgumentValue
             throw new InvalidModel('A float argument must be finite; INF and NAN have no PHP literal.');
         }
 
-        return new self(self::KIND_LITERAL, $value, [], null, null, []);
+        return new self(self::KIND_LITERAL, $value, [], [], null, null, []);
     }
 
     public static function listOf(self ...$items): self
     {
-        return new self(self::KIND_LIST, null, $items, null, null, []);
+        // On PHP 8.0+ unknown named arguments land in the variadic with string keys; re-index them.
+        $list = [];
+        foreach ($items as $item) {
+            $list[] = $item;
+        }
+
+        return new self(self::KIND_LIST, null, $list, [], null, null, []);
     }
 
     /**
@@ -88,7 +99,7 @@ final class ArgumentValue
      */
     public static function mapOf(array $items): self
     {
-        return new self(self::KIND_MAP, null, $items, null, null, []);
+        return new self(self::KIND_MAP, null, [], $items, null, null, []);
     }
 
     public static function constant(string $name, ?ClassName $class = null): self
@@ -97,19 +108,19 @@ final class ArgumentValue
             throw new InvalidModel(sprintf('"%s" is not a valid constant name; use classReference() for ::class.', $name));
         }
 
-        return new self(self::KIND_CONSTANT, null, [], $class, $name, []);
+        return new self(self::KIND_CONSTANT, null, [], [], $class, $name, []);
     }
 
     public static function classReference(ClassName $class): self
     {
-        return new self(self::KIND_CLASS_REFERENCE, null, [], $class, null, []);
+        return new self(self::KIND_CLASS_REFERENCE, null, [], [], $class, null, []);
     }
 
     public static function newInstance(ClassName $class, AttributeArgument ...$arguments): self
     {
         AttributeArgument::assertWellFormed($arguments);
 
-        return new self(self::KIND_NEW_INSTANCE, null, [], $class, null, $arguments);
+        return new self(self::KIND_NEW_INSTANCE, null, [], [], $class, null, $arguments);
     }
 
     /**
@@ -137,7 +148,7 @@ final class ArgumentValue
     {
         $this->assertKind(self::KIND_LIST);
 
-        return array_values($this->items);
+        return $this->list;
     }
 
     /**
@@ -149,7 +160,7 @@ final class ArgumentValue
     {
         $this->assertKind(self::KIND_MAP);
 
-        return $this->items;
+        return $this->map;
     }
 
     public function constantName(): string

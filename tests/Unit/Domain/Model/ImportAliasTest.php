@@ -51,6 +51,7 @@ final class ImportAliasTest extends TestCase
             'empty' => [''],
             'leading digit segment' => ['App\\1Rules'],
             'empty segment' => ['App\\\\Rules'],
+            'double leading backslash' => ['\\\\App\\Rules'],
         ];
     }
 }

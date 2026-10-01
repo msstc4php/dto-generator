@@ -20,16 +20,11 @@ final class ClassName
 
     public static function fromFqcn(string $fqcn): self
     {
-        $normalized = ltrim($fqcn, '\\');
-        if ($normalized === '') {
+        if ($fqcn === '' || $fqcn === '\\') {
             throw new InvalidModel(sprintf('Class name "%s" must not be empty.', $fqcn));
         }
 
-        foreach (explode('\\', $normalized) as $segment) {
-            if (!Identifier::isValid($segment)) {
-                throw new InvalidModel(sprintf('"%s" is not a valid class name: segment "%s" is not a PHP identifier.', $fqcn, $segment));
-            }
-        }
+        $normalized = Identifier::normalizeQualifiedName($fqcn, 'class name');
 
         $position = strrpos($normalized, '\\');
         $namespace = $position === false ? '' : (string) substr($normalized, 0, $position);
@@ -71,7 +66,7 @@ final class ClassName
 
         return array_values(array_filter(
             explode('\\', $this->namespace),
-            static fn (string $segment): bool => Identifier::isReserved($segment),
+            static fn (string $segment): bool => Identifier::isPhp74Keyword($segment),
         ));
     }
 

@@ -11,6 +11,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\ArgumentValue;
 use MSSTC4PHP\DtoGenerator\Domain\Model\AttributeArgument;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use PHPUnit\Framework\TestCase;
+use ReflectionMethod;
 
 final class ArgumentValueTest extends TestCase
 {
@@ -70,6 +71,18 @@ final class ArgumentValueTest extends TestCase
         $this->expectExceptionMessage('must be a scalar or null');
 
         ArgumentValue::literal([1]);
+    }
+
+    /**
+     * @requires PHP >= 8.0
+     */
+    public function testListOfDropsKeysOfUnknownNamedArguments(): void
+    {
+        // Unknown named arguments are collected into the variadic under their names.
+        $list = (new ReflectionMethod(ArgumentValue::class, 'listOf'))->invokeArgs(null, ['a' => ArgumentValue::literal(1)]);
+
+        self::assertInstanceOf(ArgumentValue::class, $list);
+        self::assertSame([0], array_keys($list->listItems()));
     }
 
     public function testHoldsListsAndMaps(): void

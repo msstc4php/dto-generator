@@ -41,6 +41,9 @@ final class DomainErrorTest extends TestCase
             'unsupported php version' => [static function (): void {
                 PhpVersion::fromString('9.9');
             }],
+            'invalid enum value' => [static function (): void {
+                MetadataMode::from('attribute');
+            }],
             'incompatible target' => [static function (): void {
                 new TargetProfile(
                     PhpVersion::fromString('7.4'),

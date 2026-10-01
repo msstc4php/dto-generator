@@ -54,8 +54,18 @@ final class IdentifierTest extends TestCase
     public function testReservedWordsIgnoreAsciiCase(): void
     {
         self::assertTrue(Identifier::isReserved('LIST'));
-        self::assertTrue(Identifier::isReserved('Resource'));
-        self::assertTrue(Identifier::isReserved('numeric'));
+        self::assertTrue(Identifier::isReserved('Enum'));
+        self::assertFalse(Identifier::isReserved('Resource'));
+        self::assertFalse(Identifier::isReserved('numeric'));
+    }
+
+    public function testKnowsWhichWordsBreakAPhp74Namespace(): void
+    {
+        self::assertTrue(Identifier::isPhp74Keyword('List'));
+        self::assertTrue(Identifier::isPhp74Keyword('fn'));
+        self::assertFalse(Identifier::isPhp74Keyword('Enum'));
+        self::assertFalse(Identifier::isPhp74Keyword('String'));
+        self::assertFalse(Identifier::isPhp74Keyword('Match'));
         self::assertFalse(Identifier::isReserved('listing'));
     }
 

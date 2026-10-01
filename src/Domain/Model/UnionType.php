@@ -21,8 +21,7 @@ final class UnionType implements TypeModel
             }
 
             foreach ($member instanceof self ? $member->members() : [$member] as $part) {
-                // PHP type names are case-insensitive, so `Foo\Bar|foo\bar` is a duplicate.
-                $key = Identifier::asciiLower($part->describe());
+                $key = $this->identityKey($part);
                 if (!isset($seen[$key])) {
                     $seen[$key] = true;
                     $flat[] = $part;
@@ -48,5 +47,38 @@ final class UnionType implements TypeModel
     public function describe(): string
     {
         return implode('|', array_map(static fn (TypeModel $member): string => $member->describe(), $this->members));
+    }
+
+    /**
+     * Class names are case-insensitive in PHP, PHPDoc literals and constants are not: fold only the former.
+     */
+    private function identityKey(TypeModel $type): string
+    {
+        return self::foldClassNames($type)->describe();
+    }
+
+    private static function foldClassNames(TypeModel $type): TypeModel
+    {
+        if ($type instanceof ClassType) {
+            return new ClassType(ClassName::fromFqcn(Identifier::asciiLower($type->className()->fqcn())));
+        }
+
+        if ($type instanceof ListType) {
+            return new ListType(self::foldClassNames($type->item()));
+        }
+
+        if ($type instanceof MapType) {
+            return new MapType(self::foldClassNames($type->value()));
+        }
+
+        if ($type instanceof NullableType) {
+            return new NullableType(self::foldClassNames($type->inner()));
+        }
+
+        if ($type instanceof self) {
+            return new self(...array_map(static fn (TypeModel $member): TypeModel => self::foldClassNames($member), $type->members()));
+        }
+
+        return $type;
     }
 }

@@ -47,7 +47,9 @@ final class ClassNameTest extends TestCase
     public function testListsReservedNamespaceSegmentsForPre80Targets(): void
     {
         self::assertSame(['Public'], ClassName::fromFqcn('App\\Dto\\Public\\User')->reservedNamespaceSegments());
-        self::assertSame(['List', 'Enum'], ClassName::fromFqcn('List\\Enum\\User')->reservedNamespaceSegments());
+        self::assertSame(['List'], ClassName::fromFqcn('List\\Enum\\User')->reservedNamespaceSegments());
+        self::assertSame([], ClassName::fromFqcn('App\\String\\Resource\\User')->reservedNamespaceSegments());
+        self::assertSame('App\\Dto\\Resource', ClassName::fromFqcn('App\\Dto\\Resource')->fqcn());
         self::assertSame([], ClassName::fromFqcn('App\\Dto\\Api\\User')->reservedNamespaceSegments());
         self::assertSame([], ClassName::fromFqcn('User')->reservedNamespaceSegments());
     }
@@ -78,6 +80,7 @@ final class ClassNameTest extends TestCase
             'empty' => ['', 'must not be empty'],
             'trailing newline' => ["App\\List\n", 'is not a PHP identifier'],
             'only a backslash' => ['\\', 'must not be empty'],
+            'double leading backslash' => ['\\\\App\\User', 'segment "" is not a PHP identifier'],
             'starts with a digit' => ['App\1User', 'segment "1User" is not a PHP identifier'],
             'dash' => ['App\User-Profile', 'segment "User-Profile" is not a PHP identifier'],
             'empty segment' => ['App\\\\User', 'segment "" is not a PHP identifier'],

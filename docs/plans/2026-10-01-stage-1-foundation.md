@@ -10,6 +10,8 @@
 
 **Spec:** `docs/specs/2026-10-01-dto-generator-design.md` — этот план реализует §13 этап 1: каркас, инструменты, deptrac (§3, §11.2), Domain — Schema, IR, `TargetProfile` (§3, §5, §6.1). Загрузка документов, Builder, Emitter, конфиг, SPI, CLI — в следующих планах.
 
+> **Примечание после ревью (2026-10-01 UTC):** API изменён по итогам code review — `withAttributes()` → `withAddedAttributes()`, `ArgumentValue::items()` → `listItems()`/`mapItems()`, `SchemaBuilder::defaultValue()` → `default()`, `TargetProfile::accessors()` → `configuredAccessors()`. Код в задачах ниже — исторический снимок; актуальный API — в `src/` и `.claude/docs/`.
+
 ## Global Constraints
 
 - Исходники и тесты должны парситься и работать на **PHP 7.4**. Запрещены: `enum`, `readonly`, атрибуты `#[...]`, `match`, union-типы в сигнатурах, promoted-свойства, именованные аргументы, `?->`, нативный тип `mixed`, возвращаемый тип `static`, функции 8.0+ (`str_contains`, `str_starts_with`, `str_ends_with`, `array_is_list`, `get_debug_type`).

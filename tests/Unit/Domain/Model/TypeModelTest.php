@@ -78,6 +78,50 @@ final class TypeModelTest extends TestCase
         self::assertCount(3, $union->members());
     }
 
+    public function testUnionKeepsCaseSensitivePhpDocMembers(): void
+    {
+        self::assertCount(2, (new UnionType(ScalarType::string("'Active'"), ScalarType::string("'active'")))->members());
+        self::assertSame(
+            'Status::ACTIVE|Status::active|int',
+            (new UnionType(ScalarType::string('Status::ACTIVE'), ScalarType::string('Status::active'), ScalarType::int()))->describe(),
+        );
+    }
+
+    /**
+     * @dataProvider caseOnlyDuplicates
+     */
+    public function testUnionFoldsCaseOfClassNamesInsideContainers(TypeModel $upper, TypeModel $lower): void
+    {
+        $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('at least two distinct members');
+
+        new UnionType($upper, $lower);
+    }
+
+    /**
+     * @return array<string, array{TypeModel, TypeModel}>
+     */
+    public static function caseOnlyDuplicates(): array
+    {
+        $upper = new ClassType(ClassName::fromFqcn('Foo\\Bar'));
+        $lower = new ClassType(ClassName::fromFqcn('foo\\bar'));
+        $other = new ClassType(ClassName::fromFqcn('Baz'));
+
+        return [
+            'list' => [new ListType($upper), new ListType($lower)],
+            'map' => [new MapType($upper), new MapType($lower)],
+            'nullable item' => [new ListType(new NullableType($upper)), new ListType(new NullableType($lower))],
+            'union item' => [new ListType(new UnionType($upper, $other)), new ListType(new UnionType($lower, $other))],
+        ];
+    }
+
+    public function testUnionKeepsContainersApartFromTheirItems(): void
+    {
+        $foo = new ClassType(ClassName::fromFqcn('Foo'));
+
+        self::assertSame('Foo|list<Foo>|array<string, Foo>', (new UnionType($foo, new ListType($foo), new MapType($foo)))->describe());
+    }
+
     public function testUnionTreatsClassNamesCaseInsensitively(): void
     {
         $this->expectException(InvalidModel::class);
