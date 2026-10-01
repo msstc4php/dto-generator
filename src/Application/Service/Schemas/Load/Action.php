@@ -4,10 +4,9 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Application\Service\Schemas\Load;
 
-use MSSTC4PHP\DtoGenerator\Application\Config\SourceConfig;
+use MSSTC4PHP\DtoGenerator\Application\Port\Document;
 use MSSTC4PHP\DtoGenerator\Application\Port\DocumentLoader;
 use MSSTC4PHP\DtoGenerator\Application\Port\DocumentLoadFailed;
-use MSSTC4PHP\DtoGenerator\Application\ValueObject\Document;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\SchemaParser;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
 use MSSTC4PHP\DtoGenerator\Domain\Exception\InvalidModel;
@@ -52,7 +51,7 @@ final class Action
                 continue;
             }
 
-            $document = $this->load($source->spec(), $specAt, $diagnostics);
+            $document = $this->load($source->spec(), $specAt, $diagnostics, $graph);
             if (!$document instanceof Document) {
                 continue;
             }
@@ -60,7 +59,7 @@ final class Action
             $owners[$document->path()] = $index;
             $this->checkOpenApiVersion($document, $diagnostics);
             foreach ($this->componentSchemas($document, $diagnostics) as [$name, $node]) {
-                if (!$this->isSelected($name, $source)) {
+                if (!$source->selects($name)) {
                     continue;
                 }
 
@@ -84,7 +83,7 @@ final class Action
                     continue;
                 }
 
-                $resolved = $this->resolve($target, $use, $owners, $diagnostics);
+                $resolved = $this->resolve($target, $use, $owners, $diagnostics, $graph);
                 if (!$resolved instanceof ResolvedSchema) {
                     $graph->markFailed($target);
 
@@ -99,12 +98,20 @@ final class Action
         return new Output($graph->build($diagnostics), $diagnostics);
     }
 
-    private function load(string $path, SchemaLocation $requestedAt, Diagnostics $diagnostics): ?Document
+    /**
+     * A file that failed once is reported once, however many sources or references point into it.
+     */
+    private function load(string $path, SchemaLocation $requestedAt, Diagnostics $diagnostics, GraphBuilder $graph): ?Document
     {
+        if ($graph->isUnloadable($path)) {
+            return null;
+        }
+
         try {
             return $this->loader->load($path);
         } catch (DocumentLoadFailed $exception) {
             $diagnostics->error($exception->getMessage(), $requestedAt);
+            $graph->markUnloadable($path);
 
             return null;
         }
@@ -140,6 +147,12 @@ final class Action
     {
         $at = (new SchemaLocation($document->path()))->child('components', 'schemas');
         $components = $document->root()['components'] ?? null;
+        if ($components !== null && (!is_array($components) || ($components !== [] && Json::isList($components)))) {
+            $diagnostics->error('"components" must be an object.', (new SchemaLocation($document->path()))->child('components'));
+
+            return [];
+        }
+
         $schemas = is_array($components) ? ($components['schemas'] ?? null) : null;
         if ($schemas === null) {
             $diagnostics->warning('The specification has no components/schemas; nothing to generate.', $at);
@@ -168,13 +181,6 @@ final class Action
         return $pairs;
     }
 
-    private function isSelected(string $name, SourceConfig $source): bool
-    {
-        $matches = static fn (string $pattern): bool => fnmatch($pattern, $name);
-
-        return array_filter($source->include(), $matches) !== [] && array_filter($source->exclude(), $matches) === [];
-    }
-
     private function target(ReferenceUse $use, Diagnostics $diagnostics): ?SchemaLocation
     {
         try {
@@ -198,9 +204,9 @@ final class Action
     /**
      * @param array<string, int> $owners
      */
-    private function resolve(SchemaLocation $target, ReferenceUse $use, array $owners, Diagnostics $diagnostics): ?ResolvedSchema
+    private function resolve(SchemaLocation $target, ReferenceUse $use, array $owners, Diagnostics $diagnostics, GraphBuilder $graph): ?ResolvedSchema
     {
-        $document = $this->load($target->file(), $use->location(), $diagnostics);
+        $document = $this->load($target->file(), $use->location(), $diagnostics, $graph);
         if (!$document instanceof Document) {
             return null;
         }

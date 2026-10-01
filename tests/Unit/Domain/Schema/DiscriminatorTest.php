@@ -56,4 +56,26 @@ final class DiscriminatorTest extends TestCase
     {
         self::assertSame('schemas/cat.yaml', (new Discriminator('kind', ['cat' => 'schemas/cat.yaml']))->refFor('cat'));
     }
+
+    /**
+     * @dataProvider bareNames
+     */
+    public function testEscapesBareNamesIntoAPointer(string $name, string $expected): void
+    {
+        self::assertSame($expected, (new Discriminator('kind', ['x' => $name]))->refFor('x'));
+    }
+
+    /**
+     * @return array<string, array{string, string}>
+     */
+    public static function bareNames(): array
+    {
+        return [
+            'tilde' => ['a~b', '#/components/schemas/a~0b'],
+            'percent' => ['a%20b', '#/components/schemas/a%2520b'],
+            'yaml file' => ['cat.yaml', 'cat.yaml'],
+            'json file' => ['cat.JSON', 'cat.JSON'],
+            'path without extension' => ['schemas/Cat', 'schemas/Cat'],
+        ];
+    }
 }

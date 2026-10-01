@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace MSSTC4PHP\DtoGenerator\Application\ValueObject;
+namespace MSSTC4PHP\DtoGenerator\Application\Port;
 
 use InvalidArgumentException;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\Path;

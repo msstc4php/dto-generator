@@ -54,7 +54,16 @@ final class TargetResolver
 
     private function detectPhp(GeneratorConfig $config, Diagnostics $diagnostics): PhpVersion
     {
-        $constraint = $this->constraints->find($config->baseDir());
+        $requirement = $this->constraints->find($config->baseDir());
+        $constraint = $requirement->constraint();
+        $file = $requirement->file();
+        if ($file !== null && $requirement->problem() !== null) {
+            $diagnostics->warning(
+                sprintf('%s %s; generating for PHP %s.', $file, $requirement->problem(), PhpVersion::oldest()->toString()),
+                $config->location()->child('target', 'php'),
+            );
+        }
+
         if ($constraint === null) {
             return PhpVersion::oldest();
         }

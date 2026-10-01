@@ -28,7 +28,8 @@ final class Path
     public static function normalize(string $path): string
     {
         $path = str_replace('\\', '/', $path);
-        $prefix = preg_match('#^(?:[A-Za-z]:)?/#', $path, $matches) === 1 ? $matches[0] : '';
+        // A UNC prefix ("//server") must survive; a drive letter is case-insensitive, so it is upper-cased.
+        $prefix = preg_match('#^(?://(?=[^/])|(?:[A-Za-z]:)?/)#', $path, $matches) === 1 ? ucfirst($matches[0]) : '';
 
         $segments = [];
         foreach (explode('/', (string) substr($path, strlen($prefix))) as $segment) {

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MSSTC4PHP\DtoGenerator\Tests\Unit\Application\Service\Schemas;
 
 use MSSTC4PHP\DtoGenerator\Application\Config\SourceConfig;
+use MSSTC4PHP\DtoGenerator\Application\Port\DocumentLoadFailed;
 use MSSTC4PHP\DtoGenerator\Application\Service\Schemas\Load\Action;
 use MSSTC4PHP\DtoGenerator\Application\Service\Schemas\Load\Input;
 use MSSTC4PHP\DtoGenerator\Application\Service\Schemas\Load\Output;
@@ -239,7 +240,7 @@ final class LoadTest extends TestCase
     }
 
     /**
-     * @param array<string, array<array-key, mixed>> $documents
+     * @param array<string, array<array-key, mixed>|DocumentLoadFailed> $documents
      */
     private function load(array $documents, SourceConfig ...$sources): Output
     {
@@ -388,5 +389,128 @@ final class LoadTest extends TestCase
         self::assertNotNull($resolved);
         self::assertSame('Tag', $resolved->name());
         self::assertNull($output->graph()->resolve($bad));
+    }
+
+    public function testRejectsComponentsThatAreNotAnObject(): void
+    {
+        $output = $this->load([self::SPEC => ['openapi' => '3.1.0', 'components' => 'none']]);
+
+        self::assertSame(['error /project/api/openapi.yaml#/components: "components" must be an object.'], $this->messages($output));
+    }
+
+    public function testReportsAnUnloadableFileOnce(): void
+    {
+        $output = $this->load(
+            [
+                self::SPEC => self::spec(['User' => ['properties' => [
+                    'a' => ['$ref' => '../other/openapi.yaml#/components/schemas/A'],
+                    'b' => ['$ref' => '../other/openapi.yaml#/components/schemas/B'],
+                ]]]),
+            ],
+            ConfigMother::source(self::SPEC),
+            ConfigMother::source(self::OTHER, ['*'], [], 'App\\Other'),
+        );
+
+        self::assertSame(['error /project/dto-generator.yaml#/sources/1/spec: File "/project/other/openapi.yaml" does not exist.'], $this->messages($output));
+    }
+
+    public function testListsAmbiguousOwnersInOrder(): void
+    {
+        $output = $this->load(
+            [
+                self::SPEC => self::spec(['User' => ['$ref' => '../shared/common.json#/F']]),
+                self::OTHER => self::spec(['Pet' => ['$ref' => '../shared/common.json#/A']]),
+                self::SHARED => ['A' => [], 'F' => ['$ref' => '#/A']],
+            ],
+            ConfigMother::source(self::SPEC),
+            ConfigMother::source(self::OTHER, ['*'], [], 'App\\Other'),
+        );
+
+        self::assertSame(
+            ['error /project/shared/common.json#/A: Schema is referenced from sources #0, #1, so its namespace is ambiguous; add its file as a source.'],
+            $this->messages($output),
+        );
+        self::assertNull($output->graph()->all()[3]->source());
+    }
+
+    public function testFollowsCyclesAcrossForeignFiles(): void
+    {
+        $output = $this->load([
+            self::SPEC => self::spec(['User' => ['$ref' => '../shared/common.json#/A']]),
+            self::SHARED => ['A' => ['properties' => ['b' => ['$ref' => 'nested/b.json#/B'], 'self' => ['$ref' => '#/A']]]],
+            '/project/shared/nested/b.json' => ['B' => ['properties' => ['a' => ['$ref' => '../common.json#/A']]]],
+        ]);
+
+        self::assertSame([], $this->messages($output));
+        self::assertSame([['User', 0, true], ['A', 0, false], ['B', 0, false]], $this->summary($output));
+    }
+
+    public function testDifferentSpellingsReachOneSchema(): void
+    {
+        $output = $this->load([self::SPEC => self::spec([
+            'User' => ['properties' => [
+                'a' => ['$ref' => 'openapi.yaml#/components/schemas/Tag'],
+                'b' => ['$ref' => '../api/./openapi.yaml#/components/schemas/Tag'],
+                'c' => ['$ref' => '#/components/schemas/T%61g'],
+                'd' => ['$ref' => '#/components/schemas/a%7E1b'],
+            ]],
+            'Tag' => [],
+            'a/b' => [],
+        ])], ConfigMother::source(self::SPEC, ['User']));
+
+        self::assertSame([], $this->messages($output));
+        self::assertSame([['User', 0, true], ['Tag', 0, false], ['a/b', 0, false]], $this->summary($output));
+    }
+
+    public function testReportsABadEscapeInsteadOfThrowing(): void
+    {
+        $output = $this->load([self::SPEC => self::spec(['User' => ['$ref' => '#/components/schemas/a~2b']])]);
+
+        self::assertSame(['error /project/api/openapi.yaml#/components/schemas/User: "/components/schemas/a~2b" is not a valid JSON pointer.'], $this->messages($output));
+    }
+
+    public function testReportsATargetThatIsNotASchema(): void
+    {
+        $output = $this->load([self::SPEC => self::spec(['User' => ['$ref' => '#/openapi']])]);
+
+        self::assertSame(['error /project/api/openapi.yaml#/openapi: A schema must be an object.'], $this->messages($output));
+    }
+
+    public function testReportsAMalformedReferencedFile(): void
+    {
+        $output = $this->load([
+            self::SPEC => self::spec(['User' => ['$ref' => '../shared/common.json#/A']]),
+            self::SHARED => DocumentLoadFailed::malformed(self::SHARED, 'Syntax error'),
+        ]);
+
+        self::assertSame(['error /project/api/openapi.yaml#/components/schemas/User: File "/project/shared/common.json" is not valid: Syntax error'], $this->messages($output));
+    }
+
+    public function testAnUnselectedComponentKeepsItsSource(): void
+    {
+        $output = $this->load(
+            [
+                self::SPEC => self::spec(['User' => ['$ref' => '../other/openapi.yaml#/components/schemas/Pet']]),
+                self::OTHER => self::spec(['Pet' => [], 'Owner' => []]),
+            ],
+            ConfigMother::source(self::SPEC),
+            ConfigMother::source(self::OTHER, ['Owner'], [], 'App\\Other'),
+        );
+
+        self::assertSame([['User', 0, true], ['Owner', 1, true], ['Pet', 1, false]], $this->summary($output));
+    }
+
+    public function testAcceptsAnEmptyComponentsObject(): void
+    {
+        $output = $this->load([self::SPEC => ['openapi' => '3.1.0', 'components' => []]]);
+
+        self::assertSame(['warning /project/api/openapi.yaml#/components/schemas: The specification has no components/schemas; nothing to generate.'], $this->messages($output));
+    }
+
+    public function testRejectsComponentsGivenAsAList(): void
+    {
+        $output = $this->load([self::SPEC => ['openapi' => '3.1.0', 'components' => ['schemas']]]);
+
+        self::assertSame(['error /project/api/openapi.yaml#/components: "components" must be an object.'], $this->messages($output));
     }
 }

@@ -35,9 +35,8 @@ final class Discriminator
         $this->propertyName = $propertyName;
         $this->mapping = [];
         foreach ($mapping as $value => $ref) {
-            // OpenAPI: a mapping value without "/" or "#" names a component schema.
-            $this->mapping[$value] = strpos($ref, '#') === false && strpos($ref, '/') === false
-                ? '#/components/schemas/' . $ref
+            $this->mapping[$value] = $this->isBareName($ref)
+                ? '#' . str_replace('%', '%25', JsonPointer::fromSegments('components', 'schemas', $ref))
                 : $ref;
         }
     }
@@ -58,5 +57,15 @@ final class Discriminator
     public function refFor(string $value): ?string
     {
         return $this->mapping[$value] ?? null;
+    }
+
+    /**
+     * OpenAPI: a mapping value without "/" or "#" names a component schema; a bare file name is still a URI.
+     */
+    private function isBareName(string $ref): bool
+    {
+        return strpos($ref, '#') === false
+            && strpos($ref, '/') === false
+            && preg_match('/\.(?:json|ya?ml)\z/i', $ref) !== 1;
     }
 }

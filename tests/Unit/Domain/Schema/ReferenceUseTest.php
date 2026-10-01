@@ -18,4 +18,17 @@ final class ReferenceUseTest extends TestCase
 
         new ReferenceUse('', new SchemaLocation('/a.yaml'));
     }
+
+    public function testKeysTellUsesApart(): void
+    {
+        $x = new SchemaLocation('/a.yaml', '/x');
+        $xy = new SchemaLocation('/a.yaml', '/xy');
+        $keys = [
+            (new ReferenceUse('yz', $x))->key(),
+            (new ReferenceUse('z', $xy))->key(),
+            (new ReferenceUse('z', $x))->key(),
+        ];
+
+        self::assertCount(3, array_unique($keys));
+    }
 }

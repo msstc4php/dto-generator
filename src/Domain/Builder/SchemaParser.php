@@ -180,7 +180,9 @@ final class SchemaParser
             $type = is_string($name) ? SchemaType::tryFrom($name) : null;
             if (!$type instanceof SchemaType) {
                 $diagnostics->error(
-                    sprintf('Unknown type %s.', is_string($name) ? '"' . $name . '"' : gettype($name)),
+                    $name === null
+                        ? 'Unknown type null; quote it as "null" (unquoted, YAML reads it as a missing value).'
+                        : sprintf('Unknown type %s.', is_string($name) ? '"' . $name . '"' : gettype($name)),
                     is_string($value) ? $at : $at->child((string) $index),
                 );
 
@@ -287,7 +289,7 @@ final class SchemaParser
         }
 
         $rawMapping = $value['mapping'] ?? [];
-        if (!is_array($rawMapping)) {
+        if (!is_array($rawMapping) || ($rawMapping !== [] && Json::isList($rawMapping))) {
             $diagnostics->error('"mapping" must be an object.', $at->child('mapping'));
 
             return null;

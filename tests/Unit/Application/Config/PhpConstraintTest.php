@@ -33,6 +33,8 @@ final class PhpConstraintTest extends TestCase
             'range' => ['>=7.4 <8.3', '7.4'],
             'range with comma' => ['>=7.4,<8.0', '7.4'],
             'upper bound first' => ['<8.4 >=8.1', '8.1'],
+            'tighter bound first' => ['>=8.1 >=7.4', '8.1'],
+            'tighter bound last' => ['>=7.4, >=8.1', '8.1'],
             'hyphen range' => ['7.4 - 8.2', '7.4'],
             'bare version' => ['8.2', '8.2'],
             'exclusive lower bound' => ['>8.0', '8.0'],

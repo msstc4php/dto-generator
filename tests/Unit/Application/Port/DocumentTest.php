@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace MSSTC4PHP\DtoGenerator\Tests\Unit\Application\ValueObject;
+namespace MSSTC4PHP\DtoGenerator\Tests\Unit\Application\Port;
 
 use InvalidArgumentException;
-use MSSTC4PHP\DtoGenerator\Application\ValueObject\Document;
+use MSSTC4PHP\DtoGenerator\Application\Port\Document;
 use PHPUnit\Framework\TestCase;
 
 final class DocumentTest extends TestCase

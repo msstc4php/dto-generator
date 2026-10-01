@@ -8,28 +8,43 @@ use RuntimeException;
 
 final class DocumentLoadFailed extends RuntimeException
 {
+    private string $path = '';
+
+    public function path(): string
+    {
+        return $this->path;
+    }
+
+    private static function at(string $path, string $message): self
+    {
+        $exception = new self($message);
+        $exception->path = $path;
+
+        return $exception;
+    }
+
     public static function notFound(string $path): self
     {
-        return new self(sprintf('File "%s" does not exist.', $path));
+        return self::at($path, sprintf('File "%s" does not exist.', $path));
     }
 
     public static function unreadable(string $path): self
     {
-        return new self(sprintf('File "%s" cannot be read.', $path));
+        return self::at($path, sprintf('File "%s" cannot be read.', $path));
     }
 
     public static function unsupportedFormat(string $path): self
     {
-        return new self(sprintf('File "%s" must be YAML (.yaml, .yml) or JSON (.json).', $path));
+        return self::at($path, sprintf('File "%s" must be YAML (.yaml, .yml) or JSON (.json).', $path));
     }
 
     public static function malformed(string $path, string $reason): self
     {
-        return new self(sprintf('File "%s" is not valid: %s', $path, $reason));
+        return self::at($path, sprintf('File "%s" is not valid: %s', $path, $reason));
     }
 
     public static function notAnObject(string $path): self
     {
-        return new self(sprintf('File "%s" must contain an object at the top level.', $path));
+        return self::at($path, sprintf('File "%s" must contain an object at the top level.', $path));
     }
 }

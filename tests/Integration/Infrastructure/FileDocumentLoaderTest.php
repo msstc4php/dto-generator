@@ -33,6 +33,8 @@ final class FileDocumentLoaderTest extends TestCase
             'yaml' => ['valid.yaml'],
             'yml' => ['valid.yml'],
             'json' => ['valid.json'],
+            'json with BOM' => ['bom.json'],
+            'yaml with BOM' => ['bom.yaml'],
         ];
     }
 
@@ -93,15 +95,39 @@ final class FileDocumentLoaderTest extends TestCase
         self::assertNull($root['object']);
     }
 
-    public function testCachesTheDecodedContent(): void
+    /** @var list<string> */
+    private array $temporary = [];
+
+    protected function tearDown(): void
     {
-        $file = $this->temporaryFile('cached.json', '{"version": 1}');
+        foreach (array_reverse($this->temporary) as $path) {
+            if (is_link($path) || is_file($path)) {
+                chmod($path, 0644);
+                unlink($path);
+            } elseif (is_dir($path)) {
+                rmdir($path);
+            }
+        }
+    }
+
+    public function testCachesTheDecodedContentPerRealFile(): void
+    {
+        $directory = $this->temporaryDirectory();
+        $file = $directory . '/cached.json';
+        $link = $directory . '/alias.json';
+        file_put_contents($file, '{"version": 1}');
+        symlink($file, $link);
+        $this->temporary[] = $file;
+        $this->temporary[] = $link;
         $loader = new FileDocumentLoader();
+
         $first = $loader->load($file);
         file_put_contents($file, '{"version": 2}');
+        $viaLink = $loader->load($link);
 
+        self::assertSame(['version' => 1], $viaLink->root());
+        self::assertSame($link, $viaLink->path(), 'the requested spelling stays the identity');
         self::assertSame($first->root(), $loader->load($file)->root());
-        unlink($file);
     }
 
     public function testReportsAnUnreadableFile(): void
@@ -110,24 +136,33 @@ final class FileDocumentLoaderTest extends TestCase
             self::markTestSkipped('root can read any file');
         }
 
-        $file = $this->temporaryFile('locked.json', '{}');
+        $file = $this->temporaryDirectory() . '/locked.json';
+        file_put_contents($file, '{}');
         chmod($file, 0000);
+        $this->temporary[] = $file;
 
+        $this->expectException(DocumentLoadFailed::class);
+        $this->expectExceptionMessage('cannot be read');
+
+        (new FileDocumentLoader())->load($file);
+    }
+
+    public function testFailuresCarryThePath(): void
+    {
         try {
-            $this->expectException(DocumentLoadFailed::class);
-            $this->expectExceptionMessage('cannot be read');
-            (new FileDocumentLoader())->load($file);
-        } finally {
-            chmod($file, 0644);
-            unlink($file);
+            (new FileDocumentLoader())->load(self::DIR . '/broken.json');
+            self::fail('expected a load failure');
+        } catch (DocumentLoadFailed $exception) {
+            self::assertStringEndsWith('tests/Fixtures/Documents/broken.json', $exception->path());
         }
     }
 
-    private function temporaryFile(string $name, string $content): string
+    private function temporaryDirectory(): string
     {
-        $file = sys_get_temp_dir() . '/dto-generator-' . bin2hex(random_bytes(4)) . '-' . $name;
-        file_put_contents($file, $content);
+        $directory = sys_get_temp_dir() . '/dto-generator-' . bin2hex(random_bytes(4));
+        mkdir($directory);
+        $this->temporary[] = $directory;
 
-        return $file;
+        return $directory;
     }
 }

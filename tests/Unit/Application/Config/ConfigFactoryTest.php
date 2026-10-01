@@ -10,7 +10,9 @@ use MSSTC4PHP\DtoGenerator\Application\Config\GeneratorConfig;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostic;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
+use MSSTC4PHP\DtoGenerator\Domain\Target\PhpVersion;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Yaml\Yaml;
 
 final class ConfigFactoryTest extends TestCase
 {
@@ -246,5 +248,50 @@ final class ConfigFactoryTest extends TestCase
         $this->expectExceptionMessage('Config path "dto-generator.yaml" must be absolute');
 
         (new ConfigFactory())->create(self::MINIMAL, 'dto-generator.yaml', new Diagnostics());
+    }
+
+    /**
+     * @dataProvider yamlVersions
+     */
+    public function testReadsPhpVersionsAsYamlDecodesThem(string $yaml, ?string $expected, ?string $error): void
+    {
+        $raw = Yaml::parse($yaml . "\nversion: 1\nsources: [{spec: a.yaml, namespace: App, outputDir: src}]");
+        self::assertIsArray($raw);
+        $diagnostics = new Diagnostics();
+        $config = (new ConfigFactory())->create($raw, self::PATH, $diagnostics);
+
+        if ($error !== null) {
+            self::assertNull($config);
+            self::assertStringContainsString($error, $diagnostics->errors()[0]->message());
+
+            return;
+        }
+
+        self::assertNotNull($config);
+        self::assertSame($expected, $config->target()->php() instanceof PhpVersion ? $config->target()->php()->toString() : null);
+    }
+
+    /**
+     * @return array<string, array{string, string|null, string|null}>
+     */
+    public static function yamlVersions(): array
+    {
+        return [
+            'float' => ['target: {php: 8.2}', '8.2', null],
+            'float with zero minor' => ['target: {php: 8.0}', '8.0', null],
+            'quoted' => ["target: {php: '8.1'}", '8.1', null],
+            'explicit auto' => ['target: {php: auto}', null, null],
+            'two-digit minor is not rounded' => ['target: {php: 8.05}', null, '"8.05" is not a PHP version'],
+            'integer' => ['target: {php: 8}', null, '"8" is not a PHP version'],
+            'unsupported' => ['target: {php: 9.0}', null, 'PHP 9.0 is not supported'],
+        ];
+    }
+
+    public function testComplainsAboutAnEmptyIncludeOnlyWhenItIsLiterallyEmpty(): void
+    {
+        $diagnostics = new Diagnostics();
+        (new ConfigFactory())->create(['version' => 1, 'sources' => [['spec' => 'a', 'namespace' => 'A', 'outputDir' => 'o', 'include' => [1]]]], self::PATH, $diagnostics);
+
+        self::assertSame(['Expected a non-empty string.'], array_map(static fn (Diagnostic $d): string => $d->message(), $diagnostics->errors()));
     }
 }

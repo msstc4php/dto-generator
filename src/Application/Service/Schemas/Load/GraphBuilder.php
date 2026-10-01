@@ -9,6 +9,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Schema\ReferenceUse;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\ResolvedSchema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaGraph;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
+use MSSTC4PHP\DtoGenerator\Domain\Shared\Path;
 
 /**
  * Mutable accumulator for one load run.
@@ -36,6 +37,19 @@ final class GraphBuilder
         return isset($this->schemas[$key]) || isset($this->failed[$key]);
     }
 
+    /** @var array<string, true> */
+    private array $unloadable = [];
+
+    public function markUnloadable(string $file): void
+    {
+        $this->unloadable[Path::normalize($file)] = true;
+    }
+
+    public function isUnloadable(string $file): bool
+    {
+        return isset($this->unloadable[Path::normalize($file)]);
+    }
+
     public function markFailed(SchemaLocation $location): void
     {
         $this->failed[$location->toString()] = true;
@@ -61,6 +75,7 @@ final class GraphBuilder
         foreach ($this->schemas as $key => $schema) {
             if ($schema->source() === null) {
                 $candidates = array_keys($owners[$key] ?? []);
+                sort($candidates);
                 if (count($candidates) > 1) {
                     $diagnostics->error(
                         sprintf(

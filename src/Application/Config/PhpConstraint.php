@@ -34,12 +34,15 @@ final class PhpConstraint
      */
     private static function lowerBound(string $alternative): ?array
     {
-        // In "a - b" only "a" bounds from below.
-        $alternative = (string) preg_replace('/\s+-\s+\S+/', '', $alternative);
-        $parts = preg_split('/[\s,]+/', trim($alternative));
+        preg_match_all('/[^\s,]+/', $alternative, $tokens);
         $bound = null;
-        foreach ($parts === false ? [] : $parts as $part) {
-            if (preg_match('/^(?:>=?|\^|~|=|==)?v?(?<major>\d+)(?:\.(?<minor>\d+))?/', $part, $matches) !== 1) {
+        foreach ($tokens[0] as $token) {
+            // In "a - b" only "a" bounds from below.
+            if ($token === '-') {
+                break;
+            }
+
+            if (preg_match('/^(?:>=?|\^|~|==?)?v?(?<major>\d+)(?:\.(?<minor>\d+))?/', $token, $matches) !== 1) {
                 continue;
             }
 

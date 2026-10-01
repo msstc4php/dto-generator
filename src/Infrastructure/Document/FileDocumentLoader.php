@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace MSSTC4PHP\DtoGenerator\Infrastructure\Document;
 
 use JsonException;
+use MSSTC4PHP\DtoGenerator\Application\Port\Document;
 use MSSTC4PHP\DtoGenerator\Application\Port\DocumentLoader;
 use MSSTC4PHP\DtoGenerator\Application\Port\DocumentLoadFailed;
-use MSSTC4PHP\DtoGenerator\Application\ValueObject\Document;
 use MSSTC4PHP\DtoGenerator\Domain\Model\Identifier;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\Path;
@@ -51,6 +51,11 @@ final class FileDocumentLoader implements DocumentLoader
         $content = is_readable($real) ? file_get_contents($real) : false;
         if ($content === false) {
             throw DocumentLoadFailed::unreadable($path);
+        }
+
+        // Editors on Windows prepend a UTF-8 BOM, which neither decoder accepts as whitespace.
+        if (strncmp($content, "\xEF\xBB\xBF", 3) === 0) {
+            $content = (string) substr($content, 3);
         }
 
         try {

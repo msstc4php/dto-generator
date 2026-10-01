@@ -31,6 +31,8 @@ final class PathTest extends TestCase
             'current dir prefix' => ['./a', 'a'],
             'root' => ['/', '/'],
             'empty' => ['', ''],
+            'unc share' => ['\\\\server\\share\\x\\..\\y', '//server/share/y'],
+            'drive letter case' => ['c:/a', 'C:/a'],
         ];
     }
 
@@ -73,6 +75,7 @@ final class PathTest extends TestCase
             'nested' => ['/a/b.yaml', '/a'],
             'in root' => ['/b.yaml', '/'],
             'root itself' => ['/', '/'],
+            'unc' => ['//server/share/b.yaml', '//server/share'],
             'relative file' => ['b.yaml', '.'],
             'windows drive' => ['C:/b.yaml', 'C:/'],
             'drive-like directory name' => ['/xC:/b.yaml', '/xC:'],

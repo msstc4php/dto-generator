@@ -17,7 +17,7 @@ final class ExtensionSettings
 
     private bool $discover;
 
-    /** @var array<string, JsonValue> */
+    /** @var array<int|string, JsonValue> */
     private array $config;
 
     /** @var array<string, array<array-key, mixed>> */
@@ -27,7 +27,7 @@ final class ExtensionSettings
 
     /**
      * @param list<ClassName> $classes extensions listed explicitly, in order
-     * @param array<string, JsonValue> $config extensionConfig sections by extension name
+     * @param array<int|string, JsonValue> $config extensionConfig sections by extension name
      * @param array<string, array<array-key, mixed>> $aliases attributeAliases; their shape is validated in stage 5
      * @param bool|null $verifyClasses null for "auto"
      */
@@ -54,7 +54,7 @@ final class ExtensionSettings
     }
 
     /**
-     * @return array<string, JsonValue>
+     * @return array<int|string, JsonValue>
      */
     public function config(): array
     {

@@ -70,9 +70,11 @@ final class ConfigFactory
 
         $php = null;
         $value = $section->raw('php') ?? 'auto';
-        // Unquoted `php: 8.2` arrives from YAML as a float, and 8.0 would print as "8".
+        // Unquoted `php: 8.2` arrives from YAML as a float; var_export() keeps "8.0", never rounds and ignores the locale.
         if (is_float($value)) {
-            $value = sprintf('%.1f', $value);
+            $value = var_export($value, true);
+        } elseif (is_int($value)) {
+            $value = (string) $value;
         }
 
         if (!is_string($value)) {
@@ -198,7 +200,7 @@ final class ConfigFactory
                 }
             }
 
-            if ($include === []) {
+            if ($section->raw('include') === []) {
                 $section->error('include', 'must not be empty');
             }
 

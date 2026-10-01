@@ -72,4 +72,14 @@ final class SourceConfig
     {
         return $this->exclude;
     }
+
+    /**
+     * Whether a component schema name passes the include and exclude globs.
+     */
+    public function selects(string $name): bool
+    {
+        $matches = static fn (string $pattern): bool => fnmatch($pattern, $name);
+
+        return array_filter($this->include, $matches) !== [] && array_filter($this->exclude, $matches) === [];
+    }
 }

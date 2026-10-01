@@ -153,4 +153,41 @@ final class TargetResolverTest extends TestCase
         self::assertNull((new TargetResolver(new FixedPhpConstraint(null)))->resolve($config, $diagnostics));
         self::assertSame('/formats/200/type', $diagnostics->errors()[0]->location()->pointer());
     }
+
+    public function testWarnsWhenComposerJsonIsUnusable(): void
+    {
+        $diagnostics = new Diagnostics();
+        $profile = (new TargetResolver(new FixedPhpConstraint(null, 'is not valid JSON')))->resolve($this->config(null), $diagnostics);
+
+        self::assertNotNull($profile);
+        self::assertSame('7.4', $profile->php()->toString());
+        self::assertSame(
+            ['warning /project/dto-generator.yaml#/target/php: /project/composer.json is not valid JSON; generating for PHP 7.4.'],
+            array_map(static fn (Diagnostic $d): string => $d->toString(), $diagnostics->all()),
+        );
+    }
+
+    public function testLooksForComposerJsonFromTheConfigDirectory(): void
+    {
+        $constraints = new FixedPhpConstraint('^8.0');
+        (new TargetResolver($constraints))->resolve($this->config(null), new Diagnostics());
+
+        self::assertSame(['/project'], $constraints->directories());
+    }
+
+    public function testDetectedPhp80DefaultsToAttributes(): void
+    {
+        $profile = $this->resolve($this->config(null), '^8.0');
+
+        self::assertNotNull($profile);
+        self::assertTrue($profile->metadata()->isAttributes());
+    }
+
+    public function testExplicitAttributesClashWithADetectedPhp74(): void
+    {
+        $diagnostics = new Diagnostics();
+
+        self::assertNull((new TargetResolver(new FixedPhpConstraint('^7.4')))->resolve($this->config(null, MetadataMode::ATTRIBUTES), $diagnostics));
+        self::assertStringContainsString('requires attributes (PHP 8.0+)', $diagnostics->errors()[0]->message());
+    }
 }

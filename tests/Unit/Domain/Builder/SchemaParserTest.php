@@ -181,6 +181,8 @@ final class SchemaParserTest extends TestCase
             'discriminator bad target' => [['discriminator' => ['propertyName' => 'kind', 'mapping' => ['cat' => 1]]], 'A mapping target must be a non-empty string', '/discriminator/mapping/cat'],
             'nested error keeps its location' => [['properties' => ['id' => ['type' => 'uuid']]], 'Unknown type "uuid"', '/properties/id/type'],
             'scalar items' => [['items' => 'string'], 'A schema must be an object', '/items'],
+            'unquoted null type' => [['type' => ['string', null]], 'Unknown type null; quote it as "null"', '/type/1'],
+            'mapping as list' => [['discriminator' => ['propertyName' => 'kind', 'mapping' => ['Dog', 'Cat']]], '"mapping" must be an object', '/discriminator/mapping'],
             'numeric type' => [['type' => 5], 'non-empty list of type names', '/type'],
             'numeric mapping key' => [['discriminator' => ['propertyName' => 'kind', 'mapping' => ['1' => 5]]], 'A mapping target must be a non-empty string', '/discriminator/mapping/1'],
         ];

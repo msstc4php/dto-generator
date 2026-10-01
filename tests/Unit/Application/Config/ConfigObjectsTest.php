@@ -68,4 +68,14 @@ final class ConfigObjectsTest extends TestCase
             [ConfigMother::source('/api.yaml')],
         );
     }
+
+    public function testSelectsComponentNamesByIncludeAndExcludeGlobs(): void
+    {
+        $source = new SourceConfig('/api.yaml', 'App', '/out', ['User*', 'Tag'], ['*Internal']);
+
+        self::assertTrue($source->selects('UserProfile'));
+        self::assertTrue($source->selects('Tag'));
+        self::assertFalse($source->selects('UserInternal'));
+        self::assertFalse($source->selects('Order'));
+    }
 }
