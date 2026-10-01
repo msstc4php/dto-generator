@@ -219,4 +219,15 @@ final class PhpParserEmitterTest extends TestCase
 
         return (new PhpParserEmitter())->emit($class, EmitterFixture::target($php, $mutability, $accessors));
     }
+
+    public function testEmitsAbstractAndOpenClasses(): void
+    {
+        $emitter = new PhpParserEmitter();
+        $target = EmitterFixture::target('8.0', Mutability::IMMUTABLE);
+        $at = new SchemaLocation('/project/api/openapi.yaml', '/components/schemas/Base');
+        $immutable = Mutability::from(Mutability::IMMUTABLE);
+
+        self::assertStringContainsString("\nabstract class Base\n", $emitter->emit(new ClassModel(ClassName::fromFqcn('App\Dto\Base'), ClassKind::from(ClassKind::ABSTRACT), null, [], $immutable, DocModel::none(), $at), $target));
+        self::assertStringContainsString("\nclass Base\n", $emitter->emit(new ClassModel(ClassName::fromFqcn('App\Dto\Base'), ClassKind::from(ClassKind::OPEN), null, [], $immutable, DocModel::none(), $at), $target));
+    }
 }

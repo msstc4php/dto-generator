@@ -16,8 +16,8 @@ final class GeneratedCodePrinter extends Standard
 {
     protected function pStmt_Declare(Declare_ $node): string
     {
-        return 'declare(' . $this->pCommaSeparated($node->declares) . ')'
-            . ($node->stmts !== null ? ' {' . $this->pStmts($node->stmts) . $this->nl . '}' : ';');
+        // The emitter only writes `declare(strict_types=1);`, never the block form.
+        return 'declare(' . $this->pCommaSeparated($node->declares) . ');';
     }
 
     protected function pStmts(array $nodes, bool $indent = true): string

@@ -39,7 +39,9 @@
                 "MSSTC4PHP\\DtoGenerator\\Domain\\Schema\\Reference::target",
                 "MSSTC4PHP\\DtoGenerator\\Domain\\Shared\\Path::directory",
                 "MSSTC4PHP\\DtoGenerator\\Domain\\Shared\\Path::normalize",
-                "MSSTC4PHP\\DtoGenerator\\Application\\Config\\PhpConstraint::lowerBound"
+                "MSSTC4PHP\\DtoGenerator\\Application\\Config\\PhpConstraint::lowerBound",
+                // A union member is never mixed or nullable, so its native type is never null.
+                "MSSTC4PHP\\DtoGenerator\\Infrastructure\\Emitter\\TypeRenderer::nativeUnion"
             ]
         },
         // Equivalent: defensive throws whose preconditions the constructors guarantee.

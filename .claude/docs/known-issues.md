@@ -39,3 +39,7 @@
 - **Infection-эквиваленты в `DefaultFit::inRange`:** `CastInt` и `PregMatchRemoveCaret` проигнорированы — уточнения строит только `TypeMapper`.
 - **Required + default.** Default обязательного не-nullable свойства игнорируется молча (spec §5.2: обязательный аргумент без значения).
 - **Схема без типа** (`{}`) → `mixed`; `type: object` без `properties` → `array<array-key, mixed>`.
+- **Формат printer php-parser.** У многострочного конструктора `)` и `{` на разных строках; параметры многострочные только если у какого-то есть PHPDoc (иначе одна длинная строка); висячая запятая — с 8.0 (`phpVersion` printer = цель). `use` не строятся до этапа 5 — классы вне namespace пишутся `\FQCN`.
+- **`x-php-name` суперглобалов** (`GLOBALS`, `_GET`, …) — ошибка Builder и инвариант `PropertyModel`: такой параметр не компилируется.
+- **Свойство `clone`** при wither через `clone` (7.4/8.0): временная переменная — `$copy`.
+

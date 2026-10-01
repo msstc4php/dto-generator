@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Tests\Unit\Infrastructure\Emitter;
 
+use LogicException;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ListType;
@@ -17,6 +18,9 @@ use MSSTC4PHP\DtoGenerator\Infrastructure\Emitter\TypeRenderer;
 use MSSTC4PHP\DtoGenerator\Tests\Support\EmitterFixture;
 use PhpParser\Node;
 use PhpParser\Node\Expr\Variable;
+use PhpParser\Node\Identifier;
+use PhpParser\Node\Name;
+use PhpParser\Node\Name\FullyQualified;
 use PhpParser\Node\Param;
 use PhpParser\Node\Stmt\Function_;
 use PhpParser\PrettyPrinter\Standard;
@@ -69,7 +73,7 @@ final class TypeRendererTest extends TestCase
     }
 
     /**
-     * @param Node\ComplexType|Node\Identifier|Node\Name $type
+     * @param Node\ComplexType|Identifier|Name $type
      */
     private function print(Node $type): string
     {
@@ -78,5 +82,49 @@ final class TypeRendererTest extends TestCase
         $code = $printer->prettyPrint([new Function_('f', ['params' => [$param]])]);
 
         return (string) preg_replace('/^function f\((.*) \$x\).*$/s', '$1', $code);
+    }
+
+    /**
+     * @dataProvider nodes
+     *
+     * @param class-string<Node> $class
+     */
+    public function testBuildsTheMatchingNodeClass(TypeModel $type, string $class): void
+    {
+        self::assertInstanceOf($class, (new TypeRenderer('App\Dto', EmitterFixture::target('8.2', 'immutable')))->nativeNode($type));
+    }
+
+    /**
+     * @return array<string, array{TypeModel, class-string<Node>}>
+     */
+    public static function nodes(): array
+    {
+        return [
+            'builtin' => [ScalarType::int(), Identifier::class],
+            'same namespace class' => [new ClassType(ClassName::fromFqcn('App\Dto\Tag')), Name::class],
+            'foreign class' => [new ClassType(ClassName::fromFqcn('DateTimeImmutable')), FullyQualified::class],
+            'nullable' => [new NullableType(ScalarType::string()), Node\NullableType::class],
+            'union' => [new UnionType(ScalarType::int(), ScalarType::string()), Node\UnionType::class],
+        ];
+    }
+
+    public function testRefusesTypesItCannotEmitYet(): void
+    {
+        $renderer = new TypeRenderer('App\Dto', EmitterFixture::target('8.2', 'immutable'));
+        $enum = new class implements TypeModel {
+            public function describe(): string
+            {
+                return 'App\Dto\Currency';
+            }
+        };
+
+        foreach ([static fn (): ?string => $renderer->native($enum), static fn (): string => $renderer->doc($enum)] as $render) {
+            try {
+                $render();
+                self::fail('An unknown type was accepted.');
+            } catch (LogicException $exception) {
+                self::assertSame('Type App\Dto\Currency cannot be emitted yet.', $exception->getMessage());
+            }
+        }
     }
 }

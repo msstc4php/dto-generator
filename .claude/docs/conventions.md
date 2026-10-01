@@ -27,3 +27,10 @@
 - Регистр первой буквы — `Identifier::asciiUpperFirst/asciiLowerFirst` (не `ucfirst/lcfirst`: на 7.4 зависят от локали).
 - Тесты Builder'а строят граф через `tests/Support/GraphFixture` (настоящий `Schemas/Load` на `InMemoryDocumentLoader`), IR — через `tests/Support/ModelFixture`.
 - В тестах не называть хелперы `at()`: в PHPUnit 9 это статический метод `TestCase::at()`, переопределение — фатальная ошибка при загрузке.
+
+## Golden-файлы emitter (этап 3a)
+- `tests/Fixtures/Emitter/<php>-<mutability>[-getters|-public]/{Sample,Tag}.php.golden` — побайтный вывод; расширение `.golden`, чтобы lint-74, PHPStan, CS-Fixer и Rector не трогали синтаксис 8.x.
+- Обновление: `UPDATE_SNAPSHOTS=1 vendor/bin/phpunit tests/Integration/Emitter`, затем прочитать diff. Руками golden не правят — дефект чинится в emitter.
+- `make test-targets` (вне песочницы, Docker): `php -l` + `tests/Targets/smoke.php` на версии профиля; deprecation/notice = провал. Новый профиль = новая строка в `GoldenEmitterTest::profiles()` (тест сверяет список с каталогами).
+- `EmitterFixture::model()` принимает mutability явно — в тестах класс должен совпадать с профилем.
+

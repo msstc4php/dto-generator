@@ -21,9 +21,9 @@ final class DocBlock
         $lines = [];
         $text = trim((string) $description);
         if ($text !== '') {
-            foreach ((array) preg_split('/\r\n|\r|\n/', $text) as $line) {
+            foreach (explode("\n", str_replace(["\r\n", "\r"], "\n", $text)) as $line) {
                 // "*/" inside the text would close the comment early.
-                $lines[] = rtrim(str_replace('*/', '*\/', (string) $line));
+                $lines[] = rtrim(str_replace('*/', '*\/', $line));
             }
         }
 

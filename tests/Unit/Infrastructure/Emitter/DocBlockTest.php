@@ -37,4 +37,9 @@ final class DocBlockTest extends TestCase
             DocBlock::render("\r\nFirst line.  \r\n\r\nThen */ here.\n", []),
         );
     }
+
+    public function testSplitsOnALoneCarriageReturn(): void
+    {
+        self::assertSame("/**\n * Old\n * Mac\n */", DocBlock::render("Old\rMac", []));
+    }
 }

@@ -81,7 +81,7 @@ final class PhpParserEmitter implements CodeEmitter
         }
 
         $node = $this->factory->class($class->name()->shortName())->addStmts($members)->getNode();
-        $node->flags |= $this->modifiers($class->kind(), $form);
+        $node->flags = $this->modifiers($class->kind(), $form);
         $this->document($node, DocBlock::render($class->doc()->description(), $this->deprecation($class->doc())));
 
         $header = new Nop();
@@ -133,14 +133,10 @@ final class PhpParserEmitter implements CodeEmitter
     private function declaration(PropertyModel $property, ClassForm $form, TypeRenderer $types): Property
     {
         $builder = $this->factory->property($property->name());
-        if ($form->hasPublicProperties()) {
-            $builder->makePublic();
-        } else {
+        // The builder declares a property public unless told otherwise; declared (unpromoted) properties exist
+        // only below PHP 8.0, so they are never readonly.
+        if (!$form->hasPublicProperties()) {
             $builder->makePrivate();
-        }
-
-        if ($form->hasReadonlyProperties()) {
-            $builder->makeReadonly();
         }
 
         $type = $types->nativeNode($property->type());
@@ -240,7 +236,7 @@ final class PhpParserEmitter implements CodeEmitter
     {
         $name = $property->name();
         if ($style->equals(WitherStyle::from(WitherStyle::CLONE_WITH))) {
-            $changes = new Array_([new ArrayItem(new Variable($name), new String_($name))], ['kind' => Array_::KIND_SHORT]);
+            $changes = new Array_([new ArrayItem(new Variable($name), new String_($name))]);
 
             return [new Return_(new FuncCall(new Name('clone'), [new Arg(new Variable('this')), new Arg($changes)]))];
         }
