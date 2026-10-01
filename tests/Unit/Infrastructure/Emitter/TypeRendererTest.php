@@ -66,6 +66,7 @@ final class TypeRendererTest extends TestCase
             'mixed on 7.4' => [new MixedType(), '7.4', null, 'mixed', true],
             'union on 8.0' => [$union, '8.0', 'int|string', 'int|string', false],
             'union on 7.4' => [$union, '7.4', null, 'int|string', true],
+            'nullable union on 7.4' => [new NullableType($union), '7.4', null, 'int|string|null', true],
             'nullable union' => [new NullableType($union), '8.0', 'int|string|null', 'int|string|null', false],
             'union of arrays' => [new UnionType(new ListType(ScalarType::int()), new MapType(ScalarType::string())), '8.0', 'array', 'list<int>|array<array-key, string>', true],
             'nullable union of arrays' => [new NullableType(new UnionType(new ListType(ScalarType::int()), new MapType(ScalarType::string()))), '8.0', '?array', 'list<int>|array<array-key, string>|null', true],

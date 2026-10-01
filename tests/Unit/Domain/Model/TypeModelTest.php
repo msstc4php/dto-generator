@@ -180,4 +180,26 @@ final class TypeModelTest extends TestCase
         self::assertSame($string, (new NullableType($string))->inner());
         self::assertSame($user, (new ClassType($user))->className());
     }
+
+    /**
+     * @dataProvider unsafeRefinements
+     */
+    public function testScalarRejectsARefinementThatWouldBreakTheDocBlock(string $refinement): void
+    {
+        $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('must be a single-line PHPDoc type');
+
+        ScalarType::int($refinement);
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function unsafeRefinements(): array
+    {
+        return [
+            'comment terminator' => ['int */ evil'],
+            'newline' => ["int\n@var string"],
+        ];
+    }
 }

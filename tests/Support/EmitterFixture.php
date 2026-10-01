@@ -50,7 +50,7 @@ final class EmitterFixture
      */
     public static function classes(): array
     {
-        return [self::sample(), self::tag()];
+        return [self::sample(), self::tag(), self::copy()];
     }
 
     public static function sample(): ClassModel
@@ -60,7 +60,7 @@ final class EmitterFixture
         return self::model('App\Dto\Sample', 'A sample DTO.', [
             self::property('id', ScalarType::int('positive-int'), true, null, 'Identifier.'),
             self::property('name', new NullableType(ScalarType::string('non-empty-string')), false, new DefaultValue('anonymous')),
-            self::property('tags', new ListType($tag), true, null, "Labels.\nAt most */ ten."),
+            self::property('tags', new ListType($tag), true, null, "Labels.\nAt most */ ten.\n@var string is text, not a tag."),
             self::property('code', new UnionType(ScalarType::int(), ScalarType::string()), true),
             self::property('createdAt', new NullableType(new ClassType(ClassName::fromFqcn('DateTimeImmutable'))), false, new DefaultValue(null), 'When it was created.'),
             self::property('score', new NullableType(ScalarType::float()), false, new DefaultValue(1.5)),
@@ -68,6 +68,14 @@ final class EmitterFixture
             self::property('flags', new NullableType(new ListType(ScalarType::bool())), false, new DefaultValue([true, false])),
             self::property('extra', new MixedType(), false, new DefaultValue(null), null, true),
         ]);
+    }
+
+    /**
+     * A class without a namespace whose property name collides with the clone-assign temporary.
+     */
+    public static function copy(): ClassModel
+    {
+        return self::model('Copy', null, [self::property('clone', ScalarType::int(), true)]);
     }
 
     public static function tag(): ClassModel

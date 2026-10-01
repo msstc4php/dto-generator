@@ -104,4 +104,20 @@ final class PropertyModelTest extends TestCase
             new SchemaLocation('a.json'),
         );
     }
+
+    public function testARequiredPropertyHasNoDefault(): void
+    {
+        $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('Property "id" is required, so it cannot have a default');
+
+        new PropertyModel('id', 'id', ScalarType::int(), true, new DefaultValue(1), DocModel::none(), new SchemaLocation('a.json', '/properties/id'));
+    }
+
+    public function testAnOptionalPropertyHasADefault(): void
+    {
+        $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('Property "id" is optional, so it needs a default');
+
+        new PropertyModel('id', 'id', ScalarType::int(), false, null, DocModel::none(), new SchemaLocation('a.json', '/properties/id'));
+    }
 }

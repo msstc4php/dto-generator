@@ -42,4 +42,9 @@ final class DocBlockTest extends TestCase
     {
         self::assertSame("/**\n * Old\n * Mac\n */", DocBlock::render("Old\rMac", []));
     }
+
+    public function testEscapesLinesThatWouldReadAsTags(): void
+    {
+        self::assertSame("/**\n * \\@var string\n *   \\@deprecated soon\n * Mail me@example.org\n */", DocBlock::render("@var string\n  @deprecated soon\nMail me@example.org", []));
+    }
 }

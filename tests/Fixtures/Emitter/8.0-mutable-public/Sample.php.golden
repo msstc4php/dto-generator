@@ -21,6 +21,7 @@ final class Sample
         /**
          * Labels.
          * At most *\/ ten.
+         * \@var string is text, not a tag.
          *
          * @var list<Tag>
          */
@@ -47,7 +48,6 @@ final class Sample
          * @deprecated
          */
         public mixed $extra = null,
-    )
-    {
+    ) {
     }
 }

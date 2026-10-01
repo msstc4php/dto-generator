@@ -67,7 +67,8 @@ final class PhpParserEmitter implements CodeEmitter
 
         $members = [];
         if (!$form->isPromoted()) {
-            foreach ($class->properties() as $property) {
+            // Declared in constructor order, like promoted properties, so the object layout is the same on every target.
+            foreach ($this->constructorOrder($class) as $property) {
                 $members[] = $this->declaration($property, $form, $types);
             }
         }
@@ -104,6 +105,10 @@ final class PhpParserEmitter implements CodeEmitter
         $fqcn = $class->name()->fqcn();
         if ($class->parent() instanceof ClassName) {
             throw new LogicException(sprintf('%s extends a class; inheritance is emitted from stage 4.', $fqcn));
+        }
+
+        if ($class->properties() !== [] && !$class->kind()->equals(ClassKind::from(ClassKind::FINAL))) {
+            throw new LogicException(sprintf('%s is not final; base classes with properties are emitted from stage 4.', $fqcn));
         }
 
         if ($class->discriminator() instanceof DiscriminatorModel) {

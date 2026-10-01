@@ -22,8 +22,10 @@ final class DocBlock
         $text = trim((string) $description);
         if ($text !== '') {
             foreach (explode("\n", str_replace(["\r\n", "\r"], "\n", $text)) as $line) {
-                // "*/" inside the text would close the comment early.
-                $lines[] = rtrim(str_replace('*/', '*\/', $line));
+                // "*/" would close the comment early, and a leading "@" would turn the text into a tag.
+                $line = rtrim(str_replace('*/', '*\/', $line));
+                $indent = strlen($line) - strlen(ltrim($line));
+                $lines[] = substr($line, $indent, 1) === '@' ? substr_replace($line, '\\', $indent, 0) : $line;
             }
         }
 

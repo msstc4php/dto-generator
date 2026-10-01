@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Tests\Unit\Domain\Target;
 
+use MSSTC4PHP\DtoGenerator\Domain\Exception\InvalidModel;
 use MSSTC4PHP\DtoGenerator\Domain\Target\AccessorStyle;
 use MSSTC4PHP\DtoGenerator\Domain\Target\ClassForm;
 use MSSTC4PHP\DtoGenerator\Domain\Target\DateTimeClass;
@@ -11,6 +12,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Target\MetadataMode;
 use MSSTC4PHP\DtoGenerator\Domain\Target\Mutability;
 use MSSTC4PHP\DtoGenerator\Domain\Target\PhpVersion;
 use MSSTC4PHP\DtoGenerator\Domain\Target\TargetProfile;
+use MSSTC4PHP\DtoGenerator\Domain\Target\WitherStyle;
 use PHPUnit\Framework\TestCase;
 
 final class ClassFormTest extends TestCase
@@ -75,5 +77,30 @@ final class ClassFormTest extends TestCase
             $form->hasSetters() ? 'setters' : '',
             'withers:' . $form->withers()->value(),
         ], static fn (string $part): bool => $part !== ''));
+    }
+
+    /**
+     * @dataProvider impossibleForms
+     */
+    public function testRejectsImpossibleShapes(callable $create, string $message): void
+    {
+        $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage($message);
+
+        $create();
+    }
+
+    /**
+     * @return array<string, array{callable(): ClassForm, string}>
+     */
+    public static function impossibleForms(): array
+    {
+        $newSelf = WitherStyle::from(WitherStyle::NEW_SELF);
+
+        return [
+            'readonly declared properties' => [static fn (): ClassForm => ClassForm::immutable(false, true, true, false, $newSelf), 'Readonly properties are always promoted'],
+            'readonly twice' => [static fn (): ClassForm => ClassForm::immutable(true, true, true, true, $newSelf), 'either the class or its properties'],
+            'immutable without withers' => [static fn (): ClassForm => ClassForm::immutable(true, true, false, true, WitherStyle::from(WitherStyle::NONE)), 'An immutable class needs withers'],
+        ];
     }
 }

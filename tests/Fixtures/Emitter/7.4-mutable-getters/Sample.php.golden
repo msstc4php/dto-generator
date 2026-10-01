@@ -19,13 +19,9 @@ final class Sample
     private int $id;
 
     /**
-     * @var ?non-empty-string
-     */
-    private ?string $name;
-
-    /**
      * Labels.
      * At most *\/ ten.
+     * \@var string is text, not a tag.
      *
      * @var list<Tag>
      */
@@ -35,6 +31,11 @@ final class Sample
      * @var int|string
      */
     private $code;
+
+    /**
+     * @var ?non-empty-string
+     */
+    private ?string $name;
 
     /**
      * When it was created.
@@ -68,8 +69,17 @@ final class Sample
      * @param ?list<bool> $flags
      * @param mixed $extra
      */
-    public function __construct(int $id, array $tags, $code, ?string $name = 'anonymous', ?\DateTimeImmutable $createdAt = null, ?float $score = 1.5, ?array $meta = null, ?array $flags = [true, false], $extra = null)
-    {
+    public function __construct(
+        int $id,
+        array $tags,
+        $code,
+        ?string $name = 'anonymous',
+        ?\DateTimeImmutable $createdAt = null,
+        ?float $score = 1.5,
+        ?array $meta = null,
+        ?array $flags = [true, false],
+        $extra = null
+    ) {
         $this->id = $id;
         $this->tags = $tags;
         $this->code = $code;

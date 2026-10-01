@@ -22,6 +22,10 @@ final class ScalarType implements TypeModel
             throw new InvalidModel(sprintf('The PHPDoc refinement of a %s type must not be blank.', $kind));
         }
 
+        if ($phpDoc !== null && preg_match('/\*\/|[\r\n]/', $phpDoc) === 1) {
+            throw new InvalidModel(sprintf('The PHPDoc refinement of a %s type must be a single-line PHPDoc type without "*/".', $kind));
+        }
+
         $this->kind = $kind;
         $this->phpDoc = $phpDoc;
     }

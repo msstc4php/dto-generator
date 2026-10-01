@@ -14,6 +14,7 @@ set_error_handler(static function (int $severity, string $message): bool {
 $profile = $argv[1] ?? '';
 require $profile . 'Tag.php.golden';
 require $profile . 'Sample.php.golden';
+require $profile . 'Copy.php.golden';
 
 /**
  * @return mixed
@@ -49,8 +50,25 @@ if (method_exists($sample, 'withId')) {
     check(read($copy, 'id') === 8 && read($sample, 'id') === 7 && read($copy, 'code') === 'A', 'wither');
 }
 
+foreach (['id', 'name', 'tags', 'code', 'createdAt', 'score', 'meta', 'flags', 'extra'] as $property) {
+    $suffix = ucfirst($property);
+    if (method_exists($sample, 'with' . $suffix)) {
+        $copy = $sample->{'with' . $suffix}(read($sample, $property));
+        check($copy !== $sample && read($copy, $property) === read($sample, $property), 'with' . $suffix);
+    }
+
+    if (method_exists($sample, 'set' . $suffix)) {
+        check($sample === $sample->{'set' . $suffix}(read($sample, $property)), 'set' . $suffix);
+    }
+}
+
 if (method_exists($sample, 'setId')) {
     check($sample->setId(9) === $sample && read($sample, 'id') === 9, 'setter');
+}
+
+$copy = new Copy(5);
+if (method_exists($copy, 'withClone')) {
+    check(read($copy->withClone(6), 'clone') === 6 && read($copy, 'clone') === 5, 'wither of a property named clone');
 }
 
 if (strpos(basename($profile), '-immutable') !== false && !method_exists($sample, 'getId')) {

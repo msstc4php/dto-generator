@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Domain\Target;
 
+use MSSTC4PHP\DtoGenerator\Domain\Exception\InvalidModel;
+
 /**
  * The shape of one generated class, resolved from the target and the class mutability (spec §6.2).
  */
@@ -23,12 +25,11 @@ final class ClassForm
 
     private WitherStyle $withers;
 
-    public function __construct(
+    private function __construct(
         bool $promoted,
         bool $publicProperties,
         bool $readonlyProperties,
         bool $readonlyClass,
-        bool $getters,
         bool $setters,
         WitherStyle $withers
     ) {
@@ -36,9 +37,37 @@ final class ClassForm
         $this->publicProperties = $publicProperties;
         $this->readonlyProperties = $readonlyProperties;
         $this->readonlyClass = $readonlyClass;
-        $this->getters = $getters;
+        $this->getters = !$publicProperties;
         $this->setters = $setters;
         $this->withers = $withers;
+    }
+
+    /**
+     * Private properties get getters and setters; public ones are changed directly.
+     */
+    public static function mutable(bool $promoted, bool $publicProperties): self
+    {
+        return new self($promoted, $publicProperties, false, false, !$publicProperties, WitherStyle::from(WitherStyle::NONE));
+    }
+
+    /**
+     * Private properties get getters; every property gets a wither.
+     */
+    public static function immutable(bool $promoted, bool $publicProperties, bool $readonlyProperties, bool $readonlyClass, WitherStyle $withers): self
+    {
+        if ($readonlyProperties && !$promoted) {
+            throw new InvalidModel('Readonly properties are always promoted, since PHP 8.1 promotes every property.');
+        }
+
+        if ($readonlyProperties && $readonlyClass) {
+            throw new InvalidModel('Readonly goes on either the class or its properties, not both.');
+        }
+
+        if ($withers->isNone()) {
+            throw new InvalidModel('An immutable class needs withers to produce modified copies.');
+        }
+
+        return new self($promoted, $publicProperties, $readonlyProperties, $readonlyClass, false, $withers);
     }
 
     public function isPromoted(): bool

@@ -21,6 +21,7 @@ final class Sample
         /**
          * Labels.
          * At most *\/ ten.
+         * \@var string is text, not a tag.
          *
          * @var list<Tag>
          */
@@ -47,8 +48,7 @@ final class Sample
          * @deprecated
          */
         public readonly mixed $extra = null,
-    )
-    {
+    ) {
     }
 
     /**
@@ -56,7 +56,17 @@ final class Sample
      */
     public function withId(int $id): self
     {
-        return new self($id, $this->tags, $this->code, $this->name, $this->createdAt, $this->score, $this->meta, $this->flags, $this->extra);
+        return new self(
+            $id,
+            $this->tags,
+            $this->code,
+            $this->name,
+            $this->createdAt,
+            $this->score,
+            $this->meta,
+            $this->flags,
+            $this->extra
+        );
     }
 
     /**
@@ -64,7 +74,17 @@ final class Sample
      */
     public function withName(?string $name): self
     {
-        return new self($this->id, $this->tags, $this->code, $name, $this->createdAt, $this->score, $this->meta, $this->flags, $this->extra);
+        return new self(
+            $this->id,
+            $this->tags,
+            $this->code,
+            $name,
+            $this->createdAt,
+            $this->score,
+            $this->meta,
+            $this->flags,
+            $this->extra
+        );
     }
 
     /**
@@ -72,22 +92,62 @@ final class Sample
      */
     public function withTags(array $tags): self
     {
-        return new self($this->id, $tags, $this->code, $this->name, $this->createdAt, $this->score, $this->meta, $this->flags, $this->extra);
+        return new self(
+            $this->id,
+            $tags,
+            $this->code,
+            $this->name,
+            $this->createdAt,
+            $this->score,
+            $this->meta,
+            $this->flags,
+            $this->extra
+        );
     }
 
     public function withCode(int|string $code): self
     {
-        return new self($this->id, $this->tags, $code, $this->name, $this->createdAt, $this->score, $this->meta, $this->flags, $this->extra);
+        return new self(
+            $this->id,
+            $this->tags,
+            $code,
+            $this->name,
+            $this->createdAt,
+            $this->score,
+            $this->meta,
+            $this->flags,
+            $this->extra
+        );
     }
 
     public function withCreatedAt(?\DateTimeImmutable $createdAt): self
     {
-        return new self($this->id, $this->tags, $this->code, $this->name, $createdAt, $this->score, $this->meta, $this->flags, $this->extra);
+        return new self(
+            $this->id,
+            $this->tags,
+            $this->code,
+            $this->name,
+            $createdAt,
+            $this->score,
+            $this->meta,
+            $this->flags,
+            $this->extra
+        );
     }
 
     public function withScore(?float $score): self
     {
-        return new self($this->id, $this->tags, $this->code, $this->name, $this->createdAt, $score, $this->meta, $this->flags, $this->extra);
+        return new self(
+            $this->id,
+            $this->tags,
+            $this->code,
+            $this->name,
+            $this->createdAt,
+            $score,
+            $this->meta,
+            $this->flags,
+            $this->extra
+        );
     }
 
     /**
@@ -95,7 +155,17 @@ final class Sample
      */
     public function withMeta(?array $meta): self
     {
-        return new self($this->id, $this->tags, $this->code, $this->name, $this->createdAt, $this->score, $meta, $this->flags, $this->extra);
+        return new self(
+            $this->id,
+            $this->tags,
+            $this->code,
+            $this->name,
+            $this->createdAt,
+            $this->score,
+            $meta,
+            $this->flags,
+            $this->extra
+        );
     }
 
     /**
@@ -103,7 +173,17 @@ final class Sample
      */
     public function withFlags(?array $flags): self
     {
-        return new self($this->id, $this->tags, $this->code, $this->name, $this->createdAt, $this->score, $this->meta, $flags, $this->extra);
+        return new self(
+            $this->id,
+            $this->tags,
+            $this->code,
+            $this->name,
+            $this->createdAt,
+            $this->score,
+            $this->meta,
+            $flags,
+            $this->extra
+        );
     }
 
     /**
@@ -111,6 +191,16 @@ final class Sample
      */
     public function withExtra(mixed $extra): self
     {
-        return new self($this->id, $this->tags, $this->code, $this->name, $this->createdAt, $this->score, $this->meta, $this->flags, $extra);
+        return new self(
+            $this->id,
+            $this->tags,
+            $this->code,
+            $this->name,
+            $this->createdAt,
+            $this->score,
+            $this->meta,
+            $this->flags,
+            $extra
+        );
     }
 }

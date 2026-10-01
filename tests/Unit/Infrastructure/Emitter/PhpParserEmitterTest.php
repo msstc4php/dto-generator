@@ -30,12 +30,12 @@ final class PhpParserEmitterTest extends TestCase
         self::assertSame(self::HEAD . <<<'PHP'
             final class Point
             {
-                private ?string $label;
-
                 /**
                  * Horizontal.
                  */
                 private int $x;
+
+                private ?string $label;
 
                 public function __construct(int $x, ?string $label = null)
                 {
@@ -84,8 +84,7 @@ final class PhpParserEmitterTest extends TestCase
                      */
                     public readonly int $x,
                     public readonly ?string $label = null,
-                )
-                {
+                ) {
                 }
 
                 public function withLabel(?string $label): self
@@ -206,18 +205,9 @@ final class PhpParserEmitterTest extends TestCase
             'parent' => [new ClassModel($name, ClassKind::from(ClassKind::FINAL), ClassName::fromFqcn('App\Dto\Animal'), [], $immutable, DocModel::none(), $at), 'App\Dto\Pet extends a class'],
             'discriminator' => [new ClassModel($name, ClassKind::from(ClassKind::ABSTRACT), null, [], $immutable, DocModel::none(), $at, [], new DiscriminatorModel('kind', ['cat' => ClassName::fromFqcn('App\Dto\Cat')])), 'App\Dto\Pet has a discriminator'],
             'class attribute' => [new ClassModel($name, ClassKind::from(ClassKind::FINAL), null, [], $immutable, DocModel::none(), $at, [$attribute]), 'App\Dto\Pet has attributes'],
+            'base class with properties' => [new ClassModel($name, ClassKind::from(ClassKind::ABSTRACT), null, [EmitterFixture::property('id', ScalarType::int(), true)], $immutable, DocModel::none(), $at), 'App\Dto\Pet is not final'],
             'property attribute' => [EmitterFixture::model('App\Dto\Pet', null, [EmitterFixture::property('id', ScalarType::int(), true)->withAddedAttributes($attribute)]), 'App\Dto\Pet has attributes'],
         ];
-    }
-
-    private function emit(string $mutability, string $php, string $accessors = AccessorStyle::AUTO): string
-    {
-        $class = EmitterFixture::model('App\Dto\Point', 'A point.', [
-            EmitterFixture::property('label', new NullableType(ScalarType::string()), false, new DefaultValue(null)),
-            EmitterFixture::property('x', ScalarType::int(), true, null, 'Horizontal.'),
-        ], $mutability);
-
-        return (new PhpParserEmitter())->emit($class, EmitterFixture::target($php, $mutability, $accessors));
     }
 
     public function testEmitsAbstractAndOpenClasses(): void
@@ -229,5 +219,15 @@ final class PhpParserEmitterTest extends TestCase
 
         self::assertStringContainsString("\nabstract class Base\n", $emitter->emit(new ClassModel(ClassName::fromFqcn('App\Dto\Base'), ClassKind::from(ClassKind::ABSTRACT), null, [], $immutable, DocModel::none(), $at), $target));
         self::assertStringContainsString("\nclass Base\n", $emitter->emit(new ClassModel(ClassName::fromFqcn('App\Dto\Base'), ClassKind::from(ClassKind::OPEN), null, [], $immutable, DocModel::none(), $at), $target));
+    }
+
+    private function emit(string $mutability, string $php, string $accessors = AccessorStyle::AUTO): string
+    {
+        $class = EmitterFixture::model('App\Dto\Point', 'A point.', [
+            EmitterFixture::property('label', new NullableType(ScalarType::string()), false, new DefaultValue(null)),
+            EmitterFixture::property('x', ScalarType::int(), true, null, 'Horizontal.'),
+        ], $mutability);
+
+        return (new PhpParserEmitter())->emit($class, EmitterFixture::target($php, $mutability, $accessors));
     }
 }

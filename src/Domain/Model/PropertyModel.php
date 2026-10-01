@@ -49,6 +49,15 @@ final class PropertyModel
             throw new InvalidModel(sprintf('Property "%s" has an empty wire name (%s).', $name, $source->toString()));
         }
 
+        // The constructor puts parameters without a default first, so "required" must mean exactly that.
+        if ($required && $default instanceof DefaultValue) {
+            throw new InvalidModel(sprintf('Property "%s" is required, so it cannot have a default (%s).', $name, $source->toString()));
+        }
+
+        if (!$required && !$default instanceof DefaultValue) {
+            throw new InvalidModel(sprintf('Property "%s" is optional, so it needs a default (%s).', $name, $source->toString()));
+        }
+
         $this->name = $name;
         $this->wireName = $wireName;
         $this->type = $type;

@@ -68,7 +68,7 @@ final class TargetProfile
         $public = $this->accessorsFor($mutability)->equals(AccessorStyle::from(AccessorStyle::PUBLIC_PROPERTIES));
         $promoted = $this->supports(Capability::from(Capability::CONSTRUCTOR_PROMOTION));
         if (!$mutability->isImmutable()) {
-            return new ClassForm($promoted, $public, false, false, !$public, !$public, WitherStyle::from(WitherStyle::NONE));
+            return ClassForm::mutable($promoted, $public);
         }
 
         $readonly = $this->supports(Capability::from(Capability::READONLY_PROPERTIES));
@@ -82,7 +82,7 @@ final class TargetProfile
             $withers = WitherStyle::CLONE_ASSIGN;
         }
 
-        return new ClassForm($promoted, $public, $readonly && !$readonlyClass, $readonlyClass, !$public, false, WitherStyle::from($withers));
+        return ClassForm::immutable($promoted, $public, $readonly && !$readonlyClass, $readonlyClass, WitherStyle::from($withers));
     }
 
     public function php(): PhpVersion

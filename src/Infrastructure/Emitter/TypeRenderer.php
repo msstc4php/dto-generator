@@ -27,67 +27,43 @@ use PhpParser\Node\Name\FullyQualified;
  */
 final class TypeRenderer
 {
-    private const BUILTIN = ['int', 'float', 'string', 'bool', 'array', 'mixed', 'null'];
-
     private string $namespace;
 
     private TargetProfile $target;
+
+    private GeneratedCodePrinter $printer;
 
     public function __construct(string $namespace, TargetProfile $target)
     {
         $this->namespace = $namespace;
         $this->target = $target;
+        $this->printer = new GeneratedCodePrinter();
     }
 
     public function native(TypeModel $type): ?string
     {
-        if ($type instanceof ScalarType) {
-            return $type->kind();
-        }
+        $node = $this->nativeNode($type);
 
-        if ($type instanceof ClassType) {
-            return $this->qualify($type->className());
-        }
-
-        if ($type instanceof ListType || $type instanceof MapType) {
-            return 'array';
-        }
-
-        if ($type instanceof MixedType) {
-            return $this->target->supports(Capability::from(Capability::MIXED_TYPE)) ? 'mixed' : null;
-        }
-
-        if ($type instanceof UnionType) {
-            return $this->nativeUnion($type);
-        }
-
-        if ($type instanceof NullableType) {
-            $inner = $this->native($type->inner());
-            if ($inner === null) {
-                return null;
-            }
-
-            return strpos($inner, '|') === false ? '?' . $inner : $inner . '|null';
-        }
-
-        throw new LogicException(sprintf('Type %s cannot be emitted yet.', $type->describe()));
+        return $node instanceof Node ? $this->printer->type($node) : null;
     }
 
     /**
+     * The declaration the target can express, or null when it cannot (a union or mixed on 7.4).
+     *
      * @return Identifier|Name|Node\NullableType|Node\UnionType|null
      */
     public function nativeNode(TypeModel $type): ?Node
     {
-        $native = $this->native($type);
-        if ($native === null) {
-            return null;
+        if (!$type instanceof NullableType) {
+            return $this->nonNullable($type);
         }
 
-        if (strpos($native, '|') !== false) {
-            return new Node\UnionType(array_map([self::class, 'single'], explode('|', $native)));
+        $inner = $this->nonNullable($type->inner());
+        if ($inner instanceof Node\UnionType) {
+            return new Node\UnionType(array_merge($inner->types, [new Identifier('null')]));
         }
 
-        return strncmp($native, '?', 1) === 0 ? new Node\NullableType($this->single(substr($native, 1))) : $this->single($native);
+        return $inner instanceof Node ? new Node\NullableType($inner) : null;
     }
 
     public function doc(TypeModel $type): string
@@ -97,7 +73,7 @@ final class TypeRenderer
         }
 
         if ($type instanceof ClassType) {
-            return $this->qualify($type->className());
+            return $this->printer->type($this->className($type->className()));
         }
 
         if ($type instanceof ListType) {
@@ -122,7 +98,7 @@ final class TypeRenderer
             return $inner instanceof UnionType ? $this->doc($inner) . '|null' : '?' . $this->doc($inner);
         }
 
-        throw new LogicException(sprintf('Type %s cannot be emitted yet.', $type->describe()));
+        throw $this->unsupported($type);
     }
 
     public function needsDoc(TypeModel $type): bool
@@ -132,35 +108,75 @@ final class TypeRenderer
         return $native === null || $native !== $this->doc($type);
     }
 
-    private function nativeUnion(UnionType $type): ?string
+    /**
+     * @return Identifier|Name|Node\UnionType|null
+     */
+    private function nonNullable(TypeModel $type): ?Node
+    {
+        if ($type instanceof UnionType) {
+            return $this->nativeUnion($type);
+        }
+
+        if ($type instanceof MixedType) {
+            return $this->target->supports(Capability::from(Capability::MIXED_TYPE)) ? new Identifier('mixed') : null;
+        }
+
+        return $this->single($type);
+    }
+
+    /**
+     * @return Identifier|Name|Node\UnionType|null
+     */
+    private function nativeUnion(UnionType $type): ?Node
     {
         if (!$this->target->supports(Capability::from(Capability::UNION_TYPES))) {
             return null;
         }
 
-        $names = [];
+        // A list and a map are both "array"; the union keeps one.
+        $members = [];
+        $printed = [];
         foreach ($type->members() as $member) {
-            $name = (string) $this->native($member);
-            $names[$name] = $name;
+            $node = $this->single($member);
+            $key = $this->printer->type($node);
+            if (!in_array($key, $printed, true)) {
+                $printed[] = $key;
+                $members[] = $node;
+            }
         }
 
-        return implode('|', $names);
-    }
-
-    private function qualify(ClassName $name): string
-    {
-        return $name->namespace() === $this->namespace ? $name->shortName() : '\\' . $name->fqcn();
+        return count($members) === 1 ? $members[0] : new Node\UnionType($members);
     }
 
     /**
+     * A type that is neither nullable, a union nor mixed: exactly what a union member may be.
+     *
      * @return Identifier|Name
      */
-    private function single(string $type): Node
+    private function single(TypeModel $type): Node
     {
-        if (strncmp($type, '\\', 1) === 0) {
-            return new FullyQualified(substr($type, 1));
+        if ($type instanceof ScalarType) {
+            return new Identifier($type->kind());
         }
 
-        return in_array($type, self::BUILTIN, true) ? new Identifier($type) : new Name($type);
+        if ($type instanceof ClassType) {
+            return $this->className($type->className());
+        }
+
+        if ($type instanceof ListType || $type instanceof MapType) {
+            return new Identifier('array');
+        }
+
+        throw $this->unsupported($type);
+    }
+
+    private function className(ClassName $name): Name
+    {
+        return $name->namespace() === $this->namespace ? new Name($name->shortName()) : new FullyQualified($name->fqcn());
+    }
+
+    private function unsupported(TypeModel $type): LogicException
+    {
+        return new LogicException(sprintf('Type %s cannot be emitted yet.', $type->describe()));
     }
 }
