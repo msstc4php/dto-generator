@@ -27,4 +27,4 @@ Hex-подход, адаптированный под библиотеку; пр
 - `Domain/Builder/SchemaParser` — «decoded JSON → `Schema`»; «`Schema` → IR» (spec §3 `Builder`) появится в этапе 2b рядом.
 - `SchemaGraph` хранит рёбра `ReferenceUse::key()` → цель, записанные при загрузке; `resolve(ReferenceUse)` — чистый поиск без повторного разбора `$ref`.
 
-Этап 2b: `Service/Model/Build` — граф схем → IR. `Domain/Builder`: `NameResolver` (имена), `SchemaShape` (форма класса / неподдержанный keyword), `TypeMapper` (§5.1), `ClassBuilder` (§5.2, §5.4, §5.5, проверка `x-`). Порядок: регистрация всех классов графа (имена, коллизии) → построение свойств с уже известными именами целей `$ref`.
+Этап 2b: `Service/Model/Build` — граф схем → IR. `Domain/Builder`: `NameResolver` (имена), `SchemaShape` (форма класса / неподдержанный keyword), `TypeMapper` (§5.1), `ClassBuilder` (§5.2, §5.4, §5.5, `x-` свойств и items), `ExtensionVocabulary` (словарь §7), `DefaultFit` (default ↔ тип), `RequiredCycles` (неконструируемые циклы). Порядок: регистрация всех классов графа (имена, коллизии) → построение свойств с уже известными именами целей `$ref`.

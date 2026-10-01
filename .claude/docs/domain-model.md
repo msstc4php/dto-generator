@@ -29,9 +29,13 @@
 - `Capability::RESERVED_NAMESPACE_SEGMENTS` (8.0): ниже — `TargetResolver` отклоняет токены PHP 7.4 в namespace источников и типах `formats`.
 
 ## Builder (этап 2b)
-- Класс = схема без `$ref`/неподдержанных keyword'ов, с `properties` и типом `object` или без типа (`SchemaShape::isClass`). Прочие именованные схемы — алиасы: `$ref` на них встраивает их тип (с защитой от циклов).
+- Класс = схема без `$ref`/`x-php-type`/неподдержанных keyword'ов, с `properties` и типом `object` или без типа (`SchemaShape::isClass`). Прочие именованные схемы — алиасы: `$ref` на них встраивает их тип (с защитой от циклов).
 - Схемы только-по-`$ref` (selected=false) тоже становятся классами — в namespace источника-владельца (решение владельца 2026-10-01 UTC).
-- Свойство: обязательное и не-nullable → без default; иначе `?T` и default из схемы или `null`. Default у класса (дата) или map → warning и `null`; `INF`/`NAN` → ошибка.
-- Имена: класс — PascalCase, ведущая цифра `_`, зарезервированное слово `_` в конце; свойство — camelCase, первое слово целиком в капсе приводится к нижнему регистру целиком, `this` → `this_`. Коллизии — без учёта ASCII-регистра.
+- Свойство: обязательное и не-nullable → без default; иначе `?T` и default из схемы или `null`. Default у класса (дата, `x-php-type`) или map, в том числе как элемента непустого списка, → warning и `null` (`{}` и `[]` из JSON неразличимы: пустой default у map/класса — тоже warning; у списка — сохраняется; не-список у списка — ошибка несовпадения); `INF`/`NAN` → ошибка; default, не подходящий под тип с учётом уточнений (`non-empty-string`, `positive-int`, `int<a, b>`, элементы `list`), → ошибка и `null` (`DefaultFit`).
+- Имена: класс — PascalCase, ведущая цифра `_`, зарезервированное слово `_` в конце; свойство — camelCase, первое слово целиком в капсе приводится к нижнему регистру целиком, ведущий акроним тоже, с цифрами (`HTTPStatus` → `httpStatus`, `HTTP2Status` → `http2Status`, `IDs` → `ids`), `this` → `this_`. Слова делятся по не-`\p{L}\p{M}\p{N}` (combining marks NFD-имён сохраняются) (NBSP, `€` — разделители); невалидный UTF-8 — только ASCII-буквы и цифры. Коллизии — без учёта ASCII-регистра.
 - Неподдержанное до этапа 4 (`enum`, `allOf/oneOf/anyOf`, `discriminator`, `additionalProperties`-схема, инлайн-объект): в свойстве — ошибка и `mixed`; у выбранного компонента — warning и класс не создаётся.
+- `x-php-skip` действует и на алиасы (ссылка → warning и `mixed`); required + skip → warning.
+- Словарь `x-php-*`/`x-dto-*` (`ExtensionVocabulary`) проверяется у каждой схемы графа: класс/enum/композиция — набор класса, алиас — `x-php-type`, `x-php-skip`; свойства — в `ClassBuilder`; любая цепочка `items` — только `x-php-type`. Контексты закрыты: `checkClass`/`checkAlias`/`checkProperty`. `x-enum-descriptions` в ядре нет.
+- Цикл обязательных class-typed свойств (A.b: B, B.a: A) → warning на каждом свойстве цикла (`RequiredCycles`, после построения всех классов).
+- `exclusiveMinimum: PHP_INT_MAX` / `exclusiveMaximum: PHP_INT_MIN` → warning, граница игнорируется.
 - `Schema::requireProperty()` — для имён из `propertyNames()`; иное имя — `InvalidModel` (ошибка кода, не ввода).
