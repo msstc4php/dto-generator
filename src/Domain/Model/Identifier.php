@@ -17,7 +17,9 @@ final class Identifier
         'fn', 'for', 'foreach', 'function', 'global', 'goto', 'if', 'implements', 'include', 'include_once',
         'instanceof', 'insteadof', 'interface', 'isset', 'list', 'match', 'namespace', 'new', 'or', 'print',
         'private', 'protected', 'public', 'readonly', 'require', 'require_once', 'return', 'static', 'switch',
-        'throw', 'trait', 'try', 'unset', 'use', 'var', 'while', 'xor', 'yield',
+        'throw', 'trait', 'try', 'unset', 'use', 'var', 'while', 'xor', 'yield', 'die', '__halt_compiler',
+        '__class__', '__dir__', '__file__', '__function__', '__line__', '__method__', '__namespace__',
+        '__trait__', '__property__',
         'bool', 'false', 'float', 'int', 'iterable', 'mixed', 'never', 'null', 'object', 'parent', 'self',
         'string', 'true', 'void',
     ];

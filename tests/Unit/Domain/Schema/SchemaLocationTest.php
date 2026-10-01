@@ -44,6 +44,33 @@ final class SchemaLocationTest extends TestCase
         new SchemaLocation('');
     }
 
+    /**
+     * @dataProvider invalidEscapes
+     */
+    public function testRejectsInvalidEscapes(string $pointer): void
+    {
+        $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('invalid "~" escape');
+
+        new SchemaLocation('a.json', $pointer);
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function invalidEscapes(): array
+    {
+        return [
+            'unknown escape' => ['/a~2'],
+            'trailing tilde' => ['/a~'],
+        ];
+    }
+
+    public function testAcceptsValidEscapes(): void
+    {
+        self::assertSame('/a~0b~1', (new SchemaLocation('a.json', '/a~0b~1'))->pointer());
+    }
+
     public function testRejectsARelativePointer(): void
     {
         $this->expectException(InvalidModel::class);

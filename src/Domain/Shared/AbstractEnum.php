@@ -28,6 +28,19 @@ abstract class AbstractEnum
     }
 
     /**
+     * @return list<string>
+     */
+    public function __sleep(): array
+    {
+        throw new LogicException(sprintf('%s is interned and cannot be serialized.', static::class));
+    }
+
+    public function __wakeup(): void
+    {
+        throw new LogicException(sprintf('%s is interned and cannot be unserialized.', static::class));
+    }
+
+    /**
      * @return static
      */
     public static function from(string $value): self

@@ -64,7 +64,11 @@ final class Schema
 
     private ?Discriminator $discriminator;
 
-    /** @var array<string, JsonValue> */
+    /**
+     * Keys are keyword names; PHP turns numeric ones into ints, hence `int|string`.
+     *
+     * @var array<int|string, JsonValue>
+     */
     private array $keywords;
 
     private Extensions $extensions;
@@ -78,7 +82,7 @@ final class Schema
      * @param list<Schema> $allOf
      * @param list<Schema> $oneOf
      * @param list<Schema> $anyOf
-     * @param array<string, JsonValue> $keywords validation keywords without a dedicated accessor
+     * @param array<int|string, JsonValue> $keywords validation keywords without a dedicated accessor
      */
     public function __construct(
         SchemaLocation $location,
@@ -117,6 +121,7 @@ final class Schema
         }
 
         foreach (array_keys($keywords) as $keyword) {
+            $keyword = (string) $keyword;
             if (in_array($keyword, self::STRUCTURAL_KEYWORDS, true) || strncmp($keyword, 'x-', 2) === 0) {
                 throw new InvalidModel(sprintf('Schema %s: "%s" has a dedicated field and cannot be a generic keyword.', $location->toString(), $keyword));
             }
@@ -294,7 +299,17 @@ final class Schema
     }
 
     /**
-     * @return array<string, JsonValue>
+     * @return list<string>
+     */
+    public function keywordNames(): array
+    {
+        return array_map('strval', array_keys($this->keywords));
+    }
+
+    /**
+     * Keys may be ints for numeric keyword names; use {@see keywordNames()} for strings.
+     *
+     * @return array<int|string, JsonValue>
      */
     public function keywords(): array
     {

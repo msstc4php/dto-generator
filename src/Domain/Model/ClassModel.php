@@ -56,7 +56,8 @@ final class ClassModel
         $names = [];
         $wireNames = [];
         foreach ($properties as $property) {
-            if (isset($names[$property->name()])) {
+            $key = strtolower($property->name());
+            if (isset($names[$key])) {
                 throw new InvalidModel(sprintf('Class %s declares property "%s" twice.', $name->fqcn(), $property->name()));
             }
 
@@ -64,7 +65,7 @@ final class ClassModel
                 throw new InvalidModel(sprintf('Class %s maps wire name "%s" twice.', $name->fqcn(), $property->wireName()));
             }
 
-            $names[$property->name()] = true;
+            $names[$key] = true;
             $wireNames[$property->wireName()] = true;
         }
 

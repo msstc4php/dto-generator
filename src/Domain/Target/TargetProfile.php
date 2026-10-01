@@ -83,7 +83,10 @@ final class TargetProfile
         return $this->mutability;
     }
 
-    public function accessors(): AccessorStyle
+    /**
+     * As configured, possibly AUTO; generation must use {@see accessorsFor()}.
+     */
+    public function configuredAccessors(): AccessorStyle
     {
         return $this->accessors;
     }

@@ -54,6 +54,29 @@ final class ClassModelTest extends TestCase
         $this->classWith([$this->property('id', 'id'), $this->property('id', 'ID')]);
     }
 
+    public function testRejectsPropertyNamesDifferingOnlyByCase(): void
+    {
+        $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('declares property "Foo" twice');
+
+        $this->classWith([$this->property('foo'), $this->property('Foo', 'foo_upper')]);
+    }
+
+    public function testRejectsExtendingItselfInAnotherCase(): void
+    {
+        $this->expectException(InvalidModel::class);
+
+        new ClassModel(
+            ClassName::fromFqcn('App\\User'),
+            ClassKind::from(ClassKind::OPEN),
+            ClassName::fromFqcn('app\\user'),
+            [],
+            Mutability::from(Mutability::MUTABLE),
+            DocModel::none(),
+            new SchemaLocation('a.json'),
+        );
+    }
+
     public function testRejectsDuplicateWireNames(): void
     {
         $this->expectException(InvalidModel::class);

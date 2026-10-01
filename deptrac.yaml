@@ -5,7 +5,8 @@ deptrac:
     - name: Domain
       collectors:
         - type: directory
-          value: src/Domain/(Schema|Model|Target|Shared|Exception)/.*
+          # Everything under Domain except the Builder, so new subdirectories are covered automatically.
+          value: src/Domain/(?!Builder/).*
     - name: DomainService
       collectors:
         - type: directory

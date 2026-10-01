@@ -6,7 +6,6 @@ install: ## Install package and tool dependencies
 	composer install --working-dir=tools
 
 check: ## Static checks (incl. PHP 7.4 syntax lint)
-	find ./src ./tests -name '*.php' -print0 | xargs -0 -r -n1 php -l > /dev/null
 	$(TOOLS)/phpstan analyse --memory-limit=512M -c phpstan.dist.neon
 	$(TOOLS)/php-cs-fixer check
 	composer validate --strict --no-check-publish

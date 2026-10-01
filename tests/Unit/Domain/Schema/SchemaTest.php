@@ -26,6 +26,15 @@ final class SchemaTest extends TestCase
         self::assertSame([self::type(SchemaType::STRING)], $schema->nonNullTypes());
     }
 
+    public function testNumericKeywordNamesStayStrings(): void
+    {
+        $schema = $this->builder()->keyword('200', 1)->build();
+
+        self::assertTrue($schema->hasKeyword('200'));
+        self::assertSame(1, $schema->keyword('200'));
+        self::assertSame(['200'], $schema->keywordNames());
+    }
+
     public function testAcceptsKeywordsThatMerelyStartWithX(): void
     {
         self::assertSame(1, $this->builder()->keyword('xmlLength', 1)->build()->keyword('xmlLength'));

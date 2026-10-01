@@ -39,6 +39,19 @@ final class ClassNameTest extends TestCase
         self::assertSame('DateTimeImmutable', $name->fqcn());
     }
 
+    public function testEqualityIgnoresCaseLikePhpDoes(): void
+    {
+        self::assertTrue(ClassName::fromFqcn('App\\UserId')->equals(ClassName::fromFqcn('app\\USERID')));
+    }
+
+    public function testListsReservedNamespaceSegmentsForPre80Targets(): void
+    {
+        self::assertSame(['Public'], ClassName::fromFqcn('App\\Dto\\Public\\User')->reservedNamespaceSegments());
+        self::assertSame(['List', 'Enum'], ClassName::fromFqcn('List\\Enum\\User')->reservedNamespaceSegments());
+        self::assertSame([], ClassName::fromFqcn('App\\Dto\\Api\\User')->reservedNamespaceSegments());
+        self::assertSame([], ClassName::fromFqcn('User')->reservedNamespaceSegments());
+    }
+
     public function testComparesByValue(): void
     {
         self::assertTrue(ClassName::fromFqcn('\App\User')->equals(ClassName::fromFqcn('App\User')));
@@ -70,6 +83,9 @@ final class ClassNameTest extends TestCase
             'trailing backslash' => ['App\User\\', 'segment "" is not a PHP identifier'],
             'reserved short name' => ['App\Model\List', '"List" is a reserved word'],
             'reserved type name' => ['Object', '"Object" is a reserved word'],
+            'die construct' => ['App\\Die', '"Die" is a reserved word'],
+            'magic constant' => ['App\\__CLASS__', '"__CLASS__" is a reserved word'],
+            'halt compiler' => ['__halt_compiler', '"__halt_compiler" is a reserved word'],
         ];
     }
 }

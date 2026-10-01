@@ -20,3 +20,21 @@ parameters:
         -
             function: 'error_log()'
             message: 'the library reports through diagnostics, not the PHP error log'
+        -
+            function:
+                - 'str_contains()'
+                - 'str_starts_with()'
+                - 'str_ends_with()'
+                - 'array_is_list()'
+                - 'get_debug_type()'
+                - 'fdiv()'
+                - 'preg_last_error_msg()'
+                - 'get_resource_id()'
+            message: 'PHP 8.0+ only; the package runs on PHP 7.4 (phpVersion: 70400 does not catch functions present in the analysing runtime)'
+    disallowedClasses:
+        -
+            class:
+                - 'Stringable'
+                - 'ValueError'
+                - 'WeakMap'
+            message: 'PHP 8.0+ only; the package runs on PHP 7.4'

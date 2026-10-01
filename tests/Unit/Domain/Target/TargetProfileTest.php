@@ -101,7 +101,7 @@ final class TargetProfileTest extends TestCase
         self::assertSame('8.2', $profile->php()->toString());
         self::assertSame(MetadataMode::from(MetadataMode::ATTRIBUTES), $profile->metadata());
         self::assertSame(Mutability::from(Mutability::MUTABLE), $profile->mutability());
-        self::assertSame(AccessorStyle::from(AccessorStyle::AUTO), $profile->accessors());
+        self::assertSame(AccessorStyle::from(AccessorStyle::AUTO), $profile->configuredAccessors());
         self::assertSame(DateTimeClass::from(DateTimeClass::MUTABLE), $profile->dateTimeClass());
         self::assertFalse($profile->isStrict());
     }

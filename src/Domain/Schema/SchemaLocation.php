@@ -22,6 +22,10 @@ final class SchemaLocation
             throw new InvalidModel(sprintf('JSON pointer "%s" must be empty or start with "/".', $pointer));
         }
 
+        if (preg_match('/~(?![01])/', $pointer) === 1) {
+            throw new InvalidModel(sprintf('JSON pointer "%s" contains an invalid "~" escape; only ~0 and ~1 are allowed.', $pointer));
+        }
+
         $this->file = $file;
         $this->pointer = $pointer;
     }

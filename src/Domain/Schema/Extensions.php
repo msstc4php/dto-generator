@@ -16,16 +16,17 @@ final class Extensions
     private array $values;
 
     /**
-     * @param array<string, JsonValue> $values
+     * @param array<int|string, JsonValue> $values
      */
     public function __construct(array $values = [])
     {
         foreach (array_keys($values) as $key) {
-            if (strncmp($key, 'x-', 2) !== 0 || strlen($key) === 2) {
+            if (!is_string($key) || strncmp($key, 'x-', 2) !== 0 || strlen($key) === 2) {
                 throw new InvalidModel(sprintf('Extension key "%s" must start with "x-" followed by a name.', $key));
             }
         }
 
+        /** @var array<string, JsonValue> $values every key passed the is_string check above */
         $this->values = $values;
     }
 

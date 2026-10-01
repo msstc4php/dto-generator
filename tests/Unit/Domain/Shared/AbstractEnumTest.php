@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MSSTC4PHP\DtoGenerator\Tests\Unit\Domain\Shared;
 
 use InvalidArgumentException;
+use LogicException;
 use MSSTC4PHP\DtoGenerator\Tests\Unit\Domain\Shared\Fixture\Colour;
 use MSSTC4PHP\DtoGenerator\Tests\Unit\Domain\Shared\Fixture\Shade;
 use PHPUnit\Framework\TestCase;
@@ -38,6 +39,20 @@ final class AbstractEnumTest extends TestCase
     public function testTryFromReturnsNullForAnUnknownValue(): void
     {
         self::assertNull(Colour::tryFrom('blue'));
+    }
+
+    public function testRefusesSerializationBecauseItWouldBreakIdentity(): void
+    {
+        $this->expectException(LogicException::class);
+
+        serialize(Colour::from(Colour::RED));
+    }
+
+    public function testRefusesUnserialization(): void
+    {
+        $this->expectException(LogicException::class);
+
+        unserialize(sprintf('O:%d:"%s":0:{}', strlen(Colour::class), Colour::class));
     }
 
     public function testInstancesAreSeparatedPerClass(): void

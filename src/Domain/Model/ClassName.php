@@ -58,8 +58,28 @@ final class ClassName
         return $this->shortName;
     }
 
+    /**
+     * Segments PHP < 8.0 cannot parse in a namespace; the emitter must reject them for such targets.
+     *
+     * @return list<string>
+     */
+    public function reservedNamespaceSegments(): array
+    {
+        if ($this->namespace === '') {
+            return [];
+        }
+
+        return array_values(array_filter(
+            explode('\\', $this->namespace),
+            static fn (string $segment): bool => Identifier::isReserved($segment),
+        ));
+    }
+
+    /**
+     * Case-insensitive, as PHP resolves class names.
+     */
     public function equals(self $other): bool
     {
-        return $this->fqcn() === $other->fqcn();
+        return strtolower($this->fqcn()) === strtolower($other->fqcn());
     }
 }

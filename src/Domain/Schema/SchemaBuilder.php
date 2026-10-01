@@ -54,7 +54,7 @@ final class SchemaBuilder
 
     private ?Discriminator $discriminator = null;
 
-    /** @var array<string, JsonValue> */
+    /** @var array<int|string, JsonValue> */
     private array $keywords = [];
 
     private Extensions $extensions;

@@ -59,6 +59,13 @@ final class ExtensionsTest extends TestCase
         ];
     }
 
+    public function testRejectsANumericKeyAsAModelError(): void
+    {
+        $this->expectException(InvalidModel::class);
+
+        new Extensions(['200' => true]);
+    }
+
     public function testGetRejectsAMissingKey(): void
     {
         $this->expectException(InvalidModel::class);
