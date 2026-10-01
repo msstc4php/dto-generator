@@ -28,6 +28,7 @@ final class CapabilityTest extends TestCase
             Capability::UNION_TYPES => [Capability::UNION_TYPES, '8.0'],
             Capability::ATTRIBUTES => [Capability::ATTRIBUTES, '8.0'],
             Capability::MIXED_TYPE => [Capability::MIXED_TYPE, '8.0'],
+            Capability::RESERVED_NAMESPACE_SEGMENTS => [Capability::RESERVED_NAMESPACE_SEGMENTS, '8.0'],
             Capability::READONLY_PROPERTIES => [Capability::READONLY_PROPERTIES, '8.1'],
             Capability::ENUMS => [Capability::ENUMS, '8.1'],
             Capability::NEW_IN_INITIALIZERS => [Capability::NEW_IN_INITIALIZERS, '8.1'],
