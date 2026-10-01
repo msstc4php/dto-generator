@@ -19,3 +19,11 @@
 ## Target (`Domain/Target`)
 - `Capability` — матрица «возможность → минимальная версия PHP» (spec §6.1). Новая версия PHP = строка в `PhpVersion::SUPPORTED` + строки в матрице.
 - `TargetProfile` валидирует сразу: `metadata=attributes` требует 8.0; `public-properties` для immutable требует readonly (8.1). `configuredAccessors()` может вернуть `AUTO` — генерация обязана использовать `accessorsFor()`, который разрешает `auto` по мутабельности конкретного класса (её можно переопределить `x-dto-mutable`).
+
+## Диагностика и граф (этап 2a)
+- `Diagnostics` — изменяемый сборщик (collecting parameter); `Diagnostic` = severity + сообщение + `SchemaLocation|null`. Ошибки конфига адресуются тем же `SchemaLocation` (файл конфига + JSON pointer).
+- `SchemaParser` всегда возвращает `Schema`; неверный keyword → диагностика и пропуск.
+- `Reference::target()` — `$ref` → `SchemaLocation` (лексически, без ФС); `null` для `scheme://`; якоря (`#Name`) не поддерживаются; фрагмент и путь проходят `rawurldecode`.
+- `Discriminator` хранит mapping нормализованным: голое имя → `#/components/schemas/<имя>`.
+- `SchemaGraph` — ключ `file#pointer`; `ResolvedSchema.source` — индекс источника-владельца; файл вне всех источников наследует владельца от ссылающихся, двое и более → ошибка неоднозначного namespace. `selected=false` — схема нужна только как цель ссылки (генерировать её всё равно придётся, иначе ссылка повиснет — решение этапа 2b).
+- `Capability::RESERVED_NAMESPACE_SEGMENTS` (8.0): ниже — `TargetResolver` отклоняет токены PHP 7.4 в namespace источников и типах `formats`.

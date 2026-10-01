@@ -17,3 +17,8 @@
 - Сравнение идентификаторов — `Identifier::asciiLower()`, не `strtolower()` (на 7.4 зависит от локали). Регулярки на целую строку — с `\z`, не `$` (`$` пропускает завершающий `\n`).
 - Тест исключения всегда проверяет и класс, и устойчивую подстроку сообщения.
 - Полный гейт перед коммитом: `make fix && make verify` (= `check` + `test` + `test-74`); `make infection` держит MSI ≥ 99 % — эквивалентные мутанты перечислены в `infection.json5` с причиной — только точечно по методу (`ignore`), не глобальным regex.
+- Use-case'ы Application — вертикальные слайсы `Service/<Area>/<UseCase>/{Action,Input,Output}.php`; вспомогательные классы слайса лежат рядом (`Schemas/Load/GraphBuilder`).
+- Ошибки пользовательского ввода (конфиг, спецификации) — только `Diagnostics` с `SchemaLocation`, без исключений; исключения — для нарушений инвариантов кода. Порт загрузки бросает `DocumentLoadFailed`, use-case превращает его в диагностику.
+- Интеграционные тесты (`tests/Integration`, suite `integration`) работают с реальной ФС и фикстурами `tests/Fixtures`; модульные используют двойники из `tests/Support`.
+- `Json::isList()` несёт `@phpstan-assert-if-true list<mixed>`: после проверки массив — список для PHPStan; литеральные массивы в тестах поэтому подаются через data provider.
+- CS-Fixer: `no_superfluous_phpdoc_tags.allow_mixed = true` — на PHP 7.4 `@param mixed` единственный способ типизировать границу декодера.

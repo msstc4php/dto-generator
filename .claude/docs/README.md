@@ -8,3 +8,4 @@
 | [domain-model.md](domain-model.md) | Schema, IR, TargetProfile — инварианты |
 | [conventions.md](conventions.md) | Правила кода, обязательные из-за рантайма PHP 7.4 |
 | [known-issues.md](known-issues.md) | Подводные камни и ограничения |
+| [integrations.md](integrations.md) | Порты, адаптеры, внешние библиотеки |

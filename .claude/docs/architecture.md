@@ -12,7 +12,9 @@ Hex-подход, адаптированный под библиотеку; пр
 | Presentation | `src/Presentation` | Application, Domain, Contract, Symfony, Composer |
 | Extension | `src/Extension` | Contract, Domain |
 
-Состояние на 2026-10-01 (UTC): реализован только Domain (этап 1). Остальные каталоги появятся в этапах 2–6.
+Состояние на 2026-10-01 (UTC): этапы 1 и 2a. Реализованы Domain, `Domain/Builder/SchemaParser`, Application (`Config/*`, use-case'ы `Service/Config/Load` и `Service/Schemas/Load`, порты `DocumentLoader`, `ProjectPhpConstraint`) и Infrastructure (`Document/FileDocumentLoader`, `Environment/ComposerJsonPhpConstraint`).
+
+Поток этапа 2a: `Config/Load` (файл → `GeneratorConfig` → `TargetResolver` → `TargetProfile`) → `Schemas/Load` (спецификации источников → выбранные `components/schemas` → обход `$ref` до замыкания → `SchemaGraph`). Ошибки ввода не бросаются, а копятся в `Diagnostics`.
 
 - `Domain/Schema` — разобранная JSON Schema; `$ref` хранится как строка, разрешение — вне домена.
 - `Domain/Model` — IR, из которого Emitter строит код. Enricher'ы (SPI) только **добавляют** `AttributeModel`.
