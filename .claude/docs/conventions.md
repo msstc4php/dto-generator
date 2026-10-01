@@ -10,4 +10,9 @@
 - `Schema::keywords()` может содержать int-ключи (числовые имена); для строк — `keywordNames()`.
 - PHPUnit 9.6: `@dataProvider` в аннотациях, провайдеры `public static`.
 - Проверка «код парсится на 7.4» — `make lint-74`, входит в `make check`; тесты на 7.4 — `make test-74`.
-- Нарушение инварианта модели → `Domain\Exception\InvalidModel`; вызов accessor'а не того вида → `\LogicException`.
+- Нарушение инварианта модели → `Domain\Exception\InvalidModel`; вызов accessor'а не того вида → `\LogicException`. Все доменные исключения реализуют маркер `Domain\Exception\DomainError` — внешние слои ловят его одним `catch`.
+- `with*()` заменяет значение; добавление — `withAdded*()`. Копии всегда через конструктор (инварианты перепроверяются), не через `clone`.
+- `SchemaBuilder`: variadic-сеттеры заменяют, keyed (`property`, `keyword`) — добавляют.
+- Сравнение идентификаторов — `Identifier::asciiLower()`, не `strtolower()` (на 7.4 зависит от локали). Регулярки на целую строку — с `\z`, не `$` (`$` пропускает завершающий `\n`).
+- Тест исключения всегда проверяет и класс, и устойчивую подстроку сообщения.
+- Полный гейт перед коммитом: `make fix && make verify` (= `check` + `test` + `test-74`); `make infection` держит MSI ≥ 99 % — эквивалентные мутанты перечислены в `infection.json5` с причиной.

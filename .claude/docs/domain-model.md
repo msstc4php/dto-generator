@@ -9,6 +9,7 @@
 ## IR (`Domain/Model`)
 - `TypeModel`: `ScalarType` (с PHPDoc-уточнением), `ClassType`, `ListType`, `MapType` (ключи всегда string), `UnionType` (≥2 разных, плоский, без nullable/mixed), `NullableType` (не вкладывается, не над mixed), `MixedType`. Равенство типов — по `describe()`.
 - `ClassName` отклоняет зарезервированные слова (включая soft keywords `enum`, `readonly`) только в **коротком имени**; сегменты namespace — лишь синтаксис идентификатора, т.к. с PHP 8.0 `App\Dto\Public` допустим. Отказ для target < 8.0 — обязанность валидации конфига (этап 2). Переименование (суффикс `_`) делает Builder, не модель.
+- `Identifier`: проверка с `\z`, зарезервированные включают `resource`/`numeric`; `asciiLower()` — локаленезависимый lower.
 - `ClassName::equals()` регистронезависим (как PHP); `reservedNamespaceSegments()` — для проверки target < 8.0. Список зарезервированных включает `die`, `__halt_compiler`, магические константы.
 - `PropertyModel`: запрещено только точное `this` (`$This` — законная переменная). `wireName` — исходное имя из схемы (для `SerializedName` в мосте).
 - `ClassModel`: уникальны PHP-имена (регистронезависимо — иначе столкнутся `getFoo()`) и wire-имена; discriminator только у `ClassKind::ABSTRACT`; `with*()` пересоздают объект и заново проверяют инварианты.
