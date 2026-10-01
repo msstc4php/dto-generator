@@ -4,9 +4,9 @@
         "directories": ["src"]
     },
     "timeout": 10,
-    // Raised to just below the measured level in Task 9.
-    "minMsi": 0,
-    "minCoveredMsi": 0,
+    // Floor two points below the level measured at the end of stage 1 (MSI 96 %, covered 97 %).
+    "minMsi": 94,
+    "minCoveredMsi": 95,
     "logs": {
         "text": "var/infection/infection.log",
         "json": "var/infection/infection.json"
