@@ -55,6 +55,10 @@ final class IdentifierTest extends TestCase
     {
         self::assertTrue(Identifier::isReserved('LIST'));
         self::assertTrue(Identifier::isReserved('Enum'));
+        self::assertTrue(Identifier::isReserved('match'));
+        self::assertTrue(Identifier::isReserved('Readonly'));
+        self::assertTrue(Identifier::isReserved('__PROPERTY__'));
+        self::assertFalse(Identifier::isReserved('listing'));
         self::assertFalse(Identifier::isReserved('Resource'));
         self::assertFalse(Identifier::isReserved('numeric'));
     }
@@ -66,7 +70,7 @@ final class IdentifierTest extends TestCase
         self::assertFalse(Identifier::isPhp74Keyword('Enum'));
         self::assertFalse(Identifier::isPhp74Keyword('String'));
         self::assertFalse(Identifier::isPhp74Keyword('Match'));
-        self::assertFalse(Identifier::isReserved('listing'));
+        self::assertFalse(Identifier::isPhp74Keyword('listing'));
     }
 
     public function testLowercasesAsciiOnlyRegardlessOfLocale(): void

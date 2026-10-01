@@ -34,7 +34,7 @@ final class EnumModel
         $values = [];
         foreach ($cases as $case) {
             if (is_int($case->value()) !== $isInt) {
-                throw new InvalidModel(sprintf('Enum %s case "%s" has value %s, which does not match the %s backing.', $name->fqcn(), $case->name(), var_export($case->value(), true), $backing->value()));
+                throw new InvalidModel($this->backingMismatch($name, $case, $backing));
             }
 
             if (isset($names[$case->name()])) {
@@ -82,5 +82,16 @@ final class EnumModel
     public function source(): SchemaLocation
     {
         return $this->source;
+    }
+
+    private function backingMismatch(ClassName $name, EnumCase $case, EnumBacking $backing): string
+    {
+        return sprintf(
+            'Enum %s case "%s" has value %s, which does not match the %s backing.',
+            $name->fqcn(),
+            $case->name(),
+            var_export($case->value(), true),
+            $backing->value(),
+        );
     }
 }

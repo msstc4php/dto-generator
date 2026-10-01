@@ -86,6 +86,7 @@ final class ArgumentValue
     public static function listOf(self ...$items): self
     {
         // On PHP 8.0+ unknown named arguments land in the variadic with string keys; re-index them.
+        // Not array_values(): PHPStan (analysing for 7.4) reports it as a no-op on a variadic.
         $list = [];
         foreach ($items as $item) {
             $list[] = $item;

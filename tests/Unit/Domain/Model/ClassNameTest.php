@@ -81,6 +81,7 @@ final class ClassNameTest extends TestCase
             'trailing newline' => ["App\\List\n", 'is not a PHP identifier'],
             'only a backslash' => ['\\', 'must not be empty'],
             'double leading backslash' => ['\\\\App\\User', 'segment "" is not a PHP identifier'],
+            'namespace keyword first' => ['Namespace\\Dto\\User', 'cannot start with "namespace"'],
             'starts with a digit' => ['App\1User', 'segment "1User" is not a PHP identifier'],
             'dash' => ['App\User-Profile', 'segment "User-Profile" is not a PHP identifier'],
             'empty segment' => ['App\\\\User', 'segment "" is not a PHP identifier'],

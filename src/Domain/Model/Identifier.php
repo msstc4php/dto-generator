@@ -25,6 +25,8 @@ final class Identifier
 
     /**
      * Not usable as a class name on some supported target: later keywords and reserved type names.
+     * `enum` is only a soft keyword (`class Enum` compiles) but is kept here on purpose: such a name
+     * reads ambiguously next to generated PHP 8.1 enums and costs nothing to suffix.
      */
     private const RESERVED_CLASS_NAMES = [
         'enum', 'match', 'readonly', '__property__',
@@ -69,10 +71,16 @@ final class Identifier
     public static function normalizeQualifiedName(string $name, string $kind): string
     {
         $normalized = strncmp($name, '\\', 1) === 0 ? (string) substr($name, 1) : $name;
-        foreach (explode('\\', $normalized) as $segment) {
+        $segments = explode('\\', $normalized);
+        foreach ($segments as $segment) {
             if (!self::isValid($segment)) {
                 throw new InvalidModel(sprintf('"%s" is not a valid %s: segment "%s" is not a PHP identifier.', $name, $kind, $segment));
             }
+        }
+
+        // `namespace\X` is a namespace-relative name to the lexer on every PHP version.
+        if (self::asciiLower($segments[0]) === 'namespace') {
+            throw new InvalidModel(sprintf('"%s" is not a valid %s: it cannot start with "namespace".', $name, $kind));
         }
 
         return $normalized;

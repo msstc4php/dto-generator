@@ -41,7 +41,7 @@ final class EnumModelTest extends TestCase
     public function testRejectsANumericStringInAnIntEnum(): void
     {
         $this->expectException(InvalidModel::class);
-        $this->expectExceptionMessage('does not match the int backing');
+        $this->expectExceptionMessage("case \"One\" has value '1', which does not match the int backing");
 
         $this->enum(EnumBacking::INT, [new EnumCase('One', '1')]);
     }

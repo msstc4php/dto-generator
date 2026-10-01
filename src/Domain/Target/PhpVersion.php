@@ -22,15 +22,15 @@ final class PhpVersion
 
     public static function fromString(string $version): self
     {
-        if (preg_match('/^(0|[1-9]\d*)\.(0|[1-9]\d*)(?:\.(?:0|[1-9]\d*))?\z/', $version, $matches) !== 1) {
+        if (preg_match('/^(?<major>0|[1-9]\d*)\.(?<minor>0|[1-9]\d*)(?:\.(?:0|[1-9]\d*))?\z/', $version, $matches) !== 1) {
             throw UnsupportedPhpVersion::malformed($version);
         }
 
-        if (!in_array($matches[1] . '.' . $matches[2], self::SUPPORTED, true)) {
+        if (!in_array($matches['major'] . '.' . $matches['minor'], self::SUPPORTED, true)) {
             throw UnsupportedPhpVersion::notSupported($version, self::SUPPORTED);
         }
 
-        return new self((int) $matches[1], (int) $matches[2]);
+        return new self((int) $matches['major'], (int) $matches['minor']);
     }
 
     public static function oldest(): self

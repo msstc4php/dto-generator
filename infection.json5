@@ -44,9 +44,7 @@
                 "MSSTC4PHP\\DtoGenerator\\Domain\\Shared\\AbstractEnum::tryFrom",
                 "MSSTC4PHP\\DtoGenerator\\Domain\\Model\\ArgumentValue::className"
             ]
-        },
-        // Equivalent only here: (int) "8.2" and (int) "8" are equal, so $matches[0] vs $matches[1] cannot be told apart.
-        "DecrementInteger": { "ignoreSourceCodeByRegex": [".*new self\\(\\(int\\) \\$matches\\[1\\].*"] }
+        }
     },
     "phpUnit": {
         "customPath": "vendor/bin/phpunit"
