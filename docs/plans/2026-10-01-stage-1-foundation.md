@@ -10,7 +10,7 @@
 
 **Spec:** `docs/specs/2026-10-01-dto-generator-design.md` — этот план реализует §13 этап 1: каркас, инструменты, deptrac (§3, §11.2), Domain — Schema, IR, `TargetProfile` (§3, §5, §6.1). Загрузка документов, Builder, Emitter, конфиг, SPI, CLI — в следующих планах.
 
-> **Примечание после ревью (2026-10-01 UTC):** API изменён по итогам code review — `withAttributes()` → `withAddedAttributes()`, `ArgumentValue::items()` → `listItems()`/`mapItems()`, `SchemaBuilder::defaultValue()` → `default()`, `TargetProfile::accessors()` → `configuredAccessors()`. Код в задачах ниже — исторический снимок; актуальный API — в `src/` и `.claude/docs/`.
+> **Примечание после ревью (2026-10-01 UTC):** API изменён по итогам code review — `withAttributes()` → `withAddedAttributes()`, `ArgumentValue::items()` → `listItems()`/`mapItems()`, `SchemaBuilder::defaultValue()` → `default()`, `TargetProfile::accessors()` → `configuredAccessors()`. Также `MapType` описывается как `array<array-key, T>` (решение от 2026-10-01 UTC, spec §5.1, сноска ¹). Код в задачах ниже — исторический снимок; актуальный API — в `src/` и `.claude/docs/`.
 
 ## Global Constraints
 
