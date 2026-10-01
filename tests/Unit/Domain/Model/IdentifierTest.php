@@ -77,4 +77,13 @@ final class IdentifierTest extends TestCase
     {
         self::assertSame("ab\xC4\xD6", Identifier::asciiLower("AB\xC4\xD6"));
     }
+
+    public function testChangesTheCaseOfTheFirstAsciiLetterOnly(): void
+    {
+        self::assertSame('User', Identifier::asciiUpperFirst('user'));
+        self::assertSame('userName', Identifier::asciiLowerFirst('UserName'));
+        self::assertSame("\xC3\xA4b", Identifier::asciiUpperFirst("\xC3\xA4b"));
+        self::assertSame('', Identifier::asciiUpperFirst(''));
+        self::assertSame('', Identifier::asciiLowerFirst(''));
+    }
 }

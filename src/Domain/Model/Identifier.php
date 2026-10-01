@@ -85,4 +85,22 @@ final class Identifier
 
         return $normalized;
     }
+
+    public static function asciiUpperFirst(string $value): string
+    {
+        if ($value === '') {
+            return '';
+        }
+
+        return strtr($value[0], 'abcdefghijklmnopqrstuvwxyz', 'ABCDEFGHIJKLMNOPQRSTUVWXYZ') . substr($value, 1);
+    }
+
+    public static function asciiLowerFirst(string $value): string
+    {
+        if ($value === '') {
+            return '';
+        }
+
+        return strtr($value[0], 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz') . substr($value, 1);
+    }
 }
