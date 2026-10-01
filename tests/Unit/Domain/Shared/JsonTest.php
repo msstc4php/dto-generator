@@ -11,13 +11,28 @@ use stdClass;
 
 final class JsonTest extends TestCase
 {
-    public function testRecognisesLists(): void
+    /**
+     * @dataProvider arrays
+     *
+     * @param array<array-key, mixed> $array
+     */
+    public function testRecognisesLists(array $array, bool $isList): void
     {
-        self::assertTrue(Json::isList([]));
-        self::assertTrue(Json::isList(['a', 'b']));
-        self::assertFalse(Json::isList([1 => 'a']));
-        self::assertFalse(Json::isList(['a' => 1]));
-        self::assertFalse(Json::isList([0 => 'a', 2 => 'b']));
+        self::assertSame($isList, Json::isList($array));
+    }
+
+    /**
+     * @return array<string, array{array<array-key, mixed>, bool}>
+     */
+    public static function arrays(): array
+    {
+        return [
+            'empty' => [[], true],
+            'list' => [['a', 'b'], true],
+            'starts at one' => [[1 => 'a'], false],
+            'map' => [['a' => 1], false],
+            'gap' => [[0 => 'a', 2 => 'b'], false],
+        ];
     }
 
     public function testPassesDecodedValuesThrough(): void

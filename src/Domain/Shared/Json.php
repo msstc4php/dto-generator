@@ -24,6 +24,8 @@ final class Json
 
     /**
      * @param array<array-key, mixed> $array
+     *
+     * @phpstan-assert-if-true list<mixed> $array
      */
     public static function isList(array $array): bool
     {
