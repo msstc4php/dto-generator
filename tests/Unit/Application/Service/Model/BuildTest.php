@@ -4,6 +4,20 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Tests\Unit\Application\Service\Model;
 
+use MSSTC4PHP\DtoGenerator\Application\Service\Model\Build\Action;
+use MSSTC4PHP\DtoGenerator\Application\Service\Model\Build\Input;
+use MSSTC4PHP\DtoGenerator\Application\Service\Schemas\Load\Action as LoadSchemas;
+use MSSTC4PHP\DtoGenerator\Application\Service\Schemas\Load\Input as SchemasInput;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\NameResolver;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\SchemaParser;
+use MSSTC4PHP\DtoGenerator\Domain\Target\AccessorStyle;
+use MSSTC4PHP\DtoGenerator\Domain\Target\DateTimeClass;
+use MSSTC4PHP\DtoGenerator\Domain\Target\MetadataMode;
+use MSSTC4PHP\DtoGenerator\Domain\Target\Mutability;
+use MSSTC4PHP\DtoGenerator\Domain\Target\PhpVersion;
+use MSSTC4PHP\DtoGenerator\Domain\Target\TargetProfile;
+use MSSTC4PHP\DtoGenerator\Tests\Support\ConfigMother;
+use MSSTC4PHP\DtoGenerator\Tests\Support\InMemoryDocumentLoader;
 use MSSTC4PHP\DtoGenerator\Tests\Support\ModelFixture;
 use PHPUnit\Framework\TestCase;
 
@@ -91,8 +105,8 @@ final class BuildTest extends TestCase
 
         return [
             'case-only collision' => [
-                ['User' => $object, 'user' => $object],
-                ['App\Dto\User'],
+                ['User' => $object, 'user' => $object, 'Tag' => $object],
+                ['App\Dto\User', 'App\Dto\Tag'],
                 ["error {$at}user: Class App\\Dto\\User is already generated from {$at}User; set \"x-php-class-name\" on one of them."],
             ],
             'separator collision' => [
@@ -105,9 +119,14 @@ final class BuildTest extends TestCase
                 [],
                 ["error {$at}User/x-php-class-name: \"x-php-class-name\" must be a PHP identifier that is not a reserved word."],
             ],
-            'no usable name' => [
-                ['***' => $object],
+            'non-string override' => [
+                ['User' => $object + ['x-php-class-name' => 5]],
                 [],
+                ["error {$at}User/x-php-class-name: \"x-php-class-name\" must be a PHP identifier that is not a reserved word."],
+            ],
+            'no usable name' => [
+                ['***' => $object, 'Tag' => $object],
+                ['App\Dto\Tag'],
                 ["error {$at}***: Schema name \"***\" has no usable characters; set \"x-php-class-name\"."],
             ],
         ];
@@ -152,5 +171,47 @@ final class BuildTest extends TestCase
         ]);
 
         self::assertSame(['App\Dto\B', 'App\Dto\A'], array_keys(ModelFixture::classes($output)));
+    }
+
+    public function testKeepsBuildingAfterASkippedSchema(): void
+    {
+        $output = ModelFixture::build([
+            'Secret' => ['type' => 'object', 'x-php-skip' => true, 'properties' => ['x' => []]],
+            'User' => ['type' => 'object', 'properties' => ['id' => []]],
+        ]);
+
+        self::assertSame(['App\Dto\User'], array_keys(ModelFixture::classes($output)));
+    }
+
+    public function testLeavesSchemasWithoutAnOwnerUngenerated(): void
+    {
+        $documents = [
+            '/project/api/openapi.yaml' => ['openapi' => '3.1.0', 'components' => ['schemas' => ['User' => ['type' => 'object', 'properties' => ['m' => ['$ref' => '../shared/common.json#/Money']]]]]],
+            '/project/other/openapi.yaml' => ['openapi' => '3.1.0', 'components' => ['schemas' => [
+                'Pet' => ['type' => 'object', 'properties' => ['m' => ['$ref' => '../shared/common.json#/Money'], 't' => ['$ref' => '#/components/schemas/Tag']]],
+                'Tag' => ['type' => 'object', 'properties' => ['label' => ['type' => 'string']]],
+            ]]],
+            '/project/shared/common.json' => ['Money' => ['type' => 'object', 'properties' => ['amount' => ['type' => 'string']]]],
+        ];
+        $config = ConfigMother::config(
+            ConfigMother::source('/project/api/openapi.yaml'),
+            ConfigMother::source('/project/other/openapi.yaml', ['Pet'], [], 'App\\Other'),
+        );
+        $graph = (new LoadSchemas(new InMemoryDocumentLoader($documents), new SchemaParser()))(new SchemasInput($config))->graph();
+        $target = new TargetProfile(
+            PhpVersion::fromString('8.2'),
+            MetadataMode::from(MetadataMode::NONE),
+            Mutability::from(Mutability::IMMUTABLE),
+            AccessorStyle::from(AccessorStyle::AUTO),
+            DateTimeClass::from(DateTimeClass::IMMUTABLE),
+            true,
+        );
+        $output = (new Action(new NameResolver()))(new Input($config, $target, $graph));
+
+        self::assertSame(
+            ['App\Dto\User' => ['m: mixed'], 'App\Other\Pet' => ['m: mixed', 't: App\Other\Tag|null'], 'App\Other\Tag' => ['label: string|null']],
+            ModelFixture::classes($output),
+        );
+        self::assertSame([], ModelFixture::messages($output));
     }
 }

@@ -48,6 +48,7 @@ final class TypeMapperTest extends TestCase
         return [
             'string' => [['type' => 'string'], 'string'],
             'non-empty string' => [['type' => 'string', 'minLength' => 1], 'non-empty-string'],
+            'zero min length' => [['type' => 'string', 'minLength' => 0], 'string'],
             'email stays a string' => [['type' => 'string', 'format' => 'email'], 'string'],
             'date-time' => [['type' => 'string', 'format' => 'date-time'], 'DateTimeImmutable'],
             'date' => [['type' => 'string', 'format' => 'date'], 'DateTimeImmutable'],
@@ -60,6 +61,8 @@ final class TypeMapperTest extends TestCase
             'upper bound' => [['type' => 'integer', 'maximum' => 10], 'int<min, 10>'],
             'exclusive upper bound' => [['type' => 'integer', 'exclusiveMaximum' => 10], 'int<min, 9>'],
             'range' => [['type' => 'integer', 'minimum' => 5, 'maximum' => 10], 'int<5, 10>'],
+            'single value range' => [['type' => 'integer', 'minimum' => 5, 'maximum' => 5], 'int<5, 5>'],
+            'tighter of two upper bounds' => [['type' => 'integer', 'maximum' => 10, 'exclusiveMaximum' => 5], 'int<min, 4>'],
             'tighter of two lower bounds' => [['type' => 'integer', 'minimum' => 1, 'exclusiveMinimum' => 4], 'int<5, max>'],
             'fractional bound ignored' => [['type' => 'integer', 'minimum' => 1.5], 'int'],
             'number' => [['type' => 'number', 'format' => 'double'], 'float'],
@@ -116,6 +119,8 @@ final class TypeMapperTest extends TestCase
             'empty range' => [['type' => 'integer', 'minimum' => 10, 'maximum' => 5], 'int', ["warning {$at}: The minimum is greater than the maximum, so no range is applied."]],
             'enum' => [['type' => 'string', 'enum' => ['a']], 'mixed', ["error {$at}: \"enum\" is not supported yet; enums, composition and inline objects arrive in a later version."]],
             'oneOf' => [['oneOf' => [['type' => 'string']]], 'mixed', ["error {$at}: \"oneOf\" is not supported yet; enums, composition and inline objects arrive in a later version."]],
+            'allOf' => [['allOf' => [['type' => 'string']]], 'mixed', ["error {$at}: \"allOf\" is not supported yet; enums, composition and inline objects arrive in a later version."]],
+            'discriminator alone' => [['discriminator' => ['propertyName' => 'kind']], 'mixed', ["error {$at}: \"discriminator\" is not supported yet; enums, composition and inline objects arrive in a later version."]],
             'map schema' => [['type' => 'object', 'additionalProperties' => ['type' => 'string']], 'mixed', ["error {$at}: \"additionalProperties\" is not supported yet; enums, composition and inline objects arrive in a later version."]],
             'inline object' => [['type' => 'object', 'properties' => ['a' => []]], 'mixed', ["error {$at}: Inline object schemas are not supported yet; move it to components/schemas and use \$ref."]],
             'enum behind an alias' => [['$ref' => '#/components/schemas/Currency'], 'mixed', ['error /project/api/openapi.yaml#/components/schemas/Currency: "enum" is not supported yet; enums, composition and inline objects arrive in a later version.']],
@@ -145,7 +150,7 @@ final class TypeMapperTest extends TestCase
         }
 
         self::assertSame(
-            ['Holder' => true, 'Tag' => true, 'Email' => false, 'MaybeCount' => false, 'Currency' => false, 'LoopA' => false, 'LoopB' => false, 'Hidden' => true, 'Free' => false],
+            ['Holder' => true, 'Tag' => true, 'Email' => false, 'MaybeCount' => false, 'Currency' => false, 'LoopA' => false, 'LoopB' => false, 'Hidden' => true, 'Free' => false, 'RefWithProperties' => false, 'StringWithProperties' => false],
             $shapes,
         );
     }
@@ -196,6 +201,34 @@ final class TypeMapperTest extends TestCase
             'LoopB' => ['$ref' => '#/components/schemas/LoopA'],
             'Hidden' => ['type' => 'object', 'properties' => ['x' => []], 'x-php-skip' => true],
             'Free' => ['type' => 'object'],
+            'RefWithProperties' => ['$ref' => '#/components/schemas/Tag', 'properties' => ['a' => []]],
+            'StringWithProperties' => ['type' => 'string', 'properties' => ['a' => []]],
         ]);
+    }
+
+    public function testAnUnresolvedReferenceIsMixedWithoutAnotherDiagnostic(): void
+    {
+        $loaded = $this->graph(['$ref' => '#/components/schemas/Tag']);
+        $withoutEdges = new SchemaGraph($loaded->all());
+        $mapper = new TypeMapper(
+            $withoutEdges,
+            [],
+            [],
+            new TargetProfile(
+                PhpVersion::fromString('8.2'),
+                MetadataMode::from(MetadataMode::NONE),
+                Mutability::from(Mutability::MUTABLE),
+                AccessorStyle::from(AccessorStyle::AUTO),
+                DateTimeClass::from(DateTimeClass::IMMUTABLE),
+                true,
+            ),
+            [],
+        );
+        $holder = $withoutEdges->all()[0]->schema()->property('value');
+        self::assertNotNull($holder);
+        $diagnostics = new Diagnostics();
+
+        self::assertSame('mixed', $mapper->map($holder, $diagnostics)->describe());
+        self::assertSame([], $diagnostics->all());
     }
 }

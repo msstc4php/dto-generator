@@ -213,6 +213,19 @@ final class Schema
         return $this->properties[$name] ?? null;
     }
 
+    /**
+     * For names taken from {@see propertyNames()}; any other name is a programming error.
+     */
+    public function requireProperty(string $name): self
+    {
+        $property = $this->property($name);
+        if (!$property instanceof self) {
+            throw new InvalidModel(sprintf('Schema %s has no property "%s".', $this->location->toString(), $name));
+        }
+
+        return $property;
+    }
+
     public function isRequired(string $name): bool
     {
         return in_array($name, $this->required, true);

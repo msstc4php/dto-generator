@@ -26,3 +26,5 @@ Hex-подход, адаптированный под библиотеку; пр
 - `Domain/Diagnostic` — отклонение от spec §3: `Diagnostics` живёт в Domain (его используют `SchemaParser` и Application), Contract (этап 5) будет ссылаться на него. Каждая `Diagnostic` обязана иметь `SchemaLocation`; одинаковые диагностики схлопываются.
 - `Domain/Builder/SchemaParser` — «decoded JSON → `Schema`»; «`Schema` → IR» (spec §3 `Builder`) появится в этапе 2b рядом.
 - `SchemaGraph` хранит рёбра `ReferenceUse::key()` → цель, записанные при загрузке; `resolve(ReferenceUse)` — чистый поиск без повторного разбора `$ref`.
+
+Этап 2b: `Service/Model/Build` — граф схем → IR. `Domain/Builder`: `NameResolver` (имена), `SchemaShape` (форма класса / неподдержанный keyword), `TypeMapper` (§5.1), `ClassBuilder` (§5.2, §5.4, §5.5, проверка `x-`). Порядок: регистрация всех классов графа (имена, коллизии) → построение свойств с уже известными именами целей `$ref`.

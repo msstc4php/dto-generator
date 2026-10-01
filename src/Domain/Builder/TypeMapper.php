@@ -124,23 +124,15 @@ final class TypeMapper
 
         $members = [];
         foreach ($schema->nonNullTypes() as $type) {
-            $member = $this->single($type, $schema, $diagnostics, $aliases);
-            if ($member instanceof MixedType) {
-                return $member;
-            }
-
-            $members[] = $member;
+            $members[] = $this->single($type, $schema, $diagnostics, $aliases);
         }
 
         if ($members === []) {
             return new MixedType();
         }
 
-        try {
-            return count($members) === 1 ? $members[0] : new UnionType(...$members);
-        } catch (InvalidModel $exception) {
-            return $members[0];
-        }
+        // Parsed type lists hold no duplicates, so two or more members always form a valid union.
+        return count($members) === 1 ? $members[0] : new UnionType(...$members);
     }
 
     private function explicitType(Schema $schema, Diagnostics $diagnostics): TypeModel

@@ -98,8 +98,8 @@ final class ClassBuilderTest extends TestCase
 
         return [
             'names colliding after camelCase' => [
-                ['type' => 'object', 'properties' => ['user_name' => ['type' => 'string'], 'userName' => ['type' => 'string']]],
-                ['userName' => 'user_name: string|null = NULL'],
+                ['type' => 'object', 'properties' => ['user_name' => ['type' => 'string'], 'userName' => ['type' => 'string'], 'id' => ['type' => 'string']]],
+                ['userName' => 'user_name: string|null = NULL', 'id' => 'id: string|null = NULL'],
                 ["error {$at}/properties/userName: Property \"userName\" becomes \$userName, which \"user_name\" already uses; set \"x-php-name\" on one of them."],
             ],
             'names colliding by case' => [
@@ -118,8 +118,8 @@ final class ClassBuilderTest extends TestCase
                 ["error {$at}/properties/user_name/x-php-name: \"x-php-name\" must be a PHP identifier other than \"this\"."],
             ],
             'no usable name' => [
-                ['type' => 'object', 'properties' => ['---' => ['type' => 'string']]],
-                [],
+                ['type' => 'object', 'properties' => ['---' => ['type' => 'string'], 'id' => ['type' => 'string']]],
+                ['id' => 'id: string|null = NULL'],
                 ["error {$at}/properties/---: Property name \"---\" has no usable characters; set \"x-php-name\"."],
             ],
             'skipped property' => [
@@ -131,6 +131,11 @@ final class ClassBuilderTest extends TestCase
                 ['type' => 'object', 'properties' => ['id' => ['type' => 'string', 'x-php-skip' => 'yes']]],
                 ['id' => 'id: string|null = NULL'],
                 ["error {$at}/properties/id/x-php-skip: \"x-php-skip\" must be true or false."],
+            ],
+            'default for an untyped property' => [
+                ['type' => 'object', 'properties' => ['any' => ['default' => 5]]],
+                ['any' => 'any: mixed = 5'],
+                [],
             ],
             'default for a date' => [
                 ['type' => 'object', 'properties' => ['at' => ['type' => 'string', 'format' => 'date-time', 'default' => '2020-01-01T00:00:00Z']]],
@@ -169,9 +174,9 @@ final class ClassBuilderTest extends TestCase
                 ],
             ],
             'foreign extensions are ignored' => [
-                ['type' => 'object', 'x-audit' => true, 'properties' => ['id' => ['type' => 'string', 'x-internal' => 1]]],
+                ['type' => 'object', 'x-audit' => true, 'x-dtoish' => 1, 'x-phpstorm' => 1, 'properties' => ['id' => ['type' => 'string', 'x-internal' => 1, 'x-php-zzz' => 1]]],
                 ['id' => 'id: string|null = NULL'],
-                [],
+                ["error {$at}/properties/id/x-php-zzz: Unknown extension \"x-php-zzz\"; known: x-php-class-name, x-php-name, x-php-type, x-dto-mutable, x-php-all-of, x-php-skip, x-php-attributes, x-enum-descriptions."],
             ],
             'x-dto-mutable not a boolean' => [
                 ['type' => 'object', 'x-dto-mutable' => 'yes', 'properties' => ['id' => ['type' => 'string']]],

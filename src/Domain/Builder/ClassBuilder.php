@@ -80,11 +80,7 @@ final class ClassBuilder
         $properties = [];
         $taken = [];
         foreach ($schema->propertyNames() as $wireName) {
-            $propertySchema = $schema->property($wireName);
-            if (!$propertySchema instanceof Schema) {
-                continue;
-            }
-
+            $propertySchema = $schema->requireProperty($wireName);
             $this->checkExtensions($propertySchema, self::PROPERTY_EXTENSIONS, $diagnostics);
             if (self::isSkipped($propertySchema, $diagnostics)) {
                 continue;

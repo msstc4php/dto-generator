@@ -31,6 +31,7 @@ final class NameResolverTest extends TestCase
             'acronym kept' => ['HTTPResponse', 'HTTPResponse'],
             'leading digit' => ['200', '_200'],
             'leading digit word' => ['2fa_settings', '_2faSettings'],
+            'digit inside' => ['version 2', 'Version2'],
             'reserved word' => ['list', 'List_'],
             'reserved type name' => ['Object', 'Object_'],
             'utf-8 letters' => ["Gr\xC3\xB6\xC3\x9Fe", "Gr\xC3\xB6\xC3\x9Fe"],

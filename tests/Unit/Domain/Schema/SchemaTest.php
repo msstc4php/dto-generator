@@ -252,4 +252,19 @@ final class SchemaTest extends TestCase
     {
         self::assertSame([], $this->builder()->types($this->type(SchemaType::STRING))->build()->references());
     }
+
+    public function testRequirePropertyRejectsAnUnknownName(): void
+    {
+        $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('has no property "missing"');
+
+        $this->builder()->build()->requireProperty('missing');
+    }
+
+    public function testRequirePropertyReturnsTheSchema(): void
+    {
+        $id = $this->builder('/id')->build();
+
+        self::assertSame($id, $this->builder()->property('id', $id)->build()->requireProperty('id'));
+    }
 }

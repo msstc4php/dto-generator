@@ -23,3 +23,7 @@
 - YAML-float (`php: 8.2`, `openapi: 3.1`) превращается в текст только через `Json::floatToString()` (`var_export` при временно выставленном `serialize_precision=-1`) — голый `var_export()` зависит от php.ini, `sprintf('%.1f')` округляет и зависит от локали.
 - `Json::isList()` несёт `@phpstan-assert-if-true list<mixed>`: после проверки массив — список для PHPStan; литеральные массивы в тестах поэтому подаются через data provider.
 - CS-Fixer: `no_superfluous_phpdoc_tags.allow_mixed = true` — на PHP 7.4 `@param mixed` единственный способ типизировать границу декодера.
+
+- Регистр первой буквы — `Identifier::asciiUpperFirst/asciiLowerFirst` (не `ucfirst/lcfirst`: на 7.4 зависят от локали).
+- Тесты Builder'а строят граф через `tests/Support/GraphFixture` (настоящий `Schemas/Load` на `InMemoryDocumentLoader`), IR — через `tests/Support/ModelFixture`.
+- В тестах не называть хелперы `at()`: в PHPUnit 9 это статический метод `TestCase::at()`, переопределение — фатальная ошибка при загрузке.

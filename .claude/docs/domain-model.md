@@ -27,3 +27,11 @@
 - `Discriminator` хранит mapping нормализованным: голое имя → `#/components/schemas/<имя>`.
 - `SchemaGraph` — ключ `file#pointer`; `ResolvedSchema.source` — индекс источника-владельца; файл вне всех источников наследует владельца от ссылающихся, двое и более → ошибка неоднозначного namespace. `selected=false` — схема нужна только как цель ссылки (генерировать её всё равно придётся, иначе ссылка повиснет — решение этапа 2b).
 - `Capability::RESERVED_NAMESPACE_SEGMENTS` (8.0): ниже — `TargetResolver` отклоняет токены PHP 7.4 в namespace источников и типах `formats`.
+
+## Builder (этап 2b)
+- Класс = схема без `$ref`/неподдержанных keyword'ов, с `properties` и типом `object` или без типа (`SchemaShape::isClass`). Прочие именованные схемы — алиасы: `$ref` на них встраивает их тип (с защитой от циклов).
+- Схемы только-по-`$ref` (selected=false) тоже становятся классами — в namespace источника-владельца (решение владельца 2026-10-01 UTC).
+- Свойство: обязательное и не-nullable → без default; иначе `?T` и default из схемы или `null`. Default у класса (дата) или map → warning и `null`; `INF`/`NAN` → ошибка.
+- Имена: класс — PascalCase, ведущая цифра `_`, зарезервированное слово `_` в конце; свойство — camelCase, первое слово целиком в капсе приводится к нижнему регистру целиком, `this` → `this_`. Коллизии — без учёта ASCII-регистра.
+- Неподдержанное до этапа 4 (`enum`, `allOf/oneOf/anyOf`, `discriminator`, `additionalProperties`-схема, инлайн-объект): в свойстве — ошибка и `mixed`; у выбранного компонента — warning и класс не создаётся.
+- `Schema::requireProperty()` — для имён из `propertyNames()`; иное имя — `InvalidModel` (ошибка кода, не ввода).
