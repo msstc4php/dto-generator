@@ -15,6 +15,9 @@ final class Diagnostics implements Countable
     /** @var list<Diagnostic> */
     private array $items = [];
 
+    /** @var array<string, true> rendered diagnostics already collected */
+    private array $seen = [];
+
     public function error(string $message, SchemaLocation $location): void
     {
         $this->add(new Diagnostic(Severity::from(Severity::ERROR), $message, $location));
@@ -30,12 +33,12 @@ final class Diagnostics implements Countable
      */
     public function add(Diagnostic $diagnostic): void
     {
-        foreach ($this->items as $item) {
-            if ($item->toString() === $diagnostic->toString()) {
-                return;
-            }
+        $key = $diagnostic->toString();
+        if (isset($this->seen[$key])) {
+            return;
         }
 
+        $this->seen[$key] = true;
         $this->items[] = $diagnostic;
     }
 

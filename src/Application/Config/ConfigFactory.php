@@ -70,9 +70,9 @@ final class ConfigFactory
 
         $php = null;
         $value = $section->raw('php') ?? 'auto';
-        // Unquoted `php: 8.2` arrives from YAML as a float; var_export() keeps "8.0", never rounds and ignores the locale.
+        // Unquoted `php: 8.2` arrives from YAML as a float.
         if (is_float($value)) {
-            $value = var_export($value, true);
+            $value = Json::floatToString($value);
         } elseif (is_int($value)) {
             $value = (string) $value;
         }

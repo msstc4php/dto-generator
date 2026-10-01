@@ -16,6 +16,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Schema\ReferenceUse;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\ResolvedSchema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
+use MSSTC4PHP\DtoGenerator\Domain\Shared\Path;
 
 /**
  * Loads every selected component schema of every source, then follows `$ref`s until the graph is closed.
@@ -45,13 +46,14 @@ final class Action
 
         foreach ($config->sources() as $index => $source) {
             $specAt = $config->location()->child('sources', (string) $index, 'spec');
-            if (isset($owners[$source->spec()])) {
-                $diagnostics->error(sprintf('The specification is already used by source #%d.', $owners[$source->spec()]), $specAt);
+            $spec = Path::normalize($source->spec());
+            if (isset($owners[$spec])) {
+                $diagnostics->error(sprintf('The specification is already used by source #%d.', $owners[$spec]), $specAt);
 
                 continue;
             }
 
-            $document = $this->load($source->spec(), $specAt, $diagnostics, $graph);
+            $document = $this->load($spec, $specAt, $diagnostics, $graph);
             if (!$document instanceof Document) {
                 continue;
             }
@@ -121,9 +123,9 @@ final class Action
     {
         $version = $document->root()['openapi'] ?? null;
         $at = (new SchemaLocation($document->path()))->child('openapi');
-        // Unquoted `openapi: 3.1` arrives from YAML as a float; var_export() keeps "3.0" and ignores the locale.
+        // Unquoted `openapi: 3.1` arrives from YAML as a float.
         if (is_float($version)) {
-            $version = var_export($version, true);
+            $version = Json::floatToString($version);
         }
 
         if (!is_string($version)) {

@@ -20,5 +20,6 @@
 - Use-case'ы Application — вертикальные слайсы `Service/<Area>/<UseCase>/{Action,Input,Output}.php`; вспомогательные классы слайса лежат рядом (`Schemas/Load/GraphBuilder`).
 - Ошибки пользовательского ввода (конфиг, спецификации) — только `Diagnostics` с `SchemaLocation`, без исключений; исключения — для нарушений инвариантов кода. Порт загрузки бросает `DocumentLoadFailed`, use-case превращает его в диагностику.
 - Интеграционные тесты (`tests/Integration`, suite `integration`) работают с реальной ФС и фикстурами `tests/Fixtures`; модульные используют двойники из `tests/Support`.
+- YAML-float (`php: 8.2`, `openapi: 3.1`) превращается в текст только через `Json::floatToString()` — не `var_export()` (зависит от `serialize_precision`) и не `sprintf('%.1f')` (округляет, зависит от локали).
 - `Json::isList()` несёт `@phpstan-assert-if-true list<mixed>`: после проверки массив — список для PHPStan; литеральные массивы в тестах поэтому подаются через data provider.
 - CS-Fixer: `no_superfluous_phpdoc_tags.allow_mixed = true` — на PHP 7.4 `@param mixed` единственный способ типизировать границу декодера.

@@ -50,4 +50,32 @@ final class JsonTest extends TestCase
 
         Json::value(new stdClass());
     }
+
+    /**
+     * @dataProvider floats
+     */
+    public function testPrintsFloatsIndependentlyOfIniAndLocale(float $value, string $expected): void
+    {
+        $precision = ini_get('serialize_precision');
+        ini_set('serialize_precision', '17');
+
+        try {
+            self::assertSame($expected, Json::floatToString($value));
+        } finally {
+            ini_set('serialize_precision', (string) $precision);
+        }
+    }
+
+    /**
+     * @return array<string, array{float, string}>
+     */
+    public static function floats(): array
+    {
+        return [
+            'one decimal' => [8.2, '8.2'],
+            'zero decimal' => [8.0, '8.0'],
+            'two decimals' => [8.05, '8.05'],
+            'negative' => [-1.5, '-1.5'],
+        ];
+    }
 }

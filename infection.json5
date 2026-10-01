@@ -23,17 +23,21 @@
                 "MSSTC4PHP\\DtoGenerator\\Domain\\Schema\\Schema::assertUniqueTypes",
                 "MSSTC4PHP\\DtoGenerator\\Application\\Service\\Schemas\\Load\\GraphBuilder::markFailed",
                 "MSSTC4PHP\\DtoGenerator\\Application\\Service\\Schemas\\Load\\GraphBuilder::markUnloadable",
+                "MSSTC4PHP\\DtoGenerator\\Domain\\Diagnostic\\Diagnostics::add",
                 "MSSTC4PHP\\DtoGenerator\\Application\\Service\\Schemas\\Load\\GraphBuilder::propagateOwners"
             ]
         },
-        // Equivalent: the substr() offsets stay within the string, so it never returns false on 7.4.
+        // Equivalent: the substr() offsets stay within the string, so it never returns false on 7.4, and
+        // preg_replace() only returns null on a regex error.
         "CastString": {
             "ignore": [
                 "MSSTC4PHP\\DtoGenerator\\Domain\\Model\\ClassName::fromFqcn",
                 "MSSTC4PHP\\DtoGenerator\\Domain\\Model\\Identifier::normalizeQualifiedName",
                 "MSSTC4PHP\\DtoGenerator\\Domain\\Schema\\JsonPointer::segments",
                 "MSSTC4PHP\\DtoGenerator\\Domain\\Schema\\Reference::target",
-                "MSSTC4PHP\\DtoGenerator\\Domain\\Shared\\Path::directory"
+                "MSSTC4PHP\\DtoGenerator\\Domain\\Shared\\Path::directory",
+                "MSSTC4PHP\\DtoGenerator\\Domain\\Shared\\Path::normalize",
+                "MSSTC4PHP\\DtoGenerator\\Application\\Config\\PhpConstraint::lowerBound"
             ]
         },
         // Equivalent: defensive throws whose preconditions the constructors guarantee.
@@ -51,7 +55,8 @@
                 "MSSTC4PHP\\DtoGenerator\\Domain\\Model\\ArgumentValue::className"
             ]
         },
-        // Equivalent: numeric strings compare numerically, and an equal candidate changes nothing.
+        // Equivalent for real constraints: numeric strings compare numerically (only a leading-zero version,
+        // which Composer never emits, would differ), and an equal candidate changes nothing.
         "CastInt": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Application\\Config\\PhpConstraint::lowerBound"] },
         "GreaterThan": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Application\\Config\\PhpConstraint::lowerBound"] },
         // Equivalent: the key only has to be unique; the order of its parts is irrelevant.

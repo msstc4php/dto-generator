@@ -34,6 +34,8 @@ final class PhpConstraint
      */
     private static function lowerBound(string $alternative): ?array
     {
+        // Composer allows "<= 8.0"; gluing the operator back keeps "8.0" from reading as a bare lower bound.
+        $alternative = (string) preg_replace('/(<>|!=|[<>]=?|==?)\s+/', '$1', $alternative);
         preg_match_all('/[^\s,]+/', $alternative, $tokens);
         $bound = null;
         foreach ($tokens[0] as $token) {

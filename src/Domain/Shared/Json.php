@@ -56,4 +56,14 @@ final class Json
 
         throw new InvalidModel(sprintf('%s is not a JSON value.', is_object($value) ? get_class($value) : gettype($value)));
     }
+
+    /**
+     * Shortest decimal form of a YAML/JSON float, unaffected by serialize_precision and the locale.
+     */
+    public static function floatToString(float $value): string
+    {
+        $text = rtrim(sprintf('%.14F', $value), '0');
+
+        return substr($text, -1) === '.' ? $text . '0' : $text;
+    }
 }

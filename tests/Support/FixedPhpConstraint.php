@@ -26,7 +26,9 @@ final class FixedPhpConstraint implements ProjectPhpConstraint
     {
         $this->directories[] = $directory;
 
-        return new PhpRequirement($directory . '/composer.json', $this->constraint, $this->problem);
+        $file = $directory . '/composer.json';
+
+        return $this->problem === null ? PhpRequirement::found($file, $this->constraint) : PhpRequirement::unusable($file, $this->problem);
     }
 
     /**

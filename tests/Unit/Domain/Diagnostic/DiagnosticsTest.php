@@ -78,4 +78,17 @@ final class DiagnosticsTest extends TestCase
 
         self::assertCount(2, $diagnostics);
     }
+
+    public function testStaysLinearWithManyDiagnostics(): void
+    {
+        $diagnostics = new Diagnostics();
+        $location = new SchemaLocation('a.yaml');
+        $started = microtime(true);
+        for ($i = 0; $i < 5000; $i++) {
+            $diagnostics->warning('Unknown format ' . $i . '.', $location);
+        }
+
+        self::assertCount(5000, $diagnostics);
+        self::assertLessThan(2.0, microtime(true) - $started);
+    }
 }

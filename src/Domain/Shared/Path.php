@@ -9,6 +9,8 @@ namespace MSSTC4PHP\DtoGenerator\Domain\Shared;
  */
 final class Path
 {
+    private const UNC_ROOT = '#^//[^/]+(?:/(?!\\.\\.?(?:/|\\z))[^/]+)?#';
+
     private function __construct()
     {
     }
@@ -22,17 +24,52 @@ final class Path
 
     public static function resolve(string $baseDir, string $path): string
     {
-        return self::normalize(self::isAbsolute($path) ? $path : $baseDir . '/' . $path);
+        return self::normalize(self::isAbsolute($path) ? $path : rtrim($baseDir, '/\\') . '/' . $path);
     }
 
     public static function normalize(string $path): string
     {
         $path = str_replace('\\', '/', $path);
-        // A UNC prefix ("//server") must survive; a drive letter is case-insensitive, so it is upper-cased.
-        $prefix = preg_match('#^(?://(?=[^/])|(?:[A-Za-z]:)?/)#', $path, $matches) === 1 ? ucfirst($matches[0]) : '';
+        // A drive letter is case-insensitive, so one spelling is kept.
+        if (preg_match('#^[a-z]:#', $path) === 1) {
+            $path = ucfirst($path);
+        }
 
+        // "//server/share" is a UNC root: kept as is and never climbed above.
+        if (preg_match(self::UNC_ROOT, $path, $matches) === 1) {
+            $segments = self::segments((string) substr($path, strlen($matches[0])), true);
+
+            return $segments === [] ? $matches[0] : $matches[0] . '/' . implode('/', $segments);
+        }
+
+        $prefix = preg_match('#^(?:[A-Za-z]:)?/#', $path, $matches) === 1 ? $matches[0] : '';
+
+        return $prefix . implode('/', self::segments((string) substr($path, strlen($prefix)), $prefix !== ''));
+    }
+
+    public static function directory(string $path): string
+    {
+        $normalized = self::normalize($path);
+        if (preg_match(self::UNC_ROOT . 'D', $normalized, $matches) === 1 && $matches[0] === $normalized) {
+            return $normalized;
+        }
+        $position = strrpos($normalized, '/');
+        if ($position === false) {
+            return '.';
+        }
+
+        $directory = (string) substr($normalized, 0, $position);
+
+        return $directory === '' || preg_match('#^[A-Za-z]:\z#', $directory) === 1 ? $directory . '/' : $directory;
+    }
+
+    /**
+     * @return list<string> the segments with "." dropped and ".." applied; a rooted path cannot climb above its root
+     */
+    private static function segments(string $path, bool $rooted): array
+    {
         $segments = [];
-        foreach (explode('/', (string) substr($path, strlen($prefix))) as $segment) {
+        foreach (explode('/', $path) as $segment) {
             if ($segment === '' || $segment === '.') {
                 continue;
             }
@@ -44,7 +81,7 @@ final class Path
                     continue;
                 }
 
-                if ($prefix !== '') {
+                if ($rooted) {
                     continue;
                 }
             }
@@ -52,19 +89,6 @@ final class Path
             $segments[] = $segment;
         }
 
-        return $prefix . implode('/', $segments);
-    }
-
-    public static function directory(string $path): string
-    {
-        $normalized = self::normalize($path);
-        $position = strrpos($normalized, '/');
-        if ($position === false) {
-            return '.';
-        }
-
-        $directory = (string) substr($normalized, 0, $position);
-
-        return $directory === '' || preg_match('#^[A-Za-z]:\z#', $directory) === 1 ? $directory . '/' : $directory;
+        return $segments;
     }
 }

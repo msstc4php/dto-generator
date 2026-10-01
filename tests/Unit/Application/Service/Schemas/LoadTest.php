@@ -513,4 +513,16 @@ final class LoadTest extends TestCase
 
         self::assertSame(['error /project/api/openapi.yaml#/components: "components" must be an object.'], $this->messages($output));
     }
+
+    public function testHandlesASpecificationInTheFilesystemRoot(): void
+    {
+        $output = $this->load(
+            ['/spec.yaml' => self::spec(['User' => ['$ref' => 'spec.yaml#/components/schemas/Tag'], 'Tag' => []])],
+            ConfigMother::source('/spec.yaml', ['User']),
+        );
+
+        self::assertSame([], $this->messages($output));
+        self::assertSame([['User', 0, true], ['Tag', 0, false]], $this->summary($output));
+        self::assertSame('/spec.yaml#/components/schemas/Tag', $output->graph()->all()[1]->location()->toString());
+    }
 }

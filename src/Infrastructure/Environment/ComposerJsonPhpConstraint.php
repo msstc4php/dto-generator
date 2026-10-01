@@ -22,7 +22,7 @@ final class ComposerJsonPhpConstraint implements ProjectPhpConstraint
 
             $parent = Path::directory($current);
             if ($parent === $current) {
-                return new PhpRequirement(null, null, null);
+                return PhpRequirement::none();
             }
 
             $current = $parent;
@@ -36,25 +36,25 @@ final class ComposerJsonPhpConstraint implements ProjectPhpConstraint
     {
         $content = is_readable($file) ? file_get_contents($file) : false;
         if ($content === false) {
-            return new PhpRequirement($file, null, 'cannot be read');
+            return PhpRequirement::unusable($file, 'cannot be read');
         }
 
         try {
             $data = json_decode($content, true, 512, JSON_THROW_ON_ERROR);
         } catch (JsonException $exception) {
-            return new PhpRequirement($file, null, 'is not valid JSON');
+            return PhpRequirement::unusable($file, 'is not valid JSON');
         }
 
         if (!is_array($data)) {
-            return new PhpRequirement($file, null, 'must contain an object');
+            return PhpRequirement::unusable($file, 'must contain an object');
         }
 
         $require = $data['require'] ?? null;
         $php = is_array($require) ? ($require['php'] ?? null) : null;
         if ($php !== null && !is_string($php)) {
-            return new PhpRequirement($file, null, '"require.php" must be a string');
+            return PhpRequirement::unusable($file, '"require.php" must be a string');
         }
 
-        return new PhpRequirement($file, $php, null);
+        return PhpRequirement::found($file, $php);
     }
 }

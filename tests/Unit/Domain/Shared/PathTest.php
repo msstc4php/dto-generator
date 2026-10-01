@@ -33,6 +33,9 @@ final class PathTest extends TestCase
             'empty' => ['', ''],
             'unc share' => ['\\\\server\\share\\x\\..\\y', '//server/share/y'],
             'drive letter case' => ['c:/a', 'C:/a'],
+            'drive-relative' => ['c:foo', 'C:foo'],
+            'unc cannot climb above the share' => ['//server/share/../../x', '//server/share/x'],
+            'unc server only' => ['//server/..', '//server'],
         ];
     }
 
@@ -54,6 +57,8 @@ final class PathTest extends TestCase
             'parent' => ['/base/dir', '../x.yaml', '/base/x.yaml'],
             'dot segment' => ['/base/dir', './other/../x.yaml', '/base/dir/x.yaml'],
             'absolute' => ['/base', '/abs/x.yaml', '/abs/x.yaml'],
+            'filesystem root' => ['/', 'a.yaml', '/a.yaml'],
+            'drive root' => ['C:/', 'a.yaml', 'C:/a.yaml'],
             'windows absolute' => ['/base', 'C:/abs/x.yaml', 'C:/abs/x.yaml'],
         ];
     }
@@ -76,6 +81,8 @@ final class PathTest extends TestCase
             'in root' => ['/b.yaml', '/'],
             'root itself' => ['/', '/'],
             'unc' => ['//server/share/b.yaml', '//server/share'],
+            'unc share root' => ['//server/share', '//server/share'],
+            'unc server root' => ['//server', '//server'],
             'relative file' => ['b.yaml', '.'],
             'windows drive' => ['C:/b.yaml', 'C:/'],
             'drive-like directory name' => ['/xC:/b.yaml', '/xC:'],

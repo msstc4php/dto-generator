@@ -41,6 +41,14 @@ final class ReferenceTest extends TestCase
         ];
     }
 
+    public function testResolvesFromAFileInTheFilesystemRoot(): void
+    {
+        $target = Reference::target('other.yaml#/X', new SchemaLocation('/spec.yaml'));
+
+        self::assertNotNull($target);
+        self::assertSame('/other.yaml#/X', $target->toString());
+    }
+
     public function testRemoteReferencesYieldNull(): void
     {
         self::assertNull(Reference::target('https://example.com/schemas.json#/X', new SchemaLocation('/a.yaml')));

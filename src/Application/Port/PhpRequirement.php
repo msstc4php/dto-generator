@@ -15,16 +15,32 @@ final class PhpRequirement
 
     private ?string $problem;
 
-    /**
-     * @param string|null $file the composer.json found, null when there is none
-     * @param string|null $constraint its "require.php"
-     * @param string|null $problem why the file could not be used, e.g. "is not valid JSON"
-     */
-    public function __construct(?string $file, ?string $constraint, ?string $problem)
+    private function __construct(?string $file, ?string $constraint, ?string $problem)
     {
         $this->file = $file;
         $this->constraint = $constraint;
         $this->problem = $problem;
+    }
+
+    public static function none(): self
+    {
+        return new self(null, null, null);
+    }
+
+    /**
+     * @param string|null $constraint its "require.php", null when it does not pin PHP
+     */
+    public static function found(string $file, ?string $constraint): self
+    {
+        return new self($file, $constraint, null);
+    }
+
+    /**
+     * @param string $problem why the file cannot be used, e.g. "is not valid JSON"
+     */
+    public static function unusable(string $file, string $problem): self
+    {
+        return new self($file, null, $problem);
     }
 
     public function file(): ?string
