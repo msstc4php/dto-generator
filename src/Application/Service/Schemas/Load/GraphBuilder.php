@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MSSTC4PHP\DtoGenerator\Application\Service\Schemas\Load;
 
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
+use MSSTC4PHP\DtoGenerator\Domain\Schema\ReferenceUse;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\ResolvedSchema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaGraph;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
@@ -40,9 +41,13 @@ final class GraphBuilder
         $this->failed[$location->toString()] = true;
     }
 
-    public function addReference(SchemaLocation $from, SchemaLocation $to): void
+    /** @var array<string, string> reference key → target key */
+    private array $edges = [];
+
+    public function addReference(ReferenceUse $use, SchemaLocation $from, SchemaLocation $to): void
     {
         $this->referrers[$to->toString()][] = $from->toString();
+        $this->edges[$use->key()] = $to->toString();
     }
 
     /**
@@ -72,7 +77,10 @@ final class GraphBuilder
             $schemas[] = $schema;
         }
 
-        return new SchemaGraph($schemas);
+        // Edges to targets that failed to load stay out, so a lookup simply misses.
+        $edges = array_filter($this->edges, fn (string $target): bool => isset($this->schemas[$target]));
+
+        return new SchemaGraph($schemas, $edges);
     }
 
     /**

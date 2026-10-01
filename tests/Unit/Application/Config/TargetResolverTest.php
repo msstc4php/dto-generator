@@ -151,7 +151,6 @@ final class TargetResolverTest extends TestCase
         $config = $this->config('7.4', null, 'App\\Dto', ['200' => ClassName::fromFqcn('Vendor\\List\\Ok')]);
 
         self::assertNull((new TargetResolver(new FixedPhpConstraint(null)))->resolve($config, $diagnostics));
-        self::assertNotNull($diagnostics->errors()[0]->location());
         self::assertSame('/formats/200/type', $diagnostics->errors()[0]->location()->pointer());
     }
 }

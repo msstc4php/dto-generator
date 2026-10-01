@@ -78,6 +78,7 @@ final class FileDocumentLoaderTest extends TestCase
             'list' => ['list.yaml', 'must contain an object at the top level'],
             'unsupported' => ['notes.txt', 'must be YAML (.yaml, .yml) or JSON (.json)'],
             'directory' => ['.', 'does not exist'],
+            'nul byte' => ["valid\0.yaml", 'does not exist'],
         ];
     }
 

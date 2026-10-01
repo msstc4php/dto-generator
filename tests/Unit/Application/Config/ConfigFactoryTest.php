@@ -128,7 +128,6 @@ final class ConfigFactoryTest extends TestCase
             static fn (Diagnostic $error): bool => strpos($error->message(), $message) !== false,
         ));
         self::assertCount(1, $matching, implode("\n", array_map(static fn (Diagnostic $d): string => $d->toString(), $diagnostics->all())));
-        self::assertNotNull($matching[0]->location());
         self::assertSame(self::PATH . '#' . $pointer, $matching[0]->location()->toString());
     }
 

@@ -342,4 +342,51 @@ final class LoadTest extends TestCase
         self::assertCount(1, $output->diagnostics());
         self::assertStringContainsString('found "13.1"', $output->diagnostics()->all()[0]->message());
     }
+
+    public function testReportsAnEmptyComponentNameAndKeepsTheRest(): void
+    {
+        $output = $this->load([self::SPEC => self::spec(['' => ['type' => 'object'], 'User' => []])]);
+
+        self::assertSame(
+            ['error /project/api/openapi.yaml#/components/schemas/: A component schema name must not be empty.'],
+            $this->messages($output),
+        );
+        self::assertSame([['User', 0, true]], $this->summary($output));
+    }
+
+    /**
+     * @dataProvider unquotedOpenApiVersions
+     */
+    public function testUnderstandsUnquotedYamlVersions(float $version, int $warnings): void
+    {
+        $output = $this->load([self::SPEC => ['openapi' => $version, 'components' => ['schemas' => []]]]);
+
+        self::assertCount($warnings, $output->diagnostics());
+    }
+
+    /**
+     * @return array<string, array{float, int}>
+     */
+    public static function unquotedOpenApiVersions(): array
+    {
+        return [
+            '3.1' => [3.1, 0],
+            '3.0' => [3.0, 1],
+        ];
+    }
+
+    public function testRecordsHowEveryReferenceResolved(): void
+    {
+        $output = $this->load([self::SPEC => self::spec([
+            'User' => ['properties' => ['tag' => ['$ref' => '#/components/schemas/Tag'], 'bad' => ['$ref' => '#Anchor']]],
+            'Tag' => [],
+        ])]);
+        $user = $output->graph()->all()[0];
+        [$tag, $bad] = $user->schema()->references();
+
+        $resolved = $output->graph()->resolve($tag);
+        self::assertNotNull($resolved);
+        self::assertSame('Tag', $resolved->name());
+        self::assertNull($output->graph()->resolve($bad));
+    }
 }

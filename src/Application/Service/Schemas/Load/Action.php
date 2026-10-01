@@ -79,7 +79,7 @@ final class Action
                     continue;
                 }
 
-                $graph->addReference($current->location(), $target);
+                $graph->addReference($use, $current->location(), $target);
                 if ($graph->knows($target)) {
                     continue;
                 }
@@ -114,6 +114,11 @@ final class Action
     {
         $version = $document->root()['openapi'] ?? null;
         $at = (new SchemaLocation($document->path()))->child('openapi');
+        // Unquoted `openapi: 3.1` arrives from YAML as a float; var_export() keeps "3.0" and ignores the locale.
+        if (is_float($version)) {
+            $version = var_export($version, true);
+        }
+
         if (!is_string($version)) {
             $diagnostics->warning('No "openapi" version; the document is read as OpenAPI 3.1.', $at);
 
@@ -150,7 +155,14 @@ final class Action
 
         $pairs = [];
         foreach ($schemas as $name => $node) {
-            $pairs[] = [(string) $name, Json::value($node)];
+            $name = (string) $name;
+            if ($name === '') {
+                $diagnostics->error('A component schema name must not be empty.', $at->child(''));
+
+                continue;
+            }
+
+            $pairs[] = [$name, Json::value($node)];
         }
 
         return $pairs;

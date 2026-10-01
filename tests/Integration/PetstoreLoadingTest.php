@@ -47,8 +47,7 @@ final class PetstoreLoadingTest extends TestCase
         $pet = $schemas->graph()->all()[0];
         $price = $pet->schema()->property('price');
         self::assertNotNull($price);
-        self::assertNotNull($price->ref());
-        $money = $schemas->graph()->resolve($price->ref(), $price->location());
+        $money = $schemas->graph()->resolve($price->references()[0]);
         self::assertNotNull($money);
         self::assertStringEndsWith('api/shared/common.json#/definitions/Money', $money->location()->toString());
     }

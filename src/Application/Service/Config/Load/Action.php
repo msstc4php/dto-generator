@@ -10,6 +10,7 @@ use MSSTC4PHP\DtoGenerator\Application\Config\TargetResolver;
 use MSSTC4PHP\DtoGenerator\Application\Port\DocumentLoader;
 use MSSTC4PHP\DtoGenerator\Application\Port\DocumentLoadFailed;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
+use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
 
 final class Action
 {
@@ -33,7 +34,7 @@ final class Action
         try {
             $document = $this->loader->load($input->configPath());
         } catch (DocumentLoadFailed $exception) {
-            $diagnostics->error($exception->getMessage());
+            $diagnostics->error($exception->getMessage(), new SchemaLocation($input->configPath()));
 
             return new Output(null, null, $diagnostics);
         }

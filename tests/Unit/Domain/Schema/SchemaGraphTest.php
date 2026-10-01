@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MSSTC4PHP\DtoGenerator\Tests\Unit\Domain\Schema;
 
 use MSSTC4PHP\DtoGenerator\Domain\Exception\InvalidModel;
+use MSSTC4PHP\DtoGenerator\Domain\Schema\ReferenceUse;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\ResolvedSchema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaBuilder;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaGraph;
@@ -13,18 +14,26 @@ use PHPUnit\Framework\TestCase;
 
 final class SchemaGraphTest extends TestCase
 {
-    public function testFindsSchemasByLocationAndReference(): void
+    public function testFindsSchemasByLocationAndRecordedReference(): void
     {
         $user = $this->resolved('/api/openapi.yaml', '/components/schemas/User', 'User', 0);
         $money = $this->resolved('/api/common.json', '/Money', 'Money', null);
-        $graph = new SchemaGraph([$user, $money]);
+        $use = new ReferenceUse('common.json#/Money', $user->location()->child('properties', 'salary'));
+        $graph = new SchemaGraph([$user, $money], [$use->key() => $money->location()->toString()]);
 
         self::assertSame([$user, $money], $graph->all());
         self::assertSame($user, $graph->get(new SchemaLocation('/api/openapi.yaml', '/components/schemas/User')));
-        self::assertSame($money, $graph->resolve('common.json#/Money', $user->location()));
-        self::assertSame($user, $graph->resolve('#/components/schemas/User', $user->location()));
-        self::assertNull($graph->resolve('#/components/schemas/Missing', $user->location()));
-        self::assertNull($graph->resolve('https://example.com/x.json', $user->location()));
+        self::assertSame($money, $graph->resolve($use));
+        self::assertNull($graph->resolve(new ReferenceUse('#Anchor', $user->location())));
+    }
+
+    public function testRejectsAnEdgeToAnUnknownSchema(): void
+    {
+        $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('points to an unknown schema');
+
+        $user = $this->resolved('/api/openapi.yaml', '/components/schemas/User', 'User', 0);
+        new SchemaGraph([$user], [(new ReferenceUse('#/x', $user->location()))->key() => '/api/openapi.yaml#/x']);
     }
 
     public function testExposesResolvedSchemaParts(): void

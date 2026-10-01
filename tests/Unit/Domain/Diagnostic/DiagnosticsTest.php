@@ -16,7 +16,7 @@ final class DiagnosticsTest extends TestCase
     public function testCollectsInOrderAndKnowsAboutErrors(): void
     {
         $diagnostics = new Diagnostics();
-        $diagnostics->warning('Looks odd.');
+        $diagnostics->warning('Looks odd.', new SchemaLocation('a.yaml'));
 
         self::assertFalse($diagnostics->hasErrors());
 
@@ -26,7 +26,7 @@ final class DiagnosticsTest extends TestCase
         self::assertTrue($diagnostics->hasErrors());
         self::assertCount(2, $diagnostics);
         self::assertSame(
-            ['warning: Looks odd.', 'error a.yaml#/x: Broken.'],
+            ['warning a.yaml#: Looks odd.', 'error a.yaml#/x: Broken.'],
             array_map(static fn (Diagnostic $diagnostic): string => $diagnostic->toString(), $diagnostics->all()),
         );
 
@@ -41,10 +41,10 @@ final class DiagnosticsTest extends TestCase
     public function testMergesAnotherCollector(): void
     {
         $first = new Diagnostics();
-        $first->warning('a');
+        $first->warning('a', new SchemaLocation('a.yaml'));
 
         $second = new Diagnostics();
-        $second->error('b');
+        $second->error('b', new SchemaLocation('a.yaml'));
 
         $first->merge($second);
 
@@ -56,15 +56,26 @@ final class DiagnosticsTest extends TestCase
         $this->expectException(InvalidModel::class);
         $this->expectExceptionMessage('needs a message');
 
-        new Diagnostic(Severity::from(Severity::ERROR), '  ');
+        new Diagnostic(Severity::from(Severity::ERROR), '  ', new SchemaLocation('a.yaml'));
     }
 
     public function testAcceptsPrebuiltDiagnostics(): void
     {
         $diagnostics = new Diagnostics();
-        $diagnostic = new Diagnostic(Severity::from(Severity::WARNING), 'Prebuilt.');
+        $diagnostic = new Diagnostic(Severity::from(Severity::WARNING), 'Prebuilt.', new SchemaLocation('a.yaml'));
         $diagnostics->add($diagnostic);
 
         self::assertSame([$diagnostic], $diagnostics->all());
+    }
+
+    public function testReportsTheSameProblemOnlyOnce(): void
+    {
+        $diagnostics = new Diagnostics();
+        $location = new SchemaLocation('a.yaml', '/x');
+        $diagnostics->error('Broken.', $location);
+        $diagnostics->error('Broken.', new SchemaLocation('a.yaml', '/x'));
+        $diagnostics->warning('Broken.', $location);
+
+        self::assertCount(2, $diagnostics);
     }
 }

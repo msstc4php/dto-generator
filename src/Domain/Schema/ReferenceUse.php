@@ -34,4 +34,12 @@ final class ReferenceUse
     {
         return $this->location;
     }
+
+    /**
+     * Identity of this use: the same $ref text written at the same place.
+     */
+    public function key(): string
+    {
+        return $this->location->toString() . "\0" . $this->ref;
+    }
 }

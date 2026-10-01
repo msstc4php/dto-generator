@@ -13,9 +13,9 @@ final class Diagnostic
 
     private string $message;
 
-    private ?SchemaLocation $location;
+    private SchemaLocation $location;
 
-    public function __construct(Severity $severity, string $message, ?SchemaLocation $location = null)
+    public function __construct(Severity $severity, string $message, SchemaLocation $location)
     {
         if (trim($message) === '') {
             throw new InvalidModel('A diagnostic needs a message.');
@@ -36,17 +36,13 @@ final class Diagnostic
         return $this->message;
     }
 
-    public function location(): ?SchemaLocation
+    public function location(): SchemaLocation
     {
         return $this->location;
     }
 
     public function toString(): string
     {
-        if (!$this->location instanceof SchemaLocation) {
-            return sprintf('%s: %s', $this->severity->value(), $this->message);
-        }
-
         return sprintf('%s %s: %s', $this->severity->value(), $this->location->toString(), $this->message);
     }
 }

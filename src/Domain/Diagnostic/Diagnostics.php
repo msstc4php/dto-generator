@@ -15,25 +15,34 @@ final class Diagnostics implements Countable
     /** @var list<Diagnostic> */
     private array $items = [];
 
-    public function error(string $message, ?SchemaLocation $location = null): void
+    public function error(string $message, SchemaLocation $location): void
     {
         $this->add(new Diagnostic(Severity::from(Severity::ERROR), $message, $location));
     }
 
-    public function warning(string $message, ?SchemaLocation $location = null): void
+    public function warning(string $message, SchemaLocation $location): void
     {
         $this->add(new Diagnostic(Severity::from(Severity::WARNING), $message, $location));
     }
 
+    /**
+     * A subtree parsed twice (as a component and as a $ref target) must not report its problems twice.
+     */
     public function add(Diagnostic $diagnostic): void
     {
+        foreach ($this->items as $item) {
+            if ($item->toString() === $diagnostic->toString()) {
+                return;
+            }
+        }
+
         $this->items[] = $diagnostic;
     }
 
     public function merge(self $other): void
     {
         foreach ($other->items as $diagnostic) {
-            $this->items[] = $diagnostic;
+            $this->add($diagnostic);
         }
     }
 

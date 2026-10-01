@@ -145,7 +145,6 @@ final class SchemaParserTest extends TestCase
         self::assertCount(1, $diagnostics->errors());
         $error = $diagnostics->errors()[0];
         self::assertStringContainsString($message, $error->message());
-        self::assertNotNull($error->location());
         self::assertSame('/components/schemas/User' . $pointer, $error->location()->pointer());
     }
 

@@ -22,6 +22,11 @@ final class FileDocumentLoader implements DocumentLoader
     public function load(string $path): Document
     {
         $normalized = Path::normalize($path);
+        // realpath() throws on NUL bytes; a decoded "%00" in a $ref must stay a load failure.
+        if (strpos($normalized, "\0") !== false) {
+            throw DocumentLoadFailed::notFound(str_replace("\0", '\0', $normalized));
+        }
+
         $real = realpath($normalized);
         if ($real === false || !is_file($real)) {
             throw DocumentLoadFailed::notFound($normalized);

@@ -38,7 +38,7 @@ final class LoadTest extends TestCase
         self::assertNull($output->config());
         self::assertNull($output->target());
         self::assertSame(
-            ['error: File "/project/dto-generator.yaml" does not exist.'],
+            ['error /project/dto-generator.yaml#: File "/project/dto-generator.yaml" does not exist.'],
             array_map(static fn (Diagnostic $d): string => $d->toString(), $output->diagnostics()->all()),
         );
     }

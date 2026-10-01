@@ -14,10 +14,14 @@ final class SchemaGraph
     /** @var array<string, ResolvedSchema> */
     private array $schemas = [];
 
+    /** @var array<string, string> */
+    private array $edges;
+
     /**
      * @param list<ResolvedSchema> $schemas
+     * @param array<string, string> $edges {@see ReferenceUse::key()} → location key of the schema it resolved to
      */
-    public function __construct(array $schemas)
+    public function __construct(array $schemas, array $edges = [])
     {
         foreach ($schemas as $schema) {
             $key = $schema->location()->toString();
@@ -27,6 +31,14 @@ final class SchemaGraph
 
             $this->schemas[$key] = $schema;
         }
+
+        foreach ($edges as $use => $target) {
+            if (!isset($this->schemas[$target])) {
+                throw new InvalidModel(sprintf('Reference %s points to an unknown schema %s.', $use, $target));
+            }
+        }
+
+        $this->edges = $edges;
     }
 
     public function get(SchemaLocation $location): ?ResolvedSchema
@@ -35,13 +47,13 @@ final class SchemaGraph
     }
 
     /**
-     * Null for remote references and for targets that could not be loaded.
+     * The schema a `$ref` resolved to while loading; null when it could not be resolved (already reported).
      */
-    public function resolve(string $ref, SchemaLocation $from): ?ResolvedSchema
+    public function resolve(ReferenceUse $use): ?ResolvedSchema
     {
-        $target = Reference::target($ref, $from);
+        $target = $this->edges[$use->key()] ?? null;
 
-        return $target instanceof SchemaLocation ? $this->get($target) : null;
+        return $target === null ? null : $this->schemas[$target];
     }
 
     /**
