@@ -15,6 +15,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
  */
 final class Schema
 {
+    /** @var non-empty-list<non-empty-string> keywords with a dedicated accessor */
     public const STRUCTURAL_KEYWORDS = [
         'type', '$ref', 'format', 'description', 'deprecated', 'default', 'enum', 'properties', 'required',
         'items', 'additionalProperties', 'allOf', 'oneOf', 'anyOf', 'discriminator',
@@ -104,28 +105,10 @@ final class Schema
         array $keywords,
         Extensions $extensions
     ) {
-        $seenTypes = [];
-        foreach ($types as $type) {
-            if (isset($seenTypes[$type->value()])) {
-                throw new InvalidModel(sprintf('Schema %s repeats type "%s".', $location->toString(), $type->value()));
-            }
-            $seenTypes[$type->value()] = true;
-        }
-
-        if ($enum === []) {
-            throw new InvalidModel(sprintf('Schema %s has an empty "enum".', $location->toString()));
-        }
-
-        if (count(array_unique($required)) !== count($required)) {
-            throw new InvalidModel(sprintf('Schema %s repeats a name in "required".', $location->toString()));
-        }
-
-        foreach (array_keys($keywords) as $keyword) {
-            $keyword = (string) $keyword;
-            if (in_array($keyword, self::STRUCTURAL_KEYWORDS, true) || strncmp($keyword, 'x-', 2) === 0) {
-                throw new InvalidModel(sprintf('Schema %s: "%s" has a dedicated field and cannot be a generic keyword.', $location->toString(), $keyword));
-            }
-        }
+        $this->assertUniqueTypes($location, $types);
+        $this->assertUsableEnum($location, $enum);
+        $this->assertUniqueRequired($location, $required);
+        $this->assertGenericKeywords($location, $keywords);
 
         $this->location = $location;
         $this->types = $types;
@@ -167,7 +150,13 @@ final class Schema
 
     public function isNullable(): bool
     {
-        return $this->hasType(SchemaType::from(SchemaType::NULL));
+        foreach ($this->types as $type) {
+            if ($type->isNull()) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -175,9 +164,7 @@ final class Schema
      */
     public function nonNullTypes(): array
     {
-        $null = SchemaType::from(SchemaType::NULL);
-
-        return array_values(array_filter($this->types, static fn (SchemaType $type): bool => $type !== $null));
+        return array_values(array_filter($this->types, static fn (SchemaType $type): bool => !$type->isNull()));
     }
 
     public function ref(): ?string
@@ -319,5 +306,55 @@ final class Schema
     public function extensions(): Extensions
     {
         return $this->extensions;
+    }
+
+    /**
+     * @param list<SchemaType> $types
+     */
+    private function assertUniqueTypes(SchemaLocation $location, array $types): void
+    {
+        $seen = [];
+        foreach ($types as $type) {
+            if (isset($seen[$type->value()])) {
+                throw new InvalidModel(sprintf('Schema %s repeats type "%s".', $location->toString(), $type->value()));
+            }
+
+            $seen[$type->value()] = true;
+        }
+    }
+
+    /**
+     * @param list<JsonValue>|null $enum
+     *
+     * @phpstan-assert non-empty-list<JsonValue>|null $enum
+     */
+    private function assertUsableEnum(SchemaLocation $location, ?array $enum): void
+    {
+        if ($enum === []) {
+            throw new InvalidModel(sprintf('Schema %s has an empty "enum".', $location->toString()));
+        }
+    }
+
+    /**
+     * @param list<string> $required
+     */
+    private function assertUniqueRequired(SchemaLocation $location, array $required): void
+    {
+        if (count(array_unique($required)) !== count($required)) {
+            throw new InvalidModel(sprintf('Schema %s repeats a name in "required".', $location->toString()));
+        }
+    }
+
+    /**
+     * @param array<int|string, JsonValue> $keywords
+     */
+    private function assertGenericKeywords(SchemaLocation $location, array $keywords): void
+    {
+        foreach (array_keys($keywords) as $keyword) {
+            $keyword = (string) $keyword;
+            if (in_array($keyword, self::STRUCTURAL_KEYWORDS, true) || Extensions::isExtensionKey($keyword)) {
+                throw new InvalidModel(sprintf('Schema %s: "%s" has a dedicated field and cannot be a generic keyword.', $location->toString(), $keyword));
+            }
+        }
     }
 }

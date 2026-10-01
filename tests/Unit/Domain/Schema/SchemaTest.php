@@ -7,6 +7,7 @@ namespace MSSTC4PHP\DtoGenerator\Tests\Unit\Domain\Schema;
 use MSSTC4PHP\DtoGenerator\Domain\Exception\InvalidModel;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Discriminator;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Extensions;
+use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaBuilder;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaType;
@@ -49,6 +50,11 @@ final class SchemaTest extends TestCase
         self::assertSame([$this->type(SchemaType::STRING)], $schema->nonNullTypes());
     }
 
+    public function testASchemaWithOnlyNonNullTypesIsNotNullable(): void
+    {
+        self::assertFalse($this->builder()->types($this->type(SchemaType::STRING))->build()->isNullable());
+    }
+
     public function testASchemaWithoutTypesIsNotNullable(): void
     {
         $schema = $this->builder()->build();
@@ -87,7 +93,7 @@ final class SchemaTest extends TestCase
 
     public function testDistinguishesANullDefaultFromNoDefault(): void
     {
-        $withNull = $this->builder()->defaultValue(null)->build();
+        $withNull = $this->builder()->default(null)->build();
         $withoutDefault = $this->builder()->build();
 
         self::assertNotNull($withNull->default());
@@ -158,6 +164,7 @@ final class SchemaTest extends TestCase
     public function testRejectsAnEmptyEnum(): void
     {
         $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('has an empty "enum"');
 
         $this->builder()->enum([])->build();
     }
@@ -165,6 +172,7 @@ final class SchemaTest extends TestCase
     public function testRejectsDuplicateRequiredNames(): void
     {
         $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('repeats a name in "required"');
 
         $this->builder()->required('id', 'id')->build();
     }
@@ -175,6 +183,7 @@ final class SchemaTest extends TestCase
     public function testRejectsKeywordsThatHaveTheirOwnAccessor(string $keyword): void
     {
         $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('has a dedicated field');
 
         $this->builder()->keyword($keyword, 'x')->build();
     }
@@ -184,12 +193,12 @@ final class SchemaTest extends TestCase
      */
     public static function reservedKeywords(): array
     {
-        return [
-            'type' => ['type'],
-            '$ref' => ['$ref'],
-            'properties' => ['properties'],
-            'extension' => ['x-php-name'],
-        ];
+        $cases = ['extension' => ['x-php-name']];
+        foreach (Schema::STRUCTURAL_KEYWORDS as $keyword) {
+            $cases[$keyword] = [$keyword];
+        }
+
+        return $cases;
     }
 
     public function testKeywordRejectsAMissingName(): void

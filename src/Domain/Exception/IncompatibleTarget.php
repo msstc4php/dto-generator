@@ -8,7 +8,7 @@ use InvalidArgumentException;
 use MSSTC4PHP\DtoGenerator\Domain\Target\Capability;
 use MSSTC4PHP\DtoGenerator\Domain\Target\PhpVersion;
 
-final class IncompatibleTarget extends InvalidArgumentException
+final class IncompatibleTarget extends InvalidArgumentException implements DomainError
 {
     public static function capabilityMissing(Capability $capability, PhpVersion $php, string $feature): self
     {

@@ -22,7 +22,7 @@ final class AttributeModel
     {
         AttributeArgument::assertWellFormed($arguments);
 
-        if ($importAlias instanceof ImportAlias && strpos($className->fqcn(), $importAlias->namespace() . '\\') !== 0) {
+        if ($importAlias instanceof ImportAlias && !$this->isInside($className, $importAlias)) {
             throw new InvalidModel(sprintf('Attribute class %s is not inside the import alias namespace %s.', $className->fqcn(), $importAlias->namespace()));
         }
 
@@ -47,5 +47,12 @@ final class AttributeModel
     public function importAlias(): ?ImportAlias
     {
         return $this->importAlias;
+    }
+
+    private function isInside(ClassName $className, ImportAlias $alias): bool
+    {
+        $prefix = $alias->namespace() . '\\';
+
+        return strncasecmp($className->fqcn(), $prefix, strlen($prefix)) === 0;
     }
 }

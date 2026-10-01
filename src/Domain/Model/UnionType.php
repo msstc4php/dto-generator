@@ -21,7 +21,8 @@ final class UnionType implements TypeModel
             }
 
             foreach ($member instanceof self ? $member->members() : [$member] as $part) {
-                $key = $part->describe();
+                // PHP type names are case-insensitive, so `Foo\Bar|foo\bar` is a duplicate.
+                $key = Identifier::asciiLower($part->describe());
                 if (!isset($seen[$key])) {
                     $seen[$key] = true;
                     $flat[] = $part;

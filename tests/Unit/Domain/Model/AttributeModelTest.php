@@ -30,6 +30,14 @@ final class AttributeModelTest extends TestCase
         self::assertSame('Assert', $alias->alias());
     }
 
+    public function testMatchesTheAliasNamespaceCaseInsensitively(): void
+    {
+        $alias = new ImportAlias('Symfony\\Component\\Validator\\Constraints', 'Assert');
+        $attribute = new AttributeModel(ClassName::fromFqcn('symfony\\component\\validator\\constraints\\Length'), [], $alias);
+
+        self::assertSame($alias, $attribute->importAlias());
+    }
+
     public function testArgumentsDefaultToNone(): void
     {
         $attribute = new AttributeModel(ClassName::fromFqcn('App\Sensitive'));
@@ -49,6 +57,7 @@ final class AttributeModelTest extends TestCase
     public function testRejectsAnInvalidAlias(): void
     {
         $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('is not a usable PHP identifier');
 
         new ImportAlias('Symfony\Component\Validator\Constraints', 'As-sert');
     }
@@ -90,6 +99,7 @@ final class AttributeModelTest extends TestCase
     public function testTheConstructorValidatesArgumentOrder(): void
     {
         $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('Positional argument after named');
 
         new AttributeModel(ClassName::fromFqcn('App\Sensitive'), [
             AttributeArgument::named('max', ArgumentValue::literal(10)),
@@ -100,6 +110,7 @@ final class AttributeModelTest extends TestCase
     public function testAnAliasNamespaceMustEndAtASegmentBoundary(): void
     {
         $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('is not inside the import alias namespace');
 
         new AttributeModel(ClassName::fromFqcn('App\SensitiveData\Mask'), [], new ImportAlias('App\Sensitive', 'S'));
     }
@@ -107,6 +118,7 @@ final class AttributeModelTest extends TestCase
     public function testRejectsAnInvalidArgumentName(): void
     {
         $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('is not a PHP identifier');
 
         AttributeArgument::named('max-length', ArgumentValue::literal(1));
     }

@@ -6,7 +6,7 @@ namespace MSSTC4PHP\DtoGenerator\Domain\Exception;
 
 use InvalidArgumentException;
 
-final class UnsupportedPhpVersion extends InvalidArgumentException
+final class UnsupportedPhpVersion extends InvalidArgumentException implements DomainError
 {
     public static function malformed(string $version): self
     {

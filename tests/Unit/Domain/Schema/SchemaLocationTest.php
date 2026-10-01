@@ -35,11 +35,13 @@ final class SchemaLocationTest extends TestCase
     {
         self::assertTrue((new SchemaLocation('a.json', '/x'))->equals((new SchemaLocation('a.json'))->child('x')));
         self::assertFalse((new SchemaLocation('a.json', '/x'))->equals(new SchemaLocation('b.json', '/x')));
+        self::assertFalse((new SchemaLocation('a.json', '/x'))->equals(new SchemaLocation('a.json', '/y')));
     }
 
     public function testRejectsAnEmptyFile(): void
     {
         $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('file must not be empty');
 
         new SchemaLocation('');
     }

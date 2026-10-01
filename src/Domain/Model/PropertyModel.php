@@ -107,11 +107,17 @@ final class PropertyModel
         return $this->type instanceof NullableType;
     }
 
-    public function withAttributes(AttributeModel ...$attributes): self
+    public function withAddedAttributes(AttributeModel ...$attributes): self
     {
-        $copy = clone $this;
-        $copy->attributes = array_merge($this->attributes, $attributes);
-
-        return $copy;
+        return new self(
+            $this->name,
+            $this->wireName,
+            $this->type,
+            $this->required,
+            $this->default,
+            $this->doc,
+            $this->source,
+            array_merge($this->attributes, $attributes),
+        );
     }
 }

@@ -35,11 +35,11 @@ final class TargetProfile
         $this->dateTimeClass = $dateTimeClass;
         $this->strict = $strict;
 
-        if ($metadata->equals(MetadataMode::from(MetadataMode::ATTRIBUTES))) {
+        if ($metadata->isAttributes()) {
             $this->assertSupports(Capability::from(Capability::ATTRIBUTES), 'Metadata mode "attributes"');
         }
 
-        $this->accessorsFor($mutability);
+        $this->assertAccessorsCompatible($mutability);
     }
 
     public function supports(Capability $capability): bool
@@ -52,18 +52,13 @@ final class TargetProfile
      */
     public function accessorsFor(Mutability $mutability): AccessorStyle
     {
-        $readonly = Capability::from(Capability::READONLY_PROPERTIES);
-        $publicProperties = AccessorStyle::from(AccessorStyle::PUBLIC_PROPERTIES);
-
-        if ($this->accessors->equals(AccessorStyle::from(AccessorStyle::AUTO))) {
-            return $mutability->isImmutable() && $this->supports($readonly)
-                ? $publicProperties
+        if ($this->accessors->isAuto()) {
+            return $mutability->isImmutable() && $this->supports(Capability::from(Capability::READONLY_PROPERTIES))
+                ? AccessorStyle::from(AccessorStyle::PUBLIC_PROPERTIES)
                 : AccessorStyle::from(AccessorStyle::GETTERS);
         }
 
-        if ($this->accessors->equals($publicProperties) && $mutability->isImmutable()) {
-            $this->assertSupports($readonly, 'Immutable DTOs with public properties');
-        }
+        $this->assertAccessorsCompatible($mutability);
 
         return $this->accessors;
     }
@@ -105,6 +100,13 @@ final class TargetProfile
     {
         if (!$this->supports($capability)) {
             throw IncompatibleTarget::capabilityMissing($capability, $this->php, $feature);
+        }
+    }
+
+    private function assertAccessorsCompatible(Mutability $mutability): void
+    {
+        if ($mutability->isImmutable() && $this->accessors->equals(AccessorStyle::from(AccessorStyle::PUBLIC_PROPERTIES))) {
+            $this->assertSupports(Capability::from(Capability::READONLY_PROPERTIES), 'Immutable DTOs with public properties');
         }
     }
 }

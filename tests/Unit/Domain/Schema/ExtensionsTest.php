@@ -42,6 +42,7 @@ final class ExtensionsTest extends TestCase
     public function testRejectsKeysThatAreNotExtensions(string $key): void
     {
         $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('must start with "x-" followed by a name');
 
         new Extensions([$key => true]);
     }
@@ -55,6 +56,7 @@ final class ExtensionsTest extends TestCase
             'plain keyword' => ['format'],
             'prefix only' => ['x-'],
             'x without dash' => ['xa'],
+            'x word' => ['xfoo'],
             'uppercase prefix' => ['X-foo'],
         ];
     }
@@ -62,8 +64,17 @@ final class ExtensionsTest extends TestCase
     public function testRejectsANumericKeyAsAModelError(): void
     {
         $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('must start with "x-" followed by a name');
 
         new Extensions(['200' => true]);
+    }
+
+    public function testRecognisesExtensionKeys(): void
+    {
+        self::assertTrue(Extensions::isExtensionKey('x-php-name'));
+        self::assertFalse(Extensions::isExtensionKey('x-'));
+        self::assertFalse(Extensions::isExtensionKey('xfoo'));
+        self::assertFalse(Extensions::isExtensionKey('format'));
     }
 
     public function testGetRejectsAMissingKey(): void

@@ -28,7 +28,7 @@ abstract class AbstractEnum
     }
 
     /**
-     * @return list<string>
+     * @return never
      */
     public function __sleep(): array
     {

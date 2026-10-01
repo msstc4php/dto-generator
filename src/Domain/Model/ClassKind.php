@@ -19,4 +19,9 @@ final class ClassKind extends AbstractEnum
     {
         return [self::FINAL, self::OPEN, self::ABSTRACT];
     }
+
+    public function isAbstract(): bool
+    {
+        return $this->value() === self::ABSTRACT;
+    }
 }

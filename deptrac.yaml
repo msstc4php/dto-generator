@@ -31,6 +31,11 @@ deptrac:
       collectors:
         - type: directory
           value: src/Extension/.*
+    # PHPStan type aliases from Domain\Shared\Json; deptrac resolves them as if they were classes.
+    - name: TypeAlias
+      collectors:
+        - type: classNameRegex
+          value: '#\\Json(Value|Scalar)$#'
     - name: Symfony
       collectors:
         - type: classNameRegex
@@ -44,13 +49,14 @@ deptrac:
         - type: classNameRegex
           value: '#^Composer\\#'
   ruleset:
-    Domain: ~
-    DomainService: [Domain]
-    Contract: [Domain]
-    Application: [Domain, DomainService, Contract]
-    Infrastructure: [Domain, Application, Contract, Symfony, PhpParser, Composer]
-    Presentation: [Application, Domain, Contract, Symfony, Composer]
-    Extension: [Contract, Domain]
+    Domain: [TypeAlias]
+    DomainService: [Domain, TypeAlias]
+    Contract: [Domain, TypeAlias]
+    Application: [Domain, DomainService, Contract, TypeAlias]
+    Infrastructure: [Domain, Application, Contract, TypeAlias, Symfony, PhpParser, Composer]
+    Presentation: [Application, Domain, Contract, TypeAlias, Symfony, Composer]
+    Extension: [Contract, Domain, TypeAlias]
+    TypeAlias: ~
     Symfony: ~
     PhpParser: ~
     Composer: ~

@@ -49,6 +49,7 @@ final class EnumModelTest extends TestCase
     public function testRejectsAnIntInAStringEnum(): void
     {
         $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('does not match the string backing');
 
         $this->enum(EnumBacking::STRING, [new EnumCase('One', 1)]);
     }
@@ -72,6 +73,7 @@ final class EnumModelTest extends TestCase
     public function testRejectsAnEnumWithoutCases(): void
     {
         $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('has no cases');
 
         $this->enum(EnumBacking::STRING, []);
     }
@@ -82,6 +84,7 @@ final class EnumModelTest extends TestCase
     public function testRejectsInvalidCaseNames(string $name): void
     {
         $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('is not a usable enum case name');
 
         new EnumCase($name, 'x');
     }
@@ -96,6 +99,7 @@ final class EnumModelTest extends TestCase
             'class keyword uppercase' => ['CLASS'],
             'dash' => ['in-progress'],
             'leading digit' => ['1st'],
+            'trailing newline' => ["Active\n"],
         ];
     }
 

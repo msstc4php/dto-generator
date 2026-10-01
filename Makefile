@@ -10,7 +10,7 @@ check: ## Static checks (incl. PHP 7.4 syntax lint)
 	$(TOOLS)/php-cs-fixer check
 	composer validate --strict --no-check-publish
 	$(TOOLS)/rector process -n
-	$(TOOLS)/deptrac analyse --config-file=deptrac.yaml --no-progress
+	$(TOOLS)/deptrac analyse --config-file=deptrac.yaml --no-progress --fail-on-uncovered
 	$(MAKE) lint-74
 
 lint-74: ## Lint sources with the PHP 7.4 parser
@@ -21,6 +21,8 @@ test: ## Run tests on the local PHP
 
 test-74: ## Run tests on PHP 7.4
 	$(PHP74) vendor/bin/phpunit
+
+verify: check test test-74 ## Full gate: static checks + tests on local PHP and PHP 7.4
 
 infection: ## Mutation testing
 	XDEBUG_MODE=coverage $(TOOLS)/infection --threads=$(shell nproc) --no-interaction
@@ -33,4 +35,4 @@ help: ## List commands
 	@grep -E '^[a-zA-Z_0-9-]+:.*?## ' Makefile | awk 'BEGIN {FS = ":.*?## "}; {printf "%-12s %s\n", $$1, $$2}'
 
 .DEFAULT_GOAL := help
-.PHONY: install check lint-74 test test-74 infection fix help
+.PHONY: install check lint-74 test test-74 verify infection fix help

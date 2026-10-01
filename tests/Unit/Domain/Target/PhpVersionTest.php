@@ -60,6 +60,10 @@ final class PhpVersionTest extends TestCase
             'comparison constraint' => ['>=7.4'],
             'leading zero' => ['08.2'],
             'four parts' => ['8.2.1.0'],
+            'trailing newline' => ["8.2\n"],
+            'leading space' => [' 8.2'],
+            'trailing dot' => ['8.2.'],
+            'leading zero minor' => ['8.02'],
         ];
     }
 

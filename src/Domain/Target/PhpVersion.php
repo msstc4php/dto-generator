@@ -22,7 +22,7 @@ final class PhpVersion
 
     public static function fromString(string $version): self
     {
-        if (preg_match('/^(0|[1-9]\d*)\.(0|[1-9]\d*)(?:\.(?:0|[1-9]\d*))?$/', $version, $matches) !== 1) {
+        if (preg_match('/^(0|[1-9]\d*)\.(0|[1-9]\d*)(?:\.(?:0|[1-9]\d*))?\z/', $version, $matches) !== 1) {
             throw UnsupportedPhpVersion::malformed($version);
         }
 

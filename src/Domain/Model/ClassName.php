@@ -80,6 +80,6 @@ final class ClassName
      */
     public function equals(self $other): bool
     {
-        return strtolower($this->fqcn()) === strtolower($other->fqcn());
+        return Identifier::asciiLower($this->fqcn()) === Identifier::asciiLower($other->fqcn());
     }
 }

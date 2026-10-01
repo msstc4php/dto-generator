@@ -61,6 +61,7 @@ final class TypeModelTest extends TestCase
     public function testScalarRejectsABlankRefinement(): void
     {
         $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('must not be blank');
 
         ScalarType::string('  ');
     }
@@ -75,6 +76,14 @@ final class TypeModelTest extends TestCase
 
         self::assertSame('string|int|bool', $union->describe());
         self::assertCount(3, $union->members());
+    }
+
+    public function testUnionTreatsClassNamesCaseInsensitively(): void
+    {
+        $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('at least two distinct members');
+
+        new UnionType(new ClassType(ClassName::fromFqcn('Foo\\Bar')), new ClassType(ClassName::fromFqcn('foo\\bar')));
     }
 
     public function testUnionNeedsTwoDistinctMembers(): void
@@ -96,6 +105,7 @@ final class TypeModelTest extends TestCase
     public function testUnionRejectsMixed(): void
     {
         $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('must not be nullable or mixed');
 
         new UnionType(ScalarType::string(), new MixedType());
     }
@@ -103,6 +113,7 @@ final class TypeModelTest extends TestCase
     public function testNullableRejectsNesting(): void
     {
         $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('already admits null');
 
         new NullableType(new NullableType(ScalarType::string()));
     }
@@ -110,6 +121,7 @@ final class TypeModelTest extends TestCase
     public function testNullableRejectsMixed(): void
     {
         $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('already admits null');
 
         new NullableType(new MixedType());
     }

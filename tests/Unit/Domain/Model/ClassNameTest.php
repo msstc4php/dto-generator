@@ -76,6 +76,7 @@ final class ClassNameTest extends TestCase
     {
         return [
             'empty' => ['', 'must not be empty'],
+            'trailing newline' => ["App\\List\n", 'is not a PHP identifier'],
             'only a backslash' => ['\\', 'must not be empty'],
             'starts with a digit' => ['App\1User', 'segment "1User" is not a PHP identifier'],
             'dash' => ['App\User-Profile', 'segment "User-Profile" is not a PHP identifier'],

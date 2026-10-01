@@ -21,7 +21,15 @@ final class ImportAlias
             throw new InvalidModel(sprintf('Import alias "%s" is not a usable PHP identifier.', $alias));
         }
 
-        $this->namespace = ClassName::fromFqcn($namespace)->fqcn();
+        $normalized = ltrim($namespace, '\\');
+        foreach (explode('\\', $normalized) as $segment) {
+            // Reserved segments are legal from PHP 8.0; only the target-aware layer may reject them.
+            if (!Identifier::isValid($segment)) {
+                throw new InvalidModel(sprintf('"%s" is not a valid namespace: segment "%s" is not a PHP identifier.', $namespace, $segment));
+            }
+        }
+
+        $this->namespace = $normalized;
         $this->alias = $alias;
     }
 

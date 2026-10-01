@@ -67,6 +67,7 @@ final class ArgumentValueTest extends TestCase
     public function testRejectsNonScalarLiterals(): void
     {
         $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('must be a scalar or null');
 
         ArgumentValue::literal([1]);
     }
@@ -78,9 +79,9 @@ final class ArgumentValueTest extends TestCase
         $map = ArgumentValue::mapOf(['keep' => $one, '200' => $one]);
 
         self::assertSame(ArgumentValue::KIND_LIST, $list->kind());
-        self::assertSame([$one, $one], $list->items());
+        self::assertSame([$one, $one], $list->listItems());
         self::assertSame(ArgumentValue::KIND_MAP, $map->kind());
-        self::assertSame(['keep', '200'], array_map('strval', array_keys($map->items())));
+        self::assertSame(['keep', '200'], array_map('strval', array_keys($map->mapItems())));
     }
 
     public function testHoldsConstants(): void
@@ -101,6 +102,7 @@ final class ArgumentValueTest extends TestCase
     public function testRejectsInvalidConstantNames(string $name): void
     {
         $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('is not a valid constant name');
 
         ArgumentValue::constant($name, ClassName::fromFqcn('App\Mask'));
     }
@@ -115,6 +117,7 @@ final class ArgumentValueTest extends TestCase
             'class keyword uppercase' => ['CLASS'],
             'dash' => ['TAIL-END'],
             'empty' => [''],
+            'trailing newline' => ["TAIL\n"],
         ];
     }
 
@@ -139,6 +142,7 @@ final class ArgumentValueTest extends TestCase
     public function testNestedInstancesValidateArgumentOrder(): void
     {
         $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('Positional argument after named');
 
         ArgumentValue::newInstance(
             ClassName::fromFqcn('App\Rule'),
@@ -171,8 +175,11 @@ final class ArgumentValueTest extends TestCase
             'literalValue on a list' => [ArgumentValue::listOf(), static function (ArgumentValue $value): void {
                 $value->literalValue();
             }],
-            'items on a literal' => [ArgumentValue::literal(1), static function (ArgumentValue $value): void {
-                $value->items();
+            'listItems on a map' => [ArgumentValue::mapOf([]), static function (ArgumentValue $value): void {
+                $value->listItems();
+            }],
+            'mapItems on a list' => [ArgumentValue::listOf(), static function (ArgumentValue $value): void {
+                $value->mapItems();
             }],
             'constantName on a literal' => [ArgumentValue::literal(1), static function (ArgumentValue $value): void {
                 $value->constantName();
@@ -192,6 +199,7 @@ final class ArgumentValueTest extends TestCase
     public function testAccessorsOfAnotherKindThrow(): void
     {
         $this->expectException(LogicException::class);
+        $this->expectExceptionMessage('is not one of');
 
         ArgumentValue::literal(1)->className();
     }

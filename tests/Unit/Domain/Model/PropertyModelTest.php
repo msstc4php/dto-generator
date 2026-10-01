@@ -41,12 +41,12 @@ final class PropertyModelTest extends TestCase
         self::assertTrue($this->property('email', new NullableType(ScalarType::string()))->isNullable());
     }
 
-    public function testWithAttributesAppendsWithoutTouchingTheOriginal(): void
+    public function testWithAddedAttributesAppendsWithoutTouchingTheOriginal(): void
     {
         $first = new AttributeModel(ClassName::fromFqcn('App\First'));
         $second = new AttributeModel(ClassName::fromFqcn('App\Second'));
-        $original = $this->property('email')->withAttributes($first);
-        $extended = $original->withAttributes($second);
+        $original = $this->property('email')->withAddedAttributes($first);
+        $extended = $original->withAddedAttributes($second);
 
         self::assertSame([$first], $original->attributes());
         self::assertSame([$first, $second], $extended->attributes());
@@ -58,6 +58,7 @@ final class PropertyModelTest extends TestCase
     public function testRejectsInvalidPropertyNames(string $name): void
     {
         $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('is not a usable PHP property name');
 
         $this->property($name);
     }
@@ -72,6 +73,7 @@ final class PropertyModelTest extends TestCase
             'dash' => ['user-name'],
             'leading digit' => ['2fa'],
             'this' => ['this'],
+            'trailing newline' => ["email\n"],
         ];
     }
 
@@ -83,6 +85,7 @@ final class PropertyModelTest extends TestCase
     public function testRejectsAnEmptyWireName(): void
     {
         $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('has an empty wire name');
 
         new PropertyModel('email', '', ScalarType::string(), true, null, DocModel::none(), new SchemaLocation('a.json'));
     }

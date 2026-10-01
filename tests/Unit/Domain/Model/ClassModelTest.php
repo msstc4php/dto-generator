@@ -65,6 +65,7 @@ final class ClassModelTest extends TestCase
     public function testRejectsExtendingItselfInAnotherCase(): void
     {
         $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('cannot extend itself');
 
         new ClassModel(
             ClassName::fromFqcn('App\\User'),
@@ -75,6 +76,11 @@ final class ClassModelTest extends TestCase
             DocModel::none(),
             new SchemaLocation('a.json'),
         );
+    }
+
+    public function testPropertyLookupIsExact(): void
+    {
+        self::assertNull($this->classWith([$this->property('id')])->property('ID'));
     }
 
     public function testRejectsDuplicateWireNames(): void
@@ -88,6 +94,7 @@ final class ClassModelTest extends TestCase
     public function testRejectsExtendingItself(): void
     {
         $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('cannot extend itself');
 
         new ClassModel(
             ClassName::fromFqcn('App\User'),
@@ -121,39 +128,30 @@ final class ClassModelTest extends TestCase
         self::assertNull($discriminator->classFor('dog'));
     }
 
-    public function testDiscriminatorNeedsAMapping(): void
-    {
-        $this->expectException(InvalidModel::class);
-
-        new DiscriminatorModel('kind', []);
-    }
-
-    public function testWithMethodsReturnValidatedCopies(): void
+    public function testWithMethodsReturnCopies(): void
     {
         $class = $this->classWith([$this->property('id')]);
-        $attribute = new AttributeModel(ClassName::fromFqcn('App\Marker'));
+        $attribute = new AttributeModel(ClassName::fromFqcn('App\\Marker'));
 
-        self::assertSame([$attribute], $class->withAttributes($attribute)->attributes());
+        self::assertSame([$attribute], $class->withAddedAttributes($attribute)->attributes());
         self::assertSame([], $class->attributes());
         self::assertCount(2, $class->withProperties($this->property('id'), $this->property('email'))->properties());
-
-        $this->expectException(InvalidModel::class);
-        $class->withProperties($this->property('id'), $this->property('id'));
     }
 
-    public function testWithAttributesAccumulates(): void
+    public function testWithPropertiesRevalidates(): void
+    {
+        $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('declares property "id" twice');
+
+        $this->classWith([])->withProperties($this->property('id'), $this->property('id'));
+    }
+
+    public function testWithAddedAttributesAccumulates(): void
     {
         $first = new AttributeModel(ClassName::fromFqcn('App\First'));
         $second = new AttributeModel(ClassName::fromFqcn('App\Second'));
 
-        self::assertSame([$first, $second], $this->classWith([])->withAttributes($first)->withAttributes($second)->attributes());
-    }
-
-    public function testDiscriminatorNeedsAPropertyName(): void
-    {
-        $this->expectException(InvalidModel::class);
-
-        new DiscriminatorModel('', ['cat' => ClassName::fromFqcn('App\Cat')]);
+        self::assertSame([$first, $second], $this->classWith([])->withAddedAttributes($first)->withAddedAttributes($second)->attributes());
     }
 
     /**

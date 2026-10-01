@@ -44,6 +44,7 @@ final class AbstractEnumTest extends TestCase
     public function testRefusesSerializationBecauseItWouldBreakIdentity(): void
     {
         $this->expectException(LogicException::class);
+        $this->expectExceptionMessage('cannot be serialized');
 
         serialize(Colour::from(Colour::RED));
     }
@@ -51,8 +52,15 @@ final class AbstractEnumTest extends TestCase
     public function testRefusesUnserialization(): void
     {
         $this->expectException(LogicException::class);
+        $this->expectExceptionMessage('cannot be unserialized');
 
         unserialize(sprintf('O:%d:"%s":0:{}', strlen(Colour::class), Colour::class));
+    }
+
+    public function testTryFromAndCasesReturnTheInternedInstances(): void
+    {
+        self::assertSame(Colour::from(Colour::RED), Colour::tryFrom(Colour::RED));
+        self::assertSame(Colour::from(Colour::GREEN), Colour::cases()[1]);
     }
 
     public function testInstancesAreSeparatedPerClass(): void

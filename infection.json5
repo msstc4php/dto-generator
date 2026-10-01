@@ -4,15 +4,31 @@
         "directories": ["src"]
     },
     "timeout": 10,
-    // Floor two points below the level measured at the end of stage 1 (MSI 96 %, covered 97 %).
-    "minMsi": 94,
-    "minCoveredMsi": 95,
+    // Equivalent mutants are ignored below, so the floor sits at the measured level (100 % at end of stage 1) minus one.
+    "minMsi": 99,
+    "minCoveredMsi": 99,
     "logs": {
         "text": "var/infection/infection.log",
         "json": "var/infection/infection.json"
     },
     "mutators": {
-        "@default": true
+        "@default": true,
+        // Equivalent mutants: isset() is true for false values too, so the seen-map value is irrelevant.
+        "TrueValue": { "ignoreSourceCodeByRegex": ["\\$[a-zA-Z]+\\[.+\\] = true;"] },
+        // substr() cannot return false here; the cast only satisfies the PHP 7.4 signature.
+        "CastString": { "ignoreSourceCodeByRegex": [".*\\(string\\) substr\\(.*"] },
+        // Unreachable defensive throws; their preconditions are guaranteed by the constructors.
+        "Throw_": { "ignoreSourceCodeByRegex": [".*LogicException\\(.*(foreign instance|no minimum PHP version|without a name|without a class).*"] },
+        "InstanceOf_": {
+            "ignore": [
+                "MSSTC4PHP\\DtoGenerator\\Domain\\Shared\\AbstractEnum::tryFrom",
+                "MSSTC4PHP\\DtoGenerator\\Domain\\Model\\ArgumentValue::className"
+            ]
+        },
+        // (int) "8.2" and (int) "8" are equal, so $matches[0] vs $matches[1] cannot be told apart.
+        "DecrementInteger": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Domain\\Target\\PhpVersion::fromString"] },
+        // listOf() is variadic, so list items are already a list.
+        "UnwrapArrayValues": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Domain\\Model\\ArgumentValue::listItems"] }
     },
     "phpUnit": {
         "customPath": "vendor/bin/phpunit"

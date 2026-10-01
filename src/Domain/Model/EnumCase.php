@@ -21,7 +21,7 @@ final class EnumCase
     public function __construct(string $name, $value, ?DocModel $doc = null)
     {
         // A class constant (and an enum case) must not be called "class".
-        if (!Identifier::isValid($name) || strtolower($name) === 'class') {
+        if (!Identifier::isValid($name) || Identifier::asciiLower($name) === 'class') {
             throw new InvalidModel(sprintf('"%s" is not a usable enum case name.', $name));
         }
 

@@ -31,6 +31,7 @@ final class DiscriminatorTest extends TestCase
     public function testRejectsAnEmptyPropertyName(): void
     {
         $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('property name must not be empty');
 
         new Discriminator('');
     }
@@ -38,6 +39,7 @@ final class DiscriminatorTest extends TestCase
     public function testRejectsAnEmptyReference(): void
     {
         $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('maps to an empty reference');
 
         new Discriminator('kind', ['cat' => '']);
     }

@@ -19,7 +19,7 @@ final class Identifier
         'private', 'protected', 'public', 'readonly', 'require', 'require_once', 'return', 'static', 'switch',
         'throw', 'trait', 'try', 'unset', 'use', 'var', 'while', 'xor', 'yield', 'die', '__halt_compiler',
         '__class__', '__dir__', '__file__', '__function__', '__line__', '__method__', '__namespace__',
-        '__trait__', '__property__',
+        '__trait__', '__property__', 'resource', 'numeric',
         'bool', 'false', 'float', 'int', 'iterable', 'mixed', 'never', 'null', 'object', 'parent', 'self',
         'string', 'true', 'void',
     ];
@@ -30,11 +30,19 @@ final class Identifier
 
     public static function isValid(string $name): bool
     {
-        return preg_match('/^[a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff]*$/', $name) === 1;
+        return preg_match('/^[a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff]*\z/', $name) === 1;
     }
 
     public static function isReserved(string $name): bool
     {
-        return in_array(strtolower($name), self::RESERVED, true);
+        return in_array(self::asciiLower($name), self::RESERVED, true);
+    }
+
+    /**
+     * PHP folds identifiers by ASCII only; strtolower() on PHP 7.4 also depends on the locale.
+     */
+    public static function asciiLower(string $value): string
+    {
+        return strtr($value, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz');
     }
 }

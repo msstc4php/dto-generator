@@ -49,14 +49,15 @@ final class ClassModel
             throw new InvalidModel(sprintf('Class %s cannot extend itself.', $name->fqcn()));
         }
 
-        if ($discriminator instanceof DiscriminatorModel && !$kind->equals(ClassKind::from(ClassKind::ABSTRACT))) {
+        if ($discriminator instanceof DiscriminatorModel && !$kind->isAbstract()) {
             throw new InvalidModel(sprintf('Only an abstract class can carry a discriminator; %s is %s.', $name->fqcn(), $kind->value()));
         }
 
         $names = [];
         $wireNames = [];
         foreach ($properties as $property) {
-            $key = strtolower($property->name());
+            // Accessor methods are case-insensitive in PHP, so `foo` and `Foo` would both declare getFoo().
+            $key = Identifier::asciiLower($property->name());
             if (isset($names[$key])) {
                 throw new InvalidModel(sprintf('Class %s declares property "%s" twice.', $name->fqcn(), $property->name()));
             }
@@ -142,7 +143,7 @@ final class ClassModel
         return $this->discriminator;
     }
 
-    public function withAttributes(AttributeModel ...$attributes): self
+    public function withAddedAttributes(AttributeModel ...$attributes): self
     {
         return new self(
             $this->name,

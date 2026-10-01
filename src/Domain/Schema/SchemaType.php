@@ -26,4 +26,9 @@ final class SchemaType extends AbstractEnum
     {
         return [self::STRING, self::INTEGER, self::NUMBER, self::BOOLEAN, self::ARRAY, self::OBJECT, self::NULL];
     }
+
+    public function isNull(): bool
+    {
+        return $this->value() === self::NULL;
+    }
 }

@@ -25,4 +25,9 @@ final class MetadataMode extends AbstractEnum
     {
         return [self::ATTRIBUTES, self::ANNOTATIONS, self::NONE];
     }
+
+    public function isAttributes(): bool
+    {
+        return $this->value() === self::ATTRIBUTES;
+    }
 }

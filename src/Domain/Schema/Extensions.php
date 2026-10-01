@@ -20,14 +20,16 @@ final class Extensions
      */
     public function __construct(array $values = [])
     {
-        foreach (array_keys($values) as $key) {
-            if (!is_string($key) || strncmp($key, 'x-', 2) !== 0 || strlen($key) === 2) {
+        $typed = [];
+        foreach ($values as $key => $value) {
+            if (!is_string($key) || !self::isExtensionKey($key)) {
                 throw new InvalidModel(sprintf('Extension key "%s" must start with "x-" followed by a name.', $key));
             }
+
+            $typed[$key] = $value;
         }
 
-        /** @var array<string, JsonValue> $values every key passed the is_string check above */
-        $this->values = $values;
+        $this->values = $typed;
     }
 
     public function has(string $key): bool
@@ -66,5 +68,10 @@ final class Extensions
     public function isEmpty(): bool
     {
         return $this->values === [];
+    }
+
+    public static function isExtensionKey(string $key): bool
+    {
+        return strncmp($key, 'x-', 2) === 0 && strlen($key) > 2;
     }
 }

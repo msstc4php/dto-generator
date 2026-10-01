@@ -18,4 +18,9 @@ final class AccessorStyle extends AbstractEnum
     {
         return [self::AUTO, self::GETTERS, self::PUBLIC_PROPERTIES];
     }
+
+    public function isAuto(): bool
+    {
+        return $this->value() === self::AUTO;
+    }
 }

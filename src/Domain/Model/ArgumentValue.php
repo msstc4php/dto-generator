@@ -93,7 +93,7 @@ final class ArgumentValue
 
     public static function constant(string $name, ?ClassName $class = null): self
     {
-        if (!Identifier::isValid($name) || strtolower($name) === 'class') {
+        if (!Identifier::isValid($name) || Identifier::asciiLower($name) === 'class') {
             throw new InvalidModel(sprintf('"%s" is not a valid constant name; use classReference() for ::class.', $name));
         }
 
@@ -131,11 +131,23 @@ final class ArgumentValue
     }
 
     /**
+     * @return list<ArgumentValue>
+     */
+    public function listItems(): array
+    {
+        $this->assertKind(self::KIND_LIST);
+
+        return array_values($this->items);
+    }
+
+    /**
+     * Keys may be ints for numeric map keys.
+     *
      * @return array<int|string, ArgumentValue>
      */
-    public function items(): array
+    public function mapItems(): array
     {
-        $this->assertKind(self::KIND_LIST, self::KIND_MAP);
+        $this->assertKind(self::KIND_MAP);
 
         return $this->items;
     }

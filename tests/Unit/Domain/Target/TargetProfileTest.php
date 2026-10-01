@@ -70,14 +70,38 @@ final class TargetProfileTest extends TestCase
         $this->profile('8.0', MetadataMode::NONE, Mutability::IMMUTABLE, AccessorStyle::PUBLIC_PROPERTIES);
     }
 
-    public function testRejectsPublicPropertiesForAnImmutableOverrideWithoutReadonly(): void
+    public function testKeepsPublicPropertiesForMutableClassesOnPhp74(): void
     {
         $profile = $this->profile('7.4', MetadataMode::NONE, Mutability::MUTABLE, AccessorStyle::PUBLIC_PROPERTIES);
 
         self::assertSame(AccessorStyle::from(AccessorStyle::PUBLIC_PROPERTIES), $profile->accessorsFor(Mutability::from(Mutability::MUTABLE)));
+    }
+
+    public function testRejectsPublicPropertiesForAnImmutableOverrideWithoutReadonly(): void
+    {
+        $profile = $this->profile('7.4', MetadataMode::NONE, Mutability::MUTABLE, AccessorStyle::PUBLIC_PROPERTIES);
 
         $this->expectException(IncompatibleTarget::class);
+        $this->expectExceptionMessage('Immutable DTOs with public properties requires readonly-properties');
+
         $profile->accessorsFor(Mutability::from(Mutability::IMMUTABLE));
+    }
+
+    public function testAllowsPublicPropertiesForImmutableClassesFromPhp81(): void
+    {
+        $profile = $this->profile('8.1', MetadataMode::NONE, Mutability::IMMUTABLE, AccessorStyle::PUBLIC_PROPERTIES);
+
+        self::assertSame(AccessorStyle::from(AccessorStyle::PUBLIC_PROPERTIES), $profile->accessorsFor(Mutability::from(Mutability::IMMUTABLE)));
+    }
+
+    public function testAllowsAttributeMetadataFromExactlyPhp80(): void
+    {
+        self::assertTrue($this->profile('8.0', MetadataMode::ATTRIBUTES)->metadata()->isAttributes());
+    }
+
+    public function testReportsStrictMode(): void
+    {
+        self::assertTrue($this->profile('8.2')->isStrict());
     }
 
     public function testExplicitGettersAreKeptAsConfigured(): void

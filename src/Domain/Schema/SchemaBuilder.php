@@ -10,6 +10,9 @@ use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
 /**
  * Mutable assembly helper for {@see Schema}; the built schema is immutable.
  *
+ * Variadic setters (types, required, allOf, …) replace the previous value; keyed setters
+ * (property, keyword) add one entry per call.
+ *
  * @phpstan-import-type JsonValue from Json
  */
 final class SchemaBuilder
@@ -103,7 +106,7 @@ final class SchemaBuilder
     /**
      * @param JsonValue $value
      */
-    public function defaultValue($value): self
+    public function default($value): self
     {
         $this->default = new DefaultValue($value);
 

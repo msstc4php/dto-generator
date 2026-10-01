@@ -42,6 +42,9 @@ final class CapabilityTest extends TestCase
 
     public function testTheMatrixCoversEveryCapability(): void
     {
-        self::assertCount(count(self::minimumVersions()), Capability::cases());
+        self::assertSame(
+            array_keys(self::minimumVersions()),
+            array_map(static fn (Capability $capability): string => $capability->value(), Capability::cases()),
+        );
     }
 }
