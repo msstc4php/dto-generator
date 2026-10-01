@@ -65,7 +65,7 @@ final readonly class Sample
             $this->score,
             $this->meta,
             $this->flags,
-            $this->extra
+            $this->extra,
         );
     }
 
@@ -83,7 +83,7 @@ final readonly class Sample
             $this->score,
             $this->meta,
             $this->flags,
-            $this->extra
+            $this->extra,
         );
     }
 
@@ -101,7 +101,7 @@ final readonly class Sample
             $this->score,
             $this->meta,
             $this->flags,
-            $this->extra
+            $this->extra,
         );
     }
 
@@ -116,7 +116,7 @@ final readonly class Sample
             $this->score,
             $this->meta,
             $this->flags,
-            $this->extra
+            $this->extra,
         );
     }
 
@@ -131,7 +131,7 @@ final readonly class Sample
             $this->score,
             $this->meta,
             $this->flags,
-            $this->extra
+            $this->extra,
         );
     }
 
@@ -146,7 +146,7 @@ final readonly class Sample
             $score,
             $this->meta,
             $this->flags,
-            $this->extra
+            $this->extra,
         );
     }
 
@@ -164,7 +164,7 @@ final readonly class Sample
             $this->score,
             $meta,
             $this->flags,
-            $this->extra
+            $this->extra,
         );
     }
 
@@ -182,7 +182,7 @@ final readonly class Sample
             $this->score,
             $this->meta,
             $flags,
-            $this->extra
+            $this->extra,
         );
     }
 
@@ -200,7 +200,7 @@ final readonly class Sample
             $this->score,
             $this->meta,
             $this->flags,
-            $extra
+            $extra,
         );
     }
 }

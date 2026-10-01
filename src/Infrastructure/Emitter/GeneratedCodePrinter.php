@@ -18,7 +18,18 @@ use PhpParser\PrettyPrinter\Standard;
  */
 final class GeneratedCodePrinter extends Standard
 {
+    /** Bytes of the comma-separated list itself, not of the whole line. */
     private const LIST_LIMIT = 80;
+
+    /**
+     * @param Node\ComplexType|Node\Identifier|Node\Name $type
+     */
+    public function type(Node $type): string
+    {
+        $this->resetState();
+
+        return $this->p($type);
+    }
 
     protected function pStmt_Declare(Declare_ $node): string
     {
@@ -29,9 +40,23 @@ final class GeneratedCodePrinter extends Standard
         return 'declare(' . $this->pCommaSeparated($node->declares) . ');';
     }
 
+    /**
+     * The standard layout, except that a multi-line parameter list closes with ") {" (PSR-12 §4.4).
+     */
     protected function pStmt_ClassMethod(ClassMethod $node): string
     {
-        return (string) preg_replace('/^( *\)(?:: [^\n]+)?)\n *\{/m', '$1 {', parent::pStmt_ClassMethod($node));
+        $params = $this->pParams($node->params);
+        // Only a multi-line list ends with a line break; a literal inside a single-line one is always quoted.
+        $multiline = substr($params, -strlen($this->nl)) === $this->nl;
+
+        return $this->pAttrGroups($node->attrGroups)
+            . $this->pModifiers($node->flags)
+            . 'function ' . ($node->byRef ? '&' : '') . $node->name
+            . '(' . $params . ')'
+            . ($node->returnType instanceof Node ? ': ' . $this->p($node->returnType) : '')
+            . ($node->stmts !== null
+                ? ($multiline ? ' {' : $this->nl . '{') . $this->pStmts($node->stmts) . $this->nl . '}'
+                : ';');
     }
 
     protected function pParams(array $params): string
@@ -41,7 +66,8 @@ final class GeneratedCodePrinter extends Standard
 
     protected function pMaybeMultiline(array $nodes, bool $trailingComma = false): string
     {
-        return $this->breakIfLong($nodes, parent::pMaybeMultiline($nodes, $trailingComma), $trailingComma);
+        // A trailing comma in calls and arrays is valid from PHP 7.3, so every target gets one once the list breaks.
+        return $this->breakIfLong($nodes, parent::pMaybeMultiline($nodes, $trailingComma), true);
     }
 
     protected function pStmts(array $nodes, bool $indent = true): string
@@ -61,21 +87,12 @@ final class GeneratedCodePrinter extends Standard
     }
 
     /**
-     * @param Node\ComplexType|Node\Identifier|Node\Name $type
-     */
-    public function type(Node $type): string
-    {
-        $this->resetState();
-
-        return $this->p($type);
-    }
-
-    /**
      * @param array<Node> $nodes
      */
     private function breakIfLong(array $nodes, string $printed, bool $trailingComma): string
     {
-        if (strpos($printed, "\n") !== false || strlen($printed) <= self::LIST_LIMIT) {
+        // A list holding a multi-line element (a long array default) breaks too, one element per line.
+        if (strpos($printed, "\n") === false && strlen($printed) <= self::LIST_LIMIT) {
             return $printed;
         }
 

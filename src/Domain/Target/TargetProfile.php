@@ -72,7 +72,6 @@ final class TargetProfile
         }
 
         $readonly = $this->supports(Capability::from(Capability::READONLY_PROPERTIES));
-        $readonlyClass = $this->supports(Capability::from(Capability::READONLY_CLASSES));
         if ($this->supports(Capability::from(Capability::CLONE_WITH))) {
             $withers = WitherStyle::CLONE_WITH;
         } elseif ($readonly) {
@@ -82,7 +81,13 @@ final class TargetProfile
             $withers = WitherStyle::CLONE_ASSIGN;
         }
 
-        return ClassForm::immutable($promoted, $public, $readonly && !$readonlyClass, $readonlyClass, WitherStyle::from($withers));
+        if ($this->supports(Capability::from(Capability::READONLY_CLASSES))) {
+            $mode = ReadonlyMode::CLASS_;
+        } else {
+            $mode = $readonly ? ReadonlyMode::PROPERTIES : ReadonlyMode::NONE;
+        }
+
+        return ClassForm::immutable($promoted, $public, ReadonlyMode::from($mode), WitherStyle::from($withers));
     }
 
     public function php(): PhpVersion

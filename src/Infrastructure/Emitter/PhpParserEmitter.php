@@ -18,6 +18,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Target\ClassForm;
 use MSSTC4PHP\DtoGenerator\Domain\Target\TargetProfile;
 use MSSTC4PHP\DtoGenerator\Domain\Target\WitherStyle;
 use PhpParser\BuilderFactory;
+use PhpParser\BuilderHelpers;
 use PhpParser\Comment;
 use PhpParser\Comment\Doc;
 use PhpParser\Modifiers;
@@ -25,6 +26,7 @@ use PhpParser\Node;
 use PhpParser\Node\Arg;
 use PhpParser\Node\ArrayItem;
 use PhpParser\Node\DeclareItem;
+use PhpParser\Node\Expr;
 use PhpParser\Node\Expr\Array_;
 use PhpParser\Node\Expr\Assign;
 use PhpParser\Node\Expr\Clone_;
@@ -273,11 +275,12 @@ final class PhpParserEmitter implements CodeEmitter
             $builder->setType($type);
         }
 
+        $param = $builder->getNode();
         if ($default instanceof DefaultValue) {
-            $builder->setDefault($default->value());
+            $param->default = self::readable(BuilderHelpers::normalizeValue($default->value()));
         }
 
-        return $builder->getNode();
+        return $param;
     }
 
     /**
@@ -333,5 +336,23 @@ final class PhpParserEmitter implements CodeEmitter
         if ($doc !== null) {
             $node->setDocComment(new Doc($doc));
         }
+    }
+
+    /**
+     * Strings with control characters are printed double-quoted with escapes, not as raw multi-line literals.
+     */
+    private static function readable(Expr $value): Expr
+    {
+        if ($value instanceof String_ && preg_match('/[\x00-\x1f\x7f]/', $value->value) === 1) {
+            $value->setAttribute('kind', String_::KIND_DOUBLE_QUOTED);
+        }
+
+        if ($value instanceof Array_) {
+            foreach ($value->items as $item) {
+                $item->value = self::readable($item->value);
+            }
+        }
+
+        return $value;
     }
 }

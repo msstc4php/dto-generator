@@ -39,8 +39,7 @@
                 "MSSTC4PHP\\DtoGenerator\\Domain\\Schema\\Reference::target",
                 "MSSTC4PHP\\DtoGenerator\\Domain\\Shared\\Path::directory",
                 "MSSTC4PHP\\DtoGenerator\\Domain\\Shared\\Path::normalize",
-                "MSSTC4PHP\\DtoGenerator\\Application\\Config\\PhpConstraint::lowerBound",
-                "MSSTC4PHP\\DtoGenerator\\Infrastructure\\Emitter\\GeneratedCodePrinter::pStmt_ClassMethod"
+                "MSSTC4PHP\\DtoGenerator\\Application\\Config\\PhpConstraint::lowerBound"
             ]
         },
         // Equivalent: defensive throws whose preconditions the constructors guarantee.
@@ -71,8 +70,9 @@
         "UnwrapArrayMap": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Domain\\Builder\\SchemaParser::applyStructural"] },
         // Equivalent: the result is only iterated.
         "UnwrapArrayValues": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Domain\\Schema\\Schema::subschemas"] },
-        // Equivalent: preg_split() only returns false on a regex error, and ini_set() cannot fail for serialize_precision.
-        "FalseValue": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Domain\\Builder\\NameResolver::words", "MSSTC4PHP\\DtoGenerator\\Domain\\Shared\\Json::floatToString"] },
+        // Equivalent: preg_split() only returns false on a regex error, ini_set() cannot fail for serialize_precision, and
+        // a list that the printer breaks is re-printed with a trailing comma whatever the caller asked for.
+        "FalseValue": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Domain\\Builder\\NameResolver::words", "MSSTC4PHP\\DtoGenerator\\Domain\\Shared\\Json::floatToString", "MSSTC4PHP\\DtoGenerator\\Infrastructure\\Emitter\\GeneratedCodePrinter::pMaybeMultiline"] },
         // Equivalent: with one side null, either order of the coalesce yields the other side.
         "Coalesce": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Domain\\Builder\\TypeMapper::tightest"] },
         // Equivalent: the json_decode depth only matters for 512-level nesting.

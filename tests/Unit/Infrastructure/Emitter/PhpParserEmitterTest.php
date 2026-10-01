@@ -11,6 +11,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\ClassModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\DiscriminatorModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\DocModel;
+use MSSTC4PHP\DtoGenerator\Domain\Model\ListType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\NullableType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ScalarType;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
@@ -205,6 +206,7 @@ final class PhpParserEmitterTest extends TestCase
             'parent' => [new ClassModel($name, ClassKind::from(ClassKind::FINAL), ClassName::fromFqcn('App\Dto\Animal'), [], $immutable, DocModel::none(), $at), 'App\Dto\Pet extends a class'],
             'discriminator' => [new ClassModel($name, ClassKind::from(ClassKind::ABSTRACT), null, [], $immutable, DocModel::none(), $at, [], new DiscriminatorModel('kind', ['cat' => ClassName::fromFqcn('App\Dto\Cat')])), 'App\Dto\Pet has a discriminator'],
             'class attribute' => [new ClassModel($name, ClassKind::from(ClassKind::FINAL), null, [], $immutable, DocModel::none(), $at, [$attribute]), 'App\Dto\Pet has attributes'],
+            'open class with properties' => [new ClassModel($name, ClassKind::from(ClassKind::OPEN), null, [EmitterFixture::property('id', ScalarType::int(), true)], $immutable, DocModel::none(), $at), 'App\Dto\Pet is not final'],
             'base class with properties' => [new ClassModel($name, ClassKind::from(ClassKind::ABSTRACT), null, [EmitterFixture::property('id', ScalarType::int(), true)], $immutable, DocModel::none(), $at), 'App\Dto\Pet is not final'],
             'property attribute' => [EmitterFixture::model('App\Dto\Pet', null, [EmitterFixture::property('id', ScalarType::int(), true)->withAddedAttributes($attribute)]), 'App\Dto\Pet has attributes'],
         ];
@@ -219,6 +221,18 @@ final class PhpParserEmitterTest extends TestCase
 
         self::assertStringContainsString("\nabstract class Base\n", $emitter->emit(new ClassModel(ClassName::fromFqcn('App\Dto\Base'), ClassKind::from(ClassKind::ABSTRACT), null, [], $immutable, DocModel::none(), $at), $target));
         self::assertStringContainsString("\nclass Base\n", $emitter->emit(new ClassModel(ClassName::fromFqcn('App\Dto\Base'), ClassKind::from(ClassKind::OPEN), null, [], $immutable, DocModel::none(), $at), $target));
+    }
+
+    public function testPrintsStringDefaultsWithControlCharactersDoubleQuoted(): void
+    {
+        $class = EmitterFixture::model('App\Dto\Note', null, [
+            EmitterFixture::property('text', new NullableType(ScalarType::string()), false, new DefaultValue("x\n)\n{")),
+            EmitterFixture::property('lines', new NullableType(new ListType(ScalarType::string())), false, new DefaultValue(["a\tb", 'plain'])),
+        ]);
+        $code = (new PhpParserEmitter())->emit($class, EmitterFixture::target('8.2', Mutability::IMMUTABLE));
+
+        self::assertStringContainsString('public ?string $text = "x\\n)\\n{",', $code);
+        self::assertStringContainsString("public ?array \$lines = [\"a\\tb\", 'plain'],", $code);
     }
 
     private function emit(string $mutability, string $php, string $accessors = AccessorStyle::AUTO): string

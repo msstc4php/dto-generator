@@ -3,12 +3,15 @@
 # PHPStan max over it with that version (spec success criterion 2).
 set -eu
 
+workdir=$(mktemp -d "${TMPDIR:-/tmp}/dto-generator-targets.XXXXXX")
+trap 'rm -rf "$workdir"' EXIT INT TERM
+
 for profile in tests/Fixtures/Emitter/*/; do
     version=$(basename "$profile" | cut -d- -f1)
     docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/app" -w /app "php:$version-cli" \
         sh -c 'for file in "$1"*.golden; do php -l "$file" > /dev/null || exit 1; done; php tests/Targets/smoke.php "$1"' sh "$profile"
 
-    config=$(mktemp --suffix=.neon)
+    config="$workdir/phpstan.neon"
     cat > "$config" <<NEON
 parameters:
     level: max
@@ -16,6 +19,5 @@ parameters:
     fileExtensions: [golden]
     paths: ["$PWD/$profile"]
 NEON
-    tools/vendor/bin/phpstan analyse -c "$config" --no-progress --error-format=raw || { rm -f "$config"; exit 1; }
-    rm -f "$config"
+    tools/vendor/bin/phpstan analyse -c "$config" --no-progress --error-format=raw
 done

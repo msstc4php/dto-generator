@@ -11,6 +11,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Target\DateTimeClass;
 use MSSTC4PHP\DtoGenerator\Domain\Target\MetadataMode;
 use MSSTC4PHP\DtoGenerator\Domain\Target\Mutability;
 use MSSTC4PHP\DtoGenerator\Domain\Target\PhpVersion;
+use MSSTC4PHP\DtoGenerator\Domain\Target\ReadonlyMode;
 use MSSTC4PHP\DtoGenerator\Domain\Target\TargetProfile;
 use MSSTC4PHP\DtoGenerator\Domain\Target\WitherStyle;
 use PHPUnit\Framework\TestCase;
@@ -96,11 +97,16 @@ final class ClassFormTest extends TestCase
     public static function impossibleForms(): array
     {
         $newSelf = WitherStyle::from(WitherStyle::NEW_SELF);
+        $cloneAssign = WitherStyle::from(WitherStyle::CLONE_ASSIGN);
+        $properties = ReadonlyMode::from(ReadonlyMode::PROPERTIES);
+        $class = ReadonlyMode::from(ReadonlyMode::CLASS_);
 
         return [
-            'readonly declared properties' => [static fn (): ClassForm => ClassForm::immutable(false, true, true, false, $newSelf), 'Readonly properties are always promoted'],
-            'readonly twice' => [static fn (): ClassForm => ClassForm::immutable(true, true, true, true, $newSelf), 'either the class or its properties'],
-            'immutable without withers' => [static fn (): ClassForm => ClassForm::immutable(true, true, false, true, WitherStyle::from(WitherStyle::NONE)), 'An immutable class needs withers'],
+            'readonly declared properties' => [static fn (): ClassForm => ClassForm::immutable(false, true, $properties, $newSelf), 'Readonly properties and classes need promoted properties'],
+            'readonly class with declared properties' => [static fn (): ClassForm => ClassForm::immutable(false, false, $class, $newSelf), 'Readonly properties and classes need promoted properties'],
+            'assigning a readonly clone' => [static fn (): ClassForm => ClassForm::immutable(true, false, $properties, $cloneAssign), 'cannot assign to a readonly clone'],
+            'assigning a clone of a readonly class' => [static fn (): ClassForm => ClassForm::immutable(true, false, $class, $cloneAssign), 'cannot assign to a readonly clone'],
+            'immutable without withers' => [static fn (): ClassForm => ClassForm::immutable(true, true, $class, WitherStyle::from(WitherStyle::NONE)), 'An immutable class needs withers'],
         ];
     }
 }

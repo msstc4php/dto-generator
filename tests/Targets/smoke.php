@@ -50,7 +50,10 @@ if (method_exists($sample, 'withId')) {
     check(read($copy, 'id') === 8 && read($sample, 'id') === 7 && read($copy, 'code') === 'A', 'wither');
 }
 
-foreach (['id', 'name', 'tags', 'code', 'createdAt', 'score', 'meta', 'flags', 'extra'] as $property) {
+$properties = array_map(static fn (ReflectionProperty $property): string => $property->getName(), (new ReflectionClass($sample))->getProperties());
+check(count($properties) === 9, 'every Sample property is exercised');
+
+foreach ($properties as $property) {
     $suffix = ucfirst($property);
     if (method_exists($sample, 'with' . $suffix)) {
         $copy = $sample->{'with' . $suffix}(read($sample, $property));
@@ -66,9 +69,9 @@ if (method_exists($sample, 'setId')) {
     check($sample->setId(9) === $sample && read($sample, 'id') === 9, 'setter');
 }
 
-$copy = new Copy(5);
-if (method_exists($copy, 'withClone')) {
-    check(read($copy->withClone(6), 'clone') === 6 && read($copy, 'clone') === 5, 'wither of a property named clone');
+$holder = new Copy(5);
+if (method_exists($holder, 'withClone')) {
+    check(read($holder->withClone(6), 'clone') === 6 && read($holder, 'clone') === 5, 'wither of a property named clone');
 }
 
 if (strpos(basename($profile), '-immutable') !== false && !method_exists($sample, 'getId')) {
