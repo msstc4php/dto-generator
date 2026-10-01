@@ -36,6 +36,10 @@ final class NameResolverTest extends TestCase
             'reserved type name' => ['Object', 'Object_'],
             'utf-8 letters' => ["Gr\xC3\xB6\xC3\x9Fe", "Gr\xC3\xB6\xC3\x9Fe"],
             'nothing usable' => ['***', null],
+            'no-break space' => ["x\u{00A0}y", 'XY'],
+            'currency sign' => ['€', null],
+            'non-ascii letters' => ["\u{00FC}ber_ma\u{00DF}", "\u{00FC}berMa\u{00DF}"],
+            'invalid utf-8' => ["ab\xFF", 'Ab'],
         ];
     }
 
@@ -59,6 +63,11 @@ final class NameResolverTest extends TestCase
             'all caps' => ['URL', 'url'],
             'all caps words' => ['URL_PATH', 'urlPATH'],
             'mixed caps' => ['userID', 'userID'],
+            'acronym inside a word' => ['xmlHTTPRequest', 'xmlHTTPRequest'],
+            'leading acronym' => ['HTTPStatus', 'httpStatus'],
+            'leading acronym before a word' => ['URLPath', 'urlPath'],
+            'no-break space in a property' => ["x\u{00A0}y", 'xY'],
+            'non-ascii first letter' => ["\u{00FC}ber", "\u{00FC}ber"],
             'leading digit' => ['200', '_200'],
             'this' => ['this', 'this_'],
             'reserved words are fine for properties' => ['class', 'class'],

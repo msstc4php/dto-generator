@@ -116,6 +116,8 @@ final class TypeMapperTest extends TestCase
             'unknown string format' => [['type' => 'string', 'format' => 'color'], 'string', ["warning {$at}/format: Unknown string format \"color\"; the property stays a string."]],
             'unknown integer format' => [['type' => 'integer', 'format' => 'int128'], 'int', ["warning {$at}/format: Unknown integer format \"int128\"; the property stays an int."]],
             'unknown number format' => [['type' => 'number', 'format' => 'decimal'], 'float', ["warning {$at}/format: Unknown number format \"decimal\"; the property stays a float."]],
+            'exclusive minimum at the top' => [['type' => 'integer', 'exclusiveMinimum' => PHP_INT_MAX], 'int', ["warning {$at}/exclusiveMinimum: \"exclusiveMinimum\" leaves no integer above it, so it is ignored."]],
+            'exclusive maximum at the bottom' => [['type' => 'integer', 'exclusiveMaximum' => PHP_INT_MIN], 'int', ["warning {$at}/exclusiveMaximum: \"exclusiveMaximum\" leaves no integer below it, so it is ignored."]],
             'empty range' => [['type' => 'integer', 'minimum' => 10, 'maximum' => 5], 'int', ["warning {$at}: The minimum is greater than the maximum, so no range is applied."]],
             'enum' => [['type' => 'string', 'enum' => ['a']], 'mixed', ["error {$at}: \"enum\" is not supported yet; enums, composition and inline objects arrive in a later version."]],
             'oneOf' => [['oneOf' => [['type' => 'string']]], 'mixed', ["error {$at}: \"oneOf\" is not supported yet; enums, composition and inline objects arrive in a later version."]],

@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace MSSTC4PHP\DtoGenerator\Application\Service\Model\Build;
 
 use MSSTC4PHP\DtoGenerator\Domain\Builder\ClassBuilder;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\ExtensionVocabulary;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\NameResolver;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\RequiredCycles;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\SchemaShape;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\TypeMapper;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
+use MSSTC4PHP\DtoGenerator\Domain\Model\ClassModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\Identifier;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\ResolvedSchema;
@@ -43,24 +46,30 @@ final class Action
             $source = $resolved->source();
             $schema = $resolved->schema();
             $key = $resolved->location()->toString();
+            $isClass = SchemaShape::isClass($schema);
+            $unsupported = SchemaShape::unsupportedKeyword($schema);
+            ExtensionVocabulary::check(
+                $schema,
+                $isClass || $unsupported !== null ? ExtensionVocabulary::CLASS_SCHEMA : ExtensionVocabulary::ALIAS_SCHEMA,
+                $diagnostics,
+            );
             if ($source === null) {
                 continue;
             }
 
-            if (!SchemaShape::isClass($schema)) {
-                $unsupported = SchemaShape::unsupportedKeyword($schema);
+            if (ClassBuilder::isSkipped($schema, $diagnostics)) {
+                $skipped[$key] = true;
+
+                continue;
+            }
+
+            if (!$isClass) {
                 if ($unsupported !== null && $resolved->isSelected()) {
                     $diagnostics->warning(
                         sprintf('"%s" is not supported yet, so no class is generated for "%s".', $unsupported, $resolved->name()),
                         $schema->location(),
                     );
                 }
-
-                continue;
-            }
-
-            if (ClassBuilder::isSkipped($schema, $diagnostics)) {
-                $skipped[$key] = true;
 
                 continue;
             }
@@ -95,6 +104,8 @@ final class Action
         foreach ($planned as [$resolved, $name, $source]) {
             $built[] = new BuiltClass($builder->build($name, $resolved, $diagnostics), $source);
         }
+
+        RequiredCycles::check(array_map(static fn (BuiltClass $class): ClassModel => $class->model(), $built), $diagnostics);
 
         return new Output($built, $diagnostics);
     }

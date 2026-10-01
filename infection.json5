@@ -57,9 +57,9 @@
                 "MSSTC4PHP\\DtoGenerator\\Domain\\Model\\ArgumentValue::className"
             ]
         },
-        // Equivalent for real constraints: numeric strings compare numerically (only a leading-zero version,
+        // Equivalent for real constraints (and for DefaultFit's numeric bounds): numeric strings compare numerically (only a leading-zero version,
         // which Composer never emits, would differ), and an equal candidate changes nothing.
-        "CastInt": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Application\\Config\\PhpConstraint::lowerBound"] },
+        "CastInt": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Application\\Config\\PhpConstraint::lowerBound", "MSSTC4PHP\\DtoGenerator\\Domain\\Builder\\DefaultFit::inRange"] },
         "GreaterThan": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Application\\Config\\PhpConstraint::lowerBound"] },
         // Equivalent: the key only has to be unique; the order of its parts is irrelevant.
         "Concat": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Domain\\Schema\\ReferenceUse::key"] },
@@ -76,7 +76,9 @@
         "Coalesce": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Domain\\Builder\\TypeMapper::tightest"] },
         // Equivalent: the json_decode depth only matters for 512-level nesting.
         "IncrementInteger": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Infrastructure\\Environment\\ComposerJsonPhpConstraint::read"] },
-        "DecrementInteger": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Infrastructure\\Environment\\ComposerJsonPhpConstraint::read"] }
+        "DecrementInteger": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Infrastructure\\Environment\\ComposerJsonPhpConstraint::read"] },
+        // Equivalent: the refinement comes from TypeMapper, which always starts an integer range with "int<".
+        "PregMatchRemoveCaret": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Domain\\Builder\\DefaultFit::inRange"] }
     },
     "phpUnit": {
         "customPath": "vendor/bin/phpunit"

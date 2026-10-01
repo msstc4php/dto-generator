@@ -265,8 +265,8 @@ final class TypeMapper
 
     private function integerRange(Schema $schema, Diagnostics $diagnostics): ?string
     {
-        $min = $this->tightest($this->intKeyword($schema, 'minimum'), $this->shifted($this->intKeyword($schema, 'exclusiveMinimum'), 1), true);
-        $max = $this->tightest($this->intKeyword($schema, 'maximum'), $this->shifted($this->intKeyword($schema, 'exclusiveMaximum'), -1), false);
+        $min = $this->tightest($this->intKeyword($schema, 'minimum'), $this->exclusive($schema, 'exclusiveMinimum', $diagnostics), true);
+        $max = $this->tightest($this->intKeyword($schema, 'maximum'), $this->exclusive($schema, 'exclusiveMaximum', $diagnostics), false);
         if ($min !== null && $max !== null && $min > $max) {
             $diagnostics->warning('The minimum is greater than the maximum, so no range is applied.', $schema->location());
 
@@ -295,9 +295,29 @@ final class TypeMapper
         return is_int($value) ? $value : null;
     }
 
-    private function shifted(?int $value, int $by): ?int
+    /**
+     * The inclusive bound an exclusive one stands for.
+     *
+     * @param 'exclusiveMinimum'|'exclusiveMaximum' $keyword
+     */
+    private function exclusive(Schema $schema, string $keyword, Diagnostics $diagnostics): ?int
     {
-        return $value === null ? null : $value + $by;
+        $value = $this->intKeyword($schema, $keyword);
+        if ($value === null) {
+            return null;
+        }
+
+        $lower = $keyword === 'exclusiveMinimum';
+        if ($value === ($lower ? PHP_INT_MAX : PHP_INT_MIN)) {
+            $diagnostics->warning(
+                sprintf('"%s" leaves no integer %s it, so it is ignored.', $keyword, $lower ? 'above' : 'below'),
+                $schema->location()->child($keyword),
+            );
+
+            return null;
+        }
+
+        return $lower ? $value + 1 : $value - 1;
     }
 
     private function tightest(?int $a, ?int $b, bool $lower): ?int

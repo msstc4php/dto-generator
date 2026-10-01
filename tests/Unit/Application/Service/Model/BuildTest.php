@@ -214,4 +214,100 @@ final class BuildTest extends TestCase
         );
         self::assertSame([], ModelFixture::messages($output));
     }
+
+    public function testAnObjectSchemaWithXPhpTypeBecomesThatClass(): void
+    {
+        $output = ModelFixture::build([
+            'User' => ['type' => 'object', 'properties' => ['money' => ['$ref' => '#/components/schemas/Money']]],
+            'Money' => ['type' => 'object', 'x-php-type' => 'Brick\\Money\\Money', 'properties' => ['amount' => []]],
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(['App\Dto\User' => ['money: Brick\Money\Money|null']], ModelFixture::classes($output));
+    }
+
+    public function testXPhpSkipWorksOnAliases(): void
+    {
+        $at = self::AT;
+        $output = ModelFixture::build([
+            'A' => ['type' => 'object', 'properties' => ['e' => ['$ref' => '#/components/schemas/E'], 'f' => ['$ref' => '#/components/schemas/F']]],
+            'E' => ['type' => 'string', 'x-php-skip' => true],
+            'F' => ['type' => 'string', 'x-php-skip' => 'yes'],
+        ]);
+
+        self::assertSame(['App\Dto\A' => ['e: mixed', 'f: string|null']], ModelFixture::classes($output));
+        self::assertSame(
+            [
+                "error {$at}F/x-php-skip: \"x-php-skip\" must be true or false.",
+                "warning {$at}A/properties/e: \$ref points to a schema excluded by \"x-php-skip\".",
+            ],
+            ModelFixture::messages($output),
+        );
+    }
+
+    public function testChecksTheExtensionVocabularyOfEverySchema(): void
+    {
+        $at = self::AT;
+        $known = 'known: x-php-class-name, x-php-name, x-php-type, x-dto-mutable, x-php-all-of, x-php-skip, x-php-attributes.';
+        $output = ModelFixture::build([
+            'User' => ['type' => 'object', 'x-dto-mutible' => true, 'x-php-name' => 'u', 'properties' => ['id' => []]],
+            'S' => ['type' => 'string', 'x-php-nmae' => 'x', 'x-php-class-name' => 'Foo'],
+            'Hidden' => ['type' => 'object', 'x-php-skip' => true, 'x-php-clas-name' => 'X', 'properties' => ['id' => []]],
+            'Currency' => ['type' => 'string', 'enum' => ['EUR'], 'x-php-class-name' => 'Money'],
+        ]);
+
+        self::assertSame(
+            [
+                "error {$at}User/x-dto-mutible: Unknown extension \"x-dto-mutible\"; {$known}",
+                "warning {$at}User/x-php-name: \"x-php-name\" has no effect here.",
+                "error {$at}S/x-php-nmae: Unknown extension \"x-php-nmae\"; {$known}",
+                "warning {$at}S/x-php-class-name: \"x-php-class-name\" has no effect here.",
+                "error {$at}Hidden/x-php-clas-name: Unknown extension \"x-php-clas-name\"; {$known}",
+                "warning {$at}Currency: \"enum\" is not supported yet, so no class is generated for \"Currency\".",
+            ],
+            ModelFixture::messages($output),
+        );
+    }
+
+    public function testWarnsAboutCyclesOfRequiredProperties(): void
+    {
+        $at = self::AT;
+        $output = ModelFixture::build([
+            'Node' => ['type' => 'object', 'required' => ['parent'], 'properties' => ['parent' => ['$ref' => '#/components/schemas/Node']]],
+            'A' => ['type' => 'object', 'required' => ['b'], 'properties' => ['b' => ['$ref' => '#/components/schemas/B']]],
+            'B' => ['type' => 'object', 'required' => ['a', 'tree'], 'properties' => ['a' => ['$ref' => '#/components/schemas/A'], 'tree' => ['$ref' => '#/components/schemas/Tree']]],
+            'Tree' => ['type' => 'object', 'required' => ['id'], 'properties' => ['id' => ['type' => 'integer'], 'parent' => ['$ref' => '#/components/schemas/Tree']]],
+        ]);
+        $message = 'Required property "%s" of %s leads back to it through required properties, so no instance can ever be constructed.';
+
+        self::assertSame(
+            [
+                "warning {$at}Node/properties/parent: " . sprintf($message, 'parent', 'App\Dto\Node'),
+                "warning {$at}A/properties/b: " . sprintf($message, 'b', 'App\Dto\A'),
+                "warning {$at}B/properties/a: " . sprintf($message, 'a', 'App\Dto\B'),
+            ],
+            ModelFixture::messages($output),
+        );
+    }
+
+    public function testFindsRequiredCyclesBehindRepeatedClasses(): void
+    {
+        $at = self::AT;
+        $ref = static fn (string $name): array => ['$ref' => '#/components/schemas/' . $name];
+        $output = ModelFixture::build([
+            'O' => ['type' => 'object', 'required' => ['p'], 'properties' => ['p' => $ref('P')]],
+            'P' => ['type' => 'object', 'required' => ['s', 'q1', 'q2'], 'properties' => ['s' => $ref('S'), 'q1' => $ref('Q'), 'q2' => $ref('Q')]],
+            'Q' => ['type' => 'object', 'required' => ['id'], 'properties' => ['id' => ['type' => 'integer']]],
+            'S' => ['type' => 'object', 'required' => ['o'], 'properties' => ['o' => $ref('O')]],
+        ]);
+
+        self::assertSame(
+            [
+                "warning {$at}O/properties/p: Required property \"p\" of App\\Dto\\O leads back to it through required properties, so no instance can ever be constructed.",
+                "warning {$at}P/properties/s: Required property \"s\" of App\\Dto\\P leads back to it through required properties, so no instance can ever be constructed.",
+                "warning {$at}S/properties/o: Required property \"o\" of App\\Dto\\S leads back to it through required properties, so no instance can ever be constructed.",
+            ],
+            ModelFixture::messages($output),
+        );
+    }
 }

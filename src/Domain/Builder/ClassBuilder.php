@@ -24,25 +24,12 @@ use MSSTC4PHP\DtoGenerator\Domain\Target\Mutability;
 use MSSTC4PHP\DtoGenerator\Domain\Target\TargetProfile;
 
 /**
- * Builds the class of one object schema (spec §5.2, §5.4, §5.5) and checks the core x- vocabulary (§7).
+ * Builds the class of one object schema (spec §5.2, §5.4, §5.5) and checks the x- vocabulary of its properties (§7).
  *
  * @phpstan-import-type JsonValue from Json
  */
 final class ClassBuilder
 {
-    /** Every core extension; x-php-attributes and x-php-all-of take effect in later stages. */
-    private const KNOWN_EXTENSIONS = [
-        'x-php-class-name', 'x-php-name', 'x-php-type', 'x-dto-mutable', 'x-php-all-of', 'x-php-skip',
-        'x-php-attributes', 'x-enum-descriptions',
-    ];
-
-    private const CLASS_EXTENSIONS = [
-        'x-php-class-name', 'x-php-type', 'x-dto-mutable', 'x-php-all-of', 'x-php-skip', 'x-php-attributes',
-        'x-enum-descriptions',
-    ];
-
-    private const PROPERTY_EXTENSIONS = ['x-php-name', 'x-php-type', 'x-php-skip', 'x-php-attributes'];
-
     private NameResolver $names;
 
     private TypeMapper $types;
@@ -75,14 +62,20 @@ final class ClassBuilder
     public function build(ClassName $name, ResolvedSchema $resolved, Diagnostics $diagnostics): ClassModel
     {
         $schema = $resolved->schema();
-        $this->checkExtensions($schema, self::CLASS_EXTENSIONS, $diagnostics);
 
         $properties = [];
         $taken = [];
         foreach ($schema->propertyNames() as $wireName) {
             $propertySchema = $schema->requireProperty($wireName);
-            $this->checkExtensions($propertySchema, self::PROPERTY_EXTENSIONS, $diagnostics);
+            $this->checkExtensions($propertySchema, $diagnostics);
             if (self::isSkipped($propertySchema, $diagnostics)) {
+                if ($schema->isRequired($wireName)) {
+                    $diagnostics->warning(
+                        sprintf('Property "%s" is required but excluded by "x-php-skip".', $wireName),
+                        $propertySchema->location()->child('x-php-skip'),
+                    );
+                }
+
                 continue;
             }
 
@@ -171,14 +164,33 @@ final class ClassBuilder
 
         $at = $schema->location()->child('default');
         $inner = $type instanceof NullableType ? $type->inner() : $type;
-        if ($inner instanceof ClassType || $inner instanceof MapType) {
+        if ($inner instanceof ClassType) {
             $diagnostics->warning(sprintf('A default for %s cannot be a PHP constant expression; null is used instead.', $inner->describe()), $at);
+
+            return null;
+        }
+
+        if ($inner instanceof MapType) {
+            $diagnostics->warning('A default for a map is not generated, because JSON object keys do not reliably survive as PHP array keys; null is used instead.', $at);
 
             return null;
         }
 
         if (self::containsNonFiniteFloat($default->value())) {
             $diagnostics->error('A default must be a finite number; INF and NAN have no PHP literal.', $at);
+
+            return null;
+        }
+
+        if (!DefaultFit::fits($default->value(), $inner)) {
+            $diagnostics->error(
+                sprintf(
+                    'Default %s does not match %s; null is used instead.',
+                    json_encode($default->value(), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION),
+                    $inner->describe(),
+                ),
+                $at,
+            );
 
             return null;
         }
@@ -233,22 +245,11 @@ final class ClassBuilder
         return $mutability;
     }
 
-    /**
-     * @param list<string> $allowed
-     */
-    private function checkExtensions(Schema $schema, array $allowed, Diagnostics $diagnostics): void
+    private function checkExtensions(Schema $property, Diagnostics $diagnostics): void
     {
-        foreach ($schema->extensions()->keys() as $key) {
-            if (strncmp($key, 'x-php-', 6) !== 0 && strncmp($key, 'x-dto-', 6) !== 0) {
-                continue;
-            }
-
-            $at = $schema->location()->child($key);
-            if (!in_array($key, self::KNOWN_EXTENSIONS, true)) {
-                $diagnostics->error(sprintf('Unknown extension "%s"; known: %s.', $key, implode(', ', self::KNOWN_EXTENSIONS)), $at);
-            } elseif (!in_array($key, $allowed, true)) {
-                $diagnostics->warning(sprintf('"%s" has no effect here.', $key), $at);
-            }
+        ExtensionVocabulary::check($property, ExtensionVocabulary::PROPERTY, $diagnostics);
+        for ($items = $property->items(); $items instanceof Schema; $items = $items->items()) {
+            ExtensionVocabulary::check($items, ExtensionVocabulary::ITEMS, $diagnostics);
         }
     }
 }

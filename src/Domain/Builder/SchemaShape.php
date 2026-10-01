@@ -37,11 +37,11 @@ final class SchemaShape
     }
 
     /**
-     * An object with its own properties, which the builder turns into a class.
+     * An object with its own properties, which the builder turns into a class; x-php-type maps it to an existing class instead.
      */
     public static function isClass(Schema $schema): bool
     {
-        if ($schema->ref() !== null || self::unsupportedKeyword($schema) !== null || $schema->propertyNames() === []) {
+        if ($schema->ref() !== null || $schema->extensions()->has('x-php-type') || self::unsupportedKeyword($schema) !== null || $schema->propertyNames() === []) {
             return false;
         }
 

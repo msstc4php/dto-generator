@@ -132,6 +132,19 @@ final class ClassBuilderTest extends TestCase
                 ['id' => 'id: string|null = NULL'],
                 ["error {$at}/properties/id/x-php-skip: \"x-php-skip\" must be true or false."],
             ],
+            'items are checked too' => [
+                ['type' => 'object', 'properties' => ['tags' => ['type' => 'array', 'items' => ['type' => 'string', 'x-php-nmae' => 1, 'x-php-name' => 'x']]]],
+                ['tags' => 'tags: list<string>|null = NULL'],
+                [
+                    "error {$at}/properties/tags/items/x-php-nmae: Unknown extension \"x-php-nmae\"; known: x-php-class-name, x-php-name, x-php-type, x-dto-mutable, x-php-all-of, x-php-skip, x-php-attributes.",
+                    "warning {$at}/properties/tags/items/x-php-name: \"x-php-name\" has no effect here.",
+                ],
+            ],
+            'required but skipped' => [
+                ['type' => 'object', 'required' => ['secret'], 'properties' => ['secret' => ['type' => 'string', 'x-php-skip' => true], 'id' => ['type' => 'string']]],
+                ['id' => 'id: string|null = NULL'],
+                ["warning {$at}/properties/secret/x-php-skip: Property \"secret\" is required but excluded by \"x-php-skip\"."],
+            ],
             'default for an untyped property' => [
                 ['type' => 'object', 'properties' => ['any' => ['default' => 5]]],
                 ['any' => 'any: mixed = 5'],
@@ -145,7 +158,7 @@ final class ClassBuilderTest extends TestCase
             'default for a map' => [
                 ['type' => 'object', 'properties' => ['meta' => ['type' => 'object', 'default' => ['a' => 1]]]],
                 ['meta' => 'meta: array<array-key, mixed>|null = NULL'],
-                ["warning {$at}/properties/meta/default: A default for array<array-key, mixed> cannot be a PHP constant expression; null is used instead."],
+                ["warning {$at}/properties/meta/default: A default for a map is not generated, because JSON object keys do not reliably survive as PHP array keys; null is used instead."],
             ],
             'infinite default' => [
                 ['type' => 'object', 'properties' => ['ratio' => ['type' => 'number', 'default' => INF]]],
@@ -158,25 +171,23 @@ final class ClassBuilderTest extends TestCase
                 ["error {$at}/properties/values/default: A default must be a finite number; INF and NAN have no PHP literal."],
             ],
             'unknown extension' => [
-                ['type' => 'object', 'x-dto-mutible' => true, 'properties' => ['id' => ['type' => 'string', 'x-php-nmae' => 'x']]],
+                ['type' => 'object', 'properties' => ['id' => ['type' => 'string', 'x-php-nmae' => 'x']]],
                 ['id' => 'id: string|null = NULL'],
                 [
-                    "error {$at}/x-dto-mutible: Unknown extension \"x-dto-mutible\"; known: x-php-class-name, x-php-name, x-php-type, x-dto-mutable, x-php-all-of, x-php-skip, x-php-attributes, x-enum-descriptions.",
-                    "error {$at}/properties/id/x-php-nmae: Unknown extension \"x-php-nmae\"; known: x-php-class-name, x-php-name, x-php-type, x-dto-mutable, x-php-all-of, x-php-skip, x-php-attributes, x-enum-descriptions.",
+                    "error {$at}/properties/id/x-php-nmae: Unknown extension \"x-php-nmae\"; known: x-php-class-name, x-php-name, x-php-type, x-dto-mutable, x-php-all-of, x-php-skip, x-php-attributes.",
                 ],
             ],
             'misplaced extension' => [
-                ['type' => 'object', 'x-php-name' => 'x', 'properties' => ['id' => ['type' => 'string', 'x-dto-mutable' => true]]],
+                ['type' => 'object', 'properties' => ['id' => ['type' => 'string', 'x-dto-mutable' => true]]],
                 ['id' => 'id: string|null = NULL'],
                 [
-                    "warning {$at}/x-php-name: \"x-php-name\" has no effect here.",
                     "warning {$at}/properties/id/x-dto-mutable: \"x-dto-mutable\" has no effect here.",
                 ],
             ],
             'foreign extensions are ignored' => [
-                ['type' => 'object', 'x-audit' => true, 'x-dtoish' => 1, 'x-phpstorm' => 1, 'properties' => ['id' => ['type' => 'string', 'x-internal' => 1, 'x-php-zzz' => 1]]],
+                ['type' => 'object', 'properties' => ['id' => ['type' => 'string', 'x-internal' => 1, 'x-dtoish' => 1, 'x-phpstorm' => 1, 'x-php-zzz' => 1]]],
                 ['id' => 'id: string|null = NULL'],
-                ["error {$at}/properties/id/x-php-zzz: Unknown extension \"x-php-zzz\"; known: x-php-class-name, x-php-name, x-php-type, x-dto-mutable, x-php-all-of, x-php-skip, x-php-attributes, x-enum-descriptions."],
+                ["error {$at}/properties/id/x-php-zzz: Unknown extension \"x-php-zzz\"; known: x-php-class-name, x-php-name, x-php-type, x-dto-mutable, x-php-all-of, x-php-skip, x-php-attributes."],
             ],
             'x-dto-mutable not a boolean' => [
                 ['type' => 'object', 'x-dto-mutable' => 'yes', 'properties' => ['id' => ['type' => 'string']]],
@@ -275,5 +286,83 @@ final class ClassBuilderTest extends TestCase
         }
 
         return $summary;
+    }
+
+    /**
+     * @dataProvider mismatchedDefaults
+     *
+     * @param array<array-key, mixed> $property
+     */
+    public function testReplacesDefaultsThatDoNotMatchTheTypeWithNull(array $property, string $value, string $type): void
+    {
+        [$class, $messages] = $this->build(['type' => 'object', 'properties' => ['v' => $property]]);
+
+        self::assertSame(['error ' . self::AT . "/properties/v/default: Default {$value} does not match {$type}; null is used instead."], $messages);
+        self::assertEquals(new DefaultValue(null), $this->property($class, 'v')->default());
+    }
+
+    /**
+     * @return array<string, array{array<array-key, mixed>, string, string}>
+     */
+    public static function mismatchedDefaults(): array
+    {
+        return [
+            'string for int' => [['type' => 'integer', 'default' => 'abc'], '"abc"', 'int'],
+            'fraction for int' => [['type' => 'integer', 'default' => 1.5], '1.5', 'int'],
+            'int for string' => [['type' => 'string', 'default' => 5], '5', 'string'],
+            'string for bool' => [['type' => 'boolean', 'default' => 'true'], '"true"', 'bool'],
+            'string for float' => [['type' => 'number', 'default' => '1'], '"1"', 'float'],
+            'bool for union' => [['type' => ['integer', 'string'], 'default' => true], 'true', 'int|string'],
+            'empty for non-empty' => [['type' => 'string', 'minLength' => 1, 'default' => ''], '""', 'non-empty-string'],
+            'below the range' => [['type' => 'integer', 'minimum' => 5, 'default' => 4], '4', 'int<5, max>'],
+            'zero for positive' => [['type' => 'integer', 'minimum' => 1, 'default' => 0], '0', 'positive-int'],
+            'negative for non-negative' => [['type' => 'integer', 'minimum' => 0, 'default' => -1], '-1', 'non-negative-int'],
+            'above the range' => [['type' => 'integer', 'maximum' => 5, 'default' => 6], '6', 'int<min, 5>'],
+            'object for list' => [['type' => 'array', 'items' => ['type' => 'integer'], 'default' => ['a' => 1]], '{"a":1}', 'list<int>'],
+            'wrong list item' => [['type' => 'array', 'items' => ['type' => 'integer'], 'default' => [1, 'x']], '[1,"x"]', 'list<int>'],
+            'path for int' => [['type' => 'integer', 'default' => "a/\u{00FC}"], "\"a/\u{00FC}\"", 'int'],
+            'whole float for int' => [['type' => 'integer', 'default' => 2.0], '2.0', 'int'],
+            'scalar for a list of classes' => [['type' => 'array', 'items' => ['x-php-type' => 'App\\Money'], 'default' => [1]], '[1]', 'list<App\\Money>'],
+            'missing item in a list' => [['type' => 'array', 'items' => ['type' => 'integer'], 'default' => [1, null]], '[1,null]', 'list<int>'],
+            'wrong nullable item' => [['type' => 'array', 'items' => ['type' => ['integer', 'null']], 'default' => ['x']], '["x"]', 'list<int|null>'],
+            'scalar for list' => [['type' => 'array', 'default' => 'x'], '"x"', 'list<mixed>'],
+        ];
+    }
+
+    /**
+     * @dataProvider matchingDefaults
+     *
+     * @param array<array-key, mixed> $property
+     * @param int|float|string|list<int|null>|null $expected
+     */
+    public function testKeepsDefaultsThatMatchTheType(array $property, $expected): void
+    {
+        [$class, $messages] = $this->build(['type' => 'object', 'properties' => ['v' => $property]]);
+
+        self::assertSame([], $messages);
+        self::assertEquals(new DefaultValue($expected), $this->property($class, 'v')->default());
+    }
+
+    /**
+     * @return array<string, array{array<array-key, mixed>, int|float|string|list<int|null>|null}>
+     */
+    public static function matchingDefaults(): array
+    {
+        return [
+            'int for float' => [['type' => 'number', 'default' => 5], 5],
+            'float' => [['type' => 'number', 'default' => 1.5], 1.5],
+            'non-empty string' => [['type' => 'string', 'minLength' => 1, 'default' => 'x'], 'x'],
+            'string in a union' => [['type' => ['integer', 'string'], 'default' => 'x'], 'x'],
+            'lower bound' => [['type' => 'integer', 'minimum' => 5, 'maximum' => 9, 'default' => 5], 5],
+            'upper bound' => [['type' => 'integer', 'minimum' => 5, 'maximum' => 9, 'default' => 9], 9],
+            'positive' => [['type' => 'integer', 'minimum' => 1, 'default' => 1], 1],
+            'non-negative' => [['type' => 'integer', 'minimum' => 0, 'default' => 0], 0],
+            'no lower bound' => [['type' => 'integer', 'maximum' => 5, 'default' => -3], -3],
+            'no upper bound' => [['type' => 'integer', 'minimum' => 5, 'default' => 100], 100],
+            'nullable items' => [['type' => 'array', 'items' => ['type' => ['integer', 'null']], 'default' => [1, null]], [1, null]],
+            'list of ints' => [['type' => 'array', 'items' => ['type' => 'integer'], 'default' => [1, 2]], [1, 2]],
+            'empty list' => [['type' => 'array', 'default' => []], []],
+            'explicit null' => [['type' => 'integer', 'default' => null], null],
+        ];
     }
 }
