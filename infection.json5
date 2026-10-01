@@ -50,5 +50,5 @@
         "customPath": "vendor/bin/phpunit"
     },
     "testFramework": "phpunit",
-    "testFrameworkOptions": "--testsuite=unit"
+    "testFrameworkOptions": "--testsuite=unit,integration"
 }
