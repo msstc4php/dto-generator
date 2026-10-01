@@ -171,6 +171,22 @@ final class ClassBuilderTest extends TestCase
                 ['days' => 'days: list<DateTimeImmutable|null>|null = NULL'],
                 ["warning {$at}/properties/days/default: A default for DateTimeImmutable cannot be a PHP constant expression; null is used instead."],
             ],
+            'empty default for a map' => [
+                ['type' => 'object', 'properties' => ['meta' => ['type' => 'object', 'default' => []]]],
+                ['meta' => 'meta: array<array-key, mixed>|null = NULL'],
+                ["warning {$at}/properties/meta/default: A default for a map is not generated, because JSON object keys do not reliably survive as PHP array keys; null is used instead."],
+            ],
+            'empty default for a class' => [
+                ['type' => 'object', 'properties' => ['money' => ['x-php-type' => 'App\\Money', 'default' => []]]],
+                ['money' => 'money: App\\Money|null = NULL'],
+                ["warning {$at}/properties/money/default: A default for App\\Money cannot be a PHP constant expression; null is used instead."],
+            ],
+            'empty default for a list of maps' => [
+                ['type' => 'object', 'properties' => ['metas' => ['type' => 'array', 'items' => ['type' => 'object'], 'default' => []]]],
+                ['metas' => 'metas: list<array<array-key, mixed>>|null = array (
+)'],
+                [],
+            ],
             'default for a list of maps' => [
                 ['type' => 'object', 'properties' => ['metas' => ['type' => 'array', 'items' => ['type' => 'object'], 'default' => [['a' => 1]]]]],
                 ['metas' => 'metas: list<array<array-key, mixed>>|null = NULL'],
@@ -346,6 +362,8 @@ final class ClassBuilderTest extends TestCase
             'missing item in a list' => [['type' => 'array', 'items' => ['type' => 'integer'], 'default' => [1, null]], '[1,null]', 'list<int>'],
             'wrong nullable item' => [['type' => 'array', 'items' => ['type' => ['integer', 'null']], 'default' => ['x']], '["x"]', 'list<int|null>'],
             'invalid utf-8 for int' => [['type' => 'integer', 'default' => "\xFF"], "\"\u{FFFD}\"", 'int'],
+            'scalar for a list of classes' => [['type' => 'array', 'items' => ['x-php-type' => 'App\\Money'], 'default' => 'x'], '"x"', 'list<App\\Money>'],
+            'object for a list of classes' => [['type' => 'array', 'items' => ['x-php-type' => 'App\\Money'], 'default' => ['a' => 1]], '{"a":1}', 'list<App\\Money>'],
             'scalar for list' => [['type' => 'array', 'default' => 'x'], '"x"', 'list<mixed>'],
         ];
     }

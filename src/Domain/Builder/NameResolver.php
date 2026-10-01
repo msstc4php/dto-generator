@@ -51,8 +51,8 @@ final class NameResolver
 
     private function lowerFirstWord(string $word): string
     {
-        // "URL" and "ID" are one word each.
-        if (preg_match('/^[A-Z0-9]+\z/', $word) === 1) {
+        // "URL", "ID" and "IDs" are one word each.
+        if (preg_match('/^[A-Z0-9]+s?\z/', $word) === 1) {
             return Identifier::asciiLower($word);
         }
 

@@ -165,8 +165,10 @@ final class ClassBuilder
 
         $at = $schema->location()->child('default');
         $inner = $type instanceof NullableType ? $type->inner() : $type;
-        // An empty list needs no item literal, so only a non-empty value can hit an unrepresentable item type.
-        $unrepresentable = $default->value() === [] ? null : self::unrepresentable($inner);
+        // Only a non-empty list reaches its item type; any other value of a list is checked as a plain mismatch.
+        $value = $default->value();
+        $reachesItems = is_array($value) && $value !== [] && Json::isList($value);
+        $unrepresentable = $inner instanceof ListType && !$reachesItems ? null : self::unrepresentable($inner);
         if ($unrepresentable instanceof ClassType) {
             $diagnostics->warning(sprintf('A default for %s cannot be a PHP constant expression; null is used instead.', $unrepresentable->describe()), $at);
 

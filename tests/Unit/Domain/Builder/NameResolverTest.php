@@ -68,6 +68,8 @@ final class NameResolverTest extends TestCase
             'decomposed accent' => ["na\u{0308}ive", "na\u{0308}ive"],
             'leading acronym with a digit' => ['HTTP2Status', 'http2Status'],
             'short acronym with a digit' => ['S3Bucket', 's3Bucket'],
+            'plural acronym' => ['IDs', 'ids'],
+            'plural acronym with a separator' => ['URLs_list', 'urlsList'],
             'leading acronym' => ['HTTPStatus', 'httpStatus'],
             'leading acronym before a word' => ['URLPath', 'urlPath'],
             'no-break space in a property' => ["x\u{00A0}y", 'xY'],
