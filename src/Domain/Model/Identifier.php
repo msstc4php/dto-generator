@@ -56,6 +56,11 @@ final class Identifier
     /**
      * PHP folds identifiers by ASCII only; strtolower() on PHP 7.4 also depends on the locale.
      */
+    public static function asciiUpper(string $value): string
+    {
+        return strtr($value, 'abcdefghijklmnopqrstuvwxyz', 'ABCDEFGHIJKLMNOPQRSTUVWXYZ');
+    }
+
     public static function asciiLower(string $value): string
     {
         return strtr($value, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz');

@@ -7,6 +7,8 @@ namespace MSSTC4PHP\DtoGenerator\Tests\Unit\Domain\Builder;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\DefaultFit;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassType;
+use MSSTC4PHP\DtoGenerator\Domain\Model\EnumBacking;
+use MSSTC4PHP\DtoGenerator\Domain\Model\EnumType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ScalarType;
 use PHPUnit\Framework\TestCase;
 
@@ -39,5 +41,14 @@ final class DefaultFitTest extends TestCase
     public function testNoJsonValueIsAClassInstance(): void
     {
         self::assertFalse(DefaultFit::fits(1, new ClassType(ClassName::fromFqcn('App\Money'))));
+    }
+
+    public function testAcceptsOnlyTheValuesOfAnEnum(): void
+    {
+        $type = new EnumType(ClassName::fromFqcn('App\Dto\Currency'), EnumBacking::from(EnumBacking::STRING), ['EUR' => 'EUR']);
+
+        self::assertTrue(DefaultFit::fits('EUR', $type));
+        self::assertFalse(DefaultFit::fits('GBP', $type));
+        self::assertFalse(DefaultFit::fits(1, $type));
     }
 }

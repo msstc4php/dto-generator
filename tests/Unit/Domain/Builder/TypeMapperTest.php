@@ -143,6 +143,22 @@ final class TypeMapperTest extends TestCase
         self::assertSame('int|null', TypeMapper::nullable(ScalarType::int())->describe());
     }
 
+    public function testRecognisesEnumSchemas(): void
+    {
+        $graph = $this->graph(['value' => []]);
+        $shapes = [];
+        foreach ($graph->all() as $resolved) {
+            $shapes[$resolved->name()] = SchemaShape::isEnum($resolved->schema());
+        }
+
+        self::assertTrue($shapes['Currency']);
+        self::assertFalse($shapes['Holder']);
+        self::assertFalse($shapes['Email']);
+        self::assertFalse(SchemaShape::isEnum(GraphFixture::load(['E' => ['enum' => ['a'], 'x-php-type' => 'App\\Money']])->all()[0]->schema()));
+        self::assertFalse(SchemaShape::isEnum(GraphFixture::load(['E' => ['enum' => ['a'], 'oneOf' => [['type' => 'string']]]])->all()[0]->schema()));
+        self::assertFalse(SchemaShape::isEnum(GraphFixture::load(['E' => ['enum' => ['a'], '$ref' => '#/components/schemas/F'], 'F' => ['type' => 'string']])->all()[0]->schema()));
+    }
+
     public function testRecognisesClassShapedSchemas(): void
     {
         $graph = $this->graph(['value' => []]);

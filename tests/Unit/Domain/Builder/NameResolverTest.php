@@ -81,4 +81,38 @@ final class NameResolverTest extends TestCase
             'nothing usable' => ['---', null],
         ];
     }
+
+    /**
+     * @dataProvider enumCases
+     *
+     * @param int|string $value
+     */
+    public function testDerivesUpperSnakeEnumCaseNames($value, ?string $expected): void
+    {
+        self::assertSame($expected, (new NameResolver())->enumCaseName($value));
+    }
+
+    /**
+     * @return array<string, array{int|string, ?string}>
+     */
+    public static function enumCases(): array
+    {
+        return [
+            'upper' => ['EUR', 'EUR'],
+            'lower' => ['eur', 'EUR'],
+            'dashes' => ['in-progress', 'IN_PROGRESS'],
+            'camel' => ['inProgress', 'IN_PROGRESS'],
+            'spaces' => ['on hold', 'ON_HOLD'],
+            'leading digit' => ['1st', '_1ST'],
+            'class' => ['class', 'CLASS_'],
+            'Class' => ['Class', 'CLASS_'],
+            'other keyword' => ['new', 'NEW'],
+            'non-ascii' => ["\u{00FC}ber", "\u{00FC}BER"],
+            'nothing usable' => ['***', null],
+            'empty' => ['', null],
+            'zero' => [0, 'VALUE_0'],
+            'positive' => [42, 'VALUE_42'],
+            'negative' => [-1, 'VALUE_MINUS_1'],
+        ];
+    }
 }

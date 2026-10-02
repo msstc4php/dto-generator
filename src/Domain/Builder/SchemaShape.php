@@ -37,6 +37,19 @@ final class SchemaShape
     }
 
     /**
+     * A list of values the builder turns into an enum; a reference, an explicit PHP type or a composition wins over it.
+     */
+    public static function isEnum(Schema $schema): bool
+    {
+        return $schema->enum() !== null
+            && $schema->ref() === null
+            && !$schema->extensions()->has('x-php-type')
+            && $schema->allOf() === []
+            && $schema->oneOf() === []
+            && $schema->anyOf() === [];
+    }
+
+    /**
      * An object with its own properties, which the builder turns into a class; x-php-type maps it to an existing class instead.
      */
     public static function isClass(Schema $schema): bool
