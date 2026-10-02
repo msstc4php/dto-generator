@@ -13,8 +13,8 @@ use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
  */
 final class ExtensionVocabulary
 {
-    /** x-php-attributes and x-php-all-of take effect in later stages. */
-    private const KNOWN = [
+    /** The core keys; any other key starting with x-php- or x-dto- is a typo. */
+    public const KNOWN = [
         'x-php-class-name', 'x-php-name', 'x-php-type', 'x-dto-mutable', 'x-php-all-of', 'x-php-skip', 'x-php-attributes',
         'x-enum-descriptions',
     ];
@@ -22,6 +22,9 @@ final class ExtensionVocabulary
     private const CLASS_SCHEMA = [
         'x-php-class-name', 'x-php-type', 'x-dto-mutable', 'x-php-all-of', 'x-php-skip', 'x-php-attributes', 'x-enum-descriptions',
     ];
+
+    /** An enum is no class, so it carries no attributes. */
+    private const ENUM_SCHEMA = ['x-php-class-name', 'x-php-type', 'x-dto-mutable', 'x-php-all-of', 'x-php-skip', 'x-enum-descriptions'];
 
     private const ALIAS_SCHEMA = ['x-php-type', 'x-php-skip'];
 
@@ -37,44 +40,81 @@ final class ExtensionVocabulary
     }
 
     /**
-     * An object schema, or an enum or composition, which becomes a class in a later stage.
+     * A schema that becomes a class; the inline members of its `allOf` only contribute properties.
+     *
+     * @param list<string> $aliases keys of `attributeAliases`, which a class takes like x-php-attributes
      */
-    public static function checkClass(Schema $schema, Diagnostics $diagnostics): void
+    public static function checkClass(Schema $schema, Diagnostics $diagnostics, array $aliases = []): void
     {
-        self::check($schema, self::CLASS_SCHEMA, $diagnostics);
+        self::check($schema, array_merge(self::CLASS_SCHEMA, $aliases), $diagnostics, $aliases);
+        self::checkMembers($schema, $diagnostics, $aliases);
+    }
+
+    /**
+     * A schema that becomes an enum, which carries no attributes.
+     *
+     * @param list<string> $aliases
+     */
+    public static function checkEnum(Schema $schema, Diagnostics $diagnostics, array $aliases = []): void
+    {
+        self::check($schema, self::ENUM_SCHEMA, $diagnostics, $aliases);
     }
 
     /**
      * A named non-object schema, inlined wherever it is referenced.
+     *
+     * @param list<string> $aliases
      */
-    public static function checkAlias(Schema $schema, Diagnostics $diagnostics): void
+    public static function checkAlias(Schema $schema, Diagnostics $diagnostics, array $aliases = []): void
     {
-        self::check($schema, self::ALIAS_SCHEMA, $diagnostics);
+        self::check($schema, self::ALIAS_SCHEMA, $diagnostics, $aliases);
     }
 
-    public static function checkProperty(Schema $schema, Diagnostics $diagnostics): void
+    /**
+     * @param list<string> $aliases keys of `attributeAliases`, which a property takes like x-php-attributes
+     */
+    public static function checkProperty(Schema $schema, Diagnostics $diagnostics, array $aliases = []): void
     {
-        self::check($schema, self::PROPERTY, $diagnostics);
+        self::check($schema, array_merge(self::PROPERTY, $aliases), $diagnostics, $aliases);
+        self::checkMembers($schema, $diagnostics, $aliases);
+    }
+
+    /**
+     * @param list<string> $aliases
+     */
+    private static function checkMembers(Schema $schema, Diagnostics $diagnostics, array $aliases): void
+    {
+        foreach ($schema->allOf() as $member) {
+            if ($member->ref() === null) {
+                self::checkKeys($member, [], $diagnostics, $aliases);
+                self::checkValues($member, $diagnostics, $aliases);
+                self::checkMembers($member, $diagnostics, $aliases);
+            }
+        }
     }
 
     /**
      * @param list<string> $allowed
+     * @param list<string> $aliases
      */
-    private static function check(Schema $schema, array $allowed, Diagnostics $diagnostics): void
+    private static function check(Schema $schema, array $allowed, Diagnostics $diagnostics, array $aliases): void
     {
-        self::checkKeys($schema, self::withDeclaration($schema, $allowed), $diagnostics);
-        self::checkValues($schema, $diagnostics);
+        self::checkKeys($schema, self::withDeclaration($schema, $allowed), $diagnostics, $aliases);
+        self::checkValues($schema, $diagnostics, $aliases);
     }
 
     /**
      * The `items` and `additionalProperties` schemas, down to any depth.
+     *
+     * @param list<string> $aliases
      */
-    private static function checkValues(Schema $schema, Diagnostics $diagnostics): void
+    private static function checkValues(Schema $schema, Diagnostics $diagnostics, array $aliases): void
     {
         foreach ([$schema->items(), $schema->additionalProperties()] as $value) {
             if ($value instanceof Schema) {
-                self::checkKeys($value, self::withDeclaration($value, self::ITEMS), $diagnostics);
-                self::checkValues($value, $diagnostics);
+                self::checkKeys($value, self::withDeclaration($value, self::ITEMS), $diagnostics, $aliases);
+                self::checkValues($value, $diagnostics, $aliases);
+                self::checkMembers($value, $diagnostics, $aliases);
             }
         }
     }
@@ -91,17 +131,19 @@ final class ExtensionVocabulary
 
     /**
      * @param list<string> $allowed
+     * @param list<string> $aliases
      */
-    private static function checkKeys(Schema $schema, array $allowed, Diagnostics $diagnostics): void
+    private static function checkKeys(Schema $schema, array $allowed, Diagnostics $diagnostics, array $aliases): void
     {
+        $known = array_merge(self::KNOWN, $aliases);
         foreach ($schema->extensions()->keys() as $key) {
-            // x-enum-descriptions belongs to the vocabulary without the x-php-/x-dto- prefix that marks the rest.
-            if (strncmp($key, 'x-php-', 6) !== 0 && strncmp($key, 'x-dto-', 6) !== 0 && !in_array($key, self::KNOWN, true)) {
+            // x-enum-descriptions and the aliases belong to the vocabulary without the x-php-/x-dto- prefix of the rest.
+            if (strncmp($key, 'x-php-', 6) !== 0 && strncmp($key, 'x-dto-', 6) !== 0 && !in_array($key, $known, true)) {
                 continue;
             }
 
             $at = $schema->location()->child($key);
-            if (!in_array($key, self::KNOWN, true)) {
+            if (!in_array($key, $known, true)) {
                 $diagnostics->error(sprintf('Unknown extension "%s"; known: %s.', $key, implode(', ', self::KNOWN)), $at);
             } elseif (!in_array($key, $allowed, true)) {
                 $diagnostics->warning(sprintf('"%s" has no effect here.', $key), $at);

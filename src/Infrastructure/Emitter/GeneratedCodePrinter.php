@@ -6,6 +6,7 @@ namespace MSSTC4PHP\DtoGenerator\Infrastructure\Emitter;
 
 use LogicException;
 use PhpParser\Node;
+use PhpParser\Node\Attribute;
 use PhpParser\Node\Stmt\ClassMethod;
 use PhpParser\Node\Stmt\Declare_;
 use PhpParser\Node\Stmt\Enum_;
@@ -70,6 +71,14 @@ final class GeneratedCodePrinter extends Standard
             . ($node->stmts !== null
                 ? ($multiline ? ' {' : $this->nl . '{') . $this->pStmts($node->stmts) . $this->nl . '}'
                 : ';');
+    }
+
+    /**
+     * Arguments break like those of a call; attributes exist from PHP 8.0, where a trailing comma is valid.
+     */
+    protected function pAttribute(Attribute $node): string
+    {
+        return $this->p($node->name) . ($node->args !== [] ? '(' . $this->pMaybeMultiline($node->args) . ')' : '');
     }
 
     protected function pParams(array $params): string

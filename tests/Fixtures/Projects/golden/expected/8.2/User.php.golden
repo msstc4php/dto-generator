@@ -19,7 +19,7 @@ final readonly class User
          * @var positive-int
          */
         public int $id,
-        public string $email,
+        #[\App\Attr\Sensitive(mask: '*', keep: 4)] #[\App\Attr\Audited(level: 'personal')] public string $email,
         public \DateTimeImmutable $createdAt,
         /**
          * @var ?non-empty-string

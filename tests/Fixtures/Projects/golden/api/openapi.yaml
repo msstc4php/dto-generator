@@ -19,6 +19,10 @@ components:
         email:
           type: string
           format: email
+          x-php-attributes:
+            - class: App\Attr\Sensitive
+              args: { mask: '*', keep: 4 }
+          x-audit: personal
         name:
           type: [string, 'null']
           minLength: 1
@@ -74,6 +78,7 @@ components:
             type: string
     Tag:
       type: object
+      x-audit: public
       required: [label]
       properties:
         label:

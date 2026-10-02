@@ -42,7 +42,7 @@ final class ModelFixture
             true,
         );
 
-        return (new Action(new NameResolver()))(new Input(ConfigMother::configWith(AllOfStrategy::from($allOfStrategy), $source), $target, $graph));
+        return (new Action(new NameResolver()))(new Input(ConfigMother::configWith(AllOfStrategy::from($allOfStrategy), $source), $target, $graph, []));
     }
 
     /**

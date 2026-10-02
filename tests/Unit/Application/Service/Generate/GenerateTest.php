@@ -8,6 +8,7 @@ use MSSTC4PHP\DtoGenerator\Application\Config\ConfigFactory;
 use MSSTC4PHP\DtoGenerator\Application\Config\TargetResolver;
 use MSSTC4PHP\DtoGenerator\Application\Port\WriteFailed;
 use MSSTC4PHP\DtoGenerator\Application\Service\Config\Load\Action as LoadConfig;
+use MSSTC4PHP\DtoGenerator\Application\Service\Extension\Load\Action as LoadExtensions;
 use MSSTC4PHP\DtoGenerator\Application\Service\Generate\Action;
 use MSSTC4PHP\DtoGenerator\Application\Service\Generate\FileChange;
 use MSSTC4PHP\DtoGenerator\Application\Service\Generate\GeneratedFile;
@@ -16,11 +17,15 @@ use MSSTC4PHP\DtoGenerator\Application\Service\Generate\Mode;
 use MSSTC4PHP\DtoGenerator\Application\Service\Generate\Output;
 use MSSTC4PHP\DtoGenerator\Application\Service\Generate\WritePlan;
 use MSSTC4PHP\DtoGenerator\Application\Service\Model\Build\Action as BuildModel;
+use MSSTC4PHP\DtoGenerator\Application\Service\Model\Enrich\Action as EnrichModel;
 use MSSTC4PHP\DtoGenerator\Application\Service\Schemas\Load\Action as LoadSchemas;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\NameResolver;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\SchemaParser;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostic;
+use MSSTC4PHP\DtoGenerator\Extension\CustomAttributes\CustomAttributes;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Emitter\PhpParserEmitter;
+use MSSTC4PHP\DtoGenerator\Infrastructure\Extension\ClassExtensionLoader;
+use MSSTC4PHP\DtoGenerator\Tests\Support\Extensions\MoneyFormatExtension;
 use MSSTC4PHP\DtoGenerator\Tests\Support\FixedPhpConstraint;
 use MSSTC4PHP\DtoGenerator\Tests\Support\InMemoryDocumentLoader;
 use MSSTC4PHP\DtoGenerator\Tests\Support\RecordingWriter;
@@ -69,6 +74,63 @@ final class GenerateTest extends TestCase
         self::assertStringContainsString("\nfinal readonly class Admin extends User\n", $admin);
         self::assertStringContainsString('public function __construct(int $id, ?Tag $tag = null, public ?int $level = null)', $admin);
         self::assertStringContainsString('parent::__construct($id, $tag);', $admin);
+    }
+
+    public function testUsesTheFormatsOfConfiguredExtensions(): void
+    {
+        $output = $this->generate(
+            new RecordingWriter(new WritePlan([], [], [])),
+            Mode::WRITE,
+            ['Price' => ['type' => 'object', 'required' => ['amount'], 'properties' => ['amount' => ['type' => 'string', 'format' => 'money']]]],
+            ['extensions' => [MoneyFormatExtension::class]],
+        );
+
+        self::assertSame('ok', $output->status()->value());
+        self::assertStringContainsString('@param numeric-string $amount', $output->files()[2]->contents());
+    }
+
+    public function testMapsFormatsOfTheConfig(): void
+    {
+        $output = $this->generate(
+            new RecordingWriter(new WritePlan([], [], [])),
+            Mode::WRITE,
+            ['Item' => ['type' => 'object', 'required' => ['id'], 'properties' => ['id' => ['type' => 'string', 'format' => 'uuid']]]],
+            ['formats' => ['uuid' => ['type' => 'App\Uuid']]],
+        );
+
+        self::assertSame('ok', $output->status()->value());
+        self::assertStringContainsString('public \App\Uuid $id', $output->files()[2]->contents());
+    }
+
+    public function testFailsOnAMistakeInTheAttributesOfASchema(): void
+    {
+        $writer = new RecordingWriter(new WritePlan([], [], []));
+        $output = $this->generate($writer, Mode::WRITE, ['Item' => ['type' => 'object', 'x-php-attributes' => 'App\Attr', 'properties' => ['id' => ['type' => 'string']]]]);
+
+        self::assertSame('generation-failed', $output->status()->value());
+        self::assertSame(['error /project/api/openapi.yaml#/components/schemas/Item/x-php-attributes: "x-php-attributes" must be a list of attributes.'], $this->messages($output));
+    }
+
+    public function testAppliesAttributeAliasesAndChecksWhereTheyApply(): void
+    {
+        $output = $this->generate(
+            new RecordingWriter(new WritePlan([], [], [])),
+            Mode::WRITE,
+            ['Item' => ['type' => 'object', 'properties' => ['tags' => ['type' => 'array', 'items' => ['type' => 'string', 'x-audit' => 'x']]]]],
+            ['attributeAliases' => ['x-audit' => ['class' => 'App\\Attr\\Audited']]],
+        );
+
+        self::assertSame(['warning /project/api/openapi.yaml#/components/schemas/Item/properties/tags/items/x-audit: "x-audit" has no effect here.'], $this->messages($output));
+    }
+
+    public function testFailsOnAnExtensionThatCannotBeLoaded(): void
+    {
+        $writer = new RecordingWriter(new WritePlan([], [], []));
+        $output = $this->generate($writer, Mode::WRITE, [], ['extensions' => ['App\Missing\Extension']]);
+
+        self::assertSame('generation-failed', $output->status()->value());
+        self::assertSame(['error /project/dto-generator.yaml#/extensions/0: Extension App\Missing\Extension cannot be loaded: Class App\Missing\Extension does not exist.'], $this->messages($output));
+        self::assertFalse($writer->applied);
     }
 
     public function testStopsOnAConfigError(): void
@@ -175,8 +237,9 @@ final class GenerateTest extends TestCase
 
     /**
      * @param array<string, array<array-key, mixed>> $extraSchemas
+     * @param array<string, array<array-key, mixed>> $extraConfig
      */
-    private function generate(RecordingWriter $writer, string $mode, array $extraSchemas = []): Output
+    private function generate(RecordingWriter $writer, string $mode, array $extraSchemas = [], array $extraConfig = []): Output
     {
         $loader = new InMemoryDocumentLoader([
             self::CONFIG => [
@@ -186,7 +249,7 @@ final class GenerateTest extends TestCase
                     ['spec' => 'api/openapi.yaml', 'namespace' => 'App\Dto', 'outputDir' => 'src/Dto'],
                     ['spec' => 'api/pets.yaml', 'namespace' => 'App\Pets', 'outputDir' => 'other'],
                 ],
-            ],
+            ] + $extraConfig,
             '/project/api/openapi.yaml' => ['openapi' => '3.1.0', 'components' => ['schemas' => [
                 'User' => ['type' => 'object', 'required' => ['id'], 'properties' => ['id' => ['type' => 'integer'], 'tag' => ['$ref' => '#/components/schemas/Tag']]],
                 'Tag' => ['type' => 'object', 'properties' => ['label' => ['type' => 'string']]],
@@ -204,8 +267,10 @@ final class GenerateTest extends TestCase
     {
         return new Action(
             new LoadConfig($loader, new ConfigFactory(), new TargetResolver(new FixedPhpConstraint(null))),
+            new LoadExtensions(new ClassExtensionLoader(), static fn (array $aliases): array => [new CustomAttributes($aliases)]),
             new LoadSchemas($loader, new SchemaParser()),
             new BuildModel(new NameResolver()),
+            new EnrichModel(),
             new PhpParserEmitter(),
             $writer,
         );

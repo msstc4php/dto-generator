@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Application\Config;
 
+use MSSTC4PHP\DtoGenerator\Domain\Model\AttributeModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
 
 /**
  * @phpstan-import-type JsonValue from Json
+ * @phpstan-import-type AttributeDeclaration from AttributeModel
  */
 final class ExtensionSettings
 {
@@ -20,7 +22,7 @@ final class ExtensionSettings
     /** @var array<int|string, JsonValue> */
     private array $config;
 
-    /** @var array<string, array<array-key, mixed>> */
+    /** @var array<string, AttributeDeclaration> */
     private array $aliases;
 
     private ?bool $verifyClasses;
@@ -28,7 +30,7 @@ final class ExtensionSettings
     /**
      * @param list<ClassName> $classes extensions listed explicitly, in order
      * @param array<int|string, JsonValue> $config extensionConfig sections by extension name
-     * @param array<string, array<array-key, mixed>> $aliases attributeAliases; their shape is validated in stage 5
+     * @param array<string, AttributeDeclaration> $aliases attributeAliases: key → attribute template
      * @param bool|null $verifyClasses null for "auto"
      */
     public function __construct(array $classes, bool $discover, array $config, array $aliases, ?bool $verifyClasses)
@@ -62,7 +64,7 @@ final class ExtensionSettings
     }
 
     /**
-     * @return array<string, array<array-key, mixed>>
+     * @return array<string, AttributeDeclaration>
      */
     public function aliases(): array
     {

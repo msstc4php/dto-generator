@@ -11,11 +11,19 @@ use MSSTC4PHP\DtoGenerator\Application\Port\FileWriter;
 use MSSTC4PHP\DtoGenerator\Application\Port\WriteFailed;
 use MSSTC4PHP\DtoGenerator\Application\Service\Config\Load\Action as LoadConfig;
 use MSSTC4PHP\DtoGenerator\Application\Service\Config\Load\Input as ConfigInput;
+use MSSTC4PHP\DtoGenerator\Application\Service\Extension\Load\Action as LoadExtensions;
+use MSSTC4PHP\DtoGenerator\Application\Service\Extension\Load\Input as ExtensionsInput;
 use MSSTC4PHP\DtoGenerator\Application\Service\Model\Build\Action as BuildModel;
 use MSSTC4PHP\DtoGenerator\Application\Service\Model\Build\Input as BuildInput;
+use MSSTC4PHP\DtoGenerator\Application\Service\Model\Enrich\Action as EnrichModel;
+use MSSTC4PHP\DtoGenerator\Application\Service\Model\Enrich\Input as EnrichInput;
 use MSSTC4PHP\DtoGenerator\Application\Service\Schemas\Load\Action as LoadSchemas;
 use MSSTC4PHP\DtoGenerator\Application\Service\Schemas\Load\Input as SchemasInput;
+use MSSTC4PHP\DtoGenerator\Contract\InstalledPackages;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
+use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
+use MSSTC4PHP\DtoGenerator\Domain\Model\ClassType;
+use MSSTC4PHP\DtoGenerator\Domain\Model\TypeModel;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
 use MSSTC4PHP\DtoGenerator\Domain\Target\TargetProfile;
 
@@ -26,19 +34,32 @@ final class Action
 {
     private LoadConfig $loadConfig;
 
+    private LoadExtensions $loadExtensions;
+
     private LoadSchemas $loadSchemas;
 
     private BuildModel $buildModel;
+
+    private EnrichModel $enrichModel;
 
     private CodeEmitter $emitter;
 
     private FileWriter $writer;
 
-    public function __construct(LoadConfig $loadConfig, LoadSchemas $loadSchemas, BuildModel $buildModel, CodeEmitter $emitter, FileWriter $writer)
-    {
+    public function __construct(
+        LoadConfig $loadConfig,
+        LoadExtensions $loadExtensions,
+        LoadSchemas $loadSchemas,
+        BuildModel $buildModel,
+        EnrichModel $enrichModel,
+        CodeEmitter $emitter,
+        FileWriter $writer
+    ) {
         $this->loadConfig = $loadConfig;
+        $this->loadExtensions = $loadExtensions;
         $this->loadSchemas = $loadSchemas;
         $this->buildModel = $buildModel;
+        $this->enrichModel = $enrichModel;
         $this->emitter = $emitter;
         $this->writer = $writer;
     }
@@ -105,16 +126,24 @@ final class Action
      */
     private function files(GeneratorConfig $config, TargetProfile $target, Diagnostics $diagnostics): ?array
     {
+        $extensions = ($this->loadExtensions)(new ExtensionsInput($config));
+        $diagnostics->merge($extensions->diagnostics());
+        $registry = $extensions->registry();
         $schemas = ($this->loadSchemas)(new SchemasInput($config));
         $diagnostics->merge($schemas->diagnostics());
-        $model = ($this->buildModel)(new BuildInput($config, $target, $schemas->graph()));
+        $formats = $registry->formats(array_map(static fn (ClassName $class): TypeModel => new ClassType($class), $config->formats()));
+        $aliases = array_keys($config->extensions()->aliases());
+        $model = ($this->buildModel)(new BuildInput($config, $target, $schemas->graph(), $formats, $aliases));
         $diagnostics->merge($model->diagnostics());
+        // Installed versions are detected in stage 6; until then extensions see none.
+        $enriched = ($this->enrichModel)(new EnrichInput($model->classes(), $schemas->graph(), $target, $registry, new InstalledPackages()));
+        $diagnostics->merge($enriched->diagnostics());
         if ($diagnostics->hasErrors()) {
             return null;
         }
 
         $files = [];
-        foreach ($model->classes() as $built) {
+        foreach ($enriched->classes() as $built) {
             $source = $config->sources()[$built->source()];
             $class = $built->model();
             // Build places every class directly in the namespace of its source.

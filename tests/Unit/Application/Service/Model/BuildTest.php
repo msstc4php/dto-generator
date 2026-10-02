@@ -10,6 +10,9 @@ use MSSTC4PHP\DtoGenerator\Application\Service\Schemas\Load\Action as LoadSchema
 use MSSTC4PHP\DtoGenerator\Application\Service\Schemas\Load\Input as SchemasInput;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\NameResolver;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\SchemaParser;
+use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
+use MSSTC4PHP\DtoGenerator\Domain\Model\ClassType;
+use MSSTC4PHP\DtoGenerator\Domain\Model\ScalarType;
 use MSSTC4PHP\DtoGenerator\Domain\Target\AccessorStyle;
 use MSSTC4PHP\DtoGenerator\Domain\Target\DateTimeClass;
 use MSSTC4PHP\DtoGenerator\Domain\Target\MetadataMode;
@@ -17,6 +20,8 @@ use MSSTC4PHP\DtoGenerator\Domain\Target\Mutability;
 use MSSTC4PHP\DtoGenerator\Domain\Target\PhpVersion;
 use MSSTC4PHP\DtoGenerator\Domain\Target\TargetProfile;
 use MSSTC4PHP\DtoGenerator\Tests\Support\ConfigMother;
+use MSSTC4PHP\DtoGenerator\Tests\Support\EmitterFixture;
+use MSSTC4PHP\DtoGenerator\Tests\Support\GraphFixture;
 use MSSTC4PHP\DtoGenerator\Tests\Support\InMemoryDocumentLoader;
 use MSSTC4PHP\DtoGenerator\Tests\Support\ModelFixture;
 use PHPUnit\Framework\TestCase;
@@ -199,7 +204,7 @@ final class BuildTest extends TestCase
             DateTimeClass::from(DateTimeClass::IMMUTABLE),
             true,
         );
-        $output = (new Action(new NameResolver()))(new Input($config, $target, $graph));
+        $output = (new Action(new NameResolver()))(new Input($config, $target, $graph, []));
 
         self::assertSame(
             ['App\Dto\User' => ['m: mixed'], 'App\Other\Pet' => ['m: mixed', 't: App\Other\Tag|null'], 'App\Other\Tag' => ['label: string|null']],
@@ -487,7 +492,7 @@ final class BuildTest extends TestCase
     {
         $output = ModelFixture::build([
             'User' => ['type' => 'object', 'x-dto-mutable' => true, 'x-php-all-of' => 'extends', 'properties' => ['id' => []]],
-            'Level' => ['enum' => ['low'], 'x-php-class-name' => 'Grade', 'x-enum-descriptions' => ['low' => 'Low.'], 'x-php-attributes' => [['class' => 'App\\Attr\\Audited']]],
+            'Level' => ['enum' => ['low'], 'x-php-class-name' => 'Grade', 'x-enum-descriptions' => ['low' => 'Low.']],
         ]);
 
         self::assertSame([], ModelFixture::messages($output));
@@ -539,5 +544,92 @@ final class BuildTest extends TestCase
 
         self::assertSame([], ModelFixture::messages($output));
         self::assertSame(['App\\Dto\\User', 'App\\Dto\\Score'], array_keys(ModelFixture::classes($output)));
+    }
+
+    public function testMapsFormatsToTheGivenTypes(): void
+    {
+        $graph = GraphFixture::load(['User' => ['type' => 'object', 'properties' => ['id' => ['type' => 'string', 'format' => 'uuid'], 'at' => ['type' => 'string', 'format' => 'day']]]]);
+        $input = new Input(
+            ConfigMother::config(ConfigMother::source(GraphFixture::SPEC)),
+            EmitterFixture::target('8.2', Mutability::IMMUTABLE),
+            $graph,
+            ['uuid' => new ClassType(ClassName::fromFqcn('App\Uuid')), 'day' => ScalarType::string('non-empty-string')],
+        );
+
+        $output = (new Action(new NameResolver()))($input);
+
+        self::assertSame(['id: App\Uuid|null', 'at: non-empty-string|null'], ModelFixture::classes($output)['App\Dto\User']);
+    }
+
+    public function testAcceptsAliasKeysOnClassesAndProperties(): void
+    {
+        $at = self::AT;
+        $graph = GraphFixture::load(['User' => [
+            'type' => 'object',
+            'x-audit' => 'high',
+            'properties' => ['id' => ['type' => 'string', 'x-audit' => 'low'], 'tags' => ['type' => 'array', 'items' => ['type' => 'string', 'x-audit' => 'none']]],
+        ]]);
+        $input = new Input(ConfigMother::config(ConfigMother::source(GraphFixture::SPEC)), EmitterFixture::target('8.2', Mutability::IMMUTABLE), $graph, [], ['x-audit']);
+
+        $output = (new Action(new NameResolver()))($input);
+
+        self::assertSame(["warning {$at}User/properties/tags/items/x-audit: \"x-audit\" has no effect here."], ModelFixture::messages($output));
+    }
+
+    public function testWarnsAboutAttributesWhereNothingCarriesThem(): void
+    {
+        $at = self::AT;
+        $graph = GraphFixture::load([
+            'Status' => ['type' => 'string', 'enum' => ['a'], 'x-php-attributes' => [['class' => 'App\A']], 'x-audit' => 1],
+            'Pet' => ['type' => 'object', 'properties' => ['name' => ['type' => 'string']]],
+            'Cat' => ['allOf' => [['$ref' => '#/components/schemas/Pet'], [
+                'x-php-attributes' => [['class' => 'App\Feline']],
+                'x-php-bogus' => 1,
+                'properties' => ['lives' => ['type' => 'integer']],
+                'additionalProperties' => ['type' => 'string', 'x-php-odd' => 1],
+                'allOf' => [['x-dto-mutable' => true]],
+            ]]],
+        ]);
+        $input = new Input(ConfigMother::config(ConfigMother::source(GraphFixture::SPEC)), EmitterFixture::target('8.2', Mutability::IMMUTABLE), $graph, [], ['x-audit']);
+
+        $output = (new Action(new NameResolver()))($input);
+
+        self::assertSame(
+            [
+                "warning {$at}Status/x-php-attributes: \"x-php-attributes\" has no effect here.",
+                "warning {$at}Status/x-audit: \"x-audit\" has no effect here.",
+                "warning {$at}Cat/allOf/1/x-php-attributes: \"x-php-attributes\" has no effect here.",
+                "error {$at}Cat/allOf/1/x-php-bogus: Unknown extension \"x-php-bogus\"; known: x-php-class-name, x-php-name, x-php-type, x-dto-mutable, x-php-all-of, x-php-skip, x-php-attributes, x-enum-descriptions.",
+                "error {$at}Cat/allOf/1/additionalProperties/x-php-odd: Unknown extension \"x-php-odd\"; known: x-php-class-name, x-php-name, x-php-type, x-dto-mutable, x-php-all-of, x-php-skip, x-php-attributes, x-enum-descriptions.",
+                "warning {$at}Cat/allOf/1/allOf/0/x-dto-mutable: \"x-dto-mutable\" has no effect here.",
+            ],
+            ModelFixture::messages($output),
+        );
+    }
+
+    public function testChecksTheMembersOfAnInlineComposition(): void
+    {
+        $at = self::AT;
+        $output = ModelFixture::build([
+            'Base' => ['type' => 'object', 'properties' => ['id' => ['type' => 'string']]],
+            'Order' => ['type' => 'object', 'properties' => [
+                'comp' => ['allOf' => [['$ref' => '#/components/schemas/Base'], [
+                    'type' => 'object',
+                    'x-php-attributes' => [['class' => 'App\\Attr\\OnMember']],
+                    'x-php-typo' => 1,
+                    'properties' => ['z' => ['type' => 'string']],
+                ]]],
+                'list' => ['type' => 'array', 'items' => ['allOf' => [['$ref' => '#/components/schemas/Base'], ['properties' => ['w' => []], 'x-php-name' => 'w']]]],
+            ]],
+        ]);
+
+        self::assertSame(
+            [
+                "warning {$at}Order/properties/comp/allOf/1/x-php-attributes: \"x-php-attributes\" has no effect here.",
+                "error {$at}Order/properties/comp/allOf/1/x-php-typo: Unknown extension \"x-php-typo\"; known: x-php-class-name, x-php-name, x-php-type, x-dto-mutable, x-php-all-of, x-php-skip, x-php-attributes, x-enum-descriptions.",
+                "warning {$at}Order/properties/list/items/allOf/1/x-php-name: \"x-php-name\" has no effect here.",
+            ],
+            ModelFixture::messages($output),
+        );
     }
 }

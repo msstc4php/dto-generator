@@ -6,6 +6,7 @@ namespace MSSTC4PHP\DtoGenerator\Tests\Integration\Emitter;
 
 use MSSTC4PHP\DtoGenerator\Domain\Target\AccessorStyle;
 use MSSTC4PHP\DtoGenerator\Domain\Target\Mutability;
+use MSSTC4PHP\DtoGenerator\Domain\Target\PhpVersion;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Emitter\PhpParserEmitter;
 use MSSTC4PHP\DtoGenerator\Tests\Support\EmitterFixture;
 use PHPUnit\Framework\TestCase;
@@ -24,7 +25,12 @@ final class GoldenEmitterTest extends TestCase
     {
         $emitter = new PhpParserEmitter();
         $target = EmitterFixture::target($php, $mutability, $accessors);
-        foreach (EmitterFixture::classes($mutability) as $class) {
+        $classes = EmitterFixture::classes($mutability);
+        if (PhpVersion::fromString($php)->isAtLeast(PhpVersion::fromString('8.1'))) {
+            $classes[] = EmitterFixture::rules($mutability);
+        }
+
+        foreach ($classes as $class) {
             $path = self::DIR . $profile . '/' . $class->name()->shortName() . '.php.golden';
             $code = $emitter->emit($class, $target, EmitterFixture::inherited($class));
             if (getenv('UPDATE_SNAPSHOTS') === '1') {

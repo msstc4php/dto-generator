@@ -2,6 +2,11 @@
 
 declare(strict_types=1);
 
+use App\Attr\Choice;
+use App\Attr\Constraints\Positive;
+use App\Attr\Constraints\Valid;
+use App\Attr\Meta;
+use App\Attr\Table;
 use App\Dto\Animal;
 use App\Dto\Circle;
 use App\Dto\Dog;
@@ -16,6 +21,8 @@ set_error_handler(static function (int $severity, string $message): bool {
 });
 
 $profile = $argv[1] ?? '';
+// The attribute classes; below PHP 8.0 `#[...]` is a comment, so the file loads on every target.
+require __DIR__ . '/attributes.php';
 require $profile . 'Currency.php.golden';
 require $profile . 'Tag.php.golden';
 require $profile . 'Sample.php.golden';
@@ -117,6 +124,28 @@ if (strpos(basename($profile), '-immutable') !== false && !method_exists($sample
     }
 
     check($rejected, 'readonly property');
+}
+
+if (PHP_VERSION_ID >= 80000) {
+    // newInstance() checks every attribute's arguments against its constructor.
+    $instances = array_map(
+        static fn (ReflectionAttribute $attribute): object => $attribute->newInstance(),
+        array_merge(
+            (new ReflectionClass(Sample::class))->getAttributes(),
+            (new ReflectionProperty(Sample::class, 'id'))->getAttributes(),
+            (new ReflectionProperty(Sample::class, 'code'))->getAttributes(),
+            (new ReflectionProperty(Sample::class, 'currency'))->getAttributes(),
+        ),
+    );
+    check(array_map('get_class', $instances) === [Table::class, Valid::class, Positive::class, Choice::class, Meta::class], 'attributes');
+    check($instances[0]->name === "sample\tdto" && $instances[3]->choices === [1, 'A'] && $instances[3]->mode === 'strict', 'attribute arguments');
+    check($instances[4]->type === 'App\\Dto\\Currency', 'class reference argument');
+}
+
+if (is_file($profile . 'Rules.php.golden')) {
+    require $profile . 'Rules.php.golden';
+    $guard = (new ReflectionProperty('App\\Dto\\Rules', 'count'))->getAttributes()[0]->newInstance();
+    check($guard->limit->max === 3, 'new in attribute arguments');
 }
 
 echo 'ok ' . basename($profile) . "\n";

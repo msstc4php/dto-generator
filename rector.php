@@ -7,6 +7,7 @@ use Rector\CodingStyle\Rector\Catch_\CatchExceptionNameMatchingTypeRector;
 use Rector\CodingStyle\Rector\Stmt\NewlineAfterStatementRector;
 use Rector\Config\RectorConfig;
 use Rector\DeadCode\Rector\ClassMethod\RemoveDuplicatedReturnSelfDocblockRector;
+use Rector\Php55\Rector\String_\StringClassNameToClassConstantRector;
 use Rector\ValueObject\PhpVersion;
 
 return RectorConfig::configure()
@@ -30,6 +31,10 @@ return RectorConfig::configure()
     )
     ->withImportNames(removeUnusedImports: true)
     ->withSkip([
+        // Generated code and the attribute classes it uses, checked on each target PHP version instead.
+        __DIR__ . '/tests/Targets',
+        // Tests name the attribute classes of tests/Targets/attributes.php, which only the generated code loads.
+        StringClassNameToClassConstantRector::class => [__DIR__ . '/tests'],
         NewlineAfterStatementRector::class,
         CatchExceptionNameMatchingTypeRector::class,
         // `@return static` on AbstractEnum factories is what types subclasses; it is not redundant with `: self`.

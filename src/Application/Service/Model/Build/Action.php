@@ -52,10 +52,12 @@ final class Action
             $schema = $resolved->schema();
             $isClass = SchemaShape::isClass($schema);
             $isEnum = SchemaShape::isEnum($schema);
-            if ($isClass || $isEnum) {
-                ExtensionVocabulary::checkClass($schema, $diagnostics);
+            if ($isClass) {
+                ExtensionVocabulary::checkClass($schema, $diagnostics, $input->aliases());
+            } elseif ($isEnum) {
+                ExtensionVocabulary::checkEnum($schema, $diagnostics, $input->aliases());
             } else {
-                ExtensionVocabulary::checkAlias($schema, $diagnostics);
+                ExtensionVocabulary::checkAlias($schema, $diagnostics, $input->aliases());
             }
 
             if ($source === null) {
@@ -101,8 +103,9 @@ final class Action
         $declarations = $registry->declarations();
         $builder = new ClassBuilder(
             $this->names,
-            new TypeMapper($input->graph(), $declarations, $input->target(), $config->formats()),
+            new TypeMapper($input->graph(), $declarations, $input->target(), $input->formats()),
             $input->target(),
+            $input->aliases(),
         );
         $models = [];
         $children = [];

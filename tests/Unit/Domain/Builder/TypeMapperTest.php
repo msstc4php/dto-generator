@@ -10,11 +10,13 @@ use MSSTC4PHP\DtoGenerator\Domain\Builder\TypeMapper;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostic;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
+use MSSTC4PHP\DtoGenerator\Domain\Model\ClassType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumBacking;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\MixedType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\NullableType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ScalarType;
+use MSSTC4PHP\DtoGenerator\Domain\Model\TypeModel;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaGraph;
 use MSSTC4PHP\DtoGenerator\Domain\Target\AccessorStyle;
 use MSSTC4PHP\DtoGenerator\Domain\Target\DateTimeClass;
@@ -34,7 +36,7 @@ final class TypeMapperTest extends TestCase
      * @dataProvider types
      *
      * @param array<array-key, mixed> $property
-     * @param array<int|string, ClassName> $formats
+     * @param array<int|string, TypeModel> $formats
      */
     public function testMapsSchemasToTypes(array $property, string $expected, array $formats = []): void
     {
@@ -45,7 +47,7 @@ final class TypeMapperTest extends TestCase
     }
 
     /**
-     * @return array<string, array{0: array<array-key, mixed>, 1: string, 2?: array<int|string, ClassName>}>
+     * @return array<string, array{0: array<array-key, mixed>, 1: string, 2?: array<int|string, TypeModel>}>
      */
     public static function types(): array
     {
@@ -56,7 +58,7 @@ final class TypeMapperTest extends TestCase
             'email stays a string' => [['type' => 'string', 'format' => 'email'], 'string'],
             'date-time' => [['type' => 'string', 'format' => 'date-time'], 'DateTimeImmutable'],
             'date' => [['type' => 'string', 'format' => 'date'], 'DateTimeImmutable'],
-            'custom format' => [['type' => 'string', 'format' => 'uuid'], 'App\Uuid', ['uuid' => ClassName::fromFqcn('App\Uuid')]],
+            'custom format' => [['type' => 'string', 'format' => 'uuid'], 'App\Uuid', ['uuid' => new ClassType(ClassName::fromFqcn('App\Uuid'))]],
             'integer' => [['type' => 'integer', 'format' => 'int64'], 'int'],
             'positive' => [['type' => 'integer', 'minimum' => 1], 'positive-int'],
             'non-negative' => [['type' => 'integer', 'minimum' => 0], 'non-negative-int'],
@@ -268,7 +270,7 @@ final class TypeMapperTest extends TestCase
 
     /**
      * @param array<array-key, mixed> $property
-     * @param array<int|string, ClassName> $formats
+     * @param array<int|string, TypeModel> $formats
      *
      * @return array{string, list<string>}
      */

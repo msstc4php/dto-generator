@@ -20,6 +20,7 @@ parameters:
     phpVersion: $(( ${2%.*} * 10000 + ${2#*.} * 100 ))
     fileExtensions: [golden]
     paths: ["$PWD/$1"]
+    scanFiles: ["$PWD/tests/Targets/attributes.php"]
 NEON
     tools/vendor/bin/phpstan analyse -c "$config" --no-progress --error-format=raw
 }

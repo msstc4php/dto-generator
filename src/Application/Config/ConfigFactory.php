@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MSSTC4PHP\DtoGenerator\Application\Config;
 
 use InvalidArgumentException;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\ExtensionVocabulary;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
 use MSSTC4PHP\DtoGenerator\Domain\Exception\InvalidModel;
 use MSSTC4PHP\DtoGenerator\Domain\Exception\UnsupportedPhpVersion;
@@ -146,20 +147,21 @@ final class ConfigFactory
         $aliasSection = $root->section('attributeAliases');
         $aliases = [];
         foreach ($aliasSection->keys() as $name) {
-            if (!Extensions::isExtensionKey($name) || strncmp($name, 'x-php-', 6) === 0 || strncmp($name, 'x-dto-', 6) === 0) {
+            $core = strncmp($name, 'x-php-', 6) === 0 || strncmp($name, 'x-dto-', 6) === 0 || in_array($name, ExtensionVocabulary::KNOWN, true);
+            if (!Extensions::isExtensionKey($name) || $core) {
                 $aliasSection->report(sprintf('Alias "%s" must be an "x-" key outside the reserved "x-php-" and "x-dto-" prefixes.', $name), $name);
 
                 continue;
             }
 
             $value = $aliasSection->raw($name);
-            if (!is_array($value) || ($value !== [] && Json::isList($value))) {
+            if (!is_array($value) || Json::isList($value) || !is_string($value['class'] ?? null) || array_diff(array_keys($value), ['class', 'args']) !== []) {
                 $aliasSection->report('An alias must be an object with "class" and optional "args".', $name);
 
                 continue;
             }
 
-            $aliases[$name] = $value;
+            $aliases[$name] = array_key_exists('args', $value) ? ['class' => $value['class'], 'args' => Json::value($value['args'])] : ['class' => $value['class']];
         }
 
         $verify = $root->raw('verifyClasses') ?? 'auto';

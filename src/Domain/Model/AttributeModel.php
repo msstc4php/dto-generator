@@ -5,7 +5,15 @@ declare(strict_types=1);
 namespace MSSTC4PHP\DtoGenerator\Domain\Model;
 
 use MSSTC4PHP\DtoGenerator\Domain\Exception\InvalidModel;
+use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
 
+/**
+ * An attribute as a config or a schema declares it (spec §7.1, §7.2), before its arguments are read.
+ *
+ * @phpstan-type AttributeDeclaration array{class: string, args?: JsonValue}
+ *
+ * @phpstan-import-type JsonValue from Json
+ */
 final class AttributeModel
 {
     private ClassName $className;
