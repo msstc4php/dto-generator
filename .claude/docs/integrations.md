@@ -24,6 +24,10 @@ UTF-8 BOM срезается; NUL-байт в пути — `DocumentLoadFailed::
 
 `verifyClasses` подключает `autoload.php` ближайшего вверх Composer-проекта (его `vendor-dir`) через `require`, при первом вопросе и только если есть атрибут для проверки. Это **выполнение чужого кода**. Загрузчик потребителя ставится после загрузчика генератора, чтобы его версии пакетов (php-parser, symfony) не подменили наши; `files` и platform check потребителя всё равно выполняются. Безопасно, когда генератор и потребитель делят один vendor; при разных vendor возможны конфликты функций/констант из `files`. Переменная окружения `DTO_GENERATOR_VERIFY_CLASSES=0` выключает режим `auto`; явное `true` она не отменяет.
 
+## SPI: разрешение `$ref` (для моста Symfony)
+
+`PropertyContext::references()` / `ClassContext::references()` → `Contract\SchemaReferences::resolve(Schema): Schema` идёт по цепочке `$ref` через `SchemaGraph::resolve(ReferenceUse)`; неразрешимая ссылка или цикл — последняя схема цепочки. Контекст, созданный без графа (тесты расширений), получает `SchemaReferences::none()`: схема как есть. `Enrich` создаёт один `SchemaReferences` на запуск (`EnrichmentRun::references()`).
+
 ## SPI для авторов расширений (этап 5a)
 - Расширение создаётся без аргументов; `name()` — ключ секции `extensionConfig` (секция не-объект → ошибка, расширение получает `[]`).
 - Порядок: встроенное `custom-attributes`, затем `extensions` конфига по порядку; в этом порядке выводятся и атрибуты. Обнаружение через composer — этап 6.

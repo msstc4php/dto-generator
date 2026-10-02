@@ -64,6 +64,26 @@ final class EnrichTest extends TestCase
         );
     }
 
+    public function testLetsEnrichersFollowThePropertysReference(): void
+    {
+        $schemas = [
+            'Pet' => ['type' => 'object', 'properties' => ['email' => ['$ref' => '#/components/schemas/Email']]],
+            'Email' => ['type' => 'string', 'format' => 'email'],
+        ];
+        $output = $this->enrich($schemas, static function (ExtensionRegistry $registry): void {
+            $registry->addPropertyEnricher(new class implements PropertyEnricher {
+                public function enrichProperty(PropertyContext $context): array
+                {
+                    $format = $context->references()->resolve($context->schema())->format() ?? 'none';
+
+                    return [new AttributeModel(ClassName::fromFqcn('App\\Attr\\Format'), [AttributeArgument::positional(ArgumentValue::literal($format))])];
+                }
+            });
+        });
+
+        self::assertSame(['App\\Dto\\Pet' => ['email: App\\Attr\\Format(email)']], $this->attributes($output));
+    }
+
     public function testRefusesNewInAttributeArgumentsBelowPhp81WhenStrict(): void
     {
         $at = self::AT;

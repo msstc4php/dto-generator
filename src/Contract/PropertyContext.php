@@ -27,8 +27,14 @@ final class PropertyContext
 
     private Diagnostics $diagnostics;
 
-    public function __construct(PropertyModel $property, ClassModel $owner, Schema $schema, TargetProfile $target, InstalledPackages $packages, Diagnostics $diagnostics)
+    private SchemaReferences $references;
+
+    /**
+     * @param SchemaReferences|null $references how `$ref`s resolve; none when omitted
+     */
+    public function __construct(PropertyModel $property, ClassModel $owner, Schema $schema, TargetProfile $target, InstalledPackages $packages, Diagnostics $diagnostics, ?SchemaReferences $references = null)
     {
+        $this->references = $references ?? SchemaReferences::none();
         $this->property = $property;
         $this->owner = $owner;
         $this->schema = $schema;
@@ -68,5 +74,10 @@ final class PropertyContext
     public function diagnostics(): Diagnostics
     {
         return $this->diagnostics;
+    }
+
+    public function references(): SchemaReferences
+    {
+        return $this->references;
     }
 }
