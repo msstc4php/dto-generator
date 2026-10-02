@@ -13,6 +13,7 @@
     "prefer-stable": true,
     "require": {
         "php": ">=7.4",
+        "composer-runtime-api": "^2.0",
         "nikic/php-parser": "^5.0",
         "symfony/console": "^5.4 || ^6.4 || ^7.0",
         "symfony/yaml": "^5.4 || ^6.4 || ^7.0"

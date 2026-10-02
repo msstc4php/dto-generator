@@ -19,7 +19,7 @@ final class GeneratedFile
 
     public function __construct(string $outputDir, string $relativePath, string $contents)
     {
-        if ($relativePath === '' || $relativePath[0] === '/' || in_array('..', explode('/', $relativePath), true)) {
+        if (!self::isSafeRelativePath($relativePath)) {
             throw new InvalidArgumentException(sprintf('"%s" must be a relative path inside the output directory.', $relativePath));
         }
 
@@ -46,5 +46,16 @@ final class GeneratedFile
     public function contents(): string
     {
         return $this->contents;
+    }
+
+    /**
+     * A forward-slash path that cannot leave the directory it is resolved against, on any platform.
+     */
+    public static function isSafeRelativePath(string $path): bool
+    {
+        return $path !== ''
+            && $path[0] !== '/'
+            && strpbrk($path, "\\:\0") === false
+            && !in_array('..', explode('/', $path), true);
     }
 }

@@ -78,7 +78,7 @@ final class Action
             try {
                 $this->writer->apply($plan);
             } catch (WriteFailed $exception) {
-                $diagnostics->error($exception->getMessage(), $config->location());
+                $diagnostics->error($exception->getMessage(), new SchemaLocation($exception->path()));
 
                 return new Output(Status::from(Status::GENERATION_FAILED), $diagnostics, $plan, $files);
             }

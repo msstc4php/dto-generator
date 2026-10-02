@@ -25,4 +25,9 @@ final class DiagnosticFormatterTest extends TestCase
             $formatter->line(new Diagnostic(Severity::from(Severity::WARNING), 'Careful.', new SchemaLocation('/project/api/openapi.yaml', '/components/schemas/User'))),
         );
     }
+
+    public function testNormalisesAWindowsWorkingDirectory(): void
+    {
+        self::assertSame('api/openapi.yaml', (new DiagnosticFormatter('C:\\proj'))->path('C:/proj/api/openapi.yaml'));
+    }
 }

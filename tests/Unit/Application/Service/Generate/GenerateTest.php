@@ -117,7 +117,7 @@ final class GenerateTest extends TestCase
         $output = $this->generate($writer, Mode::WRITE);
 
         self::assertSame('generation-failed', $output->status()->value());
-        self::assertSame(['error /project/dto-generator.yaml#: Cannot write "/project/src/Dto/User.php".'], $this->messages($output));
+        self::assertSame(['error /project/src/Dto/User.php#: Cannot write "/project/src/Dto/User.php".'], $this->messages($output));
     }
 
     public function testPassesEachOutputDirOnce(): void

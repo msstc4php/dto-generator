@@ -16,10 +16,12 @@ use MSSTC4PHP\DtoGenerator\Domain\Shared\Path;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
+use Symfony\Component\Console\Output\ConsoleOutputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 
 /**
  * `dto-generator generate [--config=] [--check] [--dry-run] [--format=text|json]` with the exit codes of spec §9.2.
+ * The report goes to stdout; in text mode, diagnostics go to stderr.
  */
 final class GenerateCommand extends Command
 {
@@ -41,7 +43,7 @@ final class GenerateCommand extends Command
     public function __construct(Generate $generate, string $workingDirectory)
     {
         $this->generate = $generate;
-        $this->workingDirectory = $workingDirectory;
+        $this->workingDirectory = Path::normalize($workingDirectory);
         $this->formatter = new DiagnosticFormatter($workingDirectory);
         parent::__construct('generate');
     }
@@ -63,24 +65,25 @@ final class GenerateCommand extends Command
         $options = $input->getOptions();
         $format = $options['format'] ?? 'text';
         if ($format !== 'text' && $format !== 'json') {
-            return $this->usageError($output, '--format must be "text" or "json".');
+            return $this->usageError($output, false, '--format must be "text" or "json".');
         }
 
+        $json = $format === 'json';
         $check = $options['check'] === true;
         $dryRun = $options['dry-run'] === true;
         if ($check && $dryRun) {
-            return $this->usageError($output, '--check and --dry-run cannot be combined.');
+            return $this->usageError($output, $json, '--check and --dry-run cannot be combined.');
         }
 
         $config = $this->configPath($options['config'] ?? null);
         if ($config === null) {
-            return $this->usageError($output, 'No dto-generator.yaml or dto-generator.json here; pass --config.');
+            return $this->usageError($output, $json, 'No dto-generator.yaml or dto-generator.json here; pass --config.');
         }
 
         $mode = Mode::from($check ? Mode::CHECK : ($dryRun ? Mode::DRY_RUN : Mode::WRITE));
         $result = ($this->generate)(new Input($config, $mode));
-        if ($format === 'json') {
-            $output->writeln($this->json($result));
+        if ($json) {
+            $output->writeln($this->json($result->status()->value(), $this->diagnostics($result), $this->changes($result->plan())));
         } else {
             $this->text($result, $mode, $output);
         }
@@ -107,43 +110,43 @@ final class GenerateCommand extends Command
         return null;
     }
 
-    private function usageError(OutputInterface $output, string $message): int
+    private function usageError(OutputInterface $output, bool $json, string $message): int
     {
-        $output->writeln('error: ' . $message);
+        if ($json) {
+            $output->writeln($this->json(Status::CONFIG_FAILED, [['severity' => 'error', 'location' => '', 'message' => $message]], []));
+        } else {
+            $this->errorOutput($output)->writeln('error: ' . $message);
+        }
 
         return self::EXIT_CODES[Status::CONFIG_FAILED];
     }
 
     private function text(Output $result, Mode $mode, OutputInterface $output): void
     {
+        $errors = $this->errorOutput($output);
         foreach ($result->diagnostics()->all() as $diagnostic) {
-            $output->writeln($this->formatter->line($diagnostic));
+            $errors->writeln($this->formatter->line($diagnostic));
         }
 
-        $errors = count($result->diagnostics()->errors());
+        $errorCount = count($result->diagnostics()->errors());
         $status = $result->status()->value();
-        if ($status === Status::CONFIG_FAILED) {
-            $output->writeln(sprintf('Configuration failed: %d error(s).', $errors));
+        if ($status === Status::CONFIG_FAILED || $status === Status::GENERATION_FAILED) {
+            $errors->writeln(sprintf('%s failed: %d error(s).', $status === Status::CONFIG_FAILED ? 'Configuration' : 'Generation', $errorCount));
 
             return;
         }
 
-        if ($status === Status::GENERATION_FAILED) {
-            $output->writeln(sprintf('Generation failed: %d error(s).', $errors));
-
-            return;
-        }
-
-        $changes = $this->changes($result);
+        $plan = $result->plan();
         $counts = [FileChange::CREATE => 0, FileChange::UPDATE => 0, FileChange::DELETE => 0, FileChange::UNCHANGED => 0];
-        foreach ($changes as $change) {
+        foreach ($this->planChanges($plan) as $change) {
             $counts[$change->kind()]++;
         }
 
+        $lines = array_map(static fn (array $change): string => $change['kind'] . ' ' . $change['path'], $this->changes($plan));
         $modeValue = $mode->value();
         if ($modeValue === Mode::CHECK) {
             $output->writeln($status === Status::OUT_OF_DATE ? 'Out of date:' : 'Up to date.');
-            foreach ($this->changeLines($changes) as $line) {
+            foreach ($lines as $line) {
                 $output->writeln('  ' . $line);
             }
 
@@ -151,7 +154,7 @@ final class GenerateCommand extends Command
         }
 
         if ($modeValue === Mode::DRY_RUN) {
-            foreach ($this->changeLines($changes) as $line) {
+            foreach ($lines as $line) {
                 $output->writeln($line);
             }
         }
@@ -165,52 +168,62 @@ final class GenerateCommand extends Command
     }
 
     /**
-     * @param list<FileChange> $changes
+     * Files that change, then the manifests that change with them.
      *
-     * @return list<string>
+     * @return list<array{kind: string, path: string}>
      */
-    private function changeLines(array $changes): array
-    {
-        $lines = [];
-        foreach ($changes as $change) {
-            if ($change->isChange()) {
-                $lines[] = $change->kind() . ' ' . $this->formatter->path($change->path());
-            }
-        }
-
-        return $lines;
-    }
-
-    private function json(Output $result): string
+    private function changes(?WritePlan $plan): array
     {
         $changes = [];
-        foreach ($this->changes($result) as $change) {
+        foreach ($this->planChanges($plan) as $change) {
             if ($change->isChange()) {
                 $changes[] = ['kind' => $change->kind(), 'path' => $this->formatter->path($change->path())];
             }
         }
 
+        foreach (array_keys($plan instanceof WritePlan ? $plan->manifests() : []) as $path) {
+            $changes[] = ['kind' => is_file($path) ? FileChange::UPDATE : FileChange::CREATE, 'path' => $this->formatter->path($path)];
+        }
+
+        return $changes;
+    }
+
+    /**
+     * Empty when the run stopped before planning.
+     *
+     * @return list<FileChange>
+     */
+    private function planChanges(?WritePlan $plan): array
+    {
+        return $plan instanceof WritePlan ? $plan->changes() : [];
+    }
+
+    /**
+     * @return list<array{severity: string, location: string, message: string}>
+     */
+    private function diagnostics(Output $result): array
+    {
+        return array_map(fn (Diagnostic $diagnostic): array => [
+            'severity' => $diagnostic->severity()->value(),
+            'location' => $this->formatter->location($diagnostic->location()),
+            'message' => $diagnostic->message(),
+        ], $result->diagnostics()->all());
+    }
+
+    /**
+     * @param list<array{severity: string, location: string, message: string}> $diagnostics
+     * @param list<array{kind: string, path: string}> $changes
+     */
+    private function json(string $status, array $diagnostics, array $changes): string
+    {
         return (string) json_encode(
-            [
-                'status' => $result->status()->value(),
-                'diagnostics' => array_map(fn (Diagnostic $diagnostic): array => [
-                    'severity' => $diagnostic->severity()->value(),
-                    'location' => $this->formatter->location($diagnostic->location()),
-                    'message' => $diagnostic->message(),
-                ], $result->diagnostics()->all()),
-                'changes' => $changes,
-            ],
+            ['status' => $status, 'diagnostics' => $diagnostics, 'changes' => $changes],
             JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE,
         );
     }
 
-    /**
-     * @return list<FileChange>
-     */
-    private function changes(Output $result): array
+    private function errorOutput(OutputInterface $output): OutputInterface
     {
-        $plan = $result->plan();
-
-        return $plan instanceof WritePlan ? $plan->changes() : [];
+        return $output instanceof ConsoleOutputInterface ? $output->getErrorOutput() : $output;
     }
 }

@@ -8,6 +8,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   tests:
     name: Tests on PHP ${{ matrix.php }} (${{ matrix.dependencies }})
@@ -23,6 +27,10 @@ jobs:
         with:
           php-version: ${{ matrix.php }}
           coverage: none
+      - uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache
+          key: composer-${{ matrix.php }}-${{ matrix.dependencies }}-${{ hashFiles('composer.json') }}
       - name: Install dependencies
         # composer.json pins the platform to 7.4 for local installs; CI resolves for the PHP it runs on.
         run: |

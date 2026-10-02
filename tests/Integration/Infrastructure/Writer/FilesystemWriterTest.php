@@ -130,28 +130,6 @@ final class FilesystemWriterTest extends TestCase
         self::assertStringContainsString('"User.php"', $manifest);
     }
 
-    public function testTreatsAnUnreadableManifestAsEmpty(): void
-    {
-        mkdir($this->dir . '/out');
-        file_put_contents($this->dir . '/out/.dto-generator.manifest.json', '{broken');
-
-        $plan = $this->write([$this->file('User.php', 'user')]);
-
-        self::assertSame([['create', 'User.php']], $this->summary($plan));
-        self::assertStringContainsString('"User.php"', (string) file_get_contents($this->dir . '/out/.dto-generator.manifest.json'));
-    }
-
-    public function testIgnoresManifestEntriesThatAreNotStrings(): void
-    {
-        mkdir($this->dir . '/out');
-        file_put_contents($this->dir . '/out/.dto-generator.manifest.json', '{"files": {"A.php": 5, "B.php": "x"}}');
-        file_put_contents($this->dir . '/out/B.php', self::HEADER . 'b');
-
-        $plan = $this->write([]);
-
-        self::assertSame([['delete', 'B.php']], $this->summary($plan));
-    }
-
     public function testDoesNothingForAnEmptyPlan(): void
     {
         (new FilesystemWriter())->apply(new WritePlan([], [], []));
@@ -170,7 +148,7 @@ final class FilesystemWriterTest extends TestCase
         $plan = $writer->plan([$this->dir . '/out'], [$this->file('User.php', 'user')]);
 
         $this->expectException(WriteFailed::class);
-        $this->expectExceptionMessage('Cannot write "' . $this->dir . '/out/User.php"');
+        $this->expectExceptionMessage('Cannot write "' . $this->dir . '/out/.dto-generator.manifest.json"');
 
         try {
             $writer->apply($plan);
@@ -185,19 +163,34 @@ final class FilesystemWriterTest extends TestCase
             self::markTestSkipped('root can delete anywhere');
         }
 
-        $this->write([$this->file('Old.php', 'old')]);
-        chmod($this->dir . '/out', 0555);
+        $this->write([$this->file('Sub/Old.php', 'old')]);
+        chmod($this->dir . '/out/Sub', 0555);
         $writer = new FilesystemWriter();
         $plan = $writer->plan([$this->dir . '/out'], []);
 
         $this->expectException(WriteFailed::class);
-        $this->expectExceptionMessage('Cannot delete "' . $this->dir . '/out/Old.php"');
+        $this->expectExceptionMessage('Cannot delete "' . $this->dir . '/out/Sub/Old.php"');
 
         try {
             $writer->apply($plan);
         } finally {
-            chmod($this->dir . '/out', 0755);
+            chmod($this->dir . '/out/Sub', 0755);
         }
+    }
+
+    public function testKeepsAStaleFileItCannotRead(): void
+    {
+        if (function_exists('posix_geteuid') && posix_geteuid() === 0) {
+            self::markTestSkipped('root can read anything');
+        }
+
+        $this->write([$this->file('Old.php', 'old')]);
+        chmod($this->dir . '/out/Old.php', 0000);
+
+        $plan = (new FilesystemWriter())->plan([$this->dir . '/out'], []);
+
+        self::assertSame([$this->dir . '/out/Old.php' => 'The file cannot be read, so it is not deleted.'], $plan->conflicts());
+        chmod($this->dir . '/out/Old.php', 0644);
     }
 
     public function testCleansAnOutputDirThatNoLongerGetsFiles(): void
@@ -264,6 +257,192 @@ final class FilesystemWriterTest extends TestCase
 
         // The writer silences warnings with a closure; PHPUnit's own handler is an object.
         self::assertNotInstanceOf(Closure::class, $previous);
+    }
+
+    /**
+     * @dataProvider corruptManifests
+     */
+    public function testRefusesToWorkFromACorruptManifest(string $manifest): void
+    {
+        mkdir($this->dir . '/out');
+        file_put_contents($this->dir . '/out/.dto-generator.manifest.json', $manifest);
+
+        $plan = (new FilesystemWriter())->plan([$this->dir . '/out'], [$this->file('User.php', 'user')]);
+
+        self::assertSame(
+            [$this->dir . '/out/.dto-generator.manifest.json' => 'The manifest is not a valid dto-generator manifest, so stale files cannot be found; fix it or delete it.'],
+            $plan->conflicts(),
+        );
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function corruptManifests(): array
+    {
+        return [
+            'merge conflict' => ["{\n<<<<<<< HEAD\n}"],
+            'no files' => ['{"generator": "msstc4php/dto-generator"}'],
+            'files not a map' => ['{"files": "A.php"}'],
+            'hash not a string' => ['{"files": {"A.php": 5}}'],
+            'path outside the directory' => ['{"files": {"../Victim.php": "x"}}'],
+            'absolute path' => ['{"files": {"/etc/Victim.php": "x"}}'],
+            'backslash' => ['{"files": {"..\\\\Victim.php": "x"}}'],
+        ];
+    }
+
+    public function testNeverTouchesAFileOutsideTheOutputDirListedInAManifest(): void
+    {
+        mkdir($this->dir . '/out');
+        file_put_contents($this->dir . '/Victim.php', self::HEADER . 'victim');
+        file_put_contents($this->dir . '/out/.dto-generator.manifest.json', '{"files": {"../Victim.php": "x"}}');
+
+        $plan = $this->write([]);
+
+        self::assertSame([], $this->summary($plan));
+        self::assertFileExists($this->dir . '/Victim.php');
+    }
+
+    public function testRefusesTwoClassesInOneFile(): void
+    {
+        $plan = (new FilesystemWriter())->plan([$this->dir . '/out'], [
+            $this->file('User.php', 'a'),
+            $this->file('Tag.php', 'tag'),
+            new GeneratedFile($this->dir . '/out/', 'user.php', self::HEADER . 'b'),
+        ]);
+
+        self::assertSame(
+            [$this->dir . '/out/user.php' => 'Another generated class already maps to this file (letter case ignored); give the sources different outputDirs or the classes different names.'],
+            $plan->conflicts(),
+        );
+    }
+
+    public function testRemovesTheTemporaryFileWhenAWriteFails(): void
+    {
+        $writer = new FilesystemWriter();
+        $plan = $writer->plan([$this->dir . '/out'], [$this->file('User.php', 'user')]);
+        // Appears between plan and apply, so the rename over it fails.
+        mkdir($this->dir . '/out/User.php', 0777, true);
+
+        try {
+            $writer->apply($plan);
+            self::fail('The write over a directory succeeded.');
+        } catch (WriteFailed $exception) {
+            self::assertSame($this->dir . '/out/User.php', $exception->path());
+        }
+
+        self::assertSame([], glob($this->dir . '/out/.*.tmp'));
+    }
+
+    public function testRecordsEveryFileItMayWriteBeforeWritingAny(): void
+    {
+        $writer = new FilesystemWriter();
+        $plan = $writer->plan([$this->dir . '/out'], [$this->file('A.php', 'a'), $this->file('B.php', 'b')]);
+        mkdir($this->dir . '/out/B.php', 0777, true);
+
+        try {
+            $writer->apply($plan);
+        } catch (WriteFailed $exception) {
+        }
+
+        $manifest = (string) file_get_contents($this->dir . '/out/.dto-generator.manifest.json');
+        self::assertStringContainsString('"A.php"', $manifest);
+        self::assertStringContainsString('"B.php"', $manifest);
+    }
+
+    public function testKeepsStaleFilesInTheInterimManifest(): void
+    {
+        $this->write([$this->file('Old.php', 'old')]);
+
+        $plan = (new FilesystemWriter())->plan([$this->dir . '/out'], [$this->file('New.php', 'new')]);
+
+        $interim = $plan->interimManifests()[$this->dir . '/out/.dto-generator.manifest.json'];
+        self::assertStringContainsString('"New.php"', $interim);
+        self::assertStringContainsString('"Old.php"', $interim);
+        self::assertStringNotContainsString('"Old.php"', $plan->manifests()[$this->dir . '/out/.dto-generator.manifest.json']);
+    }
+
+    public function testNeedsNoInterimManifestWhenNothingIsDeleted(): void
+    {
+        $plan = (new FilesystemWriter())->plan([$this->dir . '/out'], [$this->file('New.php', 'new')]);
+
+        self::assertSame([], $plan->interimManifests());
+    }
+
+    public function testRefusesAnOutputDirWithANulByte(): void
+    {
+        $plan = (new FilesystemWriter())->plan([$this->dir . "/o\0ut"], [new GeneratedFile($this->dir . "/o\0ut", 'User.php', self::HEADER)]);
+
+        self::assertSame([$this->dir . "/o\0ut" => 'The output directory path contains a NUL byte.'], $plan->conflicts());
+        self::assertSame([], $plan->changes());
+    }
+
+    public function testReportsAFileItCannotRead(): void
+    {
+        if (function_exists('posix_geteuid') && posix_geteuid() === 0) {
+            self::markTestSkipped('root can read anything');
+        }
+
+        mkdir($this->dir . '/out');
+        file_put_contents($this->dir . '/out/User.php', self::HEADER . 'user');
+        chmod($this->dir . '/out/User.php', 0000);
+
+        $plan = (new FilesystemWriter())->plan([$this->dir . '/out'], [$this->file('User.php', 'new')]);
+
+        self::assertSame([$this->dir . '/out/User.php' => 'The file cannot be read, so it is not overwritten.'], $plan->conflicts());
+    }
+
+    public function testTreatsWindowsLineEndingsAsUnchanged(): void
+    {
+        $this->write([$this->file('User.php', "user\nline")]);
+        file_put_contents($this->dir . '/out/User.php', str_replace("\n", "\r\n", self::HEADER . "user\nline"));
+
+        $plan = $this->write([$this->file('User.php', "user\nline")]);
+
+        self::assertFalse($plan->hasChanges());
+    }
+
+    public function testKeepsThePermissionsOfAnUpdatedFile(): void
+    {
+        $this->write([$this->file('User.php', 'old')]);
+        chmod($this->dir . '/out/User.php', 0664);
+
+        $this->write([$this->file('User.php', 'new')]);
+
+        clearstatcache();
+        self::assertSame('0664', substr(sprintf('%o', fileperms($this->dir . '/out/User.php')), -4));
+    }
+
+    public function testLocksTheOutputDirFromPlanUntilApply(): void
+    {
+        $writer = new FilesystemWriter();
+        $lock = FilesystemWriter::lockPath($this->dir . '/out');
+        $plan = $writer->plan([$this->dir . '/out/'], [$this->file('User.php', 'user')]);
+
+        self::assertFalse($this->canLock($lock));
+
+        $writer->apply($plan);
+
+        self::assertTrue($this->canLock($lock));
+    }
+
+    public function testReleasesTheLockWhenTheWriterIsDropped(): void
+    {
+        $writer = new FilesystemWriter();
+        $writer->plan([$this->dir . '/out'], []);
+        unset($writer);
+
+        self::assertTrue($this->canLock(FilesystemWriter::lockPath($this->dir . '/out')));
+    }
+
+    private function canLock(string $path): bool
+    {
+        $handle = fopen($path, 'c');
+        self::assertIsResource($handle);
+        $locked = flock($handle, LOCK_EX | LOCK_NB);
+        fclose($handle);
+
+        return $locked;
     }
 
     /**

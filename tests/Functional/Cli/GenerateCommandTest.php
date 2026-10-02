@@ -53,10 +53,7 @@ final class GenerateCommandTest extends TestCase
 
     public function testWritesTheOutput(): void
     {
-        [$code, $display] = $this->execute([]);
-
-        self::assertSame(0, $code);
-        self::assertSame("Written: 2, deleted: 0, unchanged: 0.\n", $display);
+        self::assertSame([0, "Written: 2, deleted: 0, unchanged: 0.\n", ''], $this->execute([]));
         self::assertStringContainsString('final readonly class User', (string) file_get_contents($this->dir . '/src/Dto/User.php'));
         self::assertFileExists($this->dir . '/src/Dto/.dto-generator.manifest.json');
     }
@@ -65,8 +62,8 @@ final class GenerateCommandTest extends TestCase
     {
         $this->execute([]);
 
-        self::assertSame([0, "Written: 0, deleted: 0, unchanged: 2.\n"], $this->execute([]));
-        self::assertSame([0, "Up to date.\n"], $this->execute(['--check' => true]));
+        self::assertSame([0, "Written: 0, deleted: 0, unchanged: 2.\n", ''], $this->execute([]));
+        self::assertSame([0, "Up to date.\n", ''], $this->execute(['--check' => true]));
     }
 
     public function testReportsAnOutOfDateOutputWithoutWriting(): void
@@ -75,19 +72,19 @@ final class GenerateCommandTest extends TestCase
         $before = (string) file_get_contents($this->dir . '/src/Dto/User.php');
         file_put_contents($this->dir . '/api/openapi.yaml', str_replace('id: { type: integer }', 'id: { type: string }', self::SPEC));
 
-        [$code, $display] = $this->execute(['--check' => true]);
-
-        self::assertSame(1, $code);
-        self::assertSame("Out of date:\n  update src/Dto/User.php\n", $display);
+        self::assertSame(
+            [1, "Out of date:\n  update src/Dto/User.php\n  update src/Dto/.dto-generator.manifest.json\n", ''],
+            $this->execute(['--check' => true]),
+        );
         self::assertSame($before, file_get_contents($this->dir . '/src/Dto/User.php'));
     }
 
     public function testShowsThePlanOnADryRun(): void
     {
-        [$code, $display] = $this->execute(['--dry-run' => true]);
-
-        self::assertSame(0, $code);
-        self::assertSame("create src/Dto/Tag.php\ncreate src/Dto/User.php\nWould write: 2, delete: 0, unchanged: 0.\n", $display);
+        self::assertSame(
+            [0, "create src/Dto/Tag.php\ncreate src/Dto/User.php\ncreate src/Dto/.dto-generator.manifest.json\nWould write: 2, delete: 0, unchanged: 0.\n", ''],
+            $this->execute(['--dry-run' => true]),
+        );
         self::assertDirectoryDoesNotExist($this->dir . '/src');
     }
 
@@ -97,12 +94,13 @@ final class GenerateCommandTest extends TestCase
         $before = (string) file_get_contents($this->dir . '/src/Dto/User.php');
         file_put_contents($this->dir . '/api/openapi.yaml', str_replace("#/components/schemas/Tag'", "#/components/schemas/Gone'", self::SPEC));
 
-        [$code, $display] = $this->execute([]);
+        [$code, $display, $errors] = $this->execute([]);
 
         self::assertSame(2, $code);
+        self::assertSame('', $display);
         self::assertSame(
             "error api/openapi.yaml#/components/schemas/User/properties/tag: \$ref \"#/components/schemas/Gone\" does not resolve: {$this->dir}/api/openapi.yaml has nothing at \"/components/schemas/Gone\".\nGeneration failed: 1 error(s).\n",
-            $display,
+            $errors,
         );
         self::assertSame($before, file_get_contents($this->dir . '/src/Dto/User.php'));
     }
@@ -111,18 +109,19 @@ final class GenerateCommandTest extends TestCase
     {
         file_put_contents($this->dir . '/dto-generator.yaml', self::CONFIG . "\nunknown: 1\n");
 
-        [$code, $display] = $this->execute([]);
+        [$code, $display, $errors] = $this->execute([]);
 
         self::assertSame(3, $code);
-        self::assertStringEndsWith("Configuration failed: 1 error(s).\n", $display);
-        self::assertStringStartsWith('error dto-generator.yaml', $display);
+        self::assertSame('', $display);
+        self::assertStringEndsWith("Configuration failed: 1 error(s).\n", $errors);
+        self::assertStringStartsWith('error dto-generator.yaml', $errors);
     }
 
     public function testNeedsAConfig(): void
     {
         unlink($this->dir . '/dto-generator.yaml');
 
-        self::assertSame([3, "error: No dto-generator.yaml or dto-generator.json here; pass --config.\n"], $this->execute([]));
+        self::assertSame([3, '', "error: No dto-generator.yaml or dto-generator.json here; pass --config.\n"], $this->execute([]));
     }
 
     public function testFallsBackToAJsonConfigAndAcceptsARelativePath(): void
@@ -138,12 +137,12 @@ final class GenerateCommandTest extends TestCase
 
     public function testRejectsCheckTogetherWithDryRun(): void
     {
-        self::assertSame([3, "error: --check and --dry-run cannot be combined.\n"], $this->execute(['--check' => true, '--dry-run' => true]));
+        self::assertSame([3, '', "error: --check and --dry-run cannot be combined.\n"], $this->execute(['--check' => true, '--dry-run' => true]));
     }
 
     public function testRejectsAnUnknownFormat(): void
     {
-        self::assertSame([3, "error: --format must be \"text\" or \"json\".\n"], $this->execute(['--format' => 'xml']));
+        self::assertSame([3, '', "error: --format must be \"text\" or \"json\".\n"], $this->execute(['--format' => 'xml']));
     }
 
     public function testReportsAsJson(): void
@@ -155,7 +154,11 @@ final class GenerateCommandTest extends TestCase
             [
                 'status' => 'out-of-date',
                 'diagnostics' => [],
-                'changes' => [['kind' => 'create', 'path' => 'src/Dto/Tag.php'], ['kind' => 'create', 'path' => 'src/Dto/User.php']],
+                'changes' => [
+                    ['kind' => 'create', 'path' => 'src/Dto/Tag.php'],
+                    ['kind' => 'create', 'path' => 'src/Dto/User.php'],
+                    ['kind' => 'create', 'path' => 'src/Dto/.dto-generator.manifest.json'],
+                ],
             ],
             json_decode($display, true),
         );
@@ -179,7 +182,7 @@ final class GenerateCommandTest extends TestCase
         $this->execute([]);
         file_put_contents($this->dir . '/api/openapi.yaml', str_replace('id: { type: integer }', 'id: { type: string }', self::SPEC));
 
-        self::assertSame([0, "Written: 1, deleted: 0, unchanged: 1.\n"], $this->execute([]));
+        self::assertSame([0, "Written: 1, deleted: 0, unchanged: 1.\n", ''], $this->execute([]));
     }
 
     public function testPrintsReadableJson(): void
@@ -193,17 +196,41 @@ final class GenerateCommandTest extends TestCase
         self::assertStringContainsString("f\u{00E4}rg", $display);
     }
 
+    public function testReportsUsageErrorsAsJson(): void
+    {
+        [$code, $display] = $this->execute(['--format' => 'json', '--check' => true, '--dry-run' => true]);
+
+        self::assertSame(3, $code);
+        self::assertSame(
+            ['status' => 'config-failed', 'diagnostics' => [['severity' => 'error', 'location' => '', 'message' => '--check and --dry-run cannot be combined.']], 'changes' => []],
+            json_decode($display, true),
+        );
+    }
+
+    public function testRefusesTwoSourcesThatWriteTheSameFile(): void
+    {
+        file_put_contents($this->dir . '/api/copy.yaml', self::SPEC);
+        file_put_contents($this->dir . '/dto-generator.yaml', self::CONFIG . "\n  - spec: api/copy.yaml\n    namespace: App\\Copy\n    outputDir: src/Dto\n");
+
+        [$code, $display, $errors] = $this->execute([]);
+
+        self::assertSame(2, $code);
+        self::assertSame('', $display);
+        self::assertStringContainsString('error src/Dto/Tag.php: Another generated class already maps to this file', $errors);
+        self::assertDirectoryDoesNotExist($this->dir . '/src');
+    }
+
     /**
      * @param array<string, string|bool> $options
      *
-     * @return array{int, string}
+     * @return array{int, string, string} exit code, stdout, stderr
      */
     private function execute(array $options): array
     {
         $tester = new CommandTester(DtoGenerator::console($this->dir)->find('generate'));
-        $code = $tester->execute($options);
+        $code = $tester->execute($options, ['capture_stderr_separately' => true]);
 
-        return [$code, $tester->getDisplay()];
+        return [$code, $tester->getDisplay(), $tester->getErrorOutput()];
     }
 
     private static function remove(string $path): void

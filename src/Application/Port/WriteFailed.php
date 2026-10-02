@@ -8,8 +8,18 @@ use RuntimeException;
 
 final class WriteFailed extends RuntimeException
 {
+    private string $path = '';
+
     public static function at(string $path, string $action): self
     {
-        return new self(sprintf('Cannot %s "%s".', $action, $path));
+        $exception = new self(sprintf('Cannot %s "%s".', $action, $path));
+        $exception->path = $path;
+
+        return $exception;
+    }
+
+    public function path(): string
+    {
+        return $this->path;
     }
 }

@@ -6,6 +6,7 @@ namespace MSSTC4PHP\DtoGenerator\Presentation\Cli;
 
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostic;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
+use MSSTC4PHP\DtoGenerator\Domain\Shared\Path;
 
 /**
  * Shows locations relative to the working directory, as spec §9.2 prints them.
@@ -16,7 +17,8 @@ final class DiagnosticFormatter
 
     public function __construct(string $workingDirectory)
     {
-        $this->workingDirectory = rtrim($workingDirectory, '/') . '/';
+        // getcwd() returns backslashes on Windows; locations are already normalised to forward slashes.
+        $this->workingDirectory = Path::normalize($workingDirectory) . '/';
     }
 
     public function line(Diagnostic $diagnostic): string

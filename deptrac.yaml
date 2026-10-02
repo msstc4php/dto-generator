@@ -54,7 +54,7 @@ deptrac:
         - type: classNameRegex
           value: '#^Composer\\#'
   ruleset:
-    EntryPoint: [Domain, DomainService, Contract, Application, Infrastructure, Presentation, Extension, TypeAlias, Symfony]
+    EntryPoint: [Domain, DomainService, Contract, Application, Infrastructure, Presentation, Extension, TypeAlias, Symfony, Composer]
     Domain: [TypeAlias]
     DomainService: [Domain, TypeAlias]
     Contract: [Domain, TypeAlias]

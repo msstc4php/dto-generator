@@ -8,7 +8,7 @@ foreach ([__DIR__ . '/../../../autoload.php', __DIR__ . '/../vendor/autoload.php
     if (is_file($autoload)) {
         require $autoload;
 
-        exit(MSSTC4PHP\DtoGenerator\DtoGenerator::console()->run());
+        exit(MSSTC4PHP\DtoGenerator\DtoGenerator::run());
     }
 }
 
