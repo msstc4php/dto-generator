@@ -21,7 +21,8 @@ final class NamedClass
     private array $via;
 
     /**
-     * @param list<Schema> $via the aliases and `allOf` wrappers a reference passed before it reached the class
+     * @param list<Schema> $via the schemas with a `$ref` a reference passed before it reached the class: aliases, and the
+     *                          `$ref` members of `allOf` wrappers
      */
     public function __construct(ResolvedSchema $schema, ClassName $name, array $via = [])
     {

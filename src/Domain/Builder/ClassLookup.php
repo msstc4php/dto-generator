@@ -50,7 +50,7 @@ final class ClassLookup
     {
         $seen = [];
         $via = [];
-        for ($target = $named; $target instanceof ResolvedSchema && !isset($seen[$target->location()->toString()]); $target = $this->unwrap($target->schema())) {
+        for ($target = $named; !isset($seen[$target->location()->toString()]); $target = $next) {
             $key = $target->location()->toString();
             $seen[$key] = $key;
             $class = $this->declarations->classAt($key);
@@ -58,23 +58,30 @@ final class ClassLookup
                 return new NamedClass($target, $class, $via);
             }
 
-            $via[] = $target->schema();
+            $passage = $this->passage($target->schema());
+            $next = $passage instanceof Schema ? $this->target($passage) : null;
+            if (!$next instanceof ResolvedSchema) {
+                return null;
+            }
+
+            $via[] = $passage;
         }
 
         return null;
     }
 
     /**
-     * The target of an alias, or of the one `$ref` member of an `allOf` that is no class of its own.
+     * The schema whose `$ref` leads on: an alias itself, or the one `$ref` member of an `allOf` that is no class of its
+     * own. Requirements written beside that `$ref` name properties of the class behind it.
      */
-    private function unwrap(Schema $schema): ?ResolvedSchema
+    private function passage(Schema $schema): ?Schema
     {
         if ($schema->ref() !== null) {
-            return $this->target($schema);
+            return $schema;
         }
 
         $references = array_values(array_filter($schema->allOf(), static fn (Schema $member): bool => $member->ref() !== null));
 
-        return count($references) === 1 && !SchemaShape::isClass($schema) ? $this->target($references[0]) : null;
+        return count($references) === 1 && !SchemaShape::isClass($schema) ? $references[0] : null;
     }
 }
