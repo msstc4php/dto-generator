@@ -27,6 +27,12 @@ test-targets: ## Lint and run the golden emitter output on each target PHP versi
 
 verify: check test test-74 ## Full gate: static checks + tests on local PHP and PHP 7.4
 
+docker-build: ## Build the Docker image as dto-generator:local
+	docker build -f docker/Dockerfile -t dto-generator:local .
+
+docker-smoke: docker-build ## Generate the golden project with the image and compare
+	sh tests/Docker/smoke.sh dto-generator:local
+
 infection: ## Mutation testing
 	XDEBUG_MODE=coverage $(TOOLS)/infection --threads=$(shell nproc) --no-interaction
 

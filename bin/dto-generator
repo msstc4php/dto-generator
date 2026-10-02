@@ -3,9 +3,11 @@
 
 declare(strict_types=1);
 
-// Installed as a dependency, the autoloader sits three levels up; in this repository, next to bin/.
-foreach ([__DIR__ . '/../../../autoload.php', __DIR__ . '/../vendor/autoload.php'] as $autoload) {
-    if (is_file($autoload)) {
+// Composer's bin proxy names the project's autoloader, even for a symlinked package; installed as a dependency, it
+// sits three levels up otherwise; in this repository, next to bin/.
+$candidates = [$GLOBALS['_composer_autoload_path'] ?? null, __DIR__ . '/../../../autoload.php', __DIR__ . '/../vendor/autoload.php'];
+foreach ($candidates as $autoload) {
+    if (is_string($autoload) && is_file($autoload)) {
         require $autoload;
 
         exit(MSSTC4PHP\DtoGenerator\DtoGenerator::run());

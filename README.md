@@ -7,8 +7,8 @@
 > `oneOf`/`anyOf` с discriminator (abstract-база) и без него (union-тип), генерация кода под PHP 7.4–8.5
 > (spec §6.2), запись с манифестом и CLI, расширения (SPI), `x-php-attributes` и `attributeAliases` с выводом
 > атрибутов PHP 8 (этап 5a), аннотации Doctrine для PHP 7.4 и `verifyClasses` (этап 5b), версии пакетов из
-> `composer.lock` и обнаружение расширений через `extra.dto-generator.extensions` (этап 6a). Composer-плагин и
-> Docker-образ (этап 6b) — впереди.
+> `composer.lock` и обнаружение расширений через `extra.dto-generator.extensions` (этап 6a), Composer-плагин и
+> Docker-образ (этап 6b). Ядро готово; впереди мост `dto-generator-bridge-symfony`.
 
 Дизайн: [`docs/specs/2026-10-01-dto-generator-design.md`](docs/specs/2026-10-01-dto-generator-design.md).
 
@@ -63,6 +63,35 @@ $output->status()->value();   // ok | out-of-date | generation-failed | config-f
 $output->diagnostics()->all();
 ```
 
+### Composer-плагин
+
+Пакет — Composer-плагин: после каждого `install`, `update` и `dump-autoload` он перегенерирует DTO, если в
+`composer.json` проекта задан путь к конфигу (путь — относительно `composer.json`). Ставьте пакет в `require-dev`
+(`composer require --dev msstc4php/dto-generator`): иначе генерация пойдёт и при `composer install --no-dev` на
+деплое. Плагин запускает `vendor/bin/dto-generator` отдельным процессом, поэтому результат тот же, что у CLI.
+
+```json
+{
+    "config": {"allow-plugins": {"msstc4php/dto-generator": true}},
+    "extra": {"dto-generator": {"config": "dto-generator.yaml", "failOnError": false}}
+}
+```
+
+По умолчанию ошибки генерации печатаются как предупреждения и команду Composer не роняют; `failOnError: true`
+делает их ошибкой команды. `--no-plugins` и `--no-scripts` плагин отключают. Если плагин не разрешён в
+`allow-plugins`, работают только CLI и PHP API.
+
+### Docker
+
+```bash
+docker build -f docker/Dockerfile -t dto-generator .
+docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/app" dto-generator --config=dto-generator.yaml [--check]
+```
+
+`target.php: auto` берётся из `composer.json` смонтированного проекта. Код проекта контейнер не выполняет:
+`verifyClasses: auto` в нём выключен (`DTO_GENERATOR_VERIFY_CLASSES=0`), явное `verifyClasses: true` подключит
+автозагрузчик проекта. Расширения — только установленные в образ.
+
 ## Требования
 
 - PHP ≥ 7.4 для запуска генератора.
@@ -77,6 +106,7 @@ make test      # PHPUnit на локальном PHP
 make test-74   # PHPUnit в контейнере php:7.4-cli
 make test-targets # сгенерированный код: php -l, smoke и PHPStan max на php:7.4…8.5-cli (Docker)
 make infection # мутационное тестирование
+make docker-smoke # собрать образ и сгенерировать им golden-проект
 make fix       # автоисправление стиля и Rector
 ```
 

@@ -88,3 +88,11 @@ jobs:
       - run: composer install --no-interaction --no-progress
       - run: composer install --no-interaction --no-progress --working-dir=tools
       - run: make infection
+
+  docker:
+    name: Docker image
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - run: make docker-smoke

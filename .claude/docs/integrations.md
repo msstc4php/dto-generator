@@ -10,6 +10,11 @@
 
 UTF-8 BOM срезается; NUL-байт в пути — `DocumentLoadFailed::notFound` (а не `ValueError` из `realpath`).
 
+## Composer и Docker (этап 6b)
+
+- Пакет — `composer-plugin`: потребителю нужно `allow-plugins` (Composer 2.2+ спросит). Отказ отключает только плагин.
+- Docker-образ обнаруживает расширения из своего vendor, читает `composer.json`/`composer.lock` смонтированного проекта и не выполняет его код при `verifyClasses: auto`. Имя образа — `ghcr.io/msstc4php/dto-generator`; публикации пока нет.
+
 ## Пакеты и расширения потребителя (этап 6a)
 
 - `composer.lock` проекта читается как данные: версии пакетов для `InstalledPackages` расширений.

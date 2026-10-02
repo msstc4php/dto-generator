@@ -2,11 +2,11 @@ deptrac:
   paths:
     - ./src
   layers:
-    # The composition root: the only class that wires every layer together.
+    # The composition root, which wires every layer together, and the Composer plugin, which Composer creates itself.
     - name: EntryPoint
       collectors:
         - type: classNameRegex
-          value: '#^MSSTC4PHP\\DtoGenerator\\DtoGenerator$#'
+          value: '#^MSSTC4PHP\\DtoGenerator\\(DtoGenerator|ComposerPlugin)$#'
     - name: Domain
       collectors:
         - type: directory
