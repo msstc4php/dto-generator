@@ -9,7 +9,6 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\AttributeModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassKind;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
-use MSSTC4PHP\DtoGenerator\Domain\Model\DiscriminatorModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\DocModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumBacking;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumCase;
@@ -19,6 +18,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\ListType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\MixedType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\NullableType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ScalarType;
+use MSSTC4PHP\DtoGenerator\Domain\Model\UnionType;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\DefaultValue;
 use MSSTC4PHP\DtoGenerator\Domain\Target\AccessorStyle;
@@ -197,6 +197,14 @@ final class PhpParserEmitterTest extends TestCase
         (new PhpParserEmitter())->emit($class, EmitterFixture::target('8.2', Mutability::IMMUTABLE));
     }
 
+    public function testRejectsInheritedPropertiesWithoutAParent(): void
+    {
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessage('App\Dto\Tag inherits properties but extends no class.');
+
+        (new PhpParserEmitter())->emit(EmitterFixture::tag(), EmitterFixture::target('8.2', Mutability::IMMUTABLE), [EmitterFixture::property('id', ScalarType::int(), true)]);
+    }
+
     /**
      * @return array<string, array{ClassModel, string}>
      */
@@ -208,11 +216,7 @@ final class PhpParserEmitterTest extends TestCase
         $immutable = Mutability::from(Mutability::IMMUTABLE);
 
         return [
-            'parent' => [new ClassModel($name, ClassKind::from(ClassKind::FINAL), ClassName::fromFqcn('App\Dto\Animal'), [], $immutable, DocModel::none(), $at), 'App\Dto\Pet extends a class'],
-            'discriminator' => [new ClassModel($name, ClassKind::from(ClassKind::ABSTRACT), null, [], $immutable, DocModel::none(), $at, [], new DiscriminatorModel('kind', ['cat' => ClassName::fromFqcn('App\Dto\Cat')])), 'App\Dto\Pet has a discriminator'],
             'class attribute' => [new ClassModel($name, ClassKind::from(ClassKind::FINAL), null, [], $immutable, DocModel::none(), $at, [$attribute]), 'App\Dto\Pet has attributes'],
-            'open class with properties' => [new ClassModel($name, ClassKind::from(ClassKind::OPEN), null, [EmitterFixture::property('id', ScalarType::int(), true)], $immutable, DocModel::none(), $at), 'App\Dto\Pet is not final'],
-            'base class with properties' => [new ClassModel($name, ClassKind::from(ClassKind::ABSTRACT), null, [EmitterFixture::property('id', ScalarType::int(), true)], $immutable, DocModel::none(), $at), 'App\Dto\Pet is not final'],
             'property attribute' => [EmitterFixture::model('App\Dto\Pet', null, [EmitterFixture::property('id', ScalarType::int(), true)->withAddedAttributes($attribute)]), 'App\Dto\Pet has attributes'],
         ];
     }
@@ -338,5 +342,87 @@ final class PhpParserEmitterTest extends TestCase
         ], $mutability);
 
         return (new PhpParserEmitter())->emit($class, EmitterFixture::target($php, $mutability, $accessors));
+    }
+
+    public function testGivesABaseProtectedPropertiesAndNoWithers(): void
+    {
+        $code = (new PhpParserEmitter())->emit(EmitterFixture::animal(Mutability::IMMUTABLE), EmitterFixture::target('8.0', Mutability::IMMUTABLE));
+
+        self::assertStringContainsString("\nclass Animal\n", $code);
+        self::assertStringContainsString('public function __construct(protected string $id, protected ?string $nickname = null)', $code);
+        self::assertStringContainsString('public function getId(): string', $code);
+        self::assertStringNotContainsString('function with', $code);
+    }
+
+    public function testPassesInheritedParametersToTheParentConstructor(): void
+    {
+        $code = (new PhpParserEmitter())->emit(EmitterFixture::dog(Mutability::IMMUTABLE), EmitterFixture::target('8.1', Mutability::IMMUTABLE), EmitterFixture::animal(Mutability::IMMUTABLE)->properties());
+
+        self::assertStringContainsString("\nfinal class Dog extends Animal\n", $code);
+        self::assertStringContainsString(
+            "    public function __construct(\n        string \$id,\n        public readonly string \$breed,\n        ?string \$nickname = null,\n        public readonly ?bool \$goodBoy = true,\n    ) {\n        parent::__construct(\$id, \$nickname);\n    }",
+            $code,
+        );
+        self::assertStringContainsString("    public function withId(string \$id): self\n    {\n        return new self(\$id, \$this->breed, \$this->nickname, \$this->goodBoy);\n    }", $code);
+        self::assertStringContainsString('public function withBreed(string $breed): self', $code);
+        self::assertSame(1, substr_count($code, 'function withId('));
+    }
+
+    public function testAssignsOwnPropertiesAfterTheParentConstructorOnPhp74(): void
+    {
+        $code = (new PhpParserEmitter())->emit(EmitterFixture::dog(Mutability::IMMUTABLE), EmitterFixture::target('7.4', Mutability::IMMUTABLE), EmitterFixture::animal(Mutability::IMMUTABLE)->properties());
+
+        self::assertStringContainsString("    private string \$breed;\n", $code);
+        self::assertStringNotContainsString('$id;', $code);
+        self::assertStringContainsString("        parent::__construct(\$id, \$nickname);\n        \$this->breed = \$breed;\n        \$this->goodBoy = \$goodBoy;\n", $code);
+        self::assertStringContainsString('return new self($id, $this->breed, $this->nickname, $this->goodBoy);', $code);
+        self::assertStringNotContainsString('clone', $code);
+    }
+
+    public function testDocumentsInheritedParametersThePromotedSignatureCannotDeclare(): void
+    {
+        $base = EmitterFixture::model('App\Dto\Base', null, [
+            EmitterFixture::property('code', new UnionType(ScalarType::int(), ScalarType::string()), true),
+            EmitterFixture::property('name', ScalarType::string('non-empty-string'), true),
+        ])
+            ->withHierarchy(ClassKind::from(ClassKind::OPEN), null, null)
+        ;
+        $child = EmitterFixture::model('App\Dto\Child', null, [EmitterFixture::property('label', ScalarType::string('non-empty-string'), true)])
+            ->withHierarchy(ClassKind::from(ClassKind::FINAL), $base->name(), null)
+        ;
+        $code = (new PhpParserEmitter())->emit($child, EmitterFixture::target('7.4', Mutability::IMMUTABLE), $base->properties());
+
+        self::assertStringContainsString("    /**\n     * @param int|string \$code\n     * @param non-empty-string \$name\n     * @param non-empty-string \$label\n     */\n    public function __construct(", $code);
+    }
+
+    public function testProtectsTheConstructorOfAnAbstractBase(): void
+    {
+        $code = (new PhpParserEmitter())->emit(EmitterFixture::shape(Mutability::IMMUTABLE), EmitterFixture::target('8.2', Mutability::IMMUTABLE));
+
+        self::assertStringContainsString("\nabstract readonly class Shape\n", $code);
+        self::assertStringContainsString('protected function __construct(public string $kind)', $code);
+    }
+
+    public function testKeepsSettersOfABaseAndGivesTheChildItsOwn(): void
+    {
+        $emitter = new PhpParserEmitter();
+        $target = EmitterFixture::target('8.2', Mutability::MUTABLE, AccessorStyle::GETTERS);
+        $base = $emitter->emit(EmitterFixture::animal(Mutability::MUTABLE), $target);
+        $child = $emitter->emit(EmitterFixture::dog(Mutability::MUTABLE), $target, EmitterFixture::animal(Mutability::MUTABLE)->properties());
+
+        self::assertStringContainsString('public function setId(string $id): self', $base);
+        self::assertStringContainsString('protected string $id', $base);
+        self::assertStringContainsString('public function setBreed(string $breed): self', $child);
+        self::assertStringNotContainsString('setId', $child);
+        self::assertStringContainsString('private string $breed', $child);
+    }
+
+    public function testExtendsAParentFromAnotherNamespace(): void
+    {
+        $child = EmitterFixture::model('App\Dto\Public\Dog', null, [])->withHierarchy(ClassKind::from(ClassKind::FINAL), ClassName::fromFqcn('App\Dto\Shared\Animal'), null);
+        $code = (new PhpParserEmitter())->emit($child, EmitterFixture::target('8.2', Mutability::IMMUTABLE), EmitterFixture::animal(Mutability::IMMUTABLE)->properties());
+
+        self::assertStringContainsString("final readonly class Dog extends \\App\\Dto\\Shared\\Animal\n", $code);
+        self::assertStringContainsString('public function __construct(string $id, ?string $nickname = null)', $code);
     }
 }

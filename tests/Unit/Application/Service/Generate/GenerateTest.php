@@ -57,6 +57,20 @@ final class GenerateTest extends TestCase
         self::assertSame(['warning /project/api/openapi.yaml#/components/schemas/Free/properties/c/format: Unknown string format "color"; the property stays a string.'], $this->messages($output));
     }
 
+    public function testHandsTheInheritedPropertiesToTheEmitter(): void
+    {
+        $output = $this->generate(new RecordingWriter(new WritePlan([], [], [])), Mode::WRITE, [
+            'Admin' => ['allOf' => [['$ref' => '#/components/schemas/User'], ['properties' => ['level' => ['type' => 'integer']]]]],
+        ]);
+
+        self::assertSame('ok', $output->status()->value());
+        self::assertStringContainsString("\nreadonly class User\n", $output->files()[0]->contents());
+        $admin = $output->files()[2]->contents();
+        self::assertStringContainsString("\nfinal readonly class Admin extends User\n", $admin);
+        self::assertStringContainsString('public function __construct(int $id, ?Tag $tag = null, public ?int $level = null)', $admin);
+        self::assertStringContainsString('parent::__construct($id, $tag);', $admin);
+    }
+
     public function testStopsOnAConfigError(): void
     {
         $writer = new RecordingWriter(new WritePlan([], [], []));

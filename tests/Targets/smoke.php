@@ -2,7 +2,11 @@
 
 declare(strict_types=1);
 
+use App\Dto\Animal;
+use App\Dto\Circle;
+use App\Dto\Dog;
 use App\Dto\Sample;
+use App\Dto\Shape;
 use App\Dto\Tag;
 
 // Runs on the profile's own PHP version, so the generated code is checked by the runtime it targets.
@@ -16,6 +20,10 @@ require $profile . 'Currency.php.golden';
 require $profile . 'Tag.php.golden';
 require $profile . 'Sample.php.golden';
 require $profile . 'Copy.php.golden';
+require $profile . 'Animal.php.golden';
+require $profile . 'Dog.php.golden';
+require $profile . 'Shape.php.golden';
+require $profile . 'Circle.php.golden';
 
 /**
  * @return mixed
@@ -79,6 +87,25 @@ $holder = new Copy(5);
 if (method_exists($holder, 'withClone')) {
     check(read($holder->withClone(6), 'clone') === 6 && read($holder, 'clone') === 5, 'wither of a property named clone');
 }
+
+// Required parameters of the whole chain come first, the parent's before the class's own.
+$dog = new Dog('d1', 'beagle');
+check($dog instanceof Animal && read($dog, 'id') === 'd1' && read($dog, 'breed') === 'beagle', 'inherited and own arguments');
+check(read($dog, 'nickname') === null && read($dog, 'goodBoy') === true, 'inherited and own defaults');
+check(read(new Animal('a1', 'Rex'), 'nickname') === 'Rex', 'open base on its own');
+if (method_exists($dog, 'withId')) {
+    $renamed = $dog->withId('d2');
+    check($renamed instanceof Dog && read($renamed, 'id') === 'd2' && read($renamed, 'breed') === 'beagle' && read($dog, 'id') === 'd1', 'wither of an inherited property');
+    check(read($dog->withBreed('pug'), 'breed') === 'pug' && read($dog->withBreed('pug'), 'id') === 'd1', 'wither of an own property');
+}
+
+if (method_exists($dog, 'setNickname')) {
+    check($dog->setNickname('Max') === $dog && read($dog, 'nickname') === 'Max', 'inherited setter');
+}
+
+$circle = new Circle('circle', 2.0);
+check($circle instanceof Shape && read($circle, 'kind') === 'circle' && read($circle, 'radius') === 2.0, 'discriminated variant');
+check((new ReflectionClass(Shape::class))->isAbstract() && !(new ReflectionClass(Animal::class))->isFinal(), 'base classes stay open');
 
 if (strpos(basename($profile), '-immutable') !== false && !method_exists($sample, 'getId')) {
     $rejected = false;

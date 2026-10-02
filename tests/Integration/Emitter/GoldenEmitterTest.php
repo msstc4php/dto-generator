@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Tests\Integration\Emitter;
 
-use MSSTC4PHP\DtoGenerator\Domain\Model\ClassModel;
 use MSSTC4PHP\DtoGenerator\Domain\Target\AccessorStyle;
 use MSSTC4PHP\DtoGenerator\Domain\Target\Mutability;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Emitter\PhpParserEmitter;
@@ -25,9 +24,9 @@ final class GoldenEmitterTest extends TestCase
     {
         $emitter = new PhpParserEmitter();
         $target = EmitterFixture::target($php, $mutability, $accessors);
-        foreach ($this->classes($mutability) as $class) {
+        foreach (EmitterFixture::classes($mutability) as $class) {
             $path = self::DIR . $profile . '/' . $class->name()->shortName() . '.php.golden';
-            $code = $emitter->emit($class, $target);
+            $code = $emitter->emit($class, $target, EmitterFixture::inherited($class));
             if (getenv('UPDATE_SNAPSHOTS') === '1') {
                 if (!is_dir(dirname($path))) {
                     mkdir(dirname($path), 0777, true);
@@ -91,18 +90,5 @@ final class GoldenEmitterTest extends TestCase
         }
 
         return $profiles;
-    }
-
-    /**
-     * @return list<ClassModel>
-     */
-    private function classes(string $mutability): array
-    {
-        $classes = [];
-        foreach (EmitterFixture::classes() as $class) {
-            $classes[] = EmitterFixture::model($class->name()->fqcn(), $class->doc()->description(), $class->properties(), $mutability);
-        }
-
-        return $classes;
     }
 }
