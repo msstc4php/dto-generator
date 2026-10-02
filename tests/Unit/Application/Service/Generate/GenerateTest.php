@@ -26,9 +26,11 @@ use MSSTC4PHP\DtoGenerator\Extension\CustomAttributes\CustomAttributes;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Emitter\PhpParserEmitter;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Extension\ClassExtensionLoader;
 use MSSTC4PHP\DtoGenerator\Tests\Support\Extensions\MoneyFormatExtension;
+use MSSTC4PHP\DtoGenerator\Tests\Support\Extensions\PackageVersionExtension;
 use MSSTC4PHP\DtoGenerator\Tests\Support\FixedClassVerifier;
 use MSSTC4PHP\DtoGenerator\Tests\Support\FixedClassVerifierLocator;
 use MSSTC4PHP\DtoGenerator\Tests\Support\FixedPhpConstraint;
+use MSSTC4PHP\DtoGenerator\Tests\Support\FixedProjectPackages;
 use MSSTC4PHP\DtoGenerator\Tests\Support\InMemoryDocumentLoader;
 use MSSTC4PHP\DtoGenerator\Tests\Support\RecordingWriter;
 use PHPUnit\Framework\TestCase;
@@ -262,11 +264,42 @@ final class GenerateTest extends TestCase
         self::assertTrue($writer->released);
     }
 
+    public function testHandsTheConsumersPackagesToExtensions(): void
+    {
+        $output = $this->generate(
+            new RecordingWriter(new WritePlan([], [], [])),
+            Mode::WRITE,
+            [],
+            ['extensions' => [PackageVersionExtension::class]],
+            null,
+            new FixedProjectPackages(['symfony/validator' => 'v7.1.0']),
+        );
+
+        self::assertSame([], $this->messages($output));
+        self::assertStringContainsString("#[\\App\\Attr\\Validator('v7.1.0')]\nfinal readonly class User\n", $output->files()[0]->contents());
+    }
+
+    public function testWarnsAboutAnUnusableLockAndGoesOnWithoutPackages(): void
+    {
+        $output = $this->generate(
+            new RecordingWriter(new WritePlan([], [], [])),
+            Mode::WRITE,
+            [],
+            ['extensions' => [PackageVersionExtension::class]],
+            null,
+            new FixedProjectPackages([], 'is not valid JSON'),
+        );
+
+        self::assertSame('ok', $output->status()->value());
+        self::assertSame(['warning /project/composer.lock#: The installed package versions are unknown: the file is not valid JSON.'], $this->messages($output));
+        self::assertStringContainsString("#[\\App\\Attr\\Validator('none')]\n", $output->files()[0]->contents());
+    }
+
     /**
      * @param array<string, array<array-key, mixed>> $extraSchemas
      * @param array<string, array<array-key, mixed>|bool> $extraConfig
      */
-    private function generate(RecordingWriter $writer, string $mode, array $extraSchemas = [], array $extraConfig = [], ?FixedClassVerifierLocator $verifiers = null): Output
+    private function generate(RecordingWriter $writer, string $mode, array $extraSchemas = [], array $extraConfig = [], ?FixedClassVerifierLocator $verifiers = null, ?FixedProjectPackages $packages = null): Output
     {
         $loader = new InMemoryDocumentLoader([
             self::CONFIG => [
@@ -287,14 +320,15 @@ final class GenerateTest extends TestCase
             ]]],
         ]);
 
-        return $this->action($loader, $writer, $verifiers ?? new FixedClassVerifierLocator())(new Input(self::CONFIG, Mode::from($mode)));
+        return $this->action($loader, $writer, $verifiers ?? new FixedClassVerifierLocator(), $packages)(new Input(self::CONFIG, Mode::from($mode)));
     }
 
-    private function action(InMemoryDocumentLoader $loader, RecordingWriter $writer, ?FixedClassVerifierLocator $verifiers = null): Action
+    private function action(InMemoryDocumentLoader $loader, RecordingWriter $writer, ?FixedClassVerifierLocator $verifiers = null, ?FixedProjectPackages $packages = null): Action
     {
         return new Action(
             new LoadConfig($loader, new ConfigFactory(), new TargetResolver(new FixedPhpConstraint(null))),
             $verifiers ?? new FixedClassVerifierLocator(),
+            $packages ?? new FixedProjectPackages(),
             new LoadExtensions(new ClassExtensionLoader(), static fn (array $aliases): array => [new CustomAttributes($aliases)]),
             new LoadSchemas($loader, new SchemaParser()),
             new BuildModel(new NameResolver()),

@@ -32,14 +32,9 @@ final class AutoloadClassVerifierLocator implements ClassVerifierLocator
      */
     public function locate(string $directory): ?ClassVerifier
     {
-        $project = $directory;
-        while (!is_file($project . '/composer.json')) {
-            $parent = dirname($project);
-            if ($parent === $project) {
-                return null;
-            }
-
-            $project = $parent;
+        $project = ComposerProject::nearest($directory);
+        if ($project === null) {
+            return null;
         }
 
         $autoload = $this->vendorDir($project) . '/autoload.php';
