@@ -31,17 +31,17 @@ final class CompositionParts
             $this->own[] = $member;
         }
 
-        $this->require($member);
+        $this->requireFrom($member);
     }
 
     public function finish(Schema $schema, ?ClassName $parent): Composition
     {
-        $this->require($schema);
+        $this->requireFrom($schema);
 
         return new Composition($parent, $schema, $this->members, $this->own, $this->required);
     }
 
-    private function require(Schema $schema): void
+    public function requireFrom(Schema $schema): void
     {
         foreach ($schema->required() as $wireName) {
             $this->required[$wireName] = $wireName;

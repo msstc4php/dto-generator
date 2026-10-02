@@ -719,7 +719,67 @@ final class CompositionTest extends TestCase
         ];
 
         self::assertSame(['error /project/api/openapi.yaml#/components/schemas/A/allOf/0: Class App\\Dto\\A extends itself.'], ModelFixture::messages(ModelFixture::build($schemas)));
-        self::assertSame(['error /project/api/openapi.yaml#/components/schemas/Alias: The allOf chain loops back to a schema it is already merging.'], ModelFixture::messages(ModelFixture::build($schemas, [], ['*'], AllOfStrategy::MERGE)));
+        self::assertSame(['error /project/api/openapi.yaml#/components/schemas/A/allOf/0: The allOf chain loops back to a schema it is already merging.'], ModelFixture::messages(ModelFixture::build($schemas, [], ['*'], AllOfStrategy::MERGE)));
+    }
+
+    public function testKeepsTheRequirementsBesideAnAliasReference(): void
+    {
+        $output = ModelFixture::build([
+            'Pet' => ['type' => 'object', 'properties' => ['name' => ['type' => 'string']]],
+            'Alias' => ['$ref' => '#/components/schemas/Pet', 'required' => ['name']],
+            'Cat' => ['allOf' => [['$ref' => '#/components/schemas/Alias'], ['properties' => ['lives' => ['type' => 'integer']]]]],
+        ], [], ['*'], AllOfStrategy::MERGE);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(['name: string', 'lives: int|null'], ModelFixture::classes($output)['App\Dto\Cat']);
+    }
+
+    public function testReportsANonObjectBehindAnAliasAtTheMemberThatUsesIt(): void
+    {
+        $output = ModelFixture::build([
+            'Email' => ['type' => 'string'],
+            'Alias' => ['$ref' => '#/components/schemas/Email'],
+            'Cat' => ['allOf' => [['$ref' => '#/components/schemas/Alias'], ['properties' => ['lives' => ['type' => 'integer']]]]],
+            'Dog' => ['allOf' => [['$ref' => '#/components/schemas/Alias'], ['properties' => ['bark' => ['type' => 'boolean']]]]],
+        ]);
+
+        self::assertSame([
+            'error /project/api/openapi.yaml#/components/schemas/Cat/allOf/0: An allOf member of a class must be an object schema.',
+            'error /project/api/openapi.yaml#/components/schemas/Dog/allOf/0: An allOf member of a class must be an object schema.',
+        ], ModelFixture::messages($output));
+    }
+
+    public function testTakesAVariantThroughAnAlias(): void
+    {
+        $cat = ['type' => 'object', 'properties' => ['petType' => ['type' => 'string'], 'lives' => ['type' => 'integer']]];
+        $dog = ['type' => 'object', 'properties' => ['petType' => ['type' => 'string'], 'bark' => ['type' => 'boolean']]];
+        $output = ModelFixture::build([
+            'Pet' => [
+                'oneOf' => [['$ref' => '#/components/schemas/Kitty'], ['$ref' => '#/components/schemas/Dog']],
+                'discriminator' => ['propertyName' => 'petType', 'mapping' => ['dog' => '#/components/schemas/Puppy']],
+            ],
+            'Kitty' => ['$ref' => '#/components/schemas/Cat'],
+            'Puppy' => ['$ref' => '#/components/schemas/Dog'],
+            'Cat' => $cat,
+            'Dog' => $dog,
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame('abstract by petType {dog: App\Dto\Dog, Kitty: App\Dto\Cat}', ModelFixture::hierarchy($output)['App\Dto\Pet']);
+    }
+
+    public function testWarnsAboutAVariantListedDirectlyAndThroughAnAlias(): void
+    {
+        $output = ModelFixture::build([
+            'Pet' => [
+                'oneOf' => [['$ref' => '#/components/schemas/Cat'], ['$ref' => '#/components/schemas/Kitty']],
+                'discriminator' => ['propertyName' => 'petType'],
+            ],
+            'Kitty' => ['$ref' => '#/components/schemas/Cat'],
+            'Cat' => ['type' => 'object', 'properties' => ['petType' => ['type' => 'string']]],
+        ]);
+
+        self::assertContains('warning /project/api/openapi.yaml#/components/schemas/Pet/oneOf/1: Variant App\\Dto\\Cat is listed twice.', ModelFixture::messages($output));
     }
 
     public function testReportsAnAllOfMemberWhoseAliasesLoop(): void
@@ -730,7 +790,7 @@ final class CompositionTest extends TestCase
             'Y' => ['$ref' => '#/components/schemas/X'],
         ]);
 
-        self::assertSame(['error /project/api/openapi.yaml#/components/schemas/Y: The allOf chain loops back to a schema it is already merging.'], ModelFixture::messages($output));
+        self::assertSame(['error /project/api/openapi.yaml#/components/schemas/A/allOf/0: The allOf chain loops back to a schema it is already merging.'], ModelFixture::messages($output));
         self::assertSame(['a: string|null'], ModelFixture::classes($output)['App\Dto\A']);
     }
 
