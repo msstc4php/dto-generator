@@ -168,9 +168,11 @@ final class AllOfResolver
      *
      * @param bool $inside whether the member is written inside the class schema, not reached through a $ref
      * @param array<string, string> $merging locations whose members are being merged, to stop loops
+     * @param Schema|null $origin the member written in the class, when $member is an alias it reached; errors point there
      */
-    private function flatten(Schema $member, bool $inside, array $merging, CompositionParts $parts, Diagnostics $diagnostics): void
+    private function flatten(Schema $member, bool $inside, array $merging, CompositionParts $parts, Diagnostics $diagnostics, ?Schema $origin = null): void
     {
+        $origin ??= $member;
         $schema = $member;
         if ($member->ref() !== null) {
             $target = $this->classes->target($member);
@@ -182,21 +184,21 @@ final class AllOfResolver
             $schema = $target->schema();
             $inside = false;
             if ($schema->ref() !== null) {
-                $this->flattenAlias($member, $schema, $inside, $merging, $parts, $diagnostics);
+                $this->flattenAlias($origin, $schema, $inside, $merging, $parts, $diagnostics);
 
                 return;
             }
         }
 
         if (!$this->isObject($schema)) {
-            $diagnostics->error('An allOf member of a class must be an object schema.', $member->location());
+            $diagnostics->error('An allOf member of a class must be an object schema.', $origin->location());
 
             return;
         }
 
         $key = $schema->location()->toString();
         if (isset($merging[$key])) {
-            $diagnostics->error('The allOf chain loops back to a schema it is already merging.', $member->location());
+            $diagnostics->error('The allOf chain loops back to a schema it is already merging.', $origin->location());
 
             return;
         }
@@ -210,22 +212,24 @@ final class AllOfResolver
     }
 
     /**
-     * An alias (`{$ref: Pet}`) merges what it names.
+     * An alias (`{$ref: Pet}`) merges what it names, and the requirements written beside its `$ref`.
      *
+     * @param Schema $origin the member written in the class
      * @param bool $inside false: the alias was reached through a $ref
      * @param array<string, string> $merging
      */
-    private function flattenAlias(Schema $member, Schema $alias, bool $inside, array $merging, CompositionParts $parts, Diagnostics $diagnostics): void
+    private function flattenAlias(Schema $origin, Schema $alias, bool $inside, array $merging, CompositionParts $parts, Diagnostics $diagnostics): void
     {
         $key = $alias->location()->toString();
         if (isset($merging[$key])) {
-            $diagnostics->error('The allOf chain loops back to a schema it is already merging.', $member->location());
+            $diagnostics->error('The allOf chain loops back to a schema it is already merging.', $origin->location());
 
             return;
         }
 
         $merging[$key] = $key;
-        $this->flatten($alias, $inside, $merging, $parts, $diagnostics);
+        $this->flatten($alias, $inside, $merging, $parts, $diagnostics, $origin);
+        $parts->requireFrom($alias);
     }
 
     /**
