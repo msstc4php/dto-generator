@@ -65,7 +65,16 @@
 - **GraphFixture/ModelFixture** бросают исключение при ошибках загрузки; сценарии с неразрешёнными `$ref` строятся с `failOnLoadErrors: false`.
 - **Rector и классы атрибутов из `tests/Targets/attributes.php`.** Rector видит эти классы и переписывает строки `'App\\Attr\\X'` в тестах на `X::class` (в том числе внутри ожидаемых строк вида `X::CONST`). `tests/Targets` исключён из Rector, а `StringClassNameToClassConstantRector` отключён для `tests/`; в ожиданиях используйте классы, которых нет в заглушке.
 - **Атрибуты свойств** выводятся только на promoted-параметрах (8.0+ всегда promoted); у наследника — только на собственных параметрах, унаследованные несут атрибуты в базе.
-- **Аннотации (7.4)** пока не выводятся: `metadata: annotations` работает как `none` до этапа 5b.
+- **`verifyClasses: auto` внутри репозитория генератора** находит его собственный `vendor/autoload.php` (поиск идёт вверх от каталога конфига). Поэтому фикстуры под `tests/Fixtures/Projects/` задают `verifyClasses: false`, иначе их классы `App\Attr\*` «не существуют».
+- **Rector превращает строки в `::class`**, если класс есть в `tests/Targets/attributes.php`, даже в тестах. Для имён отсутствующих классов в ожидаемых сообщениях берите имена, которых нет в стабах (`App\Attr\Strictness`, `App\Missing\*`).
+- **Doctrine `AnnotationReader` читает `use` из исходного файла класса** (`ReflectionClass::getFileName()`): в тестах файл нельзя удалять до чтения аннотаций. Round-trip тест — `tests/Integration/Infrastructure/Emitter/AnnotationRoundTripTest.php`, `doctrine/annotations` — require-dev (abandoned, но 2.0 ставится и на 7.4).
+- **`defined('A::X')` вычисляет выражение константы** и может бросить `Error` (неизвестная константа или класс) или подгрузить другие классы потребителя — поэтому он тоже внутри `guarded()`.
+- **`New` — зарезервированное слово**, `ClassName::fromFqcn('App\New')` бросает `InvalidModel`; в тестах берите другие имена.
+- **infection иногда падает с `TestFileNameNotFoundException`** (устаревший `junit.xml` в общем `/tmp/claude-1000/infection`); повторный прогон проходит.
+- **`var_export()` float** уже даёт `2.0`, `1.0E+25` — добавлять `.0` не нужно.
+- **PHPUnit сам превращает E_USER_ERROR в исключение**: тест, проверяющий собственный error handler, должен поставить handler, который ошибку пропускает (`set_error_handler(fn () => true)`), иначе мутант без handler'а выживает.
+- **Composer `ClassLoader::getRegisteredLoaders()`** — ключ = vendorDir; по нему видно, свой ли это загрузчик (тот же vendor — `require` вернёт уже зарегистрированный объект).
+- **`AutoloadClassVerifier` выполняет код потребителя** (`require_once vendor/autoload.php`) в процессе генератора. Поэтому в Docker-образе (этап 6) `DTO_GENERATOR_VERIFY_CLASSES=0`.
 - **Import-алиас против коротких имён файла.** Emitter собирает класс, затем сверяет импортированные алиасы (без регистра) с короткими именами, которые выписал `TypeRenderer`, и с именем самого класса; при совпадении класс собирается заново, а атрибуты этого алиаса пишутся `\FQCN` без `use`.
 - **SPI-граница проверяет результат enricher'а** (не список `AttributeModel` → ошибка с именем расширения) и ловит любые `Throwable` при автозагрузке и создании расширения; одинаковое `name()` у двух расширений → второе не используется (ошибка), секция `extensionConfig` без расширения → warning.
 - **`InstalledPackages` пуст до этапа 6**: расширение, ветвящееся по `has('symfony/validator')`, в 5a ничего не выдаст.
