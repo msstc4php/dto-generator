@@ -7,16 +7,20 @@ namespace MSSTC4PHP\DtoGenerator\Application\Service\Extension\Load;
 use Closure;
 use MSSTC4PHP\DtoGenerator\Application\Config\GeneratorConfig;
 use MSSTC4PHP\DtoGenerator\Application\Extension\Registry;
+use MSSTC4PHP\DtoGenerator\Application\Port\ExtensionDiscovery;
 use MSSTC4PHP\DtoGenerator\Application\Port\ExtensionFailed;
 use MSSTC4PHP\DtoGenerator\Application\Port\ExtensionLoader;
 use MSSTC4PHP\DtoGenerator\Contract\Extension;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
 use MSSTC4PHP\DtoGenerator\Domain\Model\AttributeModel;
+use MSSTC4PHP\DtoGenerator\Domain\Model\Identifier;
+use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
 use Throwable;
 
 /**
- * Registers the extensions of a run (spec §8): the built-in ones first, then those the config lists, in its order.
+ * Registers the extensions of a run (spec §8): the built-in ones first, then those the config lists, in its order, then
+ * those installed packages declare.
  *
  * @phpstan-import-type AttributeDeclaration from AttributeModel
  */
@@ -27,14 +31,17 @@ final class Action
     /** @var Closure(array<string, AttributeDeclaration>): list<Extension> */
     private Closure $builtIn;
 
+    private ExtensionDiscovery $discovery;
+
     /**
      * @param Closure(array<string, AttributeDeclaration>): list<Extension> $builtIn the built-in extensions for the
      *                                                                               config's attributeAliases
      */
-    public function __construct(ExtensionLoader $loader, Closure $builtIn)
+    public function __construct(ExtensionLoader $loader, Closure $builtIn, ExtensionDiscovery $discovery)
     {
         $this->loader = $loader;
         $this->builtIn = $builtIn;
+        $this->discovery = $discovery;
     }
 
     public function __invoke(Input $input): Output
@@ -63,22 +70,61 @@ final class Action
     }
 
     /**
-     * The built-in extensions, then the configured ones that load, each with its index in `extensions` (null if built in).
+     * The built-in extensions, then the configured ones, then the discovered ones by package (spec §8), each with where
+     * it comes from and its class.
      *
-     * @return list<array{Extension, int|null}>
+     * @return list<array{Extension, SchemaLocation, string}>
      */
     private function load(GeneratorConfig $config, Diagnostics $diagnostics): array
     {
         $settings = $config->extensions();
-        $loaded = array_map(static fn (Extension $extension): array => [$extension, null], ($this->builtIn)($settings->aliases()));
+        $loaded = array_map(static fn (Extension $extension): array => [$extension, $config->location(), get_class($extension)], ($this->builtIn)($settings->aliases()));
+        $listed = [];
         foreach ($settings->classes() as $index => $class) {
+            $listed[Identifier::asciiLower($class->fqcn())] = true;
+            $at = $config->location()->child('extensions', (string) $index);
             try {
-                $loaded[] = [$this->loader->load($class), $index];
+                $loaded[] = [$this->loader->load($class), $at, $class->fqcn()];
             } catch (ExtensionFailed $exception) {
-                $diagnostics->error(
-                    sprintf('Extension %s cannot be loaded: %s', $class->fqcn(), $exception->getMessage()),
-                    $config->location()->child('extensions', (string) $index),
-                );
+                $diagnostics->error(sprintf('Extension %s cannot be loaded: %s', $class->fqcn(), $exception->getMessage()), $at);
+            }
+        }
+
+        return $settings->discover() ? array_merge($loaded, $this->discovered($config, $listed, $diagnostics)) : $loaded;
+    }
+
+    /**
+     * @param array<string, true> $listed lower-cased classes already loaded, which discovery does not load again
+     *
+     * @return list<array{Extension, SchemaLocation, string}>
+     */
+    private function discovered(GeneratorConfig $config, array $listed, Diagnostics $diagnostics): array
+    {
+        $at = $config->location()->child('discoverExtensions');
+        $found = $this->discovery->discover();
+        foreach ($found->problems() as $problem) {
+            $diagnostics->warning($problem, $at);
+        }
+
+        $extensions = $found->extensions();
+        // usort() is stable only from PHP 8.0; the index keeps a package's own order on 7.4.
+        $order = array_keys($extensions);
+        usort($order, static fn (int $a, int $b): int => [$extensions[$a]->package(), $a] <=> [$extensions[$b]->package(), $b]);
+
+        $loaded = [];
+        foreach ($order as $index) {
+            $discovered = $extensions[$index];
+            $class = $discovered->className();
+            $key = Identifier::asciiLower($class->fqcn());
+            if (isset($listed[$key])) {
+                continue;
+            }
+
+            $listed[$key] = true;
+            try {
+                $loaded[] = [$this->loader->load($class), $at, $class->fqcn()];
+            } catch (ExtensionFailed $exception) {
+                $diagnostics->error(sprintf('Extension %s, discovered in package %s, cannot be loaded: %s', $class->fqcn(), $discovered->package(), $exception->getMessage()), $at);
             }
         }
 
@@ -88,18 +134,15 @@ final class Action
     /**
      * Registers each extension under its own name, with its section of extensionConfig.
      *
-     * @param list<array{Extension, int|null}> $loaded
+     * @param list<array{Extension, SchemaLocation, string}> $loaded
      *
      * @return array<string, string> the names registered
      */
     private function registerOnce(array $loaded, GeneratorConfig $config, Registry $registry, Diagnostics $diagnostics): array
     {
-        $classes = $config->extensions()->classes();
         $sections = $config->extensions()->config();
         $named = [];
-        foreach ($loaded as [$extension, $origin]) {
-            $at = $origin === null ? $config->location() : $config->location()->child('extensions', (string) $origin);
-            $class = $origin === null ? get_class($extension) : $classes[$origin]->fqcn();
+        foreach ($loaded as [$extension, $at, $class]) {
             try {
                 $name = $extension->name();
             } catch (Throwable $exception) {

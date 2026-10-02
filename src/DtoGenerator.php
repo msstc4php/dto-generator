@@ -21,6 +21,7 @@ use MSSTC4PHP\DtoGenerator\Infrastructure\Emitter\PhpParserEmitter;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Environment\AutoloadClassVerifierLocator;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Environment\ComposerJsonPhpConstraint;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Environment\ComposerLockPackages;
+use MSSTC4PHP\DtoGenerator\Infrastructure\Environment\InstalledJsonExtensionDiscovery;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Extension\ClassExtensionLoader;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Writer\FilesystemWriter;
 use MSSTC4PHP\DtoGenerator\Presentation\Cli\ErrorOutput;
@@ -54,7 +55,7 @@ final class DtoGenerator
             new LoadConfig($loader, new ConfigFactory(), new TargetResolver(new ComposerJsonPhpConstraint())),
             new AutoloadClassVerifierLocator(),
             new ComposerLockPackages(),
-            new LoadExtensions(new ClassExtensionLoader(), static fn (array $aliases): array => [new CustomAttributes($aliases)]),
+            new LoadExtensions(new ClassExtensionLoader(), static fn (array $aliases): array => [new CustomAttributes($aliases)], new InstalledJsonExtensionDiscovery()),
             new LoadSchemas($loader, new SchemaParser()),
             new BuildModel(new NameResolver()),
             new EnrichModel(),

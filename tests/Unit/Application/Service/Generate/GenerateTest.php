@@ -29,6 +29,7 @@ use MSSTC4PHP\DtoGenerator\Tests\Support\Extensions\MoneyFormatExtension;
 use MSSTC4PHP\DtoGenerator\Tests\Support\Extensions\PackageVersionExtension;
 use MSSTC4PHP\DtoGenerator\Tests\Support\FixedClassVerifier;
 use MSSTC4PHP\DtoGenerator\Tests\Support\FixedClassVerifierLocator;
+use MSSTC4PHP\DtoGenerator\Tests\Support\FixedExtensionDiscovery;
 use MSSTC4PHP\DtoGenerator\Tests\Support\FixedPhpConstraint;
 use MSSTC4PHP\DtoGenerator\Tests\Support\FixedProjectPackages;
 use MSSTC4PHP\DtoGenerator\Tests\Support\InMemoryDocumentLoader;
@@ -329,7 +330,7 @@ final class GenerateTest extends TestCase
             new LoadConfig($loader, new ConfigFactory(), new TargetResolver(new FixedPhpConstraint(null))),
             $verifiers ?? new FixedClassVerifierLocator(),
             $packages ?? new FixedProjectPackages(),
-            new LoadExtensions(new ClassExtensionLoader(), static fn (array $aliases): array => [new CustomAttributes($aliases)]),
+            new LoadExtensions(new ClassExtensionLoader(), static fn (array $aliases): array => [new CustomAttributes($aliases)], new FixedExtensionDiscovery()),
             new LoadSchemas($loader, new SchemaParser()),
             new BuildModel(new NameResolver()),
             new EnrichModel(),
