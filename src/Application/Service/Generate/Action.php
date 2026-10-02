@@ -6,6 +6,8 @@ namespace MSSTC4PHP\DtoGenerator\Application\Service\Generate;
 
 use MSSTC4PHP\DtoGenerator\Application\Config\GeneratorConfig;
 use MSSTC4PHP\DtoGenerator\Application\Config\SourceConfig;
+use MSSTC4PHP\DtoGenerator\Application\Port\ClassVerifier;
+use MSSTC4PHP\DtoGenerator\Application\Port\ClassVerifierLocator;
 use MSSTC4PHP\DtoGenerator\Application\Port\CodeEmitter;
 use MSSTC4PHP\DtoGenerator\Application\Port\FileWriter;
 use MSSTC4PHP\DtoGenerator\Application\Port\WriteFailed;
@@ -34,6 +36,8 @@ final class Action
 {
     private LoadConfig $loadConfig;
 
+    private ClassVerifierLocator $verifiers;
+
     private LoadExtensions $loadExtensions;
 
     private LoadSchemas $loadSchemas;
@@ -48,6 +52,7 @@ final class Action
 
     public function __construct(
         LoadConfig $loadConfig,
+        ClassVerifierLocator $verifiers,
         LoadExtensions $loadExtensions,
         LoadSchemas $loadSchemas,
         BuildModel $buildModel,
@@ -56,6 +61,7 @@ final class Action
         FileWriter $writer
     ) {
         $this->loadConfig = $loadConfig;
+        $this->verifiers = $verifiers;
         $this->loadExtensions = $loadExtensions;
         $this->loadSchemas = $loadSchemas;
         $this->buildModel = $buildModel;
@@ -71,11 +77,12 @@ final class Action
         $diagnostics->merge($loaded->diagnostics());
         $config = $loaded->config();
         $target = $loaded->target();
+        $verifier = $config instanceof GeneratorConfig ? $this->verifier($config, $diagnostics) : null;
         if (!$config instanceof GeneratorConfig || !$target instanceof TargetProfile || $diagnostics->hasErrors()) {
             return new Output(Status::from(Status::CONFIG_FAILED), $diagnostics, null, []);
         }
 
-        $files = $this->files($config, $target, $diagnostics);
+        $files = $this->files($config, $target, $verifier, $diagnostics);
         if ($files === null) {
             return new Output(Status::from(Status::GENERATION_FAILED), $diagnostics, null, []);
         }
@@ -120,11 +127,33 @@ final class Action
     }
 
     /**
+     * verifyClasses (spec §4): "auto" verifies when the consumer's vendor/autoload.php is found and the environment does
+     * not forbid it; true insists on the autoloader.
+     */
+    private function verifier(GeneratorConfig $config, Diagnostics $diagnostics): ?ClassVerifier
+    {
+        $setting = $config->extensions()->verifyClasses();
+        if ($setting === false || ($setting === null && $this->verifiers->isDisabledByEnvironment())) {
+            return null;
+        }
+
+        $verifier = $this->verifiers->locate($config->baseDir());
+        if ($setting === true && !$verifier instanceof ClassVerifier) {
+            $diagnostics->error(
+                sprintf('"verifyClasses" is true, but no vendor/autoload.php was found from %s upwards.', $config->baseDir()),
+                $config->location()->child('verifyClasses'),
+            );
+        }
+
+        return $verifier;
+    }
+
+    /**
      * Null when the schemas or the model have errors, since emitting them would be wasted work.
      *
      * @return list<GeneratedFile>|null
      */
-    private function files(GeneratorConfig $config, TargetProfile $target, Diagnostics $diagnostics): ?array
+    private function files(GeneratorConfig $config, TargetProfile $target, ?ClassVerifier $verifier, Diagnostics $diagnostics): ?array
     {
         $extensions = ($this->loadExtensions)(new ExtensionsInput($config));
         $diagnostics->merge($extensions->diagnostics());
@@ -136,7 +165,7 @@ final class Action
         $model = ($this->buildModel)(new BuildInput($config, $target, $schemas->graph(), $formats, $aliases));
         $diagnostics->merge($model->diagnostics());
         // Installed versions are detected in stage 6; until then extensions see none.
-        $enriched = ($this->enrichModel)(new EnrichInput($model->classes(), $schemas->graph(), $target, $registry, new InstalledPackages()));
+        $enriched = ($this->enrichModel)(new EnrichInput($model->classes(), $schemas->graph(), $target, $registry, new InstalledPackages(), $verifier));
         $diagnostics->merge($enriched->diagnostics());
         if ($diagnostics->hasErrors()) {
             return null;

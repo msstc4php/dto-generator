@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MSSTC4PHP\DtoGenerator\Application\Service\Model\Enrich;
 
 use MSSTC4PHP\DtoGenerator\Application\Extension\Registry;
+use MSSTC4PHP\DtoGenerator\Application\Port\ClassVerifier;
 use MSSTC4PHP\DtoGenerator\Application\Service\Model\Build\BuiltClass;
 use MSSTC4PHP\DtoGenerator\Contract\InstalledPackages;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaGraph;
@@ -23,11 +24,15 @@ final class Input
 
     private InstalledPackages $packages;
 
+    private ?ClassVerifier $verifier;
+
     /**
      * @param list<BuiltClass> $classes
+     * @param ClassVerifier|null $verifier the consumer's autoloader when verifyClasses is on
      */
-    public function __construct(array $classes, SchemaGraph $graph, TargetProfile $target, Registry $registry, InstalledPackages $packages)
+    public function __construct(array $classes, SchemaGraph $graph, TargetProfile $target, Registry $registry, InstalledPackages $packages, ?ClassVerifier $verifier = null)
     {
+        $this->verifier = $verifier;
         $this->classes = $classes;
         $this->graph = $graph;
         $this->target = $target;
@@ -56,6 +61,11 @@ final class Input
     public function registry(): Registry
     {
         return $this->registry;
+    }
+
+    public function verifier(): ?ClassVerifier
+    {
+        return $this->verifier;
     }
 
     public function packages(): InstalledPackages

@@ -26,6 +26,8 @@ use MSSTC4PHP\DtoGenerator\Extension\CustomAttributes\CustomAttributes;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Emitter\PhpParserEmitter;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Extension\ClassExtensionLoader;
 use MSSTC4PHP\DtoGenerator\Tests\Support\Extensions\MoneyFormatExtension;
+use MSSTC4PHP\DtoGenerator\Tests\Support\FixedClassVerifier;
+use MSSTC4PHP\DtoGenerator\Tests\Support\FixedClassVerifierLocator;
 use MSSTC4PHP\DtoGenerator\Tests\Support\FixedPhpConstraint;
 use MSSTC4PHP\DtoGenerator\Tests\Support\InMemoryDocumentLoader;
 use MSSTC4PHP\DtoGenerator\Tests\Support\RecordingWriter;
@@ -121,6 +123,31 @@ final class GenerateTest extends TestCase
         );
 
         self::assertSame(['warning /project/api/openapi.yaml#/components/schemas/Item/properties/tags/items/x-audit: "x-audit" has no effect here.'], $this->messages($output));
+    }
+
+    public function testRefusesToVerifyClassesWithoutAnAutoloader(): void
+    {
+        $writer = new RecordingWriter(new WritePlan([], [], []));
+        $output = $this->generate($writer, Mode::WRITE, [], ['verifyClasses' => true]);
+
+        self::assertSame('config-failed', $output->status()->value());
+        self::assertSame(['error /project/dto-generator.yaml#/verifyClasses: "verifyClasses" is true, but no vendor/autoload.php was found from /project upwards.'], $this->messages($output));
+    }
+
+    public function testVerifiesTheClassesOfAttributesWhenAnAutoloaderIsFound(): void
+    {
+        $schemas = ['Item' => ['type' => 'object', 'x-php-attributes' => [['class' => 'App\\Missing']], 'properties' => ['id' => ['type' => 'string']]]];
+
+        $found = $this->generate(new RecordingWriter(new WritePlan([], [], [])), Mode::WRITE, $schemas, [], new FixedClassVerifierLocator(new FixedClassVerifier([])));
+        $disabled = $this->generate(new RecordingWriter(new WritePlan([], [], [])), Mode::WRITE, $schemas, [], new FixedClassVerifierLocator(new FixedClassVerifier([]), true));
+        $off = $this->generate(new RecordingWriter(new WritePlan([], [], [])), Mode::WRITE, $schemas, ['verifyClasses' => false], new FixedClassVerifierLocator(new FixedClassVerifier([])));
+        $forced = $this->generate(new RecordingWriter(new WritePlan([], [], [])), Mode::WRITE, $schemas, ['verifyClasses' => true], new FixedClassVerifierLocator(new FixedClassVerifier([]), true));
+
+        self::assertSame('generation-failed', $found->status()->value());
+        self::assertSame(['error /project/api/openapi.yaml#/components/schemas/Item: Attribute class App\\Missing does not exist.'], $this->messages($found));
+        self::assertSame('ok', $disabled->status()->value());
+        self::assertSame('ok', $off->status()->value());
+        self::assertSame('generation-failed', $forced->status()->value());
     }
 
     public function testFailsOnAnExtensionThatCannotBeLoaded(): void
@@ -237,9 +264,9 @@ final class GenerateTest extends TestCase
 
     /**
      * @param array<string, array<array-key, mixed>> $extraSchemas
-     * @param array<string, array<array-key, mixed>> $extraConfig
+     * @param array<string, array<array-key, mixed>|bool> $extraConfig
      */
-    private function generate(RecordingWriter $writer, string $mode, array $extraSchemas = [], array $extraConfig = []): Output
+    private function generate(RecordingWriter $writer, string $mode, array $extraSchemas = [], array $extraConfig = [], ?FixedClassVerifierLocator $verifiers = null): Output
     {
         $loader = new InMemoryDocumentLoader([
             self::CONFIG => [
@@ -260,13 +287,14 @@ final class GenerateTest extends TestCase
             ]]],
         ]);
 
-        return $this->action($loader, $writer)(new Input(self::CONFIG, Mode::from($mode)));
+        return $this->action($loader, $writer, $verifiers ?? new FixedClassVerifierLocator())(new Input(self::CONFIG, Mode::from($mode)));
     }
 
-    private function action(InMemoryDocumentLoader $loader, RecordingWriter $writer): Action
+    private function action(InMemoryDocumentLoader $loader, RecordingWriter $writer, ?FixedClassVerifierLocator $verifiers = null): Action
     {
         return new Action(
             new LoadConfig($loader, new ConfigFactory(), new TargetResolver(new FixedPhpConstraint(null))),
+            $verifiers ?? new FixedClassVerifierLocator(),
             new LoadExtensions(new ClassExtensionLoader(), static fn (array $aliases): array => [new CustomAttributes($aliases)]),
             new LoadSchemas($loader, new SchemaParser()),
             new BuildModel(new NameResolver()),

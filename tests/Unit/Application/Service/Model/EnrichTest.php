@@ -6,6 +6,7 @@ namespace MSSTC4PHP\DtoGenerator\Tests\Unit\Application\Service\Model;
 
 use Closure;
 use MSSTC4PHP\DtoGenerator\Application\Extension\Registry;
+use MSSTC4PHP\DtoGenerator\Application\Port\ClassVerifier;
 use MSSTC4PHP\DtoGenerator\Application\Service\Model\Enrich\Action;
 use MSSTC4PHP\DtoGenerator\Application\Service\Model\Enrich\Input;
 use MSSTC4PHP\DtoGenerator\Application\Service\Model\Enrich\Output;
@@ -30,6 +31,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Target\PhpVersion;
 use MSSTC4PHP\DtoGenerator\Domain\Target\TargetProfile;
 use MSSTC4PHP\DtoGenerator\Extension\CustomAttributes\CustomAttributes;
 use MSSTC4PHP\DtoGenerator\Tests\Support\Extensions\MarkingExtension;
+use MSSTC4PHP\DtoGenerator\Tests\Support\FixedClassVerifier;
 use MSSTC4PHP\DtoGenerator\Tests\Support\GraphFixture;
 use MSSTC4PHP\DtoGenerator\Tests\Support\ModelFixture;
 use PHPUnit\Framework\TestCase;
@@ -138,7 +140,7 @@ final class EnrichTest extends TestCase
      * @param array<string, array<array-key, mixed>> $schemas
      * @param Closure(ExtensionRegistry):void $register
      */
-    private function enrich(array $schemas, Closure $register, string $php = '8.2', bool $strict = true, string $metadata = MetadataMode::ATTRIBUTES): Output
+    private function enrich(array $schemas, Closure $register, string $php = '8.2', bool $strict = true, string $metadata = MetadataMode::ATTRIBUTES, ?ClassVerifier $verifier = null): Output
     {
         $built = ModelFixture::build($schemas);
         $diagnostics = new Diagnostics();
@@ -174,7 +176,7 @@ final class EnrichTest extends TestCase
             $strict,
         );
 
-        return (new Action())(new Input($built->classes(), GraphFixture::load($schemas), $target, $registry, new InstalledPackages()));
+        return (new Action())(new Input($built->classes(), GraphFixture::load($schemas), $target, $registry, new InstalledPackages(), $verifier));
     }
 
     /**
@@ -288,5 +290,67 @@ final class EnrichTest extends TestCase
                 }
             });
         };
+    }
+
+    public function testReportsClassesAndConstantsTheConsumerLacks(): void
+    {
+        $at = self::AT;
+        $verifier = new FixedClassVerifier(['App\\Attr\\Rule', 'App\\Attr\\Strictness'], ['App\\Attr\\Strictness::STRICT', 'PHP_INT_MAX']);
+        $output = $this->enrich(['Pet' => self::SCHEMAS['Pet']], static function (ExtensionRegistry $registry): void {
+            $registry->addPropertyEnricher(new class implements PropertyEnricher {
+                public function enrichProperty(PropertyContext $context): array
+                {
+                    return [
+                        new AttributeModel(ClassName::fromFqcn('App\\Attr\\Rule'), [
+                            AttributeArgument::named('mode', ArgumentValue::constant('STRICT', ClassName::fromFqcn('App\\Attr\\Strictness'))),
+                            AttributeArgument::named('limit', ArgumentValue::constant('PHP_INT_MAX')),
+                            AttributeArgument::named('other', ArgumentValue::listOf(
+                                ArgumentValue::constant('LOOSE', ClassName::fromFqcn('App\\Attr\\Strictness')),
+                                ArgumentValue::constant('NOPE'),
+                                ArgumentValue::mapOf(['k' => ArgumentValue::classReference(ClassName::fromFqcn('App\\Missing\\Ref'))]),
+                                ArgumentValue::newInstance(ClassName::fromFqcn('App\\Missing\\Inner'), AttributeArgument::positional(ArgumentValue::classReference(ClassName::fromFqcn('App\\Missing\\Arg')))),
+                            )),
+                        ]),
+                        new AttributeModel(ClassName::fromFqcn('App\\Missing\\Attribute')),
+                    ];
+                }
+            });
+        }, '8.2', true, MetadataMode::ATTRIBUTES, $verifier);
+
+        self::assertSame(
+            [
+                "error {$at}Pet/properties/name: Constant App\\Attr\\Strictness::LOOSE, used by attribute App\\Attr\\Rule, does not exist.",
+                "error {$at}Pet/properties/name: Constant NOPE, used by attribute App\\Attr\\Rule, does not exist.",
+                "error {$at}Pet/properties/name: Class App\\Missing\\Ref, used by attribute App\\Attr\\Rule, does not exist.",
+                "error {$at}Pet/properties/name: Class App\\Missing\\Inner, used by attribute App\\Attr\\Rule, does not exist.",
+                "error {$at}Pet/properties/name: Class App\\Missing\\Arg, used by attribute App\\Attr\\Rule, does not exist.",
+                "error {$at}Pet/properties/name: Attribute class App\\Missing\\Attribute does not exist.",
+            ],
+            $this->messages($output),
+        );
+    }
+
+    public function testVerifiesNothingWhenNoMetadataRenders(): void
+    {
+        $output = $this->enrich(['Pet' => self::SCHEMAS['Pet']], static function (ExtensionRegistry $registry): void {
+            (new MarkingExtension())->register($registry, []);
+        }, '8.2', true, MetadataMode::NONE, new FixedClassVerifier([]));
+
+        self::assertSame([], $this->messages($output));
+    }
+
+    public function testVerifiesTheAttributesOfClasses(): void
+    {
+        $output = $this->enrich(['Pet' => self::SCHEMAS['Pet']], static function (ExtensionRegistry $registry): void {
+            (new MarkingExtension())->register($registry, []);
+        }, '8.2', true, MetadataMode::ATTRIBUTES, new FixedClassVerifier([]));
+
+        self::assertSame(
+            [
+                'error ' . self::AT . 'Pet/properties/name: Attribute class App\\Attr\\Marked does not exist.',
+                'error ' . self::AT . 'Pet: Attribute class App\\Attr\\Marked does not exist.',
+            ],
+            $this->messages($output),
+        );
     }
 }
