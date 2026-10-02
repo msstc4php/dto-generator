@@ -15,6 +15,7 @@ use MSSTC4PHP\DtoGenerator\Application\Service\Model\Enrich\Action as EnrichMode
 use MSSTC4PHP\DtoGenerator\Application\Service\Schemas\Load\Action as LoadSchemas;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\NameResolver;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\SchemaParser;
+use MSSTC4PHP\DtoGenerator\Extension\CustomAttributes\CustomAttributes;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Document\FileDocumentLoader;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Emitter\PhpParserEmitter;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Environment\ComposerJsonPhpConstraint;
@@ -49,7 +50,7 @@ final class DtoGenerator
 
         return new Generate(
             new LoadConfig($loader, new ConfigFactory(), new TargetResolver(new ComposerJsonPhpConstraint())),
-            new LoadExtensions(new ClassExtensionLoader(), static fn (): array => []),
+            new LoadExtensions(new ClassExtensionLoader(), static fn (array $aliases): array => [new CustomAttributes($aliases)]),
             new LoadSchemas($loader, new SchemaParser()),
             new BuildModel(new NameResolver()),
             new EnrichModel(),

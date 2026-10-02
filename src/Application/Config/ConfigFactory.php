@@ -155,7 +155,7 @@ final class ConfigFactory
             }
 
             $value = $aliasSection->raw($name);
-            if (!is_array($value) || ($value !== [] && Json::isList($value))) {
+            if (!is_array($value) || Json::isList($value) || !is_string($value['class'] ?? null) || array_diff(array_keys($value), ['class', 'args']) !== []) {
                 $aliasSection->report('An alias must be an object with "class" and optional "args".', $name);
 
                 continue;

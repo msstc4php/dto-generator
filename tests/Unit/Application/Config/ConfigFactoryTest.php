@@ -169,6 +169,10 @@ final class ConfigFactoryTest extends TestCase
             'unknown format key' => [['version' => 1, 'formats' => ['uuid' => ['type' => 'App\Uuid', 'kind' => 1]], 'sources' => [$source]], 'Unknown key "kind"', '/formats/uuid/kind'],
             'reserved x-dto alias' => [['version' => 1, 'attributeAliases' => ['x-dto-audit' => []], 'sources' => [$source]], 'outside the reserved', '/attributeAliases/x-dto-audit'],
             'alias of a core key' => [['version' => 1, 'attributeAliases' => ['x-enum-descriptions' => ['class' => 'App\A']], 'sources' => [$source]], 'outside the reserved', '/attributeAliases/x-enum-descriptions'],
+            'alias without class' => [['version' => 1, 'attributeAliases' => ['x-audit' => ['args' => []]], 'sources' => [$source]], 'An alias must be an object', '/attributeAliases/x-audit'],
+            'alias with another key' => [['version' => 1, 'attributeAliases' => ['x-audit' => ['class' => 'App\A', 'with' => 1]], 'sources' => [$source]], 'An alias must be an object', '/attributeAliases/x-audit'],
+            'alias with a class that is no string' => [['version' => 1, 'attributeAliases' => ['x-audit' => ['class' => 5]], 'sources' => [$source]], 'An alias must be an object', '/attributeAliases/x-audit'],
+            'empty alias' => [['version' => 1, 'attributeAliases' => ['x-audit' => []], 'sources' => [$source]], 'An alias must be an object', '/attributeAliases/x-audit'],
             'alias list' => [['version' => 1, 'attributeAliases' => ['x-audit' => ['App\A']], 'sources' => [$source]], 'An alias must be an object', '/attributeAliases/x-audit'],
             'empty spec' => [['version' => 1, 'sources' => [['spec' => ''] + $source]], '"spec" must be a non-empty string', '/sources/0/spec'],
             'numeric spec' => [['version' => 1, 'sources' => [['spec' => 5] + $source]], '"spec" must be a non-empty string', '/sources/0/spec'],
@@ -230,7 +234,7 @@ final class ConfigFactoryTest extends TestCase
         $config = $this->valid([
             'version' => 1,
             'formats' => ['uuid' => ['type' => 'App\Uuid'], '200' => ['type' => 'App\Ok']],
-            'attributeAliases' => ['x-phpstorm' => ['class' => 'App\A'], 'x-dtox' => [], 'x-empty' => []],
+            'attributeAliases' => ['x-phpstorm' => ['class' => 'App\A'], 'x-dtox' => ['class' => 'App\B'], 'x-empty' => ['class' => 'App\C', 'args' => []]],
             'sources' => [
                 ['spec' => 'a.yaml', 'namespace' => 'App\A', 'outputDir' => 'a', 'include' => ['A*', 'B*']],
                 ['spec' => 'b.yaml', 'namespace' => 'App\B', 'outputDir' => 'b'],
