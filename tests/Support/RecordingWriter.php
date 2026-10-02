@@ -26,6 +26,8 @@ final class RecordingWriter implements FileWriter
 
     public bool $applied = false;
 
+    public bool $released = false;
+
     public function __construct(WritePlan $plan, ?WriteFailed $failure = null)
     {
         $this->plan = $plan;
@@ -47,5 +49,10 @@ final class RecordingWriter implements FileWriter
         }
 
         $this->applied = true;
+    }
+
+    public function release(): void
+    {
+        $this->released = true;
     }
 }

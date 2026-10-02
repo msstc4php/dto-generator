@@ -19,7 +19,14 @@ interface FileWriter
     public function plan(array $outputDirs, array $files): WritePlan;
 
     /**
+     * Writes the plan and releases what plan() locked.
+     *
      * @throws WriteFailed
      */
     public function apply(WritePlan $plan): void;
+
+    /**
+     * Releases what plan() locked when the plan is not applied (a check, a dry run or an error).
+     */
+    public function release(): void;
 }

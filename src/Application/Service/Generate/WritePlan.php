@@ -21,19 +21,24 @@ final class WritePlan
     /** @var array<string, string> */
     private array $interimManifests;
 
+    /** @var list<string> */
+    private array $newManifests;
+
     /**
      * @param list<FileChange> $changes
      * @param array<string, string> $conflicts path → why writing must not touch the file
      * @param array<string, string> $manifests manifest path → new contents, for manifests that change
      * @param array<string, string> $interimManifests manifest path → contents written before any file, listing both
      *                                                the files about to be written and those about to be deleted
+     * @param list<string> $newManifests paths of manifests that do not exist yet
      */
-    public function __construct(array $changes, array $conflicts, array $manifests, array $interimManifests = [])
+    public function __construct(array $changes, array $conflicts, array $manifests, array $interimManifests = [], array $newManifests = [])
     {
         $this->changes = $changes;
         $this->conflicts = $conflicts;
         $this->manifests = $manifests;
         $this->interimManifests = $interimManifests;
+        $this->newManifests = $newManifests;
     }
 
     /**
@@ -66,6 +71,14 @@ final class WritePlan
     public function interimManifests(): array
     {
         return $this->interimManifests;
+    }
+
+    /**
+     * Decided while planning, so a report written after apply() still says "create".
+     */
+    public function isNewManifest(string $path): bool
+    {
+        return in_array($path, $this->newManifests, true);
     }
 
     public function hasChanges(): bool

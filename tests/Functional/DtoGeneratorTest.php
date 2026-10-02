@@ -99,4 +99,40 @@ final class DtoGeneratorTest extends TestCase
         self::assertSame(3, DtoGenerator::run(new ArrayInput(['command' => 'generate', '--check' => true, '--dry-run' => true]), $output));
         self::assertSame("error: --check and --dry-run cannot be combined.\n", $output->fetch());
     }
+
+    public function testReportsInputErrorsAsJsonWhenAsked(): void
+    {
+        $output = new BufferedOutput();
+
+        self::assertSame(3, DtoGenerator::run(new ArrayInput(['command' => 'generate', '--bogus' => true, '--format' => 'json']), $output));
+        self::assertSame(
+            ['status' => 'config-failed', 'diagnostics' => [['severity' => 'error', 'location' => '', 'message' => 'The "--bogus" option does not exist.']], 'changes' => []],
+            json_decode($output->fetch(), true),
+        );
+    }
+
+    public function testShowsTheExceptionClassWhenVerbose(): void
+    {
+        $application = new Application();
+        $application->add(new class extends Command {
+            protected function configure(): void
+            {
+                $this->setName('boom');
+            }
+
+            protected function execute(InputInterface $input, OutputInterface $output): int
+            {
+                throw new RuntimeException('Disk on fire.');
+            }
+        });
+        $verbose = new BufferedOutput(OutputInterface::VERBOSITY_VERBOSE);
+        $veryVerbose = new BufferedOutput(OutputInterface::VERBOSITY_VERY_VERBOSE);
+
+        self::assertSame(2, DtoGenerator::run(new ArrayInput(['command' => 'boom']), $verbose, $application));
+        self::assertSame(2, DtoGenerator::run(new ArrayInput(['command' => 'boom']), $veryVerbose, $application));
+        $short = $verbose->fetch();
+        self::assertStringStartsWith("error: Disk on fire.\nRuntimeException in ", $short);
+        self::assertStringNotContainsString('#0 ', $short);
+        self::assertStringContainsString("\n#0 ", $veryVerbose->fetch());
+    }
 }

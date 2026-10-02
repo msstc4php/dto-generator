@@ -17,13 +17,14 @@ use MSSTC4PHP\DtoGenerator\Infrastructure\Document\FileDocumentLoader;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Emitter\PhpParserEmitter;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Environment\ComposerJsonPhpConstraint;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Writer\FilesystemWriter;
+use MSSTC4PHP\DtoGenerator\Presentation\Cli\ErrorOutput;
 use MSSTC4PHP\DtoGenerator\Presentation\Cli\GenerateCommand;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\CommandLoader\FactoryCommandLoader;
 use Symfony\Component\Console\Exception\ExceptionInterface;
+use Symfony\Component\Console\Input\ArgvInput;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\ConsoleOutput;
-use Symfony\Component\Console\Output\ConsoleOutputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Throwable;
 
@@ -72,19 +73,28 @@ final class DtoGenerator
      */
     public static function run(?InputInterface $input = null, ?OutputInterface $output = null, ?Application $application = null): int
     {
+        $input ??= new ArgvInput();
         $output ??= new ConsoleOutput();
-        $application ??= self::console();
-        $application->setAutoExit(false);
+        $application = self::withoutAutoExit($application ?? self::console());
         $application->setCatchExceptions(false);
 
         try {
             return $application->run($input, $output);
         } catch (ExceptionInterface $exception) {
-            self::errorOutput($output)->writeln('error: ' . $exception->getMessage());
+            // getParameterOption() is documented as "mixed", which PHPStan reads as a class on phpVersion 70400;
+            // json_encode() takes any value and gives a plain string to compare.
+            if (json_encode($input->getParameterOption('--format')) === '"json"') {
+                $output->writeln(ErrorOutput::json($exception->getMessage()));
+            } else {
+                ErrorOutput::of($output)->writeln('error: ' . $exception->getMessage());
+            }
 
             return 3;
         } catch (Throwable $exception) {
-            self::errorOutput($output)->writeln('error: ' . $exception->getMessage());
+            $errors = ErrorOutput::of($output);
+            $errors->writeln('error: ' . $exception->getMessage());
+            $errors->writeln(sprintf('%s in %s:%d', get_class($exception), $exception->getFile(), $exception->getLine()), OutputInterface::VERBOSITY_VERBOSE);
+            $errors->writeln($exception->getTraceAsString(), OutputInterface::VERBOSITY_VERY_VERBOSE);
 
             return 2;
         }
@@ -95,8 +105,13 @@ final class DtoGenerator
         return InstalledVersions::getPrettyVersion(self::PACKAGE) ?? 'dev';
     }
 
-    private static function errorOutput(OutputInterface $output): OutputInterface
+    /**
+     * Without it, run() would exit the process instead of returning the code.
+     */
+    private static function withoutAutoExit(Application $application): Application
     {
-        return $output instanceof ConsoleOutputInterface ? $output->getErrorOutput() : $output;
+        $application->setAutoExit(false);
+
+        return $application;
     }
 }

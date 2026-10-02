@@ -196,6 +196,15 @@ final class GenerateCommandTest extends TestCase
         self::assertStringContainsString("f\u{00E4}rg", $display);
     }
 
+    public function testReportsANewManifestAsCreatedAfterWriting(): void
+    {
+        $report = json_decode($this->execute(['--format' => 'json'])[1], true);
+
+        self::assertIsArray($report);
+        self::assertIsArray($report['changes']);
+        self::assertSame(['kind' => 'create', 'path' => 'src/Dto/.dto-generator.manifest.json'], end($report['changes']));
+    }
+
     public function testReportsUsageErrorsAsJson(): void
     {
         [$code, $display] = $this->execute(['--format' => 'json', '--check' => true, '--dry-run' => true]);

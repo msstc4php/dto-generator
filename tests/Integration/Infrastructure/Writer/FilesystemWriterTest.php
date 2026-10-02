@@ -9,6 +9,7 @@ use MSSTC4PHP\DtoGenerator\Application\Port\WriteFailed;
 use MSSTC4PHP\DtoGenerator\Application\Service\Generate\FileChange;
 use MSSTC4PHP\DtoGenerator\Application\Service\Generate\GeneratedFile;
 use MSSTC4PHP\DtoGenerator\Application\Service\Generate\WritePlan;
+use MSSTC4PHP\DtoGenerator\Infrastructure\Writer\DirectoryLocks;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Writer\FilesystemWriter;
 use PHPUnit\Framework\TestCase;
 
@@ -42,7 +43,7 @@ final class FilesystemWriterTest extends TestCase
             . '        "User.php": "' . hash('sha256', self::HEADER . 'user') . "\"\n    }\n}\n",
             file_get_contents($this->dir . '/out/.dto-generator.manifest.json'),
         );
-        self::assertSame('0644', substr(sprintf('%o', fileperms($this->dir . '/out/User.php')), -4));
+        self::assertSame(sprintf('%o', 0666 & ~umask()), substr(sprintf('%o', fileperms($this->dir . '/out/User.php')), -3));
         self::assertSame(sprintf('%o', 0777 & ~umask()), substr(sprintf('%o', fileperms($this->dir . '/out/Sub')), -3));
         self::assertSame([], glob($this->dir . '/out/.*.tmp'));
     }
@@ -416,14 +417,23 @@ final class FilesystemWriterTest extends TestCase
     public function testLocksTheOutputDirFromPlanUntilApply(): void
     {
         $writer = new FilesystemWriter();
-        $lock = FilesystemWriter::lockPath($this->dir . '/out');
         $plan = $writer->plan([$this->dir . '/out/'], [$this->file('User.php', 'user')]);
 
-        self::assertFalse($this->canLock($lock));
+        self::assertFalse($this->canLock(DirectoryLocks::path($this->dir . '/out')));
 
         $writer->apply($plan);
 
-        self::assertTrue($this->canLock($lock));
+        self::assertTrue($this->canLock(DirectoryLocks::path($this->dir . '/out')));
+    }
+
+    public function testReleasesTheLockWithoutApplying(): void
+    {
+        $writer = new FilesystemWriter();
+        $writer->plan([$this->dir . '/out'], [$this->file('User.php', 'user')]);
+
+        $writer->release();
+
+        self::assertTrue($this->canLock(DirectoryLocks::path($this->dir . '/out')));
     }
 
     public function testReleasesTheLockWhenTheWriterIsDropped(): void
@@ -432,7 +442,71 @@ final class FilesystemWriterTest extends TestCase
         $writer->plan([$this->dir . '/out'], []);
         unset($writer);
 
-        self::assertTrue($this->canLock(FilesystemWriter::lockPath($this->dir . '/out')));
+        self::assertTrue($this->canLock(DirectoryLocks::path($this->dir . '/out')));
+    }
+
+    public function testLetsTwoWritersOfOneProcessShareALock(): void
+    {
+        $first = new FilesystemWriter();
+        $second = new FilesystemWriter();
+        $first->plan([$this->dir . '/out'], []);
+
+        // Would block forever if each writer took its own lock.
+        $second->plan([$this->dir . '/out'], []);
+        $first->release();
+
+        self::assertFalse($this->canLock(DirectoryLocks::path($this->dir . '/out')));
+
+        $second->release();
+
+        self::assertTrue($this->canLock(DirectoryLocks::path($this->dir . '/out')));
+    }
+
+    public function testDeletesBeforeItWrites(): void
+    {
+        mkdir($this->dir . '/out');
+        $path = $this->dir . '/out/User.php';
+        file_put_contents($path, self::HEADER . 'old');
+
+        // On a case-insensitive filesystem a class renamed from Foo to FOO plans exactly this for one file.
+        (new FilesystemWriter())->apply(new WritePlan([FileChange::update($path, self::HEADER . 'new'), FileChange::delete($path)], [], []));
+
+        self::assertSame(self::HEADER . 'new', file_get_contents($path));
+    }
+
+    public function testTreatsAManifestWithWindowsLineEndingsAsUnchanged(): void
+    {
+        $this->write([$this->file('User.php', 'user')]);
+        $manifest = $this->dir . '/out/.dto-generator.manifest.json';
+        file_put_contents($manifest, str_replace("\n", "\r\n", (string) file_get_contents($manifest)));
+
+        self::assertFalse((new FilesystemWriter())->plan([$this->dir . '/out'], [$this->file('User.php', 'user')])->hasChanges());
+    }
+
+    public function testKnowsWhichManifestsAreNew(): void
+    {
+        $this->write([$this->file('User.php', 'user')]);
+
+        $plan = (new FilesystemWriter())->plan([$this->dir . '/out', $this->dir . '/fresh'], [
+            $this->file('User.php', 'changed'),
+            new GeneratedFile($this->dir . '/fresh', 'Tag.php', self::HEADER . 'tag'),
+        ]);
+
+        self::assertFalse($plan->isNewManifest($this->dir . '/out/.dto-generator.manifest.json'));
+        self::assertTrue($plan->isNewManifest($this->dir . '/fresh/.dto-generator.manifest.json'));
+    }
+
+    public function testGivesNewFilesTheUmaskPermissions(): void
+    {
+        $previous = umask(0002);
+
+        try {
+            $this->write([$this->file('User.php', 'user')]);
+        } finally {
+            umask($previous);
+        }
+
+        self::assertSame('0664', substr(sprintf('%o', fileperms($this->dir . '/out/User.php')), -4));
     }
 
     private function canLock(string $path): bool

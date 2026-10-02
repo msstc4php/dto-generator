@@ -16,7 +16,6 @@ use MSSTC4PHP\DtoGenerator\Domain\Shared\Path;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
-use Symfony\Component\Console\Output\ConsoleOutputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 
 /**
@@ -113,9 +112,9 @@ final class GenerateCommand extends Command
     private function usageError(OutputInterface $output, bool $json, string $message): int
     {
         if ($json) {
-            $output->writeln($this->json(Status::CONFIG_FAILED, [['severity' => 'error', 'location' => '', 'message' => $message]], []));
+            $output->writeln(ErrorOutput::json($message));
         } else {
-            $this->errorOutput($output)->writeln('error: ' . $message);
+            ErrorOutput::of($output)->writeln('error: ' . $message);
         }
 
         return self::EXIT_CODES[Status::CONFIG_FAILED];
@@ -123,7 +122,7 @@ final class GenerateCommand extends Command
 
     private function text(Output $result, Mode $mode, OutputInterface $output): void
     {
-        $errors = $this->errorOutput($output);
+        $errors = ErrorOutput::of($output);
         foreach ($result->diagnostics()->all() as $diagnostic) {
             $errors->writeln($this->formatter->line($diagnostic));
         }
@@ -181,8 +180,10 @@ final class GenerateCommand extends Command
             }
         }
 
-        foreach (array_keys($plan instanceof WritePlan ? $plan->manifests() : []) as $path) {
-            $changes[] = ['kind' => is_file($path) ? FileChange::UPDATE : FileChange::CREATE, 'path' => $this->formatter->path($path)];
+        if ($plan instanceof WritePlan) {
+            foreach (array_keys($plan->manifests()) as $path) {
+                $changes[] = ['kind' => $plan->isNewManifest($path) ? FileChange::CREATE : FileChange::UPDATE, 'path' => $this->formatter->path($path)];
+            }
         }
 
         return $changes;
@@ -216,14 +217,6 @@ final class GenerateCommand extends Command
      */
     private function json(string $status, array $diagnostics, array $changes): string
     {
-        return (string) json_encode(
-            ['status' => $status, 'diagnostics' => $diagnostics, 'changes' => $changes],
-            JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE,
-        );
-    }
-
-    private function errorOutput(OutputInterface $output): OutputInterface
-    {
-        return $output instanceof ConsoleOutputInterface ? $output->getErrorOutput() : $output;
+        return ErrorOutput::encode(['status' => $status, 'diagnostics' => $diagnostics, 'changes' => $changes]);
     }
 }

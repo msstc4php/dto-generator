@@ -61,20 +61,33 @@ final class Action
 
         $outputDirs = array_values(array_unique(array_map(static fn (SourceConfig $source): string => $source->outputDir(), $config->sources())));
         $plan = $this->writer->plan($outputDirs, $files);
+
+        try {
+            return $this->conclude($input->mode(), $plan, $files, $diagnostics);
+        } finally {
+            // plan() locks the output directories; apply() releases them, but a check or an error never applies.
+            $this->writer->release();
+        }
+    }
+
+    /**
+     * @param list<GeneratedFile> $files
+     */
+    private function conclude(Mode $mode, WritePlan $plan, array $files, Diagnostics $diagnostics): Output
+    {
         foreach ($plan->conflicts() as $path => $reason) {
             $diagnostics->error($reason, new SchemaLocation($path));
         }
 
-        if ($diagnostics->hasErrors()) {
+        if ($plan->conflicts() !== []) {
             return new Output(Status::from(Status::GENERATION_FAILED), $diagnostics, $plan, $files);
         }
 
-        $mode = $input->mode()->value();
-        if ($mode === Mode::CHECK) {
+        if ($mode->value() === Mode::CHECK) {
             return new Output(Status::from($plan->hasChanges() ? Status::OUT_OF_DATE : Status::OK), $diagnostics, $plan, $files);
         }
 
-        if ($mode === Mode::WRITE) {
+        if ($mode->value() === Mode::WRITE) {
             try {
                 $this->writer->apply($plan);
             } catch (WriteFailed $exception) {

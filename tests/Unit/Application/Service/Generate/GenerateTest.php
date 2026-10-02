@@ -95,6 +95,7 @@ final class GenerateTest extends TestCase
         $current = new RecordingWriter(new WritePlan([FileChange::unchanged('/project/src/Dto/User.php')], [], []));
 
         self::assertSame('out-of-date', $this->generate($outdated, Mode::CHECK)->status()->value());
+        self::assertTrue($outdated->released);
         self::assertSame('ok', $this->generate($current, Mode::CHECK)->status()->value());
         self::assertFalse($outdated->applied);
         self::assertFalse($current->applied);

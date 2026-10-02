@@ -8,14 +8,17 @@ use RuntimeException;
 
 final class WriteFailed extends RuntimeException
 {
-    private string $path = '';
+    private string $path;
+
+    private function __construct(string $message, string $path)
+    {
+        parent::__construct($message);
+        $this->path = $path;
+    }
 
     public static function at(string $path, string $action): self
     {
-        $exception = new self(sprintf('Cannot %s "%s".', $action, $path));
-        $exception->path = $path;
-
-        return $exception;
+        return new self(sprintf('Cannot %s "%s".', $action, $path), $path);
     }
 
     public function path(): string
