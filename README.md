@@ -6,7 +6,7 @@
 > (spec §5.1–§5.5), enum, map-типы и вынос инлайн-схем, композиция `allOf` (наследование или слияние),
 > `oneOf`/`anyOf` с discriminator (abstract-база) и без него (union-тип), генерация кода под PHP 7.4–8.5
 > (spec §6.2), запись с манифестом и CLI, расширения (SPI), `x-php-attributes` и `attributeAliases` с выводом
-> атрибутов PHP 8 (этап 5a). Аннотации для PHP 7.4 (этап 5b), Composer-плагин и Docker-образ (этап 6) — впереди.
+> атрибутов PHP 8 (этап 5a), аннотации Doctrine для PHP 7.4 и `verifyClasses` (этап 5b). Composer-плагин и Docker-образ (этап 6) — впереди.
 
 Дизайн: [`docs/specs/2026-10-01-dto-generator-design.md`](docs/specs/2026-10-01-dto-generator-design.md).
 
