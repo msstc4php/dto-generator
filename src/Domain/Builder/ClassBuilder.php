@@ -59,15 +59,19 @@ final class ClassBuilder
         return $value;
     }
 
-    public function build(ClassName $name, Schema $schema, Diagnostics $diagnostics): ClassModel
+    /**
+     * The class takes the properties of every part of its composition; its parent's arrive through inheritance.
+     */
+    public function build(ClassName $name, Schema $schema, Diagnostics $diagnostics, ?Composition $composition = null): ClassModel
     {
+        $composition ??= Composition::of($schema);
         $properties = [];
         $taken = [];
-        foreach ($schema->propertyNames() as $wireName) {
-            $propertySchema = $schema->requireProperty($wireName);
+        $byWireName = [];
+        foreach ($this->sources($composition) as [$wireName, $propertySchema]) {
             ExtensionVocabulary::checkProperty($propertySchema, $diagnostics);
             if (self::isSkipped($propertySchema, $diagnostics)) {
-                if ($schema->isRequired($wireName)) {
+                if ($composition->isRequired($wireName)) {
                     $diagnostics->warning(
                         sprintf('Property "%s" is required but excluded by "x-php-skip".', $wireName),
                         $propertySchema->location()->child('x-php-skip'),
@@ -77,8 +81,26 @@ final class ClassBuilder
                 continue;
             }
 
-            $property = $this->property($schema, $wireName, $propertySchema, $diagnostics);
+            $property = $this->property($wireName, $propertySchema, $composition->isRequired($wireName), $diagnostics);
             if (!$property instanceof PropertyModel) {
+                continue;
+            }
+
+            $earlier = $byWireName[$wireName] ?? null;
+            if ($earlier instanceof PropertyModel) {
+                if ($earlier->type()->describe() !== $property->type()->describe()) {
+                    $diagnostics->error(
+                        sprintf(
+                            'Property "%s" of %s is %s here, but %s in an earlier allOf member.',
+                            $wireName,
+                            $name->fqcn(),
+                            $property->type()->describe(),
+                            $earlier->type()->describe(),
+                        ),
+                        $propertySchema->location(),
+                    );
+                }
+
                 continue;
             }
 
@@ -94,6 +116,7 @@ final class ClassBuilder
             }
 
             $taken[$key] = $wireName;
+            $byWireName[$wireName] = $property;
             $properties[] = $property;
         }
 
@@ -105,7 +128,7 @@ final class ClassBuilder
         return new ClassModel(
             $name,
             ClassKind::from(ClassKind::FINAL),
-            null,
+            $composition->parent(),
             $properties,
             $this->mutability($schema, $diagnostics),
             new DocModel($schema->description(), $schema->isDeprecated()),
@@ -143,7 +166,22 @@ final class ClassBuilder
         );
     }
 
-    private function property(Schema $owner, string $wireName, Schema $schema, Diagnostics $diagnostics): ?PropertyModel
+    /**
+     * @return list<array{string, Schema}> wire name and schema of every property, part by part
+     */
+    private function sources(Composition $composition): array
+    {
+        $sources = [];
+        foreach ($composition->parts() as $part) {
+            foreach ($part->propertyNames() as $wireName) {
+                $sources[] = [$wireName, $part->requireProperty($wireName)];
+            }
+        }
+
+        return $sources;
+    }
+
+    private function property(string $wireName, Schema $schema, bool $required, Diagnostics $diagnostics): ?PropertyModel
     {
         $name = $this->propertyName($wireName, $schema, $diagnostics);
         if ($name === null) {
@@ -151,7 +189,7 @@ final class ClassBuilder
         }
 
         $type = $this->types->map($schema, $diagnostics);
-        $required = $owner->isRequired($wireName) && !$type instanceof NullableType;
+        $required = $required && !$type instanceof NullableType;
         $default = null;
         if (!$required) {
             $type = TypeMapper::nullable($type);

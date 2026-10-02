@@ -4,18 +4,21 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Application\Service\Model\Build;
 
+use MSSTC4PHP\DtoGenerator\Domain\Builder\AllOfResolver;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\ClassBuilder;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\Composition;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\EnumBuilder;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\ExtensionVocabulary;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\NameResolver;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\RequiredCycles;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\SchemaShape;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\TypeMapper;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\VariantResolver;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
-use MSSTC4PHP\DtoGenerator\Domain\Model\ClassModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\Identifier;
+use MSSTC4PHP\DtoGenerator\Domain\Schema\Discriminator;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
 
 /**
@@ -44,8 +47,7 @@ final class Action
             $schema = $resolved->schema();
             $isClass = SchemaShape::isClass($schema);
             $isEnum = SchemaShape::isEnum($schema);
-            $unsupported = SchemaShape::unsupportedKeyword($schema);
-            if ($isClass || $isEnum || $unsupported !== null) {
+            if ($isClass || $isEnum) {
                 ExtensionVocabulary::checkClass($schema, $diagnostics);
             } else {
                 ExtensionVocabulary::checkAlias($schema, $diagnostics);
@@ -62,14 +64,11 @@ final class Action
             }
 
             if (!$isClass && !$isEnum) {
-                if ($unsupported !== null && $resolved->isSelected()) {
-                    $diagnostics->warning(
-                        sprintf('"%s" is not supported yet, so no class is generated for "%s".', $unsupported, $resolved->name()),
-                        $schema->location(),
-                    );
-                }
-
                 continue;
+            }
+
+            if ($isClass) {
+                $this->warnAboutIgnoredComposition($schema, $diagnostics);
             }
 
             $short = $this->shortName($schema, $resolved->name(), $diagnostics);
@@ -79,24 +78,64 @@ final class Action
             }
         }
 
+        // Every named class is declared by now, so `allOf` can tell which members it may extend.
+        $allOf = new AllOfResolver($input->graph(), $registry->declarations(), $config->dto()->allOfStrategy());
+        $compositions = [];
         // Inline classes are planned while walking, so the walk reaches inline objects nested in inline objects.
         for ($index = 0; ($planned = $registry->plannedAt($index)) !== null; $index++) {
-            $this->hoist($planned[0], $planned[1], $planned[2], $registry, $enums, $diagnostics);
+            $compositions[$index] = $allOf->compose($planned[0], $diagnostics);
+            $this->hoist($planned[0], $compositions[$index], $planned[1], $planned[2], $registry, $enums, $diagnostics);
         }
 
+        $declarations = $registry->declarations();
         $builder = new ClassBuilder(
             $this->names,
-            new TypeMapper($input->graph(), $registry->declarations(), $input->target(), $config->formats()),
+            new TypeMapper($input->graph(), $declarations, $input->target(), $config->formats()),
             $input->target(),
         );
+        $variants = new VariantResolver($input->graph(), $declarations);
         $built = [];
-        foreach ($registry->planned() as [$schema, $name, $source]) {
-            $built[] = new BuiltClass($builder->build($name, $schema, $diagnostics), $source);
+        $unions = [];
+        foreach ($registry->planned() as $index => [$schema, $name, $source]) {
+            $built[] = new BuiltClass($builder->build($name, $schema, $diagnostics, $compositions[$index]), $source);
+            $discriminator = SchemaShape::discriminatorOf($schema);
+            if ($discriminator instanceof Discriminator) {
+                $unions[$name->fqcn()] = $variants->resolve($schema, $discriminator, $diagnostics);
+            }
         }
 
-        RequiredCycles::check(array_map(static fn (BuiltClass $class): ClassModel => $class->model(), $built), $diagnostics);
+        $output = new Output(Hierarchy::link($built, $unions, $diagnostics), $diagnostics, $registry->enums());
+        $models = [];
+        $inherited = [];
+        foreach ($output->classes() as $class) {
+            $models[] = $class->model();
+            $inherited[$class->model()->name()->fqcn()] = $output->inheritedProperties($class->model());
+        }
 
-        return new Output($built, $diagnostics, $registry->enums());
+        RequiredCycles::check($models, $diagnostics, $inherited);
+
+        return $output;
+    }
+
+    /**
+     * A discriminator without `oneOf`/`anyOf`, or a union beside properties, has no place in a class (spec §5.3).
+     */
+    private function warnAboutIgnoredComposition(Schema $schema, Diagnostics $diagnostics): void
+    {
+        if (SchemaShape::isDiscriminated($schema) || $schema->allOf() !== []) {
+            return;
+        }
+
+        if ($schema->discriminator() instanceof Discriminator) {
+            $diagnostics->warning(
+                'The discriminator is ignored: only oneOf or anyOf with a discriminator becomes a base class.',
+                $schema->location()->child('discriminator'),
+            );
+        }
+
+        if (SchemaShape::hasUnion($schema)) {
+            $diagnostics->warning('"oneOf" and "anyOf" beside "properties" are not represented; the class keeps only its properties.', $schema->location());
+        }
     }
 
     /**
@@ -123,16 +162,18 @@ final class Action
     /**
      * Declares the inline objects and enums of a class's properties, looking through arrays (`…Item`).
      */
-    private function hoist(Schema $owner, ClassName $ownerName, int $source, Registry $registry, EnumBuilder $enums, Diagnostics $diagnostics): void
+    private function hoist(Schema $owner, Composition $composition, ClassName $ownerName, int $source, Registry $registry, EnumBuilder $enums, Diagnostics $diagnostics): void
     {
         /** @var list<array{Schema, ?string, string}> $candidates schema, `<Parent><Property>` (null without usable characters), wire name */
         $candidates = [];
-        foreach ($owner->propertyNames() as $wireName) {
-            $property = $owner->requireProperty($wireName);
-            // The class builder reports a malformed x-php-skip; here it only decides whether to look further.
-            if (!ClassBuilder::isSkipped($property, new Diagnostics())) {
-                $base = $this->names->className($wireName);
-                $candidates[] = [$property, $base === null ? null : $ownerName->shortName() . $base, $wireName];
+        foreach ($composition->ownParts() as $part) {
+            foreach ($part->propertyNames() as $wireName) {
+                $property = $part->requireProperty($wireName);
+                // The class builder reports a malformed x-php-skip; here it only decides whether to look further.
+                if (!ClassBuilder::isSkipped($property, new Diagnostics())) {
+                    $base = $this->names->className($wireName);
+                    $candidates[] = [$property, $base === null ? null : $ownerName->shortName() . $base, $wireName];
+                }
             }
         }
 
@@ -181,7 +222,8 @@ final class Action
      */
     private function inline(Schema $schema, string $suffix): ?array
     {
-        if (SchemaShape::isClass($schema) || SchemaShape::isEnum($schema)) {
+        // A discriminated union becomes a base class only as a named schema (spec §5.3); inline it is a union type.
+        if ((SchemaShape::isClass($schema) && !SchemaShape::isDiscriminated($schema)) || SchemaShape::isEnum($schema)) {
             return [$schema, $suffix];
         }
 

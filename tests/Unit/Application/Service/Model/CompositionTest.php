@@ -1,0 +1,546 @@
+<?php
+
+declare(strict_types=1);
+
+namespace MSSTC4PHP\DtoGenerator\Tests\Unit\Application\Service\Model;
+
+use MSSTC4PHP\DtoGenerator\Application\Service\Model\Build\Output;
+use MSSTC4PHP\DtoGenerator\Domain\Model\PropertyModel;
+use MSSTC4PHP\DtoGenerator\Domain\Target\AllOfStrategy;
+use MSSTC4PHP\DtoGenerator\Tests\Support\ModelFixture;
+use PHPUnit\Framework\TestCase;
+
+final class CompositionTest extends TestCase
+{
+    private const AT = '/project/api/openapi.yaml#/components/schemas/';
+
+    private const PET = ['$ref' => '#/components/schemas/Pet'];
+
+    public function testExtendsTheOneReferencedClass(): void
+    {
+        $output = ModelFixture::build([
+            'Pet' => ['type' => 'object', 'required' => ['name'], 'properties' => ['name' => ['type' => 'string']]],
+            'Cat' => ['allOf' => [self::PET, ['type' => 'object', 'required' => ['lives'], 'properties' => ['lives' => ['type' => 'integer']]]]],
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(['App\Dto\Pet' => ['name: string'], 'App\Dto\Cat' => ['lives: int']], ModelFixture::classes($output));
+        self::assertSame(['App\Dto\Pet' => 'open', 'App\Dto\Cat' => 'final extends App\Dto\Pet'], ModelFixture::hierarchy($output));
+        self::assertSame(['name'], $this->inherited($output, 'App\Dto\Cat'));
+        self::assertSame([], $this->inherited($output, 'App\Dto\Pet'));
+    }
+
+    public function testCollectsPropertiesOfInlineMembersAndOwnProperties(): void
+    {
+        $output = ModelFixture::build([
+            'Pet' => ['type' => 'object', 'properties' => ['name' => ['type' => 'string']]],
+            'Cat' => [
+                'allOf' => [['properties' => ['lives' => ['type' => 'integer']]], self::PET, ['required' => ['lives', 'whiskers']]],
+                'properties' => ['whiskers' => ['type' => 'boolean']],
+            ],
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(['lives: int', 'whiskers: bool'], ModelFixture::classes($output)['App\Dto\Cat']);
+        self::assertSame('final extends App\Dto\Pet', ModelFixture::hierarchy($output)['App\Dto\Cat']);
+    }
+
+    public function testChainsSeveralLevels(): void
+    {
+        $output = ModelFixture::build([
+            'Animal' => ['type' => 'object', 'properties' => ['id' => ['type' => 'string']]],
+            'Pet' => ['allOf' => [['$ref' => '#/components/schemas/Animal'], ['properties' => ['name' => ['type' => 'string']]]]],
+            'Cat' => ['allOf' => [self::PET, ['properties' => ['lives' => ['type' => 'integer']]]]],
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(
+            ['App\Dto\Animal' => 'open', 'App\Dto\Pet' => 'open extends App\Dto\Animal', 'App\Dto\Cat' => 'final extends App\Dto\Pet'],
+            ModelFixture::hierarchy($output),
+        );
+        self::assertSame(['id', 'name'], $this->inherited($output, 'App\Dto\Cat'));
+    }
+
+    public function testMergesSeveralReferences(): void
+    {
+        $output = ModelFixture::build([
+            'A' => ['type' => 'object', 'properties' => ['a' => ['type' => 'string']]],
+            'B' => ['type' => 'object', 'required' => ['b'], 'properties' => ['b' => ['type' => 'integer']]],
+            'C' => [
+                'allOf' => [['$ref' => '#/components/schemas/A'], ['$ref' => '#/components/schemas/B']],
+                'required' => ['a', 'c'],
+                'properties' => ['c' => ['type' => 'boolean']],
+            ],
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(['a: string', 'b: int', 'c: bool'], ModelFixture::classes($output)['App\Dto\C']);
+        self::assertSame(['App\Dto\A' => 'final', 'App\Dto\B' => 'final', 'App\Dto\C' => 'final'], ModelFixture::hierarchy($output));
+    }
+
+    public function testMergesNestedCompositionsAllTheWayDown(): void
+    {
+        $output = ModelFixture::build([
+            'Pet' => ['type' => 'object', 'properties' => ['name' => ['type' => 'string']]],
+            'Cat' => ['allOf' => [self::PET, ['properties' => ['lives' => ['type' => 'integer']]]]],
+            'Tag' => ['type' => 'object', 'properties' => ['label' => ['type' => 'string']]],
+            'TaggedCat' => ['allOf' => [['$ref' => '#/components/schemas/Cat'], ['$ref' => '#/components/schemas/Tag']]],
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(['name: string|null', 'lives: int|null', 'label: string|null'], ModelFixture::classes($output)['App\Dto\TaggedCat']);
+    }
+
+    public function testMergesWhenTheSchemaAsksForIt(): void
+    {
+        $output = ModelFixture::build([
+            'Pet' => ['type' => 'object', 'required' => ['name'], 'properties' => ['name' => ['type' => 'string']]],
+            'Cat' => ['allOf' => [self::PET, ['properties' => ['lives' => ['type' => 'integer']]]], 'x-php-all-of' => 'merge'],
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(['name: string', 'lives: int|null'], ModelFixture::classes($output)['App\Dto\Cat']);
+        self::assertSame(['App\Dto\Pet' => 'final', 'App\Dto\Cat' => 'final'], ModelFixture::hierarchy($output));
+    }
+
+    public function testMergesWhenTheConfigAsksForIt(): void
+    {
+        $output = ModelFixture::build(
+            [
+                'Pet' => ['type' => 'object', 'properties' => ['name' => ['type' => 'string']]],
+                'Cat' => ['allOf' => [self::PET, ['properties' => ['lives' => ['type' => 'integer']]]]],
+                'Dog' => ['allOf' => [self::PET, ['properties' => ['bark' => ['type' => 'boolean']]]], 'x-php-all-of' => 'extends'],
+            ],
+            [],
+            ['*'],
+            AllOfStrategy::MERGE,
+        );
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(
+            ['App\Dto\Pet' => 'open', 'App\Dto\Cat' => 'final', 'App\Dto\Dog' => 'final extends App\Dto\Pet'],
+            ModelFixture::hierarchy($output),
+        );
+    }
+
+    public function testMergesAPropertyDeclaredTwiceWithTheSameType(): void
+    {
+        $output = ModelFixture::build([
+            'A' => ['type' => 'object', 'properties' => ['x' => ['type' => 'string']]],
+            'B' => ['type' => 'object', 'properties' => ['x' => ['type' => 'string', 'description' => 'Again.'], 'y' => ['type' => 'integer']]],
+            'C' => ['allOf' => [['$ref' => '#/components/schemas/A'], ['$ref' => '#/components/schemas/B']]],
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(['x: string|null', 'y: int|null'], ModelFixture::classes($output)['App\Dto\C']);
+    }
+
+    public function testReportsAMergedPropertyWithAnotherType(): void
+    {
+        $at = self::AT;
+        $output = ModelFixture::build([
+            'A' => ['type' => 'object', 'properties' => ['x' => ['type' => 'string']]],
+            'B' => ['type' => 'object', 'properties' => ['x' => ['type' => 'integer']]],
+            'C' => ['allOf' => [['$ref' => '#/components/schemas/A'], ['$ref' => '#/components/schemas/B']]],
+        ]);
+
+        self::assertSame(
+            ["error {$at}B/properties/x: Property \"x\" of App\\Dto\\C is int|null here, but string|null in an earlier allOf member."],
+            ModelFixture::messages($output),
+        );
+    }
+
+    /**
+     * @dataProvider problems
+     *
+     * @param array<string, array<array-key, mixed>> $schemas
+     * @param list<string> $expected
+     */
+    public function testReportsCompositionProblems(array $schemas, array $expected): void
+    {
+        self::assertSame($expected, ModelFixture::messages(ModelFixture::build($schemas)));
+    }
+
+    /**
+     * @return array<string, array{array<string, array<array-key, mixed>>, list<string>}>
+     */
+    public static function problems(): array
+    {
+        $at = self::AT;
+        $pet = ['type' => 'object', 'properties' => ['name' => ['type' => 'string']]];
+        $lives = ['properties' => ['lives' => ['type' => 'integer']]];
+
+        return [
+            'unknown strategy' => [
+                ['Pet' => $pet, 'Cat' => ['allOf' => [self::PET, $lives], 'x-php-all-of' => 'inherit']],
+                ["error {$at}Cat/x-php-all-of: \"x-php-all-of\" must be \"extends\" or \"merge\"."],
+            ],
+            'member that is not an object' => [
+                ['Email' => ['type' => 'string'], 'Cat' => ['allOf' => [['$ref' => '#/components/schemas/Email'], $lives]]],
+                ["error {$at}Cat/allOf/0: An allOf member of a class must be an object schema."],
+            ],
+            'inline member that is not an object' => [
+                ['Cat' => ['allOf' => [['type' => 'string'], $lives, ['properties' => ['name' => []]]]]],
+                ["error {$at}Cat/allOf/0: An allOf member of a class must be an object schema."],
+            ],
+            'merge loop' => [
+                [
+                    'A' => ['allOf' => [['$ref' => '#/components/schemas/B'], ['properties' => ['a' => []]]], 'x-php-all-of' => 'merge'],
+                    'B' => ['allOf' => [['$ref' => '#/components/schemas/A'], ['properties' => ['b' => []]]], 'x-php-all-of' => 'merge'],
+                ],
+                [
+                    "error {$at}B/allOf/0: The allOf chain loops back to a schema it is already merging.",
+                    "error {$at}A/allOf/0: The allOf chain loops back to a schema it is already merging.",
+                ],
+            ],
+            'inheritance loop' => [
+                [
+                    'Plain' => ['type' => 'object', 'properties' => ['p' => []]],
+                    'A' => ['allOf' => [['$ref' => '#/components/schemas/B'], ['properties' => ['a' => []]]]],
+                    'B' => ['allOf' => [['$ref' => '#/components/schemas/A'], ['properties' => ['b' => []]]]],
+                ],
+                ["error {$at}A: Class App\\Dto\\A extends itself through App\\Dto\\B."],
+            ],
+            'class extending into a loop' => [
+                [
+                    'C' => ['allOf' => [['$ref' => '#/components/schemas/A'], ['properties' => ['c' => []]]]],
+                    'A' => ['allOf' => [['$ref' => '#/components/schemas/B'], ['properties' => ['a' => []]]]],
+                    'B' => ['allOf' => [['$ref' => '#/components/schemas/A'], ['properties' => ['b' => []]]]],
+                ],
+                ["error {$at}A: Class App\\Dto\\A extends itself through App\\Dto\\B."],
+            ],
+            'property named like an inherited one' => [
+                ['Pet' => $pet, 'Cat' => ['allOf' => [self::PET, ['properties' => ['NAME' => ['type' => 'string', 'x-php-name' => 'Name']]]]]],
+                ["error {$at}Cat/allOf/1/properties/NAME: Property \"NAME\" of App\\Dto\\Cat becomes \$Name, which App\\Dto\\Pet already declares; set \"x-php-name\"."],
+            ],
+            'property of a grandparent' => [
+                [
+                    'Animal' => ['type' => 'object', 'properties' => ['id' => ['type' => 'string']]],
+                    'Pet' => ['allOf' => [['$ref' => '#/components/schemas/Animal'], ['properties' => ['name' => []]]]],
+                    'Cat' => ['allOf' => [self::PET, ['properties' => ['id' => ['type' => 'integer']]]]],
+                ],
+                ["error {$at}Cat/allOf/1/properties/id: Property \"id\" of App\\Dto\\Cat is already declared by App\\Dto\\Animal."],
+            ],
+            'member that is a plain union' => [
+                ['Either' => ['oneOf' => [['type' => 'string'], ['type' => 'integer']]], 'Cat' => ['allOf' => [['$ref' => '#/components/schemas/Either'], $lives]]],
+                ["error {$at}Cat/allOf/0: An allOf member of a class must be an object schema."],
+            ],
+            'redeclared inherited property' => [
+                ['Pet' => $pet, 'Cat' => ['allOf' => [self::PET, ['properties' => ['name' => ['type' => 'integer']]]]]],
+                ["error {$at}Cat/allOf/1/properties/name: Property \"name\" of App\\Dto\\Cat is already declared by App\\Dto\\Pet."],
+            ],
+            'different mutability' => [
+                ['Pet' => $pet + ['x-dto-mutable' => true], 'Cat' => ['allOf' => [self::PET, $lives]]],
+                ["error {$at}Cat: App\\Dto\\Cat is immutable but its parent App\\Dto\\Pet is mutable; give both the same \"x-dto-mutable\"."],
+            ],
+            'discriminator without oneOf' => [
+                ['Pet' => $pet + ['discriminator' => ['propertyName' => 'name']]],
+                ["warning {$at}Pet/discriminator: The discriminator is ignored: only oneOf or anyOf with a discriminator becomes a base class."],
+            ],
+            'oneOf beside properties' => [
+                ['Pet' => $pet + ['oneOf' => [['required' => ['name']]]]],
+                ["warning {$at}Pet: \"oneOf\" and \"anyOf\" beside \"properties\" are not represented; the class keeps only its properties."],
+            ],
+        ];
+    }
+
+    public function testExtendsADiscriminatedBase(): void
+    {
+        $output = ModelFixture::build([
+            'Pet' => ['oneOf' => [['$ref' => '#/components/schemas/Cat'], ['$ref' => '#/components/schemas/Dog']], 'discriminator' => ['propertyName' => 'kind']],
+            'Cat' => ['type' => 'object', 'properties' => ['kind' => ['type' => 'string']]],
+            'Dog' => ['type' => 'object', 'properties' => ['kind' => ['type' => 'string']]],
+            'Tagged' => ['allOf' => [self::PET, ['properties' => ['tag' => ['type' => 'string']]]]],
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame('final extends App\Dto\Pet', ModelFixture::hierarchy($output)['App\Dto\Tagged']);
+    }
+
+    public function testIgnoresAnUnresolvedMember(): void
+    {
+        $output = ModelFixture::build(
+            ['Cat' => ['allOf' => [['$ref' => '#/components/schemas/Missing'], ['properties' => ['lives' => ['type' => 'integer']]]]]],
+            [],
+            ['*'],
+            AllOfStrategy::EXTENDS,
+            false,
+        );
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(['App\Dto\Cat' => ['lives: int|null']], ModelFixture::classes($output));
+    }
+
+    public function testHoistsInlineObjectsOfMembers(): void
+    {
+        // Kitten comes first, so it reaches the inline objects of Pet and Cat before their own classes do.
+        $output = ModelFixture::build([
+            'Kitten' => ['allOf' => [['$ref' => '#/components/schemas/Cat'], self::PET], 'x-php-all-of' => 'merge'],
+            'Pet' => ['type' => 'object', 'properties' => ['owner' => ['type' => 'object', 'properties' => ['name' => ['type' => 'string']]]]],
+            'Cat' => ['allOf' => [self::PET, ['properties' => ['toy' => ['type' => 'object', 'properties' => ['kind' => ['type' => 'string']]]]]]],
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        $classes = ModelFixture::classes($output);
+        self::assertSame(['toy: App\Dto\CatToy|null'], $classes['App\Dto\Cat']);
+        self::assertSame(['owner: App\Dto\PetOwner|null', 'toy: App\Dto\CatToy|null'], $classes['App\Dto\Kitten']);
+        self::assertArrayNotHasKey('App\Dto\KittenOwner', $classes);
+    }
+
+    public function testDeclaresAnInlineComposition(): void
+    {
+        $output = ModelFixture::build([
+            'Pet' => ['type' => 'object', 'properties' => ['name' => ['type' => 'string']]],
+            'Owner' => ['type' => 'object', 'properties' => ['pet' => ['allOf' => [self::PET, ['properties' => ['since' => ['type' => 'string']]]]]]],
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(['pet: App\Dto\OwnerPet|null'], ModelFixture::classes($output)['App\Dto\Owner']);
+        self::assertSame('final extends App\Dto\Pet', ModelFixture::hierarchy($output)['App\Dto\OwnerPet']);
+    }
+
+    public function testTurnsADiscriminatedUnionIntoAnAbstractBase(): void
+    {
+        $output = ModelFixture::build([
+            'Pet' => [
+                'oneOf' => [['$ref' => '#/components/schemas/Cat'], ['$ref' => '#/components/schemas/Dog']],
+                'discriminator' => ['propertyName' => 'petType', 'mapping' => ['cat' => '#/components/schemas/Cat']],
+            ],
+            'Cat' => ['type' => 'object', 'required' => ['petType', 'name'], 'properties' => [
+                'petType' => ['type' => 'string'], 'name' => ['type' => 'string'], 'lives' => ['type' => 'integer'],
+            ]],
+            'Dog' => ['type' => 'object', 'required' => ['petType', 'name'], 'properties' => [
+                'name' => ['type' => 'string'], 'bark' => ['type' => 'boolean'], 'petType' => ['type' => 'string'],
+            ]],
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(
+            ['App\Dto\Pet' => ['petType: string', 'name: string'], 'App\Dto\Cat' => ['lives: int|null'], 'App\Dto\Dog' => ['bark: bool|null']],
+            ModelFixture::classes($output),
+        );
+        self::assertSame(
+            [
+                'App\Dto\Pet' => 'abstract by petType {cat: App\Dto\Cat, Dog: App\Dto\Dog}',
+                'App\Dto\Cat' => 'final extends App\Dto\Pet',
+                'App\Dto\Dog' => 'final extends App\Dto\Pet',
+            ],
+            ModelFixture::hierarchy($output),
+        );
+    }
+
+    public function testKeepsPropertiesThatDifferBetweenVariants(): void
+    {
+        $output = ModelFixture::build([
+            'Pet' => ['anyOf' => [['$ref' => '#/components/schemas/Cat'], ['$ref' => '#/components/schemas/Dog']], 'discriminator' => ['propertyName' => 'kind']],
+            'Cat' => ['type' => 'object', 'required' => ['name'], 'properties' => [
+                'kind' => ['type' => 'string'], 'name' => ['type' => 'string'], 'size' => ['type' => 'string', 'default' => 's'], 'tag' => ['type' => 'string'],
+            ]],
+            'Dog' => ['type' => 'object', 'properties' => [
+                'kind' => ['type' => 'string'], 'name' => ['type' => 'string'], 'size' => ['type' => 'string', 'default' => 'l'], 'tag' => ['type' => 'string', 'x-php-name' => 'label'],
+            ]],
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(
+            [
+                'App\Dto\Pet' => ['kind: string|null'],
+                'App\Dto\Cat' => ['name: string', 'size: string|null', 'tag: string|null'],
+                'App\Dto\Dog' => ['name: string|null', 'size: string|null', 'tag: string|null'],
+            ],
+            ModelFixture::classes($output),
+        );
+    }
+
+    public function testMovesSharedPropertiesNextToTheOwnPropertiesOfTheBase(): void
+    {
+        $output = ModelFixture::build([
+            'Pet' => [
+                'properties' => ['kind' => ['type' => 'string']],
+                'oneOf' => [['$ref' => '#/components/schemas/Cat'], ['$ref' => '#/components/schemas/Dog']],
+                'discriminator' => ['propertyName' => 'kind'],
+            ],
+            'Cat' => ['type' => 'object', 'properties' => ['kind' => ['type' => 'string'], 'name' => ['type' => 'string'], 'a' => ['type' => 'integer']]],
+            'Dog' => ['type' => 'object', 'properties' => ['kind' => ['type' => 'string'], 'b' => ['type' => 'boolean'], 'name' => ['type' => 'string']]],
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(
+            ['App\Dto\Pet' => ['kind: string|null', 'name: string|null'], 'App\Dto\Cat' => ['a: int|null'], 'App\Dto\Dog' => ['b: bool|null']],
+            ModelFixture::classes($output),
+        );
+    }
+
+    public function testSharesNothingWithAVariantThatHasAnotherParent(): void
+    {
+        $output = ModelFixture::build([
+            'Pet' => ['oneOf' => [['$ref' => '#/components/schemas/Cat'], ['$ref' => '#/components/schemas/Dog']], 'discriminator' => ['propertyName' => 'kind']],
+            'Animal' => ['type' => 'object', 'properties' => ['id' => ['type' => 'string']]],
+            'Cat' => ['allOf' => [['$ref' => '#/components/schemas/Animal'], ['properties' => ['kind' => ['type' => 'string']]]]],
+            'Dog' => ['type' => 'object', 'properties' => ['kind' => ['type' => 'string']]],
+        ]);
+
+        self::assertCount(1, ModelFixture::messages($output));
+        self::assertSame([], ModelFixture::classes($output)['App\Dto\Pet']);
+        self::assertSame(['kind: string|null'], ModelFixture::classes($output)['App\Dto\Dog']);
+    }
+
+    public function testKeepsTheVariantsAroundOneItCannotUse(): void
+    {
+        $at = self::AT;
+        $output = ModelFixture::build([
+            'Pet' => [
+                'oneOf' => [
+                    ['type' => 'object', 'properties' => ['a' => []]],
+                    ['$ref' => '#/components/schemas/Missing'],
+                    ['$ref' => '#/components/schemas/Name'],
+                    ['$ref' => '#/components/schemas/Cat'],
+                ],
+                'discriminator' => ['propertyName' => 'kind', 'mapping' => ['dog' => 'Dog', 'gone' => 'Gone', 'cat' => 'Cat']],
+            ],
+            'Cat' => ['type' => 'object', 'properties' => ['kind' => ['type' => 'string']]],
+            'Dog' => ['type' => 'object', 'properties' => ['kind' => ['type' => 'string']]],
+            'Name' => ['type' => 'string'],
+        ], [], ['*'], AllOfStrategy::EXTENDS, false);
+
+        $messages = ModelFixture::messages($output);
+        self::assertContains("error {$at}Pet/oneOf/0: A variant of a discriminated union must be a \$ref to an object schema.", $messages);
+        self::assertContains("error {$at}Pet/discriminator/mapping/dog: Discriminator value \"dog\" maps to a schema that is not one of the variants.", $messages);
+        self::assertContains("error {$at}Pet/oneOf/2: A variant of a discriminated union must be a \$ref to an object schema.", $messages);
+        self::assertCount(3, $messages);
+        self::assertSame('abstract by kind {cat: App\Dto\Cat}', ModelFixture::hierarchy($output)['App\Dto\Pet']);
+    }
+
+    public function testAcceptsVariantsThatExtendTheBaseThemselves(): void
+    {
+        $output = ModelFixture::build([
+            'Pet' => [
+                'properties' => ['petType' => ['type' => 'string']],
+                'required' => ['petType'],
+                'oneOf' => [['$ref' => '#/components/schemas/Cat']],
+                'discriminator' => ['propertyName' => 'petType'],
+            ],
+            'Cat' => ['allOf' => [self::PET, ['properties' => ['lives' => ['type' => 'integer']]]]],
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(['App\Dto\Pet' => ['petType: string'], 'App\Dto\Cat' => ['lives: int|null']], ModelFixture::classes($output));
+        self::assertSame(
+            ['App\Dto\Pet' => 'abstract by petType {Cat: App\Dto\Cat}', 'App\Dto\Cat' => 'final extends App\Dto\Pet'],
+            ModelFixture::hierarchy($output),
+        );
+    }
+
+    /**
+     * @dataProvider variantProblems
+     *
+     * @param array<string, array<array-key, mixed>> $schemas
+     * @param list<string> $expected
+     */
+    public function testReportsVariantProblems(array $schemas, array $expected): void
+    {
+        self::assertSame($expected, ModelFixture::messages(ModelFixture::build($schemas)));
+    }
+
+    /**
+     * @return array<string, array{array<string, array<array-key, mixed>>, list<string>}>
+     */
+    public static function variantProblems(): array
+    {
+        $at = self::AT;
+        $cat = ['type' => 'object', 'properties' => ['kind' => ['type' => 'string']]];
+        $discriminator = ['propertyName' => 'kind'];
+        $catRef = ['$ref' => '#/components/schemas/Cat'];
+
+        return [
+            'inline variant' => [
+                ['Pet' => ['oneOf' => [$catRef, ['type' => 'object', 'properties' => ['a' => []]]], 'discriminator' => $discriminator], 'Cat' => $cat],
+                ["error {$at}Pet/oneOf/1: A variant of a discriminated union must be a \$ref to an object schema."],
+            ],
+            'variant that is not a class' => [
+                ['Pet' => ['oneOf' => [$catRef, ['$ref' => '#/components/schemas/Name']], 'discriminator' => $discriminator], 'Cat' => $cat, 'Name' => ['type' => 'string']],
+                ["error {$at}Pet/oneOf/1: A variant of a discriminated union must be a \$ref to an object schema."],
+            ],
+            'mapping outside the variants' => [
+                [
+                    'Pet' => ['oneOf' => [$catRef], 'discriminator' => ['propertyName' => 'kind', 'mapping' => ['dog' => 'Dog']]],
+                    'Cat' => $cat,
+                    'Dog' => $cat,
+                ],
+                ["error {$at}Pet/discriminator/mapping/dog: Discriminator value \"dog\" maps to a schema that is not one of the variants."],
+            ],
+            'variant with another parent' => [
+                [
+                    'Pet' => ['oneOf' => [$catRef], 'discriminator' => $discriminator],
+                    'Animal' => $cat,
+                    'Cat' => ['allOf' => [['$ref' => '#/components/schemas/Animal'], ['properties' => ['lives' => []]]]],
+                ],
+                ["error {$at}Cat: App\\Dto\\Cat already extends App\\Dto\\Animal, so it cannot also be a variant of App\\Dto\\Pet."],
+            ],
+            'variant that is the base' => [
+                ['Pet' => ['oneOf' => [$catRef, ['$ref' => '#/components/schemas/Pet']], 'discriminator' => $discriminator], 'Cat' => $cat],
+                ["error {$at}Pet: App\\Dto\\Pet lists itself among its variants."],
+            ],
+            'variant in an inheritance loop' => [
+                [
+                    'Pet' => ['oneOf' => [$catRef, ['$ref' => '#/components/schemas/Dog']], 'discriminator' => $discriminator],
+                    'Cat' => ['allOf' => [['$ref' => '#/components/schemas/Dog'], ['properties' => ['c' => []]]]],
+                    'Dog' => ['allOf' => [$catRef, ['properties' => ['d' => []]]]],
+                ],
+                [
+                    "error {$at}Cat: App\\Dto\\Cat already extends App\\Dto\\Dog, so it cannot also be a variant of App\\Dto\\Pet.",
+                    "error {$at}Dog: App\\Dto\\Dog already extends App\\Dto\\Cat, so it cannot also be a variant of App\\Dto\\Pet.",
+                    "error {$at}Cat: Class App\\Dto\\Cat extends itself through App\\Dto\\Dog.",
+                ],
+            ],
+            'variant of two unions' => [
+                [
+                    'Pet' => ['oneOf' => [$catRef], 'discriminator' => $discriminator],
+                    'Animal' => ['oneOf' => [$catRef], 'discriminator' => $discriminator],
+                    'Cat' => $cat,
+                ],
+                ["error {$at}Cat: App\\Dto\\Cat already extends App\\Dto\\Pet, so it cannot also be a variant of App\\Dto\\Animal."],
+            ],
+        ];
+    }
+
+    public function testLeavesAUnionWithoutDiscriminatorAsAType(): void
+    {
+        $output = ModelFixture::build([
+            'Owner' => ['type' => 'object', 'properties' => ['pet' => ['$ref' => '#/components/schemas/Pet']]],
+            'Pet' => ['oneOf' => [['$ref' => '#/components/schemas/Cat'], ['type' => 'string']]],
+            'Cat' => ['type' => 'object', 'properties' => ['name' => ['type' => 'string']]],
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(['App\Dto\Owner' => ['pet: App\Dto\Cat|string|null'], 'App\Dto\Cat' => ['name: string|null']], ModelFixture::classes($output));
+    }
+
+    public function testFindsRequiredCyclesThroughInheritedProperties(): void
+    {
+        $at = self::AT;
+        $output = ModelFixture::build([
+            'Base' => ['type' => 'object', 'required' => ['next'], 'properties' => ['next' => ['$ref' => '#/components/schemas/Child']]],
+            'Child' => ['allOf' => [['$ref' => '#/components/schemas/Base'], ['properties' => ['x' => []]]]],
+        ]);
+
+        self::assertSame(
+            ["warning {$at}Base/properties/next: Required property \"next\" of App\\Dto\\Child leads back to it through required properties, so no instance can ever be constructed."],
+            ModelFixture::messages($output),
+        );
+    }
+
+    /**
+     * @return list<string> wire names of the inherited properties, root first
+     */
+    private function inherited(Output $output, string $fqcn): array
+    {
+        foreach ($output->classes() as $class) {
+            if ($class->model()->name()->fqcn() === $fqcn) {
+                return array_map(static fn (PropertyModel $property): string => $property->wireName(), $output->inheritedProperties($class->model()));
+            }
+        }
+
+        self::fail('No class ' . $fqcn);
+    }
+}

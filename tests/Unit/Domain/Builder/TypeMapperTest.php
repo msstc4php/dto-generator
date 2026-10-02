@@ -85,6 +85,29 @@ final class TypeMapperTest extends TestCase
             'nullable alias' => [['$ref' => '#/components/schemas/MaybeCount'], 'int|null'],
             'x-php-type' => [['type' => 'string', 'x-php-type' => '\Symfony\Component\Uid\Uuid'], 'Symfony\Component\Uid\Uuid'],
             'nullable x-php-type' => [['type' => ['string', 'null'], 'x-php-type' => 'App\Uuid'], 'App\Uuid|null'],
+            'oneOf of scalars' => [['oneOf' => [['type' => 'string'], ['type' => 'integer']]], 'string|int'],
+            'anyOf of classes' => [['anyOf' => [['$ref' => '#/components/schemas/Tag'], ['$ref' => '#/components/schemas/Note']]], 'App\Dto\Tag|App\Dto\Note'],
+            'oneOf with a null member' => [['oneOf' => [['$ref' => '#/components/schemas/Tag'], ['type' => 'null']]], 'App\Dto\Tag|null'],
+            'oneOf with a nullable member' => [['oneOf' => [['type' => 'string'], ['type' => ['integer', 'null']]]], 'string|int|null'],
+            'oneOf of one type twice' => [['oneOf' => [['type' => 'string'], ['type' => 'string', 'format' => 'email']]], 'string'],
+            'oneOf with an untyped member' => [['oneOf' => [['type' => 'string'], []]], 'mixed'],
+            'oneOf and anyOf together' => [['oneOf' => [['type' => 'string']], 'anyOf' => [['type' => 'boolean']]], 'string|bool'],
+            'inline discriminated union' => [
+                ['oneOf' => [['$ref' => '#/components/schemas/Tag'], ['$ref' => '#/components/schemas/Note']], 'discriminator' => ['propertyName' => 'kind']],
+                'App\Dto\Tag|App\Dto\Note',
+            ],
+            'allOf wrapping a reference' => [['allOf' => [['$ref' => '#/components/schemas/Tag']], 'description' => 'The tag.'], 'App\Dto\Tag'],
+            'nullable allOf wrapper' => [['allOf' => [['$ref' => '#/components/schemas/Tag']], 'type' => ['object', 'null']], 'App\Dto\Tag|null'],
+            'allOf wrapping an alias' => [['allOf' => [['$ref' => '#/components/schemas/Email']]], 'string'],
+            'allOf with constraints only' => [['type' => 'integer', 'allOf' => [['minimum' => 1]]], 'int'],
+            'allOf of a reference and constraints' => [['allOf' => [['$ref' => '#/components/schemas/Email'], ['maxLength' => 5]]], 'string'],
+            'discriminator alone' => [['discriminator' => ['propertyName' => 'kind']], 'mixed'],
+            'inline discriminated union with properties' => [
+                ['properties' => ['kind' => []], 'oneOf' => [['$ref' => '#/components/schemas/Tag'], ['$ref' => '#/components/schemas/Note']], 'discriminator' => ['propertyName' => 'kind']],
+                'App\Dto\Tag|App\Dto\Note',
+            ],
+            'allOf of constraints and then a reference' => [['allOf' => [['maxLength' => 5], ['$ref' => '#/components/schemas/Email']]], 'string'],
+            'oneOf with null first' => [['oneOf' => [['type' => 'null'], ['type' => 'string'], ['type' => 'integer']]], 'string|int|null'],
         ];
     }
 
@@ -124,9 +147,11 @@ final class TypeMapperTest extends TestCase
             'exclusive maximum at the bottom' => [['type' => 'integer', 'exclusiveMaximum' => PHP_INT_MIN], 'int', ["warning {$at}/exclusiveMaximum: \"exclusiveMaximum\" leaves no integer below it, so it is ignored."]],
             'empty range' => [['type' => 'integer', 'minimum' => 10, 'maximum' => 5], 'int', ["warning {$at}: The minimum is greater than the maximum, so no range is applied."]],
             'undeclared inline enum' => [['type' => 'string', 'enum' => ['a']], 'string', ["warning {$at}: This inline enum is not generated (only properties of generated classes get one), so the property keeps its plain type."]],
-            'oneOf' => [['oneOf' => [['type' => 'string']]], 'mixed', ["error {$at}: \"oneOf\" is not supported yet; enums, composition and inline objects arrive in a later version."]],
-            'allOf' => [['allOf' => [['type' => 'string']]], 'mixed', ["error {$at}: \"allOf\" is not supported yet; enums, composition and inline objects arrive in a later version."]],
-            'discriminator alone' => [['discriminator' => ['propertyName' => 'kind']], 'mixed', ["error {$at}: \"discriminator\" is not supported yet; enums, composition and inline objects arrive in a later version."]],
+            'allOf of two typed schemas' => [['allOf' => [['type' => 'string'], ['type' => 'integer']]], 'mixed', ["error {$at}: \"allOf\" combines several typed schemas that are not objects, which no PHP type expresses; keep one of them."]],
+            'allOf with oneOf' => [['allOf' => [['$ref' => '#/components/schemas/Tag']], 'oneOf' => [['type' => 'string']]], 'mixed', ["error {$at}: \"allOf\" together with \"oneOf\" or \"anyOf\" is not supported."]],
+            'undeclared allOf object' => [['allOf' => [['$ref' => '#/components/schemas/Tag'], ['properties' => ['x' => []]]]], 'mixed', ["error {$at}: This inline object is not generated (only properties of generated classes get one); move it to components/schemas and use \$ref."]],
+            'properties beside oneOf' => [['properties' => ['a' => []], 'oneOf' => [['type' => 'string']]], 'mixed', ["error {$at}: This inline object is not generated (only properties of generated classes get one); move it to components/schemas and use \$ref."]],
+            'oneOf with an inline object' => [['oneOf' => [['type' => 'object', 'properties' => ['a' => []]], ['type' => 'string']]], 'mixed', ["error {$at}/oneOf/0: This inline object is not generated (only properties of generated classes get one); move it to components/schemas and use \$ref."]],
             'boolean enum' => [['type' => 'boolean', 'enum' => [true]], 'bool', ["warning {$at}: This enum has no string or integer value, so it is not generated and the property keeps its plain type."]],
             'nullable class by reference' => [['$ref' => '#/components/schemas/MaybeTag'], 'App\Dto\Tag|null', []],
             'map schema' => [['type' => 'object', 'additionalProperties' => ['type' => 'string']], 'array<array-key, string>', []],
@@ -180,7 +205,7 @@ final class TypeMapperTest extends TestCase
         }
 
         self::assertSame(
-            ['Holder' => true, 'Tag' => true, 'Email' => false, 'MaybeCount' => false, 'Currency' => false, 'MaybeTag' => true, 'MaybeCurrency' => false, 'Failed' => false, 'LoopA' => false, 'LoopB' => false, 'Hidden' => true, 'Free' => false, 'RefWithProperties' => false, 'StringWithProperties' => false],
+            ['Holder' => true, 'Tag' => true, 'Note' => true, 'Email' => false, 'MaybeCount' => false, 'Currency' => false, 'MaybeTag' => true, 'MaybeCurrency' => false, 'Failed' => false, 'LoopA' => false, 'LoopB' => false, 'Hidden' => true, 'Free' => false, 'RefWithProperties' => false, 'StringWithProperties' => false],
             $shapes,
         );
     }
@@ -217,7 +242,7 @@ final class TypeMapperTest extends TestCase
         $at = '/project/api/openapi.yaml#/components/schemas/';
 
         return new Declarations(
-            [self::TAG => ClassName::fromFqcn('App\Dto\Tag'), $at . 'MaybeTag' => ClassName::fromFqcn('App\Dto\Tag')],
+            [self::TAG => ClassName::fromFqcn('App\Dto\Tag'), $at . 'MaybeTag' => ClassName::fromFqcn('App\Dto\Tag'), $at . 'Note' => ClassName::fromFqcn('App\Dto\Note')],
             [
                 $at . 'Currency' => new EnumType(ClassName::fromFqcn('App\Dto\Currency'), EnumBacking::from(EnumBacking::STRING), ['EUR' => 'EUR']),
                 $at . 'MaybeCurrency' => new EnumType(ClassName::fromFqcn('App\Dto\MaybeCurrency'), EnumBacking::from(EnumBacking::STRING), ['EUR' => 'EUR']),
@@ -264,6 +289,7 @@ final class TypeMapperTest extends TestCase
         return GraphFixture::load([
             'Holder' => ['type' => 'object', 'properties' => ['value' => $property]],
             'Tag' => ['type' => 'object', 'properties' => ['label' => ['type' => 'string']]],
+            'Note' => ['type' => 'object', 'properties' => ['text' => ['type' => 'string']]],
             'Email' => ['type' => 'string', 'format' => 'email'],
             'MaybeCount' => ['type' => ['integer', 'null']],
             'Currency' => ['type' => 'string', 'enum' => ['EUR']],
@@ -302,5 +328,53 @@ final class TypeMapperTest extends TestCase
 
         self::assertSame('mixed', $mapper->map($holder, $diagnostics)->describe());
         self::assertSame([], $diagnostics->all());
+    }
+
+    /**
+     * @dataProvider compositions
+     *
+     * @param array<array-key, mixed> $schema
+     */
+    public function testRecognisesComposedClasses(array $schema, bool $class, bool $discriminated): void
+    {
+        $graph = GraphFixture::load([
+            'S' => $schema,
+            'Tag' => ['type' => 'object', 'properties' => ['label' => []]],
+            'Note' => ['type' => 'object', 'properties' => ['text' => []]],
+            'Email' => ['type' => 'string'],
+        ]);
+        $resolved = $graph->all()[0]->schema();
+
+        self::assertSame([$class, $discriminated], [SchemaShape::isClass($resolved), SchemaShape::isDiscriminated($resolved)]);
+    }
+
+    /**
+     * @return array<string, array{array<array-key, mixed>, bool, bool}>
+     */
+    public static function compositions(): array
+    {
+        $tag = ['$ref' => '#/components/schemas/Tag'];
+        $note = ['$ref' => '#/components/schemas/Note'];
+        $discriminator = ['propertyName' => 'kind'];
+
+        return [
+            'allOf wrapper' => [['allOf' => [$tag], 'description' => 'x'], false, false],
+            'allOf wrapper with constraints' => [['allOf' => [['$ref' => '#/components/schemas/Email'], ['maxLength' => 5]]], false, false],
+            'allOf reference and inline object' => [['allOf' => [$tag, ['properties' => ['a' => []]]]], true, false],
+            'allOf of two references' => [['allOf' => [$tag, $note]], true, false],
+            'inline object after a constraint' => [['allOf' => [['description' => 'x'], ['properties' => ['a' => []]]]], true, false],
+            'allOf of one inline object' => [['allOf' => [['type' => 'object', 'properties' => ['a' => []]]]], true, false],
+            'allOf of a nested composition' => [['allOf' => [['allOf' => [$tag, $note]]]], true, false],
+            'allOf reference and own properties' => [['allOf' => [$tag], 'properties' => ['a' => []]], true, false],
+            'allOf on a string' => [['type' => 'string', 'allOf' => [$tag, $note]], false, false],
+            'allOf with oneOf' => [['allOf' => [$tag, $note], 'oneOf' => [$tag]], false, false],
+            'oneOf with discriminator' => [['oneOf' => [$tag, $note], 'discriminator' => $discriminator], true, true],
+            'anyOf with discriminator' => [['anyOf' => [$tag, $note], 'discriminator' => $discriminator], true, true],
+            'oneOf without discriminator' => [['oneOf' => [$tag, $note]], false, false],
+            'properties beside oneOf' => [['properties' => ['a' => []], 'oneOf' => [['required' => ['a']]]], true, false],
+            'discriminator alone' => [['properties' => ['a' => []], 'discriminator' => $discriminator], true, false],
+            'discriminator on a reference' => [['$ref' => '#/components/schemas/Tag', 'oneOf' => [$tag], 'discriminator' => $discriminator], false, false],
+            'discriminator with x-php-type' => [['oneOf' => [$tag], 'discriminator' => $discriminator, 'x-php-type' => 'App\\Pet'], false, false],
+        ];
     }
 }
