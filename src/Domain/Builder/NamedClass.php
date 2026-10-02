@@ -6,6 +6,7 @@ namespace MSSTC4PHP\DtoGenerator\Domain\Builder;
 
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\ResolvedSchema;
+use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
 
 /**
  * A generated class together with the named schema it is generated from.
@@ -30,5 +31,10 @@ final class NamedClass
     public function name(): ClassName
     {
         return $this->name;
+    }
+
+    public function isGeneratedFrom(Schema $schema): bool
+    {
+        return $this->schema->location()->equals($schema->location());
     }
 }

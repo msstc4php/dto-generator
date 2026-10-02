@@ -62,9 +62,10 @@ final class AllOfResolver
 
         $index = $this->parentIndex($schema, $parents, $diagnostics);
         $itself = null;
-        if ($index !== null && $parents[$index]->schema()->location()->equals($schema->location())) {
+        if ($index !== null && $parents[$index]->isGeneratedFrom($schema)) {
             $diagnostics->error(sprintf('Class %s extends itself.', $parents[$index]->name()->fqcn()), $members[$index]->location());
-            [$itself, $index] = [$index, null];
+            $itself = $index;
+            $index = null;
         }
 
         $key = $schema->location()->toString();
@@ -180,6 +181,11 @@ final class AllOfResolver
 
             $schema = $target->schema();
             $inside = false;
+            if ($schema->ref() !== null) {
+                $this->flattenAlias($member, $schema, $inside, $merging, $parts, $diagnostics);
+
+                return;
+            }
         }
 
         if (!$this->isObject($schema)) {
@@ -201,6 +207,25 @@ final class AllOfResolver
         }
 
         $parts->add($schema, $inside);
+    }
+
+    /**
+     * An alias (`{$ref: Pet}`) merges what it names.
+     *
+     * @param bool $inside false: the alias was reached through a $ref
+     * @param array<string, string> $merging
+     */
+    private function flattenAlias(Schema $member, Schema $alias, bool $inside, array $merging, CompositionParts $parts, Diagnostics $diagnostics): void
+    {
+        $key = $alias->location()->toString();
+        if (isset($merging[$key])) {
+            $diagnostics->error('The allOf chain loops back to a schema it is already merging.', $member->location());
+
+            return;
+        }
+
+        $merging[$key] = $key;
+        $this->flatten($alias, $inside, $merging, $parts, $diagnostics);
     }
 
     /**

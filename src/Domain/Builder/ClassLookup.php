@@ -11,7 +11,8 @@ use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaGraph;
 
 /**
- * The generated class a `$ref` stands for, also through `allOf: [$ref]` wrappers that only annotate a reference.
+ * The generated class a `$ref` stands for, also through aliases (`{$ref: Pet}`) and `allOf: [$ref]` wrappers that only
+ * annotate a reference.
  */
 final class ClassLookup
 {
@@ -61,10 +62,14 @@ final class ClassLookup
     }
 
     /**
-     * The target of the one `$ref` member of an `allOf` that is no class of its own.
+     * The target of an alias, or of the one `$ref` member of an `allOf` that is no class of its own.
      */
     private function unwrap(Schema $schema): ?ResolvedSchema
     {
+        if ($schema->ref() !== null) {
+            return $this->target($schema);
+        }
+
         $references = array_values(array_filter($schema->allOf(), static fn (Schema $member): bool => $member->ref() !== null));
 
         return count($references) === 1 && !SchemaShape::isClass($schema) ? $this->target($references[0]) : null;
