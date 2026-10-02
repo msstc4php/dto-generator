@@ -77,6 +77,7 @@
 - **`AutoloadClassVerifier` выполняет код потребителя** (`require_once vendor/autoload.php`) в процессе генератора. Поэтому в Docker-образе (этап 6) `DTO_GENERATOR_VERIFY_CLASSES=0`.
 - **Import-алиас против коротких имён файла.** Emitter собирает класс, затем сверяет импортированные алиасы (без регистра) с короткими именами, которые выписал `TypeRenderer`, и с именем самого класса; при совпадении класс собирается заново, а атрибуты этого алиаса пишутся `\FQCN` без `use`.
 - **SPI-граница проверяет результат enricher'а** (не список `AttributeModel` → ошибка с именем расширения) и ловит любые `Throwable` при автозагрузке и создании расширения; одинаковое `name()` у двух расширений → второе не используется (ошибка), секция `extensionConfig` без расширения → warning.
-- **`InstalledPackages` пуст до этапа 6**: расширение, ветвящееся по `has('symfony/validator')`, в 5a ничего не выдаст.
+- **Версии в `InstalledPackages` — как в `composer.lock`** (`v7.1.0`, `dev-main`), без нормализации; сравнивать их — забота расширения.
+- **`ProjectPackagesUnusable::$file` нельзя назвать `$file`**: у `Exception` есть protected `$file`, private-свойство с тем же именем — fatal error.
 - **Коды чужих исключений** не переносятся в `ExtensionFailed` (код `0`, исходное исключение — `previous`): у `PDOException` код строковый, а `RuntimeException` в strict_types принимает только int.
 - **`name()` расширения** вызывается под защитой и в `Load`, и в `Registry::register`; сбой → ошибка с FQCN класса.
