@@ -75,7 +75,12 @@ final class EnumBuilderTest extends TestCase
             'boolean' => [['enum' => [true]], false, ["error {$at}/enum/0: Enum value true cannot back a PHP enum; use strings or integers."]],
             'type mismatch' => [['type' => 'integer', 'enum' => ['a']], false, ["error {$at}/type: \"type\" does not match the enum values, which are strings."]],
             'nullable type' => [['type' => ['string', 'null'], 'enum' => ['a']], true, []],
-            'duplicate' => [['enum' => ['a', 'a']], true, ["warning {$at}/enum/1: Enum value \"a\" is listed twice."]],
+            'duplicate' => [['enum' => ["a/\u{00FC}", "a/\u{00FC}"]], true, ["warning {$at}/enum/1: Enum value \"a/\u{00FC}\" is listed twice."]],
+            'string and integer one' => [['enum' => ['1', 1]], false, ["error {$at}/enum: The enum mixes strings and integers, which no PHP enum can back."]],
+            'whole float' => [['enum' => [2.0]], false, ["error {$at}/enum/0: Enum value 2.0 cannot back a PHP enum; use strings or integers."]],
+            'integers declared as strings' => [['type' => 'string', 'enum' => [1]], false, ["error {$at}/type: \"type\" does not match the enum values, which are integers."]],
+            'empty descriptions' => [['enum' => ['a'], 'x-enum-descriptions' => []], true, []],
+            'descriptions as a list' => [['enum' => ['a'], 'x-enum-descriptions' => ['A']], true, ["error {$at}/x-enum-descriptions: \"x-enum-descriptions\" must map enum values to descriptions."]],
             'same case' => [['enum' => ['eur', 'EUR']], false, ["error {$at}/enum/1: Enum values \"eur\" and \"EUR\" both become case EUR."]],
             'no usable characters' => [['enum' => ['***']], false, ["error {$at}/enum/0: Enum value \"***\" has no characters usable in a case name."]],
             'descriptions not a map' => [['enum' => ['a'], 'x-enum-descriptions' => 'A'], true, ["error {$at}/x-enum-descriptions: \"x-enum-descriptions\" must map enum values to descriptions."]],
@@ -109,5 +114,23 @@ final class EnumBuilderTest extends TestCase
         }
 
         return $cases;
+    }
+
+    public function testKeepsGoingAfterNullsAndDuplicates(): void
+    {
+        [$enum, $messages] = $this->build(['enum' => [null, 'a', 'a', 'b']]);
+
+        self::assertInstanceOf(EnumModel::class, $enum);
+        self::assertSame(['A' => 'a', 'B' => 'b'], self::cases($enum));
+        self::assertSame(['warning ' . self::AT . '/enum/2: Enum value "a" is listed twice.'], $messages);
+    }
+
+    public function testDescribesIntegerCases(): void
+    {
+        [$enum] = $this->build(['enum' => [1, 2], 'x-enum-descriptions' => ['2' => 'Two.']]);
+
+        self::assertInstanceOf(EnumModel::class, $enum);
+        self::assertNull($enum->cases()[0]->doc()->description());
+        self::assertSame('Two.', $enum->cases()[1]->doc()->description());
     }
 }

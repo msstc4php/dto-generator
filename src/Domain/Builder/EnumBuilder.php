@@ -69,7 +69,7 @@ final class EnumBuilder
             }
 
             $taken[$case] = $value;
-            $description = $descriptions[(string) $value] ?? null;
+            $description = $descriptions[$value] ?? null;
             $cases[] = new EnumCase($case, $value, new DocModel($description));
         }
 
@@ -85,7 +85,7 @@ final class EnumBuilder
     {
         $values = [];
         $seen = [];
-        foreach ((array) $schema->enum() as $index => $value) {
+        foreach ($schema->enum() ?? [] as $index => $value) {
             $value = Json::value($value);
             if ($value === null) {
                 continue;
@@ -100,14 +100,15 @@ final class EnumBuilder
                 return null;
             }
 
-            $key = gettype($value) . ':' . $value;
-            if (isset($seen[$key])) {
+            // JSON keeps "1" and 1 apart.
+            $key = self::show($value);
+            if (in_array($key, $seen, true)) {
                 $diagnostics->warning(sprintf('Enum value %s is listed twice.', $this->show($value)), $schema->location()->child('enum', (string) $index));
 
                 continue;
             }
 
-            $seen[$key] = true;
+            $seen[] = $key;
             $values[$index] = $value;
         }
 
@@ -144,7 +145,7 @@ final class EnumBuilder
     /**
      * @param array<int, int|string> $values
      *
-     * @return array<string, string> value as a string → description
+     * @return array<int|string, string> value → description
      */
     private function descriptions(Schema $schema, array $values, Diagnostics $diagnostics): array
     {

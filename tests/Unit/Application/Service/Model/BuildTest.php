@@ -397,4 +397,17 @@ final class BuildTest extends TestCase
         self::assertSame(["error {$at}User/properties/level/enum: The enum mixes strings and integers, which no PHP enum can back."], ModelFixture::messages($output));
         self::assertSame(['App\\Dto\\User' => ['level: mixed']], ModelFixture::classes($output));
     }
+
+    public function testFindsInlineDeclarationsAfterSkippedAndUnnamedProperties(): void
+    {
+        $at = self::AT;
+        $output = ModelFixture::build(['User' => ['type' => 'object', 'properties' => [
+            'hidden' => ['type' => 'object', 'x-php-skip' => true, 'properties' => ['x' => []]],
+            '---' => ['type' => 'object', 'properties' => ['x' => []]],
+            'grid' => ['type' => 'array', 'items' => ['type' => 'array', 'items' => ['type' => 'object', 'properties' => ['cell' => ['type' => 'string']]]]],
+        ]]]);
+
+        self::assertSame(["error {$at}User/properties/---: Property name \"---\" has no usable characters; set \"x-php-name\"."], ModelFixture::messages($output));
+        self::assertSame(['App\\Dto\\User', 'App\\Dto\\UserGridItemItem'], array_keys(ModelFixture::classes($output)));
+    }
 }

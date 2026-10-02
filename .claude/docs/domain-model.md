@@ -39,3 +39,9 @@
 - Цикл обязательных class-typed свойств (A.b: B, B.a: A) → warning на каждом свойстве цикла (`RequiredCycles`, после построения всех классов).
 - `exclusiveMinimum: PHP_INT_MAX` / `exclusiveMaximum: PHP_INT_MIN` → warning, граница игнорируется.
 - `Schema::requireProperty()` — для имён из `propertyNames()`; иное имя — `InvalidModel` (ошибка кода, не ввода).
+
+## Этап 4a
+- Enum: значения string или int одного типа; `null` среди значений или `type: [T, "null"]` → nullable-свойство. Имена case — UPPER_SNAKE из значения (`in-progress`→`IN_PROGRESS`, `inProgress`→`IN_PROGRESS`, `1`→`VALUE_1`, `-1`→`VALUE_MINUS_1`, `class`→`CLASS_`, ведущая цифра → `_`). Совпадение имён — ошибка; дубликат значения — warning. `x-enum-descriptions` — map значение→описание (ключи проверяются).
+- `additionalProperties: <schema>`: объект без `properties` → `array<array-key, T>` (алиас), с `properties` → доп. свойство `$additionalProperties` (wire name `additionalProperties`, default `[]`); конфликт имени — ошибка.
+- Инлайн-объекты/enum в свойствах классов (и в `items` — суффикс `Item`) → объявления `<Parent><Property>`; `x-php-class-name` на инлайн-схеме переопределяет; коллизия — ошибка, свойство молча `mixed` (abandoned). Инлайн-схемы вне свойств классов (items алиаса и т. п.) не генерируются: объект — ошибка, enum — warning и базовый тип.
+

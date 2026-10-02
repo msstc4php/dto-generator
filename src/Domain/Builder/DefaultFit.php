@@ -48,7 +48,7 @@ final class DefaultFit
         }
 
         if ($type instanceof EnumType) {
-            return (is_int($value) || is_string($value)) && $type->caseFor($value) !== null;
+            return $type->caseFor($value) !== null;
         }
 
         if ($type instanceof ListType) {

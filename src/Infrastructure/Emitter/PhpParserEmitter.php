@@ -406,7 +406,7 @@ final class PhpParserEmitter implements CodeEmitter
     private function defaultValue($value, TypeModel $type, TypeRenderer $types): Expr
     {
         $type = $type instanceof NullableType ? $type->inner() : $type;
-        if ($type instanceof EnumType && (is_int($value) || is_string($value))) {
+        if ($type instanceof EnumType) {
             $case = $type->caseFor($value);
             if ($case !== null) {
                 return new ClassConstFetch($types->nameOf($type->className()), $case);

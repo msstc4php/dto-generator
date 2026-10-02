@@ -17,6 +17,8 @@
         "TrueValue": {
             "ignore": [
                 "MSSTC4PHP\\DtoGenerator\\Domain\\Model\\ClassModel::__construct",
+                "MSSTC4PHP\\DtoGenerator\\Application\\Service\\Model\\Build\\Registry::abandon",
+                "MSSTC4PHP\\DtoGenerator\\Application\\Service\\Model\\Build\\Registry::skip",
                 "MSSTC4PHP\\DtoGenerator\\Domain\\Model\\EnumModel::__construct",
                 "MSSTC4PHP\\DtoGenerator\\Domain\\Model\\UnionType::__construct",
                 "MSSTC4PHP\\DtoGenerator\\Domain\\Model\\AttributeArgument::assertWellFormed",
@@ -42,6 +44,8 @@
                 "MSSTC4PHP\\DtoGenerator\\Application\\Config\\PhpConstraint::lowerBound",
                 // file_get_contents() of a file just found, json_encode() of plain arrays and getcwd() do not fail.
                 "MSSTC4PHP\\DtoGenerator\\Infrastructure\\Writer\\FilesystemWriter::plan",
+                "MSSTC4PHP\\DtoGenerator\\Domain\\Builder\\EnumBuilder::show",
+                "MSSTC4PHP\\DtoGenerator\\Domain\\Builder\\NameResolver::enumCaseName",
                 "MSSTC4PHP\\DtoGenerator\\Infrastructure\\Writer\\FilesystemWriter::readManifest",
                 "MSSTC4PHP\\DtoGenerator\\Presentation\\Cli\\JsonReport::encode",
                 "MSSTC4PHP\\DtoGenerator\\DtoGenerator::console"
@@ -69,7 +73,7 @@
         "CastInt": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Application\\Config\\PhpConstraint::lowerBound", "MSSTC4PHP\\DtoGenerator\\Domain\\Builder\\DefaultFit::inRange"] },
         "GreaterThan": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Application\\Config\\PhpConstraint::lowerBound"] },
         // Equivalent: the key only has to be unique; the order of its parts is irrelevant.
-        "Concat": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Domain\\Schema\\ReferenceUse::key", "MSSTC4PHP\\DtoGenerator\\Infrastructure\\Writer\\FilesystemWriter::temporaryPath"] },
+        "Concat": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Application\\Service\\Model\\Build\\Action::inline", "MSSTC4PHP\\DtoGenerator\\Domain\\Schema\\ReferenceUse::key", "MSSTC4PHP\\DtoGenerator\\Infrastructure\\Writer\\FilesystemWriter::temporaryPath"] },
         // Equivalent: any unique name in the target's directory works for the temporary file.
         "ConcatOperandRemoval": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Infrastructure\\Writer\\FilesystemWriter::temporaryPath"] },
         "LessThan": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Application\\Config\\PhpConstraint::lowestMinor"] },

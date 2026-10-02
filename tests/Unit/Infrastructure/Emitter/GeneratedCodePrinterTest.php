@@ -27,6 +27,7 @@ use PhpParser\Node\Scalar\Int_;
 use PhpParser\Node\Scalar\String_;
 use PhpParser\Node\Stmt\ClassMethod;
 use PhpParser\Node\Stmt\Declare_;
+use PhpParser\Node\Stmt\Enum_;
 use PhpParser\Node\Stmt\Expression;
 use PhpParser\Node\Stmt\Return_;
 use PhpParser\PhpVersion;
@@ -209,5 +210,18 @@ final class GeneratedCodePrinterTest extends TestCase
         $list = new List_([null, new ArrayItem(new Variable('b'))], ['kind' => List_::KIND_ARRAY]);
 
         self::assertSame('[, $b] = $c;', (new GeneratedCodePrinter())->prettyPrint([new Expression(new Assign($list, new Variable('c')))]));
+    }
+
+    public function testPrintsEnumsInPerCsStyle(): void
+    {
+        $printer = new GeneratedCodePrinter(['phpVersion' => PhpVersion::fromString('8.1')]);
+        $backed = new Enum_('Status', [
+            'scalarType' => new Identifier('string'),
+            'implements' => [new Name('JsonSerializable')],
+            'attrGroups' => [new AttributeGroup([new Attribute(new Name('Pure'))])],
+        ]);
+
+        self::assertSame("#[Pure]\nenum Status: string implements JsonSerializable\n{\n}", $printer->prettyPrint([$backed]));
+        self::assertSame("enum Plain\n{\n}", $printer->prettyPrint([new Enum_('Plain')]));
     }
 }

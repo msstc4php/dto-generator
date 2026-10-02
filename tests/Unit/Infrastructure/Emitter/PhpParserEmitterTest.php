@@ -234,12 +234,14 @@ final class PhpParserEmitterTest extends TestCase
             EmitterFixture::property('text', new NullableType(ScalarType::string()), false, new DefaultValue("x\n)\n{")),
             EmitterFixture::property('lines', new NullableType(new ListType(ScalarType::string())), false, new DefaultValue(["a\tb", 'plain'])),
             EmitterFixture::property('map', new MixedType(), false, new DefaultValue(["a\nb" => 1])),
+            EmitterFixture::property('any', new MixedType(), false, new DefaultValue(["x\ty"])),
         ]);
         $code = (new PhpParserEmitter())->emit($class, EmitterFixture::target('8.2', Mutability::IMMUTABLE));
 
         self::assertStringContainsString('public ?string $text = "x\\n)\\n{",', $code);
         self::assertStringContainsString("public ?array \$lines = [\"a\\tb\", 'plain'],", $code);
         self::assertStringContainsString('public mixed $map = ["a\\nb" => 1],', $code);
+        self::assertStringContainsString('public mixed $any = ["x\\ty"],', $code);
     }
 
     public function testEmitsANativeEnumFromPhp81(): void

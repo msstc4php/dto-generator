@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace MSSTC4PHP\DtoGenerator\Domain\Model;
 
 use MSSTC4PHP\DtoGenerator\Domain\Exception\InvalidModel;
+use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
 
 /**
  * A property typed by a generated enum. It keeps the case of every value, so a schema default can be emitted as
  * `Name::CASE` and checked against the enum.
+ *
+ * @phpstan-import-type JsonValue from Json
  */
 final class EnumType implements TypeModel
 {
@@ -62,7 +65,9 @@ final class EnumType implements TypeModel
     }
 
     /**
-     * @param int|string $value
+     * The case of a value, or null for anything that is not one of the values (another type included).
+     *
+     * @param JsonValue $value
      */
     public function caseFor($value): ?string
     {

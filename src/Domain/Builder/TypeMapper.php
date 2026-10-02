@@ -90,13 +90,13 @@ final class TypeMapper
         }
 
         $key = $schema->location()->toString();
+        if ($this->declarations->isAbandoned($key)) {
+            return new MixedType();
+        }
+
         $declared = $this->declared($key);
         if ($declared instanceof TypeModel) {
             return $declared;
-        }
-
-        if ($this->declarations->isAbandoned($key)) {
-            return new MixedType();
         }
 
         $unsupported = SchemaShape::unsupportedKeyword($schema);

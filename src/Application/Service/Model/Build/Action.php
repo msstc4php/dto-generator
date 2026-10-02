@@ -132,17 +132,13 @@ final class Action
                 continue;
             }
 
-            $suffix = '';
-            while ($candidate->ref() === null && !SchemaShape::isClass($candidate) && !SchemaShape::isEnum($candidate) && $candidate->items() instanceof Schema) {
-                $candidate = $candidate->items();
-                $suffix .= 'Item';
-            }
-
-            $isEnum = SchemaShape::isEnum($candidate);
-            if (!$isEnum && !SchemaShape::isClass($candidate)) {
+            $inline = $this->inline($candidate, '');
+            if ($inline === null) {
                 continue;
             }
 
+            [$candidate, $suffix] = $inline;
+            $isEnum = SchemaShape::isEnum($candidate);
             $base = $this->names->className($wireName);
             $short = $base === null ? null : $this->shortName($candidate, $ownerName->shortName() . $base . $suffix, $diagnostics);
             $name = $short === null ? null : ClassName::fromFqcn(($ownerName->namespace() === '' ? '' : $ownerName->namespace() . '\\') . $short);
@@ -150,6 +146,22 @@ final class Action
                 $registry->abandon($candidate);
             }
         }
+    }
+
+    /**
+     * The inline object or enum a property holds, looking through arrays; each array level adds "Item" to the name.
+     *
+     * @return array{Schema, string}|null
+     */
+    private function inline(Schema $schema, string $suffix): ?array
+    {
+        if (SchemaShape::isClass($schema) || SchemaShape::isEnum($schema)) {
+            return [$schema, $suffix];
+        }
+
+        $items = $schema->items();
+
+        return $items instanceof Schema ? $this->inline($items, $suffix . 'Item') : null;
     }
 
     /**
