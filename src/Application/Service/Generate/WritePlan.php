@@ -12,7 +12,7 @@ final class WritePlan
     /** @var list<FileChange> */
     private array $changes;
 
-    /** @var list<string> */
+    /** @var array<string, string> */
     private array $conflicts;
 
     /** @var array<string, string> */
@@ -20,7 +20,7 @@ final class WritePlan
 
     /**
      * @param list<FileChange> $changes
-     * @param list<string> $conflicts files writing must not touch, each with the reason
+     * @param array<string, string> $conflicts path → why writing must not touch the file
      * @param array<string, string> $manifests manifest path → new contents, for manifests that change
      */
     public function __construct(array $changes, array $conflicts, array $manifests)
@@ -39,7 +39,7 @@ final class WritePlan
     }
 
     /**
-     * @return list<string>
+     * @return array<string, string>
      */
     public function conflicts(): array
     {

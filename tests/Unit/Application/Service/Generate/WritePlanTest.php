@@ -70,10 +70,10 @@ final class WritePlanTest extends TestCase
 
     public function testExposesItsParts(): void
     {
-        $plan = new WritePlan([FileChange::create('/out/A.php', 'a')], ['/out/B.php: conflict'], ['/out/m.json' => '{}']);
+        $plan = new WritePlan([FileChange::create('/out/A.php', 'a')], ['/out/B.php' => 'conflict'], ['/out/m.json' => '{}']);
 
         self::assertCount(1, $plan->changes());
-        self::assertSame(['/out/B.php: conflict'], $plan->conflicts());
+        self::assertSame(['/out/B.php' => 'conflict'], $plan->conflicts());
         self::assertSame(['/out/m.json' => '{}'], $plan->manifests());
     }
 }

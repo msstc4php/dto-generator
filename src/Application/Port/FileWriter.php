@@ -13,9 +13,10 @@ use MSSTC4PHP\DtoGenerator\Application\Service\Generate\WritePlan;
 interface FileWriter
 {
     /**
+     * @param list<string> $outputDirs every output directory of the config, including ones that no longer get files
      * @param list<GeneratedFile> $files the complete set; anything a manifest lists beyond it is stale
      */
-    public function plan(array $files): WritePlan;
+    public function plan(array $outputDirs, array $files): WritePlan;
 
     /**
      * @throws WriteFailed
