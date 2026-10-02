@@ -4,19 +4,19 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Tests\Functional;
 
-use Closure;
 use Composer\Composer;
+use Composer\Config;
 use Composer\EventDispatcher\EventDispatcher;
 use Composer\Factory;
 use Composer\IO\BufferIO;
+use Composer\IO\IOInterface;
 use Composer\Package\RootPackage;
 use Composer\Script\Event;
 use Composer\Script\ScriptEvents;
 use FilesystemIterator;
 use LogicException;
-use MSSTC4PHP\DtoGenerator\Application\Service\Generate\Input;
-use MSSTC4PHP\DtoGenerator\Application\Service\Generate\Output;
 use MSSTC4PHP\DtoGenerator\ComposerPlugin;
+use MSSTC4PHP\DtoGenerator\Tests\Support\Extensions\PackageVersionExtension;
 use PHPUnit\Framework\TestCase;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
@@ -25,9 +25,12 @@ use SplFileInfo;
 use Symfony\Component\Console\Formatter\OutputFormatter;
 use Symfony\Component\Console\Output\OutputInterface;
 
+/**
+ * The plugin runs this repository's bin/dto-generator, as a project runs its vendor/bin proxy.
+ */
 final class ComposerPluginTest extends TestCase
 {
-    private const CONFIG = "version: 1\ntarget: {php: '8.2'}\nverifyClasses: false\ndiscoverExtensions: false\nsources:\n  - {spec: api.yaml, namespace: App\\Dto, outputDir: out}\n";
+    private const CONFIG = "version: 1\ntarget: {php: '8.2'}\nverifyClasses: false\nsources:\n  - {spec: api.yaml, namespace: App\\Dto, outputDir: out}\n";
 
     private const SPEC = "openapi: 3.1.0\ncomponents:\n  schemas:\n    Pet:\n      type: object\n      properties:\n        name: {type: string}\n";
 
@@ -48,6 +51,7 @@ final class ComposerPluginTest extends TestCase
     protected function tearDown(): void
     {
         chdir($this->cwd);
+        putenv('COMPOSER');
         $entries = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($this->root, FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::CHILD_FIRST);
         foreach ($entries as $entry) {
             assert($entry instanceof SplFileInfo);
@@ -62,41 +66,46 @@ final class ComposerPluginTest extends TestCase
         self::assertSame([ScriptEvents::POST_AUTOLOAD_DUMP => 'onPostAutoloadDump'], ComposerPlugin::getSubscribedEvents());
     }
 
-    public function testDoesNothingWithoutAConfig(): void
+    public function testDoesNothingWithoutItsExtra(): void
     {
         self::assertSame('', $this->dump([]));
-        self::assertSame('', $this->dump(['dto-generator' => ['failOnError' => true]]));
-        self::assertDirectoryDoesNotExist($this->root . '/gen/out');
-    }
-
-    public function testDoesNothingWhenComposerRunsWithoutScripts(): void
-    {
-        self::assertSame('', $this->dump(['dto-generator' => ['config' => 'gen/dto-generator.yaml']], null, false));
         self::assertDirectoryDoesNotExist($this->root . '/gen/out');
     }
 
     public function testGeneratesFromAConfigRelativeToTheProject(): void
     {
-        $output = $this->dump(['dto-generator' => ['config' => 'gen/dto-generator.yaml']]);
-
-        self::assertSame("dto-generator: written 1, deleted 0, unchanged 0.\n", $output);
+        self::assertSame("dto-generator: Written: 1, deleted: 0, unchanged: 0.\n", $this->dump(['dto-generator' => ['config' => 'gen/dto-generator.yaml']]));
         self::assertFileExists($this->root . '/gen/out/Pet.php');
-        self::assertSame("dto-generator: written 0, deleted 0, unchanged 1.\n", $this->dump(['dto-generator' => ['config' => 'gen/dto-generator.yaml']]));
+        self::assertSame("dto-generator: Written: 0, deleted: 0, unchanged: 1.\n", $this->dump(['dto-generator' => ['config' => 'gen/dto-generator.yaml']]));
     }
 
-    public function testCountsUpdatedFilesAsWritten(): void
+    public function testTakesTheProjectFromTheComposerVariable(): void
     {
-        $this->dump(['dto-generator' => ['config' => 'gen/dto-generator.yaml']]);
-        file_put_contents($this->root . '/gen/api.yaml', self::SPEC . "        age: {type: integer}\n");
+        mkdir($this->root . '/sub');
+        file_put_contents($this->root . '/sub/dto-generator.yaml', self::CONFIG);
+        file_put_contents($this->root . '/sub/api.yaml', self::SPEC);
+        putenv('COMPOSER=sub/composer.json');
 
-        self::assertSame("dto-generator: written 1, deleted 0, unchanged 0.\n", $this->dump(['dto-generator' => ['config' => 'gen/dto-generator.yaml']]));
+        $this->dump(['dto-generator' => ['config' => 'dto-generator.yaml']]);
+
+        self::assertFileExists($this->root . '/sub/out/Pet.php');
     }
 
-    public function testAcceptsAnAbsoluteConfigPath(): void
+    public function testPassesAbsoluteConfigPathsAsTheyAre(): void
     {
         $this->dump(['dto-generator' => ['config' => $this->root . '/gen/dto-generator.yaml']]);
-
         self::assertFileExists($this->root . '/gen/out/Pet.php');
+
+        self::assertStringStartsWith('dto-generator: error C:/nowhere/dto.yaml: ', $this->dump(['dto-generator' => ['config' => 'C:\nowhere\dto.yaml']]));
+    }
+
+    public function testLoadsExtensionsThroughTheProjectsAutoloader(): void
+    {
+        file_put_contents($this->root . '/gen/dto-generator.yaml', self::CONFIG . "extensions: ['" . PackageVersionExtension::class . "']\n");
+
+        $this->dump(['dto-generator' => ['config' => 'gen/dto-generator.yaml']]);
+
+        self::assertStringContainsString("#[\\App\\Attr\\Validator('none')]", (string) file_get_contents($this->root . '/gen/out/Pet.php'));
     }
 
     public function testWarnsAboutFailuresUnlessToldToFail(): void
@@ -106,36 +115,15 @@ final class ComposerPluginTest extends TestCase
         $output = $this->dump(['dto-generator' => ['config' => 'gen/dto-generator.yaml']]);
 
         self::assertStringContainsString('dto-generator: error gen/api.yaml#/components/schemas/Pet/properties/owner: $ref "#/components/schemas/Gone" does not resolve', $output);
-        self::assertStringEndsWith("dto-generator: generation failed with 1 error(s); nothing was written.\n", $output);
+        self::assertStringEndsWith("dto-generator: Generation failed: 1 error(s).\ndto-generator: the generator exited with code 2.\n", $output);
         self::assertDirectoryDoesNotExist($this->root . '/gen/out');
 
         $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('dto-generator: generation failed with 1 error(s); nothing was written.');
+        $this->expectExceptionMessage('dto-generator: the generator exited with code 2.');
         $this->dump(['dto-generator' => ['config' => 'gen/dto-generator.yaml', 'failOnError' => true]]);
     }
 
-    public function testReportsAGeneratorThatStops(): void
-    {
-        $stopping = static function (): Output {
-            throw new LogicException('out of memory');
-        };
-
-        self::assertSame("dto-generator: generation stopped: out of memory\n", $this->dump(['dto-generator' => ['config' => 'gen/dto-generator.yaml']], $stopping));
-    }
-
-    public function testReportsAMissingConfigFile(): void
-    {
-        $output = $this->dump(['dto-generator' => ['config' => 'missing.yaml']]);
-
-        self::assertStringEndsWith("dto-generator: configuration failed with 1 error(s); nothing was written.\n", $output);
-    }
-
-    public function testKeepsAngleBracketsOfMessagesAsText(): void
-    {
-        self::assertStringContainsString('missing<b>.yaml" does not exist.', $this->dump(['dto-generator' => ['config' => 'missing<b>.yaml']]));
-    }
-
-    public function testShowsErrorsAsErrorsWhenTheyFailTheCommand(): void
+    public function testShowsTheOutputOfAFailureAsErrorsWhenItFailsTheCommand(): void
     {
         $io = $this->io(true);
         try {
@@ -150,11 +138,44 @@ final class ComposerPluginTest extends TestCase
         self::assertStringStartsWith("\033[30;43mdto-generator: error missing.yaml: ", $io->getOutput());
     }
 
-    public function testReportsSettingsOfTheWrongType(): void
+    public function testShowsTheWarningsOfASuccessfulRunAsWarningsEvenWhenFailing(): void
+    {
+        file_put_contents($this->root . '/gen/dto-generator.yaml', self::CONFIG . "extensionConfig:\n  nobody: {}\n");
+        $io = $this->io(true);
+
+        $this->runPlugin(['dto-generator' => ['config' => 'gen/dto-generator.yaml', 'failOnError' => true]], $io);
+
+        self::assertStringStartsWith("\033[30;43mdto-generator: warning ", $io->getOutput());
+    }
+
+    public function testKeepsAngleBracketsOfTheOutputAsText(): void
+    {
+        self::assertStringContainsString('missing<b>.yaml', $this->dump(['dto-generator' => ['config' => 'missing<b>.yaml']]));
+    }
+
+    public function testShowsTheWarningsOfASuccessfulRun(): void
+    {
+        file_put_contents($this->root . '/gen/dto-generator.yaml', self::CONFIG . "extensionConfig:\n  nobody: {}\n");
+
+        $output = $this->dump(['dto-generator' => ['config' => 'gen/dto-generator.yaml']]);
+
+        self::assertStringStartsWith('dto-generator: warning gen/dto-generator.yaml#/extensionConfig/nobody: No loaded extension is named "nobody"', $output);
+        self::assertStringEndsWith("dto-generator: Written: 1, deleted: 0, unchanged: 0.\n", $output);
+    }
+
+    public function testReportsSettingsItCannotUse(): void
     {
         self::assertSame(
             "dto-generator: extra.dto-generator must be an object with \"config\", the path of the config file.\n",
             $this->dump(['dto-generator' => 'gen/dto-generator.yaml']),
+        );
+        self::assertSame(
+            "dto-generator: extra.dto-generator must be an object with \"config\", the path of the config file.\n",
+            $this->dump(['dto-generator' => ['gen/dto-generator.yaml']]),
+        );
+        self::assertSame(
+            "dto-generator: extra.dto-generator has no \"config\", so nothing is generated.\n",
+            $this->dump(['dto-generator' => []]),
         );
         self::assertSame(
             "dto-generator: extra.dto-generator.config must be the path of the config file.\n",
@@ -167,28 +188,54 @@ final class ComposerPluginTest extends TestCase
         self::assertDirectoryDoesNotExist($this->root . '/gen/out');
 
         $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('dto-generator: extra.dto-generator.config must be the path of the config file.');
-        $this->dump(['dto-generator' => ['config' => 3, 'failOnError' => true]]);
+        $this->expectExceptionMessage('dto-generator: extra.dto-generator has no "config", so nothing is generated.');
+        $this->dump(['dto-generator' => ['failOnError' => true]]);
     }
 
-    public function testShowsWarningsOfASuccessfulRun(): void
+    public function testDoesNothingWhenComposerRunsWithoutScripts(): void
     {
-        file_put_contents($this->root . '/gen/dto-generator.yaml', self::CONFIG . "extensionConfig:\n  nobody: {}\n");
+        $composer = $this->composer(['dto-generator' => ['config' => 'gen/dto-generator.yaml']]);
+        $io = $this->io(false);
+        $composer->setEventDispatcher((new EventDispatcher($composer, $io))->setRunScripts(false));
 
-        $output = $this->dump(['dto-generator' => ['config' => 'gen/dto-generator.yaml']]);
+        (new ComposerPlugin())->onPostAutoloadDump(new Event(ScriptEvents::POST_AUTOLOAD_DUMP, $composer, $io));
 
-        self::assertStringStartsWith('dto-generator: warning gen/dto-generator.yaml#/extensionConfig/nobody: No loaded extension is named "nobody"', $output);
-        self::assertStringEndsWith("dto-generator: written 1, deleted 0, unchanged 0.\n", $output);
+        self::assertSame('', $io->getOutput());
+        self::assertDirectoryDoesNotExist($this->root . '/gen/out');
+    }
+
+    public function testRunsWhenTheScriptsFlagCannotBeRead(): void
+    {
+        $composer = $this->composer(['dto-generator' => ['config' => 'gen/dto-generator.yaml']]);
+        $io = $this->io(false);
+        $composer->setEventDispatcher(new class($composer, $io) extends EventDispatcher {
+            public function __construct(Composer $composer, IOInterface $io)
+            {
+                parent::__construct($composer, $io);
+                unset($this->runScripts);
+            }
+
+            /**
+             * @return never
+             */
+            public function __get(string $name)
+            {
+                throw new LogicException('No ' . $name . ' in this Composer.');
+            }
+        });
+
+        (new ComposerPlugin())->onPostAutoloadDump(new Event(ScriptEvents::POST_AUTOLOAD_DUMP, $composer, $io));
+
+        self::assertFileExists($this->root . '/gen/out/Pet.php');
     }
 
     /**
-     * @param array<string, array<string, bool|int|string>|string> $extra
-     * @param (Closure(Input): Output)|null $generator
+     * @param array<string, array<array-key, bool|int|string>|string> $extra
      */
-    private function dump(array $extra, ?Closure $generator = null, bool $scripts = true): string
+    private function dump(array $extra): string
     {
         $io = $this->io(false);
-        $this->runPlugin($extra, $io, $generator, $scripts);
+        $this->runPlugin($extra, $io);
 
         return $io->getOutput();
     }
@@ -200,19 +247,32 @@ final class ComposerPluginTest extends TestCase
     }
 
     /**
-     * @param array<string, array<string, bool|int|string>|string> $extra
-     * @param (Closure(Input): Output)|null $generator
+     * @param array<string, array<array-key, bool|int|string>|string> $extra
      */
-    private function runPlugin(array $extra, BufferIO $io, ?Closure $generator = null, bool $scripts = true): void
+    private function composer(array $extra): Composer
     {
         $composer = new Composer();
         $package = new RootPackage('acme/app', '1.0.0.0', '1.0.0');
         $package->setExtra($extra);
 
         $composer->setPackage($package);
-        $composer->setEventDispatcher((new EventDispatcher($composer, $io))->setRunScripts($scripts));
+        $config = new Config(false, $this->root);
+        $config->merge(['config' => ['bin-dir' => dirname(__DIR__, 2) . '/bin']]);
 
-        $plugin = new ComposerPlugin($generator);
+        $composer->setConfig($config);
+
+        return $composer;
+    }
+
+    /**
+     * @param array<string, array<array-key, bool|int|string>|string> $extra
+     */
+    private function runPlugin(array $extra, BufferIO $io): void
+    {
+        $composer = $this->composer($extra);
+        $composer->setEventDispatcher(new EventDispatcher($composer, $io));
+
+        $plugin = new ComposerPlugin();
         $plugin->activate($composer, $io);
 
         try {

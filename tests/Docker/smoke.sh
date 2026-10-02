@@ -10,7 +10,8 @@ run() {
     dir="$1"
     config="$2"
     shift 2
-    docker run --rm -u "$(id -u):$(id -g)" -v "$work/$dir:/app" "$image" "--config=$config" "$@"
+    # ":z" lets SELinux hosts share the directory with the container.
+    docker run --rm -u "$(id -u):$(id -g)" -v "$work/$dir:/app:z" "$image" "--config=$config" "$@"
 }
 
 mkdir "$work/golden"
@@ -19,7 +20,15 @@ run golden php8.2.yaml
 for expected in "$root"/tests/Fixtures/Projects/golden/expected/8.2/*.golden; do
     cmp "$expected" "$work/golden/generated/8.2/$(basename "$expected" .golden)"
 done
+expected_files=$(cd "$root/tests/Fixtures/Projects/golden/expected/8.2" && ls | sed 's/\.golden$//' | sort)
+generated_files=$(cd "$work/golden/generated/8.2" && ls | sort)
+[ "$expected_files" = "$generated_files" ]
 run golden php8.2.yaml --check
+# The JSON report must be the only thing on stdout: no deprecation notice of a dependency on PHP 8.4.
+run golden php8.2.yaml --check --format=json \
+    | docker run --rm -i --entrypoint php "$image" -r 'json_decode(stream_get_contents(STDIN), true, 512, JSON_THROW_ON_ERROR);'
+[ "$(docker run --rm --entrypoint id "$image" -u)" = 1000 ]
+docker run --rm --entrypoint test "$image" -f /opt/dto-generator/LICENSE
 
 mkdir -p "$work/auto/api"
 printf '{"require": {"php": ">=8.1"}}\n' > "$work/auto/composer.json"

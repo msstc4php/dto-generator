@@ -39,7 +39,8 @@ Hex-подход, адаптированный под библиотеку; пр
 
 Этап 6b:
 
-- `src/ComposerPlugin.php` — второй класс слоя EntryPoint (deptrac): его создаёт Composer (`extra.class`, пакет `type: composer-plugin`), он собирает генератор через `DtoGenerator::generator()` (внедряемый `Closure(Input): Output` для тестов). Подписка на `post-autoload-dump`; `extra.dto-generator.{config, failOnError}`; вывод через `writeError` со стилями `warning`/`error` Composer, `<` экранируется.
+- `src/ComposerPlugin.php` — второй класс слоя EntryPoint (deptrac): его создаёт Composer (`extra.class`, пакет `type: composer-plugin`). Подписка на `post-autoload-dump`; настройки `extra.dto-generator.{config, failOnError}` разбирает `Presentation/Composer/PluginSettings`. Генерация — отдельным процессом `PHP_BINARY <bin-dir>/dto-generator generate --config=… --no-ansi` (`ProcessExecutor`) с cwd = каталог `Factory::getComposerFile()`; вывод CLI идёт через `writeError` с префиксом `dto-generator: `, stderr — стилем `warning`/`error`, всё через `OutputFormatter::escape`.
+- `bin/dto-generator` сначала берёт `$GLOBALS['_composer_autoload_path']` (ставит bin-прокси Composer 2.2+), затем `../../../autoload.php`, затем `../vendor/autoload.php`.
 - `docker/Dockerfile`: `composer:2` → `composer install --no-dev --classmap-authoritative --no-plugins --no-scripts` в `/opt/dto-generator`; `php:8.4-cli-alpine`, симлинк в `/usr/local/bin`, `USER 1000:1000`, `WORKDIR /app`, `DTO_GENERATOR_VERIFY_CLASSES=0`. `.dockerignore` пропускает только `composer.json`, `bin`, `src`. `tests/Docker/smoke.sh` (`make docker-smoke`, job `docker` в CI).
 
 Этап 6a:

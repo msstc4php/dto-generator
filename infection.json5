@@ -22,6 +22,8 @@
         // Equivalent: isset()-only seen-maps, so the stored value is never read.
         "TrueValue": {
             "ignore": [
+                // Closure::bind() of a static closure to a class that exists never returns null.
+                "MSSTC4PHP\\DtoGenerator\\ComposerPlugin::runsScripts",
                 "MSSTC4PHP\\DtoGenerator\\Domain\\Model\\ClassModel::__construct",
                 "MSSTC4PHP\\DtoGenerator\\Application\\Service\\Model\\Build\\Registry::abandon",
                 "MSSTC4PHP\\DtoGenerator\\Application\\Service\\Model\\Build\\Registry::skip",
@@ -62,14 +64,13 @@
                 "MSSTC4PHP\\DtoGenerator\\Domain\\Builder\\NameResolver::enumCaseName",
                 "MSSTC4PHP\\DtoGenerator\\Infrastructure\\Writer\\FilesystemWriter::readManifest",
                 "MSSTC4PHP\\DtoGenerator\\Presentation\\Cli\\JsonReport::encode",
-                "MSSTC4PHP\\DtoGenerator\\DtoGenerator::console",
-                // getcwd() fails only when the working directory has been removed.
-                "MSSTC4PHP\\DtoGenerator\\ComposerPlugin::generate"
+                "MSSTC4PHP\\DtoGenerator\\DtoGenerator::console"
             ]
         },
         // Equivalent: defensive throws whose preconditions the constructors guarantee.
         "Throw_": {
             "ignore": [
+                "MSSTC4PHP\\DtoGenerator\\Presentation\\Composer\\PluginSettings::config",
                 "MSSTC4PHP\\DtoGenerator\\Domain\\Shared\\AbstractEnum::tryFrom",
                 "MSSTC4PHP\\DtoGenerator\\Domain\\Target\\Capability::minimumVersion",
                 "MSSTC4PHP\\DtoGenerator\\Domain\\Model\\ArgumentValue::constantName",
@@ -78,8 +79,6 @@
         },
         "InstanceOf_": {
             "ignore": [
-                // A write that did not fail always has a plan.
-                "MSSTC4PHP\\DtoGenerator\\ComposerPlugin::summary",
                 // Closure::bind() of a static closure to a class that exists never returns null.
                 "MSSTC4PHP\\DtoGenerator\\ComposerPlugin::runsScripts",
                 // Config loading reports an error whenever it returns no config or target.
@@ -121,6 +120,8 @@
         // could not be locked only frees a descriptor.
         "MethodCallRemoval": { "ignore": ["MSSTC4PHP\\DtoGenerator\\DtoGenerator::withoutAutoExit", "MSSTC4PHP\\DtoGenerator\\Infrastructure\\Writer\\DirectoryLocks::open"] },
         "LogicalOr": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Application\\Service\\Generate\\Action::__invoke"] },
+        // Equivalent on POSIX, where the script's shebang starts PHP too; PHP_BINARY matters on Windows.
+        "ArrayItemRemoval": { "ignore": ["MSSTC4PHP\\DtoGenerator\\ComposerPlugin::generate"] },
         "PregMatchRemoveCaret": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Domain\\Builder\\DefaultFit::inRange"] }
     },
     "phpUnit": {

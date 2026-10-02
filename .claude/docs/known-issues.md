@@ -80,7 +80,9 @@
 - **Composer шлёт script-события плагинам и при `--no-scripts`**: флаг выключает только скрипты `composer.json`. `ComposerPlugin::runsScripts()` читает защищённое `EventDispatcher::$runScripts` через `Closure::bind` — публичного геттера нет.
 - **`BufferIO` без стилей Composer** печатает `<warning>` как текст: в тестах форматтер строится с `Factory::createAdditionalStyles()`. Стиль `warning` — `30;43`, `error` — `37;41`.
 - **Метод тестового класса нельзя назвать `run()`** — он переопределяет `TestCase::run()`.
-- **Composer несёт свою копию symfony/console**: в пути плагина Console-код генератора не используется.
+- **Внутри процесса Composer окружение — его собственное**: `Composer\InstalledVersions` грузится из phar Composer (его `installed.json`), автозагрузчик видит только плагин и его зависимости, библиотеки (psr/log, symfony/console) — версии Composer. Поэтому плагин запускает CLI отдельным процессом; генератор внутри Composer не вызывать.
+- **Пакет, подключённый симлинком (path-репозиторий)**: `__DIR__` в bin — реальный путь репозитория, поэтому нужен `_composer_autoload_path` от прокси, иначе подхватится vendor репозитория генератора.
+- **Образ собирается без lock**: `composer config platform.php 8.4` в стадии vendor, иначе зависимости разрешались бы под 7.4 из composer.json.
 - **Нет точечного отключения обнаруженного расширения**: если новая версия зависимости приносит расширение, которое не грузится или совпадает по `name()` с явным, генерация падает с error на `#/discoverExtensions`, и выход один — `discoverExtensions: false` целиком. Исключение по пакету (`discoverExtensions: {exclude: [...]}`) — кандидат на будущее.
 - **Подключённые обнаруженные расширения нигде не перечисляются**: у `Diagnostics` есть только error/warning, а warning на каждый запуск был бы шумом.
 - **Версии в `InstalledPackages` — как в `composer.lock`** (`v7.1.0`, `dev-main`), без нормализации; сравнивать их — забота расширения.

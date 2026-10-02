@@ -17,10 +17,13 @@
 - **Плагин** (`src/ComposerPlugin.php`, слой EntryPoint: его создаёт сам Composer, и он собирает генератор через `DtoGenerator`): `PluginInterface` + `EventSubscriberInterface`, подписка на `ScriptEvents::POST_AUTOLOAD_DUMP`.
   - Нет `extra.dto-generator` или `config` — ничего не делает.
   - `config` — непустая строка, путь относительно каталога `composer.json` проекта (рабочий каталог Composer). `failOnError` — bool, по умолчанию `false`. Неверный тип — сообщение и (при `failOnError: true`) провал команды.
-  - Запуск `DtoGenerator::generator()` в режиме записи. Итог печатается через IO Composer: `dto-generator: N files written, M deleted` или `up to date`; диагностика — строками как в CLI (`<warning>`/`<error>`).
+  - Запуск `<bin-dir>/dto-generator generate --config=… --no-ansi` отдельным процессом (`ProcessExecutor`): внутри Composer классы, `installed.json` и библиотеки — его собственные, а не проекта. Вывод CLI печатается через IO Composer с префиксом `dto-generator: `; stderr — стилем `warning` (или `error` при `failOnError` и ненулевом коде), итог — как у CLI (`Written: N, deleted: M, unchanged: K.`).
+  - `bin/dto-generator` сначала берёт `$GLOBALS['_composer_autoload_path']` от bin-прокси Composer, так что и пакет, подключённый симлинком, работает с автозагрузчиком проекта.
+  - Конфиг ищется относительно каталога `composer.json` проекта (учитывая переменную `COMPOSER`).
   - Статус `config-failed`/`generation-failed`: при `failOnError: false` — всё как warning, команда успешна; при `true` — исключение, Composer завершает команду с ошибкой.
   - Код Console в пути плагина не используется: Composer несёт свою копию symfony/console.
-  - `--no-plugins` — плагин не загружается; `--no-scripts` — Composer не рассылает script-события. Оба — поведение Composer, плагину ничего делать не нужно (проверяется по документации, не тестом).
+  - `--no-plugins` — плагин не загружается. `--no-scripts` Composer плагинам не скрывает, поэтому плагин читает защищённое `EventDispatcher::$runScripts`; если прочитать не удалось — запускается.
+  - `extra.dto-generator` без `config` — предупреждение (ошибка при `failOnError: true`).
 - **Docker** (`docker/Dockerfile`):
   - stage 1 `composer:2`: копия пакета в `/opt/dto-generator`, `composer install --no-dev --classmap-authoritative --no-plugins --no-scripts`;
   - stage 2 `php:8.4-cli-alpine`: копия из stage 1, `ln -s /opt/dto-generator/bin/dto-generator /usr/local/bin/dto-generator`, `ENV DTO_GENERATOR_VERIFY_CLASSES=0`, `USER 1000:1000` по умолчанию (переопределяется `-u`), `WORKDIR /app`, `ENTRYPOINT ["dto-generator", "generate"]`.

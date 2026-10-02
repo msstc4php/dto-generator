@@ -66,7 +66,9 @@ $output->diagnostics()->all();
 ### Composer-плагин
 
 Пакет — Composer-плагин: после каждого `install`, `update` и `dump-autoload` он перегенерирует DTO, если в
-`composer.json` проекта задан путь к конфигу:
+`composer.json` проекта задан путь к конфигу (путь — относительно `composer.json`). Ставьте пакет в `require-dev`
+(`composer require --dev msstc4php/dto-generator`): иначе генерация пойдёт и при `composer install --no-dev` на
+деплое. Плагин запускает `vendor/bin/dto-generator` отдельным процессом, поэтому результат тот же, что у CLI.
 
 ```json
 {

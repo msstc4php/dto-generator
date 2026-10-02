@@ -8,39 +8,25 @@ use Closure;
 use Composer\Composer;
 use Composer\EventDispatcher\EventDispatcher;
 use Composer\EventDispatcher\EventSubscriberInterface;
+use Composer\Factory;
 use Composer\IO\IOInterface;
 use Composer\Plugin\PluginInterface;
 use Composer\Script\Event;
 use Composer\Script\ScriptEvents;
-use MSSTC4PHP\DtoGenerator\Application\Service\Generate\FileChange;
-use MSSTC4PHP\DtoGenerator\Application\Service\Generate\Input;
-use MSSTC4PHP\DtoGenerator\Application\Service\Generate\Mode;
-use MSSTC4PHP\DtoGenerator\Application\Service\Generate\Output;
-use MSSTC4PHP\DtoGenerator\Application\Service\Generate\Status;
-use MSSTC4PHP\DtoGenerator\Application\Service\Generate\WritePlan;
-use MSSTC4PHP\DtoGenerator\Presentation\Cli\DiagnosticFormatter;
+use Composer\Util\ProcessExecutor;
+use MSSTC4PHP\DtoGenerator\Presentation\Composer\PluginSettings;
 use RuntimeException;
+use Symfony\Component\Console\Formatter\OutputFormatter;
 use Throwable;
 
 /**
  * Regenerates the DTOs after each autoload dump when the root package sets `extra.dto-generator.config` (spec §9.3).
- * Failures only warn unless `extra.dto-generator.failOnError` is true, so an install never breaks by default.
- * Composer itself skips the plugin with --no-plugins; --no-scripts the plugin has to honour itself.
+ * It runs the project's vendor/bin/dto-generator in a process of its own: inside Composer the classes, installed.json
+ * and libraries are Composer's, not the project's. Failures only warn unless `failOnError` is true.
  */
 final class ComposerPlugin implements PluginInterface, EventSubscriberInterface
 {
     private const PREFIX = 'dto-generator: ';
-
-    /** @var Closure(Input): Output */
-    private Closure $generator;
-
-    /**
-     * @param (Closure(Input): Output)|null $generator the generator to run; Composer creates the plugin without one
-     */
-    public function __construct(?Closure $generator = null)
-    {
-        $this->generator = $generator ?? static fn (Input $input): Output => DtoGenerator::generator()($input);
-    }
 
     public function activate(Composer $composer, IOInterface $io): void
     {
@@ -64,108 +50,74 @@ final class ComposerPlugin implements PluginInterface, EventSubscriberInterface
 
     public function onPostAutoloadDump(Event $event): void
     {
-        $extra = $event->getComposer()->getPackage()->getExtra();
-        if (!array_key_exists('dto-generator', $extra) || !$this->runsScripts($event->getComposer()->getEventDispatcher())) {
+        $composer = $event->getComposer();
+        $settings = PluginSettings::fromExtra($composer->getPackage()->getExtra());
+        if (!$settings instanceof PluginSettings || !$this->runsScripts($composer->getEventDispatcher())) {
             return;
         }
 
         $io = $event->getIO();
-        $settings = $extra['dto-generator'];
-        if (!is_array($settings)) {
-            $this->fail($io, false, 'extra.dto-generator must be an object with "config", the path of the config file.');
+        $problem = $settings->problem();
+        if ($problem !== null) {
+            $this->fail($io, $settings->failOnError(), $problem);
 
             return;
         }
 
-        $failOnError = $settings['failOnError'] ?? false;
-        if (!is_bool($failOnError)) {
-            $this->fail($io, false, 'extra.dto-generator.failOnError must be true or false.');
-
-            return;
-        }
-
-        if (!array_key_exists('config', $settings)) {
-            return;
-        }
-
-        $config = $settings['config'];
-        if (!is_string($config) || $config === '') {
-            $this->fail($io, $failOnError, 'extra.dto-generator.config must be the path of the config file.');
-
-            return;
-        }
-
-        $this->generate($io, $failOnError, $config);
+        $this->generate($io, $settings->failOnError(), $settings->config(), $composer);
     }
 
     /**
      * --no-scripts only keeps Composer from running the scripts of composer.json; listeners of plugins still get the
-     * event, and the dispatcher has no public getter for the flag (a protected property in every Composer 2).
+     * event, and the dispatcher has no public getter for the flag. Should a release change that, the plugin runs.
      */
     private function runsScripts(EventDispatcher $dispatcher): bool
     {
-        $read = Closure::bind(static fn (EventDispatcher $dispatcher): bool => $dispatcher->runScripts, null, EventDispatcher::class);
-
-        return $read instanceof Closure && $read($dispatcher);
-    }
-
-    private function generate(IOInterface $io, bool $failOnError, string $config): void
-    {
-        // Composer runs in the project's directory, --working-dir included.
-        $workingDirectory = (string) getcwd();
-        $path = preg_match('~^([a-zA-Z]:)?[/\\\\]~', $config) === 1 ? $config : $workingDirectory . '/' . $config;
-
         try {
-            $result = ($this->generator)(new Input($path, Mode::from(Mode::WRITE)));
+            $read = Closure::bind(static fn (EventDispatcher $dispatcher): bool => $dispatcher->runScripts, null, EventDispatcher::class);
+
+            return $read instanceof Closure ? $read($dispatcher) : true;
         } catch (Throwable $exception) {
-            $this->fail($io, $failOnError, sprintf('generation stopped: %s', $exception->getMessage()));
-
-            return;
+            return true;
         }
-
-        $formatter = new DiagnosticFormatter($workingDirectory);
-        $failed = $this->failed($result);
-        foreach ($result->diagnostics()->all() as $diagnostic) {
-            $line = self::PREFIX . $formatter->line($diagnostic);
-            $this->write($io, $diagnostic->severity()->isError() && $failOnError ? 'error' : 'warning', $line);
-        }
-
-        if ($failed !== null) {
-            $this->fail($io, $failOnError, $failed);
-
-            return;
-        }
-
-        $io->writeError(self::PREFIX . $this->summary($result->plan()));
     }
 
-    private function failed(Output $result): ?string
+    /**
+     * The CLI runs in the directory of the project's composer.json, which the COMPOSER variable may name, and resolves
+     * a relative config path there itself.
+     */
+    private function generate(IOInterface $io, bool $failOnError, string $config, Composer $composer): void
     {
-        $status = $result->status()->value();
-        if ($status !== Status::CONFIG_FAILED && $status !== Status::GENERATION_FAILED) {
-            return null;
+        $binDir = $composer->getConfig()->get('bin-dir');
+        $bin = (is_string($binDir) ? $binDir : 'vendor/bin') . '/dto-generator';
+        // PHP_BINARY: the PHP Composer runs on, and Windows does not read the script's shebang.
+        $command = implode(' ', array_map([ProcessExecutor::class, 'escape'], [PHP_BINARY, $bin, 'generate', '--config=' . $config, '--no-ansi']));
+        $process = new ProcessExecutor($io);
+        $output = null;
+        $exitCode = $process->execute($command, $output, dirname(Factory::getComposerFile()));
+
+        $style = $exitCode !== 0 && $failOnError ? 'error' : 'warning';
+        foreach ($this->lines($process->getErrorOutput()) as $line) {
+            $this->write($io, $style, $line);
         }
 
-        return sprintf(
-            '%s failed with %d error(s); nothing was written.',
-            $status === Status::CONFIG_FAILED ? 'configuration' : 'generation',
-            count($result->diagnostics()->errors()),
-        );
+        foreach ($this->lines(is_string($output) ? $output : '') as $line) {
+            $io->writeError(OutputFormatter::escape(self::PREFIX . $line));
+        }
+
+        if ($exitCode !== 0) {
+            $this->fail($io, $failOnError, sprintf('the generator exited with code %d.', $exitCode));
+        }
     }
 
-    private function summary(?WritePlan $plan): string
+    /**
+     * @return array<int, string> the lines that are not empty
+     */
+    private function lines(string $text): array
     {
-        $counts = [FileChange::CREATE => 0, FileChange::UPDATE => 0, FileChange::DELETE => 0, FileChange::UNCHANGED => 0];
-        foreach ($plan instanceof WritePlan ? $plan->changes() : [] as $change) {
-            $counts[$change->kind()]++;
-        }
+        $lines = preg_split('~\R~', $text);
 
-        return sprintf(
-            'written %d, deleted %d, unchanged %d.',
-            $counts[FileChange::CREATE] + $counts[FileChange::UPDATE],
-            $counts[FileChange::DELETE],
-            $counts[FileChange::UNCHANGED],
-        );
+        return array_filter(is_array($lines) ? $lines : [], static fn (string $line): bool => $line !== '');
     }
 
     /**
@@ -177,16 +129,16 @@ final class ComposerPlugin implements PluginInterface, EventSubscriberInterface
             throw new RuntimeException(self::PREFIX . $message);
         }
 
-        $this->write($io, 'warning', self::PREFIX . $message);
+        $this->write($io, 'warning', $message);
     }
 
     /**
-     * Composer formats its output like Symfony Console, so a "<" of the text is escaped, not taken for a tag.
+     * Composer formats its output like Symfony Console, which it ships, so the text is escaped, not taken for tags.
      *
      * @param 'error'|'warning' $style
      */
     private function write(IOInterface $io, string $style, string $text): void
     {
-        $io->writeError(sprintf('<%1$s>%2$s</%1$s>', $style, addcslashes($text, '<')));
+        $io->writeError(sprintf('<%1$s>%2$s</%1$s>', $style, OutputFormatter::escape(self::PREFIX . $text)));
     }
 }
