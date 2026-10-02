@@ -2,6 +2,11 @@ deptrac:
   paths:
     - ./src
   layers:
+    # The composition root: the only class that wires every layer together.
+    - name: EntryPoint
+      collectors:
+        - type: classNameRegex
+          value: '#^MSSTC4PHP\\DtoGenerator\\DtoGenerator$#'
     - name: Domain
       collectors:
         - type: directory
@@ -49,6 +54,7 @@ deptrac:
         - type: classNameRegex
           value: '#^Composer\\#'
   ruleset:
+    EntryPoint: [Domain, DomainService, Contract, Application, Infrastructure, Presentation, Extension, TypeAlias, Symfony]
     Domain: [TypeAlias]
     DomainService: [Domain, TypeAlias]
     Contract: [Domain, TypeAlias]

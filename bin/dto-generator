@@ -1,0 +1,16 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+// Installed as a dependency, the autoloader sits three levels up; in this repository, next to bin/.
+foreach ([__DIR__ . '/../../../autoload.php', __DIR__ . '/../vendor/autoload.php'] as $autoload) {
+    if (is_file($autoload)) {
+        require $autoload;
+
+        exit(MSSTC4PHP\DtoGenerator\DtoGenerator::console()->run());
+    }
+}
+
+fwrite(STDERR, "dto-generator: run composer install first.\n");
+exit(2);
