@@ -25,6 +25,7 @@ use MSSTC4PHP\DtoGenerator\Tests\Support\FixedPhpConstraint;
 use MSSTC4PHP\DtoGenerator\Tests\Support\InMemoryDocumentLoader;
 use MSSTC4PHP\DtoGenerator\Tests\Support\RecordingWriter;
 use PHPUnit\Framework\TestCase;
+use RuntimeException;
 
 final class GenerateTest extends TestCase
 {
@@ -141,6 +142,20 @@ final class GenerateTest extends TestCase
         $this->action($loader, $writer)(new Input(self::CONFIG, Mode::from(Mode::WRITE)));
 
         self::assertSame(['/project/shared', '/project/own'], $writer->outputDirs);
+    }
+
+    public function testReleasesTheWriterWhenPlanningFails(): void
+    {
+        $writer = new RecordingWriter(new WritePlan([], [], []), null, new RuntimeException('Disk gone.'));
+
+        try {
+            $this->generate($writer, Mode::WRITE);
+            self::fail('The failure was swallowed.');
+        } catch (RuntimeException $exception) {
+            self::assertSame('Disk gone.', $exception->getMessage());
+        }
+
+        self::assertTrue($writer->released);
     }
 
     /**

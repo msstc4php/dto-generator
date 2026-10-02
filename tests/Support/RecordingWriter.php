@@ -8,6 +8,7 @@ use MSSTC4PHP\DtoGenerator\Application\Port\FileWriter;
 use MSSTC4PHP\DtoGenerator\Application\Port\WriteFailed;
 use MSSTC4PHP\DtoGenerator\Application\Service\Generate\GeneratedFile;
 use MSSTC4PHP\DtoGenerator\Application\Service\Generate\WritePlan;
+use RuntimeException;
 
 /**
  * Returns a fixed plan and records what Generate asked of it.
@@ -28,16 +29,22 @@ final class RecordingWriter implements FileWriter
 
     public bool $released = false;
 
-    public function __construct(WritePlan $plan, ?WriteFailed $failure = null)
+    private ?RuntimeException $planFailure;
+
+    public function __construct(WritePlan $plan, ?WriteFailed $failure = null, ?RuntimeException $planFailure = null)
     {
         $this->plan = $plan;
         $this->failure = $failure;
+        $this->planFailure = $planFailure;
     }
 
     public function plan(array $outputDirs, array $files): WritePlan
     {
         $this->outputDirs = $outputDirs;
         $this->files = $files;
+        if ($this->planFailure instanceof RuntimeException) {
+            throw $this->planFailure;
+        }
 
         return $this->plan;
     }

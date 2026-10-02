@@ -53,7 +53,9 @@ final class GeneratedFile
      */
     public static function isSafeRelativePath(string $path): bool
     {
+        // Valid UTF-8 too, so the path survives the JSON manifest unchanged.
         return $path !== ''
+            && preg_match('//u', $path) === 1
             && $path[0] !== '/'
             && strpbrk($path, "\\:\0") === false
             && !in_array('..', explode('/', $path), true);

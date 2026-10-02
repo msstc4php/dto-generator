@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Infrastructure\Writer;
 
+use MSSTC4PHP\DtoGenerator\Domain\Shared\Path;
+
 /**
  * Exclusive locks on output directories, shared by every writer of one process: flock() locks per open file, so
  * a second writer in the same process taking its own lock would wait for itself forever.
@@ -27,7 +29,7 @@ final class DirectoryLocks
      */
     public static function path(string $directory): string
     {
-        return sys_get_temp_dir() . '/dto-generator-' . sha1(self::canonical(rtrim($directory, '/'))) . '.lock';
+        return sys_get_temp_dir() . '/dto-generator-' . sha1(self::canonical(Path::normalize($directory))) . '.lock';
     }
 
     /**

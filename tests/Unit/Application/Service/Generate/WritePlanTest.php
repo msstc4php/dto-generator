@@ -44,6 +44,8 @@ final class WritePlanTest extends TestCase
             'absolute' => ['/etc/passwd'],
             'parent' => ['../User.php'],
             'nested parent' => ['A/../../User.php'],
+            'invalid utf-8' => ["\xFF.php"],
+            'backslash' => ['A\\User.php'],
         ];
     }
 

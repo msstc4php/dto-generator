@@ -528,8 +528,11 @@ final class FilesystemWriterTest extends TestCase
         $manifest = $this->dir . '/out/.dto-generator.manifest.json';
         chmod($manifest, 0000);
 
-        $plan = (new FilesystemWriter())->plan([$this->dir . '/out'], [$this->file('User.php', 'user')]);
-        chmod($manifest, 0644);
+        try {
+            $plan = (new FilesystemWriter())->plan([$this->dir . '/out'], [$this->file('User.php', 'user')]);
+        } finally {
+            chmod($manifest, 0644);
+        }
 
         self::assertSame([$manifest => 'The manifest cannot be read; fix its permissions.'], $plan->conflicts());
     }
@@ -594,13 +597,6 @@ final class FilesystemWriterTest extends TestCase
         self::assertSame(DirectoryLocks::path($this->dir . '/real'), DirectoryLocks::path($this->dir . '/link'));
     }
 
-    public function testWritesAManifestForANonUtf8FileName(): void
-    {
-        $this->write([$this->file("\xFF.php", 'odd')]);
-
-        self::assertStringContainsString('"files"', (string) file_get_contents($this->dir . '/out/.dto-generator.manifest.json'));
-    }
-
     public function testPrefersAWriterWideConflictOverAPerDirectoryOne(): void
     {
         $plan = (new FilesystemWriter())->plan([$this->dir . '/out'], [
@@ -633,6 +629,11 @@ final class FilesystemWriterTest extends TestCase
             chmod(DirectoryLocks::path($blocked), 0644);
             unlink(DirectoryLocks::path($blocked));
         }
+    }
+
+    public function testKeysTheLockOfAnUnnormalisedPathLikeTheNormalisedOne(): void
+    {
+        self::assertSame(DirectoryLocks::path($this->dir . '/out/dto'), DirectoryLocks::path($this->dir . '/out/./x/../dto/'));
     }
 
     private function canLock(string $path): bool

@@ -205,6 +205,19 @@ final class GenerateCommandTest extends TestCase
         self::assertSame(['kind' => 'create', 'path' => 'src/Dto/.dto-generator.manifest.json'], end($report['changes']));
     }
 
+    public function testKeepsMarkupInJsonDiagnostics(): void
+    {
+        file_put_contents($this->dir . '/api/openapi.yaml', str_replace('label: { type: string }', "label: { type: string, format: '<comment>x</comment>' }", self::SPEC));
+
+        $report = json_decode($this->execute(['--format' => 'json', '--dry-run' => true])[1], true);
+
+        self::assertIsArray($report);
+        self::assertIsArray($report['diagnostics']);
+        self::assertIsArray($report['diagnostics'][0]);
+        self::assertIsString($report['diagnostics'][0]['message']);
+        self::assertStringContainsString('"<comment>x</comment>"', $report['diagnostics'][0]['message']);
+    }
+
     public function testReportsUsageErrorsAsJson(): void
     {
         [$code, $display] = $this->execute(['--format' => 'json', '--check' => true, '--dry-run' => true]);
