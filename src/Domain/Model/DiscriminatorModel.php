@@ -48,6 +48,16 @@ final class DiscriminatorModel
         return array_map('strval', array_keys($this->mapping));
     }
 
+    /**
+     * Discriminator value → concrete class; PHP turns numeric values into int keys.
+     *
+     * @return non-empty-array<int|string, ClassName>
+     */
+    public function mapping(): array
+    {
+        return $this->mapping;
+    }
+
     public function classFor(string $value): ?ClassName
     {
         return $this->mapping[$value] ?? null;

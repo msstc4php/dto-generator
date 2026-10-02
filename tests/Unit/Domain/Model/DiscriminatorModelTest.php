@@ -20,6 +20,7 @@ final class DiscriminatorModelTest extends TestCase
         self::assertSame(['cat', '1'], $discriminator->values());
         self::assertSame($cat, $discriminator->classFor('cat'));
         self::assertNull($discriminator->classFor('dog'));
+        self::assertSame(['cat' => $cat, 1 => $discriminator->classFor('1')], $discriminator->mapping());
     }
 
     public function testNeedsAMapping(): void
