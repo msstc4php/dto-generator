@@ -70,13 +70,13 @@ final class AttributeVerification
             foreach ($attributes as $attribute) {
                 $name = $attribute->className();
                 foreach ($attribute->arguments() as $argument) {
-                    foreach ($this->missing($argument->value()) as $missing) {
-                        $this->report($missing, sprintf('%s, used by attribute %s, does not exist.', $missing, $name->fqcn()), $at);
+                    foreach ($this->missing($argument->value()) as $key => $missing) {
+                        $this->report($key, sprintf('%s, used by attribute %s, does not exist.', $missing, $name->fqcn()), $at);
                     }
                 }
 
                 if (!$this->hasClass($name)) {
-                    $this->report('Class ' . $name->fqcn(), sprintf('Attribute class %s does not exist.', $name->fqcn()), $at);
+                    $this->report($this->key($name), sprintf('Attribute class %s does not exist.', $name->fqcn()), $at);
                 }
             }
         } catch (ClassVerificationFailed $exception) {
@@ -86,7 +86,9 @@ final class AttributeVerification
     }
 
     /**
-     * @return list<string> what the value names and the consumer lacks, like "Class App\X" or "Constant App\X::Y"
+     * @return array<string, string> what the value names and the consumer lacks, like "Class App\X" or
+     *                               "Constant App\X::Y", by a key that ignores the case of class names, as PHP does:
+     *                               "app\x", "app\x::Y", or "\Y" for a global constant
      *
      * @throws ClassVerificationFailed
      */
@@ -97,26 +99,27 @@ final class AttributeVerification
             case ArgumentValue::KIND_CONSTANT:
                 $class = $value->constantClass();
                 if (!$this->hasConstant($class, $value->constantName())) {
-                    $missing[] = 'Constant ' . ($class instanceof ClassName ? $class->fqcn() . '::' : '') . $value->constantName();
+                    $key = $class instanceof ClassName ? $this->key($class) . '::' . $value->constantName() : '\\' . $value->constantName();
+                    $missing[$key] = 'Constant ' . ($class instanceof ClassName ? $class->fqcn() . '::' : '') . $value->constantName();
                 }
 
                 break;
             case ArgumentValue::KIND_CLASS_REFERENCE:
                 if (!$this->hasType($value->className())) {
-                    $missing[] = 'Class ' . $value->className()->fqcn();
+                    $missing[$this->key($value->className())] = 'Class ' . $value->className()->fqcn();
                 }
 
                 break;
             case ArgumentValue::KIND_NEW_INSTANCE:
                 if (!$this->hasClass($value->className())) {
-                    $missing[] = 'Class ' . $value->className()->fqcn();
+                    $missing[$this->key($value->className())] = 'Class ' . $value->className()->fqcn();
                 }
 
                 break;
         }
 
         foreach ($value->children() as $child) {
-            $missing = array_merge($missing, $this->missing($child));
+            $missing += $this->missing($child);
         }
 
         return $missing;
@@ -151,12 +154,12 @@ final class AttributeVerification
     }
 
     /**
-     * @param string $missing the name, like "Class App\X", which is reported once whichever attribute uses it
+     * @param string $key the missing name, which is reported once whichever attribute uses it
      */
-    private function report(string $missing, string $message, SchemaLocation $at): void
+    private function report(string $key, string $message, SchemaLocation $at): void
     {
-        if (!isset($this->reported[$missing])) {
-            $this->reported[$missing] = true;
+        if (!isset($this->reported[$key])) {
+            $this->reported[$key] = true;
             $this->diagnostics->error($message, $at);
         }
     }

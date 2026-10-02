@@ -220,11 +220,42 @@ final class AutoloadClassVerifierTest extends TestCase
 
     public function testTakesADriveLetterVendorDirAsAbsolute(): void
     {
-        mkdir($this->root . '/C:/deps', 0777, true);
-        file_put_contents($this->root . '/C:/deps/autoload.php', "<?php\n");
-        file_put_contents($this->root . '/composer.json', '{"config": {"vendor-dir": "C:/deps"}}');
+        mkdir($this->root . '/C:deps', 0777, true);
+        file_put_contents($this->root . '/C:deps/autoload.php', "<?php\n");
+        file_put_contents($this->root . '/composer.json', '{"config": {"vendor-dir": "C:deps"}}');
+        // Taken as relative, the path would also resolve against the working directory, so that is an empty one.
+        $cwd = (string) getcwd();
+        chdir($this->root . '/config/nested');
 
-        self::assertNull((new AutoloadClassVerifierLocator(static fn (): ?string => null))->locate($this->root));
+        try {
+            self::assertNull((new AutoloadClassVerifierLocator(static fn (): ?string => null))->locate($this->root));
+        } finally {
+            chdir($cwd);
+        }
+    }
+
+    public function testTakesAUncVendorDirAsAbsolute(): void
+    {
+        mkdir($this->root . '/\\\\server');
+        file_put_contents($this->root . '/\\\\server/autoload.php', "<?php\n");
+        file_put_contents($this->root . '/composer.json', '{"config": {"vendor-dir": "\\\\\\\\server"}}');
+        $cwd = (string) getcwd();
+        chdir($this->root . '/config/nested');
+
+        try {
+            self::assertNull((new AutoloadClassVerifierLocator(static fn (): ?string => null))->locate($this->root));
+        } finally {
+            chdir($cwd);
+        }
+    }
+
+    public function testTakesASingleLeadingBackslashAsRelativeLikeComposer(): void
+    {
+        mkdir($this->root . '/\\deps');
+        file_put_contents($this->root . '/\\deps/autoload.php', "<?php\n");
+        file_put_contents($this->root . '/composer.json', '{"config": {"vendor-dir": "\\\\deps"}}');
+
+        self::assertInstanceOf(ClassVerifier::class, (new AutoloadClassVerifierLocator(static fn (): ?string => null))->locate($this->root));
     }
 
     public function testPrefersTheVendorDirOfTheEnvironment(): void

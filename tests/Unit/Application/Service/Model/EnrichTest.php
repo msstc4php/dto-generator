@@ -480,6 +480,53 @@ final class EnrichTest extends TestCase
         );
     }
 
+    public function testReportsAMissingNameOnceWhateverCaseItIsWrittenIn(): void
+    {
+        $at = self::AT;
+        $output = $this->enrich(['Pet' => self::SCHEMAS['Pet']], $this->propertyAttributes(
+            new AttributeModel(ClassName::fromFqcn('App\\Attr\\Rule'), [
+                AttributeArgument::positional(ArgumentValue::classReference(ClassName::fromFqcn('App\\Gone'))),
+                AttributeArgument::positional(ArgumentValue::constant('LEVEL', ClassName::fromFqcn('App\\Gone'))),
+                AttributeArgument::positional(ArgumentValue::constant('LEVEL', ClassName::fromFqcn('app\\GONE'))),
+                AttributeArgument::positional(ArgumentValue::constant('level', ClassName::fromFqcn('App\\Gone'))),
+            ]),
+            new AttributeModel(ClassName::fromFqcn('app\\gone')),
+        ), '8.2', true, MetadataMode::ATTRIBUTES, new FixedClassVerifier(['App\\Attr\\Rule']));
+
+        self::assertSame(
+            [
+                "error {$at}Pet/properties/name: Class App\\Gone, used by attribute App\\Attr\\Rule, does not exist.",
+                "error {$at}Pet/properties/name: Constant App\\Gone::LEVEL, used by attribute App\\Attr\\Rule, does not exist.",
+                "error {$at}Pet/properties/name: Constant App\\Gone::level, used by attribute App\\Attr\\Rule, does not exist.",
+            ],
+            $this->messages($output),
+        );
+    }
+
+    public function testKeepsMissingNamesOfDifferentKindsApart(): void
+    {
+        $at = self::AT;
+        $output = $this->enrich(['Pet' => self::SCHEMAS['Pet']], $this->propertyAttributes(new AttributeModel(ClassName::fromFqcn('App\\Attr\\Rule'), [
+            AttributeArgument::positional(ArgumentValue::listOf(
+                ArgumentValue::constant('level', ClassName::fromFqcn('App\\Gone')),
+                ArgumentValue::classReference(ClassName::fromFqcn('App\\Gonelevel')),
+                ArgumentValue::constant('level', ClassName::fromFqcn('App\\Lost')),
+                ArgumentValue::constant('gone'),
+                ArgumentValue::classReference(ClassName::fromFqcn('Gone')),
+                ArgumentValue::constant('OTHER'),
+                ArgumentValue::newInstance(ClassName::fromFqcn('App\\Fresh')),
+            )),
+        ])), '8.2', true, MetadataMode::ATTRIBUTES, new FixedClassVerifier(['App\\Attr\\Rule']));
+
+        self::assertSame(
+            array_map(
+                static fn (string $missing): string => "error {$at}Pet/properties/name: {$missing}, used by attribute App\\Attr\\Rule, does not exist.",
+                ['Constant App\\Gone::level', 'Class App\\Gonelevel', 'Constant App\\Lost::level', 'Constant gone', 'Class Gone', 'Constant OTHER', 'Class App\\Fresh'],
+            ),
+            $this->messages($output),
+        );
+    }
+
     public function testTreatsTheClassesAndEnumsOfThisRunAsExisting(): void
     {
         $at = self::AT;

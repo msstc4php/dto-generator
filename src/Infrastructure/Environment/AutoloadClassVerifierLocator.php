@@ -69,6 +69,14 @@ final class AutoloadClassVerifierLocator implements ClassVerifierLocator
             return $project . '/vendor';
         }
 
-        return preg_match('~^([a-zA-Z]:)?[/\\\\]~', $vendorDir) === 1 ? $vendorDir : $project . '/' . $vendorDir;
+        return $this->isAbsolute($vendorDir) ? $vendorDir : $project . '/' . $vendorDir;
+    }
+
+    /**
+     * Composer's Platform::isAbsolutePath(): "/x", "C:…" (drive-relative too) and "\\server".
+     */
+    private function isAbsolute(string $path): bool
+    {
+        return $path[0] === '/' || substr($path, 1, 1) === ':' || strpos($path, '\\\\') === 0;
     }
 }
