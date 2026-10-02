@@ -48,6 +48,10 @@ final readonly class Sample
          * @deprecated
          */
         public mixed $extra = null,
+        /**
+         * Settlement currency.
+         */
+        public ?Currency $currency = Currency::EUR,
     ) {
     }
 
@@ -112,5 +116,10 @@ final readonly class Sample
     public function withExtra(mixed $extra): self
     {
         return clone($this, ['extra' => $extra]);
+    }
+
+    public function withCurrency(?Currency $currency): self
+    {
+        return clone($this, ['currency' => $currency]);
     }
 }

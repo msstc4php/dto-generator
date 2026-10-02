@@ -7,6 +7,8 @@ namespace MSSTC4PHP\DtoGenerator\Tests\Unit\Infrastructure\Emitter;
 use LogicException;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassType;
+use MSSTC4PHP\DtoGenerator\Domain\Model\EnumBacking;
+use MSSTC4PHP\DtoGenerator\Domain\Model\EnumType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ListType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\MapType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\MixedType;
@@ -51,6 +53,8 @@ final class TypeRendererTest extends TestCase
         $date = new ClassType(ClassName::fromFqcn('DateTimeImmutable'));
         $money = new ClassType(ClassName::fromFqcn('Brick\Money\Money'));
         $union = new UnionType(ScalarType::int(), ScalarType::string());
+        $currency = new EnumType(ClassName::fromFqcn('App\Dto\Currency'), EnumBacking::from(EnumBacking::STRING), ['EUR' => 'EUR']);
+        $level = new EnumType(ClassName::fromFqcn('Other\Level'), EnumBacking::from(EnumBacking::INT), [1 => 'VALUE_1']);
 
         return [
             'int' => [ScalarType::int(), '8.2', 'int', 'int', false],
@@ -64,6 +68,11 @@ final class TypeRendererTest extends TestCase
             'map' => [new NullableType(new MapType(ScalarType::int())), '8.2', '?array', '?array<array-key, int>', true],
             'mixed on 8.0' => [new MixedType(), '8.0', 'mixed', 'mixed', false],
             'mixed on 7.4' => [new MixedType(), '7.4', null, 'mixed', true],
+            'enum on 8.1' => [$currency, '8.1', 'Currency', 'Currency', false],
+            'enum on 8.0' => [$currency, '8.0', 'string', 'Currency::*', true],
+            'foreign int enum on 7.4' => [$level, '7.4', 'int', '\\Other\\Level::*', true],
+            'nullable enum on 7.4' => [new NullableType($currency), '7.4', '?string', '?Currency::*', true],
+            'list of enums on 8.2' => [new ListType($currency), '8.2', 'array', 'list<Currency>', true],
             'union on 8.0' => [$union, '8.0', 'int|string', 'int|string', false],
             'union on 7.4' => [$union, '7.4', null, 'int|string', true],
             'nullable union on 7.4' => [new NullableType($union), '7.4', null, 'int|string|null', true],

@@ -10,9 +10,20 @@ final class Settings
 {
     private ?string $theme;
 
-    public function __construct(?string $theme = 'dark')
+    /**
+     * Properties the schema does not declare.
+     *
+     * @var array<array-key, int>
+     */
+    private array $additionalProperties;
+
+    /**
+     * @param array<array-key, int> $additionalProperties
+     */
+    public function __construct(?string $theme = 'dark', array $additionalProperties = [])
     {
         $this->theme = $theme;
+        $this->additionalProperties = $additionalProperties;
     }
 
     public function getTheme(): ?string
@@ -23,6 +34,24 @@ final class Settings
     public function setTheme(?string $theme): self
     {
         $this->theme = $theme;
+
+        return $this;
+    }
+
+    /**
+     * @return array<array-key, int>
+     */
+    public function getAdditionalProperties(): array
+    {
+        return $this->additionalProperties;
+    }
+
+    /**
+     * @param array<array-key, int> $additionalProperties
+     */
+    public function setAdditionalProperties(array $additionalProperties): self
+    {
+        $this->additionalProperties = $additionalProperties;
 
         return $this;
     }

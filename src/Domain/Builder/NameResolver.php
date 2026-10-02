@@ -49,6 +49,34 @@ final class NameResolver
         return $name === 'this' ? 'this_' : $name;
     }
 
+    /**
+     * UPPER_SNAKE, usable as an enum case and as a class constant on PHP 7.4.
+     *
+     * @param int|string $value
+     */
+    public function enumCaseName($value): ?string
+    {
+        if (is_int($value)) {
+            // The digits of the string form: abs(PHP_INT_MIN) overflows to a float.
+            return $value < 0 ? 'VALUE_MINUS_' . substr((string) $value, 1) : 'VALUE_' . $value;
+        }
+
+        if ($value === '') {
+            return 'EMPTY';
+        }
+
+        // "inProgress" is two words, like "in-progress".
+        $words = $this->words((string) preg_replace('/(?<=[a-z0-9])(?=[A-Z])/', ' ', $value));
+        if ($words === []) {
+            return null;
+        }
+
+        $name = $this->guardDigit(implode('_', array_map([Identifier::class, 'asciiUpper'], $words)));
+
+        // A constant named "class" would clash with Name::class.
+        return Identifier::asciiLower($name) === 'class' ? $name . '_' : $name;
+    }
+
     private function lowerFirstWord(string $word): string
     {
         // "URL", "ID" and "IDs" are one word each.

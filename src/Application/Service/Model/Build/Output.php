@@ -13,13 +13,26 @@ final class Output
 
     private Diagnostics $diagnostics;
 
+    /** @var list<BuiltEnum> */
+    private array $enums;
+
     /**
-     * @param list<BuiltClass> $classes in graph order
+     * @param list<BuiltClass> $classes in graph order, inline classes after their owners
+     * @param list<BuiltEnum> $enums
      */
-    public function __construct(array $classes, Diagnostics $diagnostics)
+    public function __construct(array $classes, Diagnostics $diagnostics, array $enums)
     {
         $this->classes = $classes;
         $this->diagnostics = $diagnostics;
+        $this->enums = $enums;
+    }
+
+    /**
+     * @return list<BuiltEnum>
+     */
+    public function enums(): array
+    {
+        return $this->enums;
     }
 
     /**

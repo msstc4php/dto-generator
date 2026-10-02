@@ -42,6 +42,13 @@ final readonly class User
          */
         public ?string $legacy = null,
         public ?\DateTimeZone $timeZone = null,
+        public ?UserStatus $status = UserStatus::ACTIVE,
+        public ?Role $role = null,
+        public ?UserPreferences $preferences = null,
+        /**
+         * @var ?array<array-key, string>
+         */
+        public ?array $labels = null,
     ) {
     }
 
@@ -118,5 +125,28 @@ final readonly class User
     public function withTimeZone(?\DateTimeZone $timeZone): self
     {
         return clone($this, ['timeZone' => $timeZone]);
+    }
+
+    public function withStatus(?UserStatus $status): self
+    {
+        return clone($this, ['status' => $status]);
+    }
+
+    public function withRole(?Role $role): self
+    {
+        return clone($this, ['role' => $role]);
+    }
+
+    public function withPreferences(?UserPreferences $preferences): self
+    {
+        return clone($this, ['preferences' => $preferences]);
+    }
+
+    /**
+     * @param ?array<array-key, string> $labels
+     */
+    public function withLabels(?array $labels): self
+    {
+        return clone($this, ['labels' => $labels]);
     }
 }

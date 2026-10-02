@@ -15,25 +15,34 @@ final class SchemaShape
     }
 
     /**
-     * The first keyword the builder cannot handle yet; composition, enums and maps of schemas arrive in stage 4.
+     * The first keyword the builder cannot handle yet; composition and discriminators arrive in stage 4b.
      */
     public static function unsupportedKeyword(Schema $schema): ?string
     {
-        if ($schema->enum() !== null) {
-            return 'enum';
-        }
-
         foreach (['allOf' => $schema->allOf(), 'oneOf' => $schema->oneOf(), 'anyOf' => $schema->anyOf()] as $keyword => $schemas) {
             if ($schemas !== []) {
                 return $keyword;
             }
         }
 
-        if ($schema->discriminator() instanceof Discriminator) {
-            return 'discriminator';
-        }
+        return $schema->discriminator() instanceof Discriminator ? 'discriminator' : null;
+    }
 
-        return $schema->additionalProperties() instanceof Schema ? 'additionalProperties' : null;
+    /**
+     * A list of values the builder turns into an enum; a reference, an explicit PHP type or a composition wins over it.
+     */
+    public static function isEnum(Schema $schema): bool
+    {
+        // Booleans or numbers alone cannot back a PHP enum; an object with properties stays a class.
+        $values = array_filter($schema->enum() ?? [], static fn ($value): bool => is_int($value) || is_string($value));
+
+        return $values !== []
+            && !self::isClass($schema)
+            && $schema->ref() === null
+            && !$schema->extensions()->has('x-php-type')
+            && $schema->allOf() === []
+            && $schema->oneOf() === []
+            && $schema->anyOf() === [];
     }
 
     /**

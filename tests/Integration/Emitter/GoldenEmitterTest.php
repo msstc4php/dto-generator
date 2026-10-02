@@ -38,6 +38,16 @@ final class GoldenEmitterTest extends TestCase
 
             self::assertStringEqualsFile($path, $code);
         }
+
+        foreach (EmitterFixture::enums() as $enum) {
+            $path = self::DIR . $profile . '/' . $enum->name()->shortName() . '.php.golden';
+            $code = $emitter->emitEnum($enum, $target);
+            if (getenv('UPDATE_SNAPSHOTS') === '1') {
+                file_put_contents($path, $code);
+            }
+
+            self::assertStringEqualsFile($path, $code);
+        }
     }
 
     public function testEmitsIdenticalCodeOnEveryRun(): void

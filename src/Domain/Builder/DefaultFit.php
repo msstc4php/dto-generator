@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Domain\Builder;
 
+use MSSTC4PHP\DtoGenerator\Domain\Model\EnumType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ListType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\MixedType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\NullableType;
@@ -44,6 +45,10 @@ final class DefaultFit
             }
 
             return false;
+        }
+
+        if ($type instanceof EnumType) {
+            return $type->caseFor($value) !== null;
         }
 
         if ($type instanceof ListType) {

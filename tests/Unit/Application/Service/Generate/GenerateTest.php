@@ -39,7 +39,8 @@ final class GenerateTest extends TestCase
 
         self::assertSame('ok', $output->status()->value());
         self::assertSame(['/project/src/Dto', '/project/other'], $writer->outputDirs);
-        self::assertSame(['User.php', 'Tag.php', 'Pet.php'], array_map(static fn (GeneratedFile $file): string => $file->relativePath(), $output->files()));
+        self::assertSame(['User.php', 'Tag.php', 'Pet.php', 'Currency.php'], array_map(static fn (GeneratedFile $file): string => $file->relativePath(), $output->files()));
+        self::assertStringContainsString("enum Currency: string\n", $output->files()[3]->contents());
         self::assertSame($output->files(), $writer->files);
         self::assertStringContainsString("final readonly class User\n", $output->files()[0]->contents());
         self::assertSame('/project/other', $output->files()[2]->outputDir());
@@ -175,6 +176,7 @@ final class GenerateTest extends TestCase
             '/project/api/openapi.yaml' => ['openapi' => '3.1.0', 'components' => ['schemas' => [
                 'User' => ['type' => 'object', 'required' => ['id'], 'properties' => ['id' => ['type' => 'integer'], 'tag' => ['$ref' => '#/components/schemas/Tag']]],
                 'Tag' => ['type' => 'object', 'properties' => ['label' => ['type' => 'string']]],
+                'Currency' => ['type' => 'string', 'enum' => ['EUR']],
             ] + $extraSchemas]],
             '/project/api/pets.yaml' => ['openapi' => '3.1.0', 'components' => ['schemas' => [
                 'Pet' => ['type' => 'object', 'properties' => ['name' => ['type' => 'string']]],

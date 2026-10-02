@@ -6,6 +6,7 @@ namespace MSSTC4PHP\DtoGenerator\Tests\Support;
 
 use MSSTC4PHP\DtoGenerator\Application\Service\Model\Build\Action;
 use MSSTC4PHP\DtoGenerator\Application\Service\Model\Build\BuiltClass;
+use MSSTC4PHP\DtoGenerator\Application\Service\Model\Build\BuiltEnum;
 use MSSTC4PHP\DtoGenerator\Application\Service\Model\Build\Input;
 use MSSTC4PHP\DtoGenerator\Application\Service\Model\Build\Output;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\NameResolver;
@@ -71,5 +72,13 @@ final class ModelFixture
     public static function sources(Output $output): array
     {
         return array_map(static fn (BuiltClass $class): int => $class->source(), $output->classes());
+    }
+
+    /**
+     * @return list<string> FQCNs of the built enums
+     */
+    public static function enums(Output $output): array
+    {
+        return array_map(static fn (BuiltEnum $enum): string => $enum->model()->name()->fqcn(), $output->enums());
     }
 }

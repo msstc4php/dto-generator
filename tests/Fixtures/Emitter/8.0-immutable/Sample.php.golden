@@ -48,6 +48,12 @@ final class Sample
          * @deprecated
          */
         private mixed $extra = null,
+        /**
+         * Settlement currency.
+         *
+         * @var ?Currency::*
+         */
+        private ?string $currency = Currency::EUR,
     ) {
     }
 
@@ -200,6 +206,25 @@ final class Sample
     {
         $clone = clone $this;
         $clone->extra = $extra;
+
+        return $clone;
+    }
+
+    /**
+     * @return ?Currency::*
+     */
+    public function getCurrency(): ?string
+    {
+        return $this->currency;
+    }
+
+    /**
+     * @param ?Currency::* $currency
+     */
+    public function withCurrency(?string $currency): self
+    {
+        $clone = clone $this;
+        $clone->currency = $currency;
 
         return $clone;
     }

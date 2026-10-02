@@ -50,6 +50,28 @@ components:
         timeZone:
           type: string
           x-php-type: DateTimeZone
+        status:
+          type: string
+          enum: [active, blocked]
+          default: active
+        role:
+          $ref: '#/components/schemas/Role'
+        preferences:
+          type: object
+          properties:
+            newsletter:
+              type: boolean
+            channels:
+              type: array
+              items:
+                type: object
+                properties:
+                  kind:
+                    type: string
+        labels:
+          type: object
+          additionalProperties:
+            type: string
     Tag:
       type: object
       required: [label]
@@ -63,3 +85,12 @@ components:
         theme:
           type: string
           default: dark
+      additionalProperties:
+        type: integer
+    Role:
+      type: integer
+      description: Access level.
+      enum: [1, 2, 3]
+      x-enum-descriptions:
+        '1': Reader.
+        '3': Owner.

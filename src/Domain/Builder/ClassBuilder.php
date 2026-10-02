@@ -17,7 +17,6 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\MapType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\NullableType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\PropertyModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\TypeModel;
-use MSSTC4PHP\DtoGenerator\Domain\Schema\ResolvedSchema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\DefaultValue;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
@@ -60,10 +59,8 @@ final class ClassBuilder
         return $value;
     }
 
-    public function build(ClassName $name, ResolvedSchema $resolved, Diagnostics $diagnostics): ClassModel
+    public function build(ClassName $name, Schema $schema, Diagnostics $diagnostics): ClassModel
     {
-        $schema = $resolved->schema();
-
         $properties = [];
         $taken = [];
         foreach ($schema->propertyNames() as $wireName) {
@@ -100,6 +97,11 @@ final class ClassBuilder
             $properties[] = $property;
         }
 
+        $additional = $this->additionalProperties($schema, isset($taken['additionalproperties']), $diagnostics);
+        if ($additional instanceof PropertyModel) {
+            $properties[] = $additional;
+        }
+
         return new ClassModel(
             $name,
             ClassKind::from(ClassKind::FINAL),
@@ -108,6 +110,36 @@ final class ClassBuilder
             $this->mutability($schema, $diagnostics),
             new DocModel($schema->description(), $schema->isDeprecated()),
             $schema->location(),
+        );
+    }
+
+    /**
+     * `properties` together with an `additionalProperties` schema: the extra keys land in $additionalProperties (spec §5.1).
+     */
+    private function additionalProperties(Schema $schema, bool $nameTaken, Diagnostics $diagnostics): ?PropertyModel
+    {
+        $additional = $schema->additionalProperties();
+        if (!$additional instanceof Schema) {
+            return null;
+        }
+
+        if ($nameTaken) {
+            $diagnostics->error(
+                'The class already has a property $additionalProperties; rename it with "x-php-name".',
+                $schema->location()->child('additionalProperties'),
+            );
+
+            return null;
+        }
+
+        return new PropertyModel(
+            'additionalProperties',
+            'additionalProperties',
+            new MapType($this->types->map($additional, $diagnostics)),
+            false,
+            new DefaultValue([]),
+            new DocModel('Properties the schema does not declare.'),
+            $additional->location(),
         );
     }
 

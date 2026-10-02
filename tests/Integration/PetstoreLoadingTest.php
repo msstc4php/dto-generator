@@ -10,6 +10,7 @@ use MSSTC4PHP\DtoGenerator\Application\Service\Config\Load\Action as LoadConfig;
 use MSSTC4PHP\DtoGenerator\Application\Service\Config\Load\Input as ConfigInput;
 use MSSTC4PHP\DtoGenerator\Application\Service\Model\Build\Action as BuildModel;
 use MSSTC4PHP\DtoGenerator\Application\Service\Model\Build\BuiltClass;
+use MSSTC4PHP\DtoGenerator\Application\Service\Model\Build\BuiltEnum;
 use MSSTC4PHP\DtoGenerator\Application\Service\Model\Build\Input as BuildInput;
 use MSSTC4PHP\DtoGenerator\Application\Service\Schemas\Load\Action as LoadSchemas;
 use MSSTC4PHP\DtoGenerator\Application\Service\Schemas\Load\Input as SchemasInput;
@@ -57,10 +58,8 @@ final class PetstoreLoadingTest extends TestCase
 
         $model = (new BuildModel(new NameResolver()))(new BuildInput($config, $target, $schemas->graph()));
 
-        self::assertSame(
-            ['error ' . $money->location()->file() . '#/definitions/Currency: "enum" is not supported yet; enums, composition and inline objects arrive in a later version.'],
-            array_map(static fn (Diagnostic $d): string => $d->toString(), $model->diagnostics()->all()),
-        );
+        self::assertSame([], array_map(static fn (Diagnostic $d): string => $d->toString(), $model->diagnostics()->all()));
+        self::assertSame(['App\Dto\Currency'], array_map(static fn (BuiltEnum $enum): string => $enum->model()->name()->fqcn(), $model->enums()));
         self::assertSame(
             ['App\Dto\Pet', 'App\Dto\Tag', 'App\Dto\Money'],
             array_map(static fn (BuiltClass $class): string => $class->model()->name()->fqcn(), $model->classes()),

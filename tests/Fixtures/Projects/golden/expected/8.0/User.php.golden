@@ -42,6 +42,19 @@ final class User
          */
         private ?string $legacy = null,
         private ?\DateTimeZone $timeZone = null,
+        /**
+         * @var ?UserStatus::*
+         */
+        private ?string $status = UserStatus::ACTIVE,
+        /**
+         * @var ?Role::*
+         */
+        private ?int $role = null,
+        private ?UserPreferences $preferences = null,
+        /**
+         * @var ?array<array-key, string>
+         */
+        private ?array $labels = null,
     ) {
     }
 
@@ -227,6 +240,76 @@ final class User
     {
         $clone = clone $this;
         $clone->timeZone = $timeZone;
+
+        return $clone;
+    }
+
+    /**
+     * @return ?UserStatus::*
+     */
+    public function getStatus(): ?string
+    {
+        return $this->status;
+    }
+
+    /**
+     * @param ?UserStatus::* $status
+     */
+    public function withStatus(?string $status): self
+    {
+        $clone = clone $this;
+        $clone->status = $status;
+
+        return $clone;
+    }
+
+    /**
+     * @return ?Role::*
+     */
+    public function getRole(): ?int
+    {
+        return $this->role;
+    }
+
+    /**
+     * @param ?Role::* $role
+     */
+    public function withRole(?int $role): self
+    {
+        $clone = clone $this;
+        $clone->role = $role;
+
+        return $clone;
+    }
+
+    public function getPreferences(): ?UserPreferences
+    {
+        return $this->preferences;
+    }
+
+    public function withPreferences(?UserPreferences $preferences): self
+    {
+        $clone = clone $this;
+        $clone->preferences = $preferences;
+
+        return $clone;
+    }
+
+    /**
+     * @return ?array<array-key, string>
+     */
+    public function getLabels(): ?array
+    {
+        return $this->labels;
+    }
+
+    /**
+     * @param ?array<array-key, string> $labels
+     */
+    public function withLabels(?array $labels): self
+    {
+        $clone = clone $this;
+        $clone->labels = $labels;
 
         return $clone;
     }

@@ -61,6 +61,13 @@ final class Sample
     public $extra;
 
     /**
+     * Settlement currency.
+     *
+     * @var ?Currency::*
+     */
+    public ?string $currency;
+
+    /**
      * @param positive-int $id
      * @param list<Tag> $tags
      * @param int|string $code
@@ -68,6 +75,7 @@ final class Sample
      * @param ?array<array-key, int> $meta
      * @param ?list<bool> $flags
      * @param mixed $extra
+     * @param ?Currency::* $currency
      */
     public function __construct(
         int $id,
@@ -78,7 +86,8 @@ final class Sample
         ?float $score = 1.5,
         ?array $meta = null,
         ?array $flags = [true, false],
-        $extra = null
+        $extra = null,
+        ?string $currency = Currency::EUR
     ) {
         $this->id = $id;
         $this->tags = $tags;
@@ -89,5 +98,6 @@ final class Sample
         $this->meta = $meta;
         $this->flags = $flags;
         $this->extra = $extra;
+        $this->currency = $currency;
     }
 }

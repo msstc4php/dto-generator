@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MSSTC4PHP\DtoGenerator\Tests\Unit\Domain\Builder;
 
 use MSSTC4PHP\DtoGenerator\Domain\Builder\ClassBuilder;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\Declarations;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\NameResolver;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\TypeMapper;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostic;
@@ -141,7 +142,7 @@ final class ClassBuilderTest extends TestCase
                 ['type' => 'object', 'properties' => ['tags' => ['type' => 'array', 'items' => ['type' => 'string', 'x-php-nmae' => 1, 'x-php-name' => 'x']]]],
                 ['tags' => 'tags: list<string>|null = NULL'],
                 [
-                    "error {$at}/properties/tags/items/x-php-nmae: Unknown extension \"x-php-nmae\"; known: x-php-class-name, x-php-name, x-php-type, x-dto-mutable, x-php-all-of, x-php-skip, x-php-attributes.",
+                    "error {$at}/properties/tags/items/x-php-nmae: Unknown extension \"x-php-nmae\"; known: x-php-class-name, x-php-name, x-php-type, x-dto-mutable, x-php-all-of, x-php-skip, x-php-attributes, x-enum-descriptions.",
                     "warning {$at}/properties/tags/items/x-php-name: \"x-php-name\" has no effect here.",
                 ],
             ],
@@ -149,6 +150,21 @@ final class ClassBuilderTest extends TestCase
                 ['type' => 'object', 'required' => ['secret'], 'properties' => ['secret' => ['type' => 'string', 'x-php-skip' => true], 'id' => ['type' => 'string']]],
                 ['id' => 'id: string|null = NULL'],
                 ["warning {$at}/properties/secret/x-php-skip: Property \"secret\" is required but excluded by \"x-php-skip\"."],
+            ],
+            'additional properties' => [
+                ['type' => 'object', 'properties' => ['id' => ['type' => 'string']], 'additionalProperties' => ['type' => 'integer']],
+                ['id' => 'id: string|null = NULL', 'additionalProperties' => "additionalProperties: array<array-key, int> = array (\n)"],
+                [],
+            ],
+            'additional properties allowed without a schema' => [
+                ['type' => 'object', 'properties' => ['id' => ['type' => 'string']], 'additionalProperties' => true],
+                ['id' => 'id: string|null = NULL'],
+                [],
+            ],
+            'additional properties clash with a property' => [
+                ['type' => 'object', 'properties' => ['additionalProperties' => ['type' => 'string']], 'additionalProperties' => ['type' => 'integer']],
+                ['additionalProperties' => 'additionalProperties: string|null = NULL'],
+                ["error {$at}/additionalProperties: The class already has a property \$additionalProperties; rename it with \"x-php-name\"."],
             ],
             'default for an untyped property' => [
                 ['type' => 'object', 'properties' => ['any' => ['default' => 5]]],
@@ -216,20 +232,20 @@ final class ClassBuilderTest extends TestCase
                 ['type' => 'object', 'properties' => ['id' => ['type' => 'string', 'x-php-nmae' => 'x']]],
                 ['id' => 'id: string|null = NULL'],
                 [
-                    "error {$at}/properties/id/x-php-nmae: Unknown extension \"x-php-nmae\"; known: x-php-class-name, x-php-name, x-php-type, x-dto-mutable, x-php-all-of, x-php-skip, x-php-attributes.",
+                    "error {$at}/properties/id/x-php-nmae: Unknown extension \"x-php-nmae\"; known: x-php-class-name, x-php-name, x-php-type, x-dto-mutable, x-php-all-of, x-php-skip, x-php-attributes, x-enum-descriptions.",
                 ],
             ],
             'misplaced extension' => [
-                ['type' => 'object', 'properties' => ['id' => ['type' => 'string', 'x-dto-mutable' => true]]],
+                ['type' => 'object', 'properties' => ['id' => ['type' => 'string', 'x-php-all-of' => 'merge']]],
                 ['id' => 'id: string|null = NULL'],
                 [
-                    "warning {$at}/properties/id/x-dto-mutable: \"x-dto-mutable\" has no effect here.",
+                    "warning {$at}/properties/id/x-php-all-of: \"x-php-all-of\" has no effect here.",
                 ],
             ],
             'foreign extensions are ignored' => [
                 ['type' => 'object', 'properties' => ['id' => ['type' => 'string', 'x-internal' => 1, 'x-dtoish' => 1, 'x-phpstorm' => 1, 'x-php-zzz' => 1]]],
                 ['id' => 'id: string|null = NULL'],
-                ["error {$at}/properties/id/x-php-zzz: Unknown extension \"x-php-zzz\"; known: x-php-class-name, x-php-name, x-php-type, x-dto-mutable, x-php-all-of, x-php-skip, x-php-attributes."],
+                ["error {$at}/properties/id/x-php-zzz: Unknown extension \"x-php-zzz\"; known: x-php-class-name, x-php-name, x-php-type, x-dto-mutable, x-php-all-of, x-php-skip, x-php-attributes, x-enum-descriptions."],
             ],
             'x-dto-mutable not a boolean' => [
                 ['type' => 'object', 'x-dto-mutable' => 'yes', 'properties' => ['id' => ['type' => 'string']]],
@@ -296,9 +312,9 @@ final class ClassBuilderTest extends TestCase
             DateTimeClass::from(DateTimeClass::IMMUTABLE),
             true,
         );
-        $builder = new ClassBuilder(new NameResolver(), new TypeMapper($graph, [], [], $target, []), $target);
+        $builder = new ClassBuilder(new NameResolver(), new TypeMapper($graph, new Declarations(), $target, []), $target);
         $diagnostics = new Diagnostics();
-        $class = $builder->build(ClassName::fromFqcn('App\Dto\User'), $graph->all()[0], $diagnostics);
+        $class = $builder->build(ClassName::fromFqcn('App\Dto\User'), $graph->all()[0]->schema(), $diagnostics);
 
         return [$class, array_map(static fn (Diagnostic $d): string => $d->toString(), $diagnostics->all())];
     }

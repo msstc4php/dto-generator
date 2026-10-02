@@ -8,6 +8,7 @@ use LogicException;
 use PhpParser\Node;
 use PhpParser\Node\Stmt\ClassMethod;
 use PhpParser\Node\Stmt\Declare_;
+use PhpParser\Node\Stmt\Enum_;
 use PhpParser\Node\Stmt\Expression;
 use PhpParser\PrettyPrinter\Standard;
 
@@ -38,6 +39,18 @@ final class GeneratedCodePrinter extends Standard
         }
 
         return 'declare(' . $this->pCommaSeparated($node->declares) . ');';
+    }
+
+    /**
+     * PER-CS writes the backing type as `enum Name: string`, without the space before the colon.
+     */
+    protected function pStmt_Enum(Enum_ $node): string
+    {
+        return $this->pAttrGroups($node->attrGroups)
+            . 'enum ' . $node->name
+            . ($node->scalarType instanceof Node ? ': ' . $this->p($node->scalarType) : '')
+            . ($node->implements !== [] ? ' implements ' . $this->pCommaSeparated($node->implements) : '')
+            . $this->nl . '{' . $this->pStmts($node->stmts) . $this->nl . '}';
     }
 
     /**
