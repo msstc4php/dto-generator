@@ -6,9 +6,10 @@ namespace MSSTC4PHP\DtoGenerator\Infrastructure\Emitter;
 
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassKind;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassModel;
-use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\PropertyModel;
+use MSSTC4PHP\DtoGenerator\Domain\Target\Capability;
 use MSSTC4PHP\DtoGenerator\Domain\Target\ClassForm;
+use MSSTC4PHP\DtoGenerator\Domain\Target\TargetProfile;
 use MSSTC4PHP\DtoGenerator\Domain\Target\WitherStyle;
 use PhpParser\Modifiers;
 
@@ -25,14 +26,17 @@ final class ClassShape
 
     private ClassForm $form;
 
+    private TargetProfile $target;
+
     /**
      * @param list<PropertyModel> $inherited
      */
-    public function __construct(ClassModel $class, array $inherited, ClassForm $form)
+    public function __construct(ClassModel $class, array $inherited, ClassForm $form, TargetProfile $target)
     {
         $this->class = $class;
         $this->inherited = $inherited;
         $this->form = $form;
+        $this->target = $target;
     }
 
     public function form(): ClassForm
@@ -79,12 +83,42 @@ final class ClassShape
         return $this->isBase() ? Modifiers::PROTECTED : Modifiers::PRIVATE;
     }
 
-    /**
-     * A subclass rebuilds itself with `new self`: inherited readonly properties belong to the parent's scope, which
-     * neither a clone assignment nor `clone with` may write from the subclass.
-     */
     public function witherStyle(): WitherStyle
     {
-        return $this->class->parent() instanceof ClassName ? WitherStyle::from(WitherStyle::NEW_SELF) : $this->form->withers();
+        return $this->form->withers();
+    }
+
+    /**
+     * A base clones itself, which keeps the subclass it is called on; `new self` in a base would build the base.
+     */
+    public function hasWithers(): bool
+    {
+        $style = $this->form->withers();
+
+        return !$style->isNone() && (!$this->isBase() || !$style->equals(WitherStyle::from(WitherStyle::NEW_SELF)));
+    }
+
+    /**
+     * Where bases have no withers, a final class rebuilds itself for the inherited properties too.
+     */
+    public function declaresInheritedWithers(): bool
+    {
+        return !$this->isBase() && $this->form->withers()->equals(WitherStyle::from(WitherStyle::NEW_SELF));
+    }
+
+    /**
+     * Mutators of a base return the subclass they are called on.
+     */
+    public function returnType(): string
+    {
+        return $this->isBase() && $this->target->supports(Capability::from(Capability::STATIC_RETURN_TYPE)) ? 'static' : 'self';
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function returnTag(): array
+    {
+        return $this->isBase() && $this->returnType() === 'self' ? ['@return static'] : [];
     }
 }

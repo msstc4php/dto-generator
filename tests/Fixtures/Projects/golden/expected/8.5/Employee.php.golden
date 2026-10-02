@@ -20,23 +20,13 @@ final readonly class Employee extends Person
         parent::__construct($fullName, $nickname);
     }
 
-    public function withFullName(string $fullName): self
-    {
-        return new self($fullName, $this->salary, $this->nickname, $this->manager);
-    }
-
-    public function withNickname(?string $nickname): self
-    {
-        return new self($this->fullName, $this->salary, $nickname, $this->manager);
-    }
-
     public function withSalary(float $salary): self
     {
-        return new self($this->fullName, $salary, $this->nickname, $this->manager);
+        return clone($this, ['salary' => $salary]);
     }
 
     public function withManager(Person|string|null $manager): self
     {
-        return new self($this->fullName, $this->salary, $this->nickname, $manager);
+        return clone($this, ['manager' => $manager]);
     }
 }

@@ -11,4 +11,14 @@ readonly class Person
     public function __construct(public string $fullName, public ?string $nickname = null)
     {
     }
+
+    public function withFullName(string $fullName): static
+    {
+        return clone($this, ['fullName' => $fullName]);
+    }
+
+    public function withNickname(?string $nickname): static
+    {
+        return clone($this, ['nickname' => $nickname]);
+    }
 }

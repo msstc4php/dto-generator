@@ -17,13 +17,18 @@ final class Variants
 
     private ?DiscriminatorModel $discriminator;
 
+    private bool $sharesProperties;
+
     /**
      * @param list<ClassName> $classes
+     * @param bool $sharesProperties whether properties all variants declare alike move to the base: a `oneOf` lists
+     *                               self-contained variants, an `allOf` subclass already declares only its own
      */
-    public function __construct(array $classes, ?DiscriminatorModel $discriminator)
+    public function __construct(array $classes, ?DiscriminatorModel $discriminator, bool $sharesProperties)
     {
         $this->classes = $classes;
         $this->discriminator = $discriminator;
+        $this->sharesProperties = $sharesProperties;
     }
 
     /**
@@ -37,5 +42,10 @@ final class Variants
     public function discriminator(): ?DiscriminatorModel
     {
         return $this->discriminator;
+    }
+
+    public function sharesProperties(): bool
+    {
+        return $this->sharesProperties;
     }
 }

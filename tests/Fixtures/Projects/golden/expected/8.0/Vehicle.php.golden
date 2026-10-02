@@ -4,15 +4,12 @@
 
 declare(strict_types=1);
 
-namespace App\Dto;
+namespace App\Golden;
 
-abstract class Shape
+abstract class Vehicle
 {
-    protected string $kind;
-
-    protected function __construct(string $kind)
+    protected function __construct(protected string $kind)
     {
-        $this->kind = $kind;
     }
 
     public function getKind(): string
@@ -20,10 +17,7 @@ abstract class Shape
         return $this->kind;
     }
 
-    /**
-     * @return static
-     */
-    public function withKind(string $kind): self
+    public function withKind(string $kind): static
     {
         $clone = clone $this;
         $clone->kind = $kind;

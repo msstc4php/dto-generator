@@ -28,16 +28,6 @@ final class Employee extends Person
         $this->manager = $manager;
     }
 
-    public function withFullName(string $fullName): self
-    {
-        return new self($fullName, $this->salary, $this->nickname, $this->manager);
-    }
-
-    public function withNickname(?string $nickname): self
-    {
-        return new self($this->fullName, $this->salary, $nickname, $this->manager);
-    }
-
     public function getSalary(): float
     {
         return $this->salary;
@@ -45,7 +35,10 @@ final class Employee extends Person
 
     public function withSalary(float $salary): self
     {
-        return new self($this->fullName, $salary, $this->nickname, $this->manager);
+        $clone = clone $this;
+        $clone->salary = $salary;
+
+        return $clone;
     }
 
     /**
@@ -61,6 +54,9 @@ final class Employee extends Person
      */
     public function withManager($manager): self
     {
-        return new self($this->fullName, $this->salary, $this->nickname, $manager);
+        $clone = clone $this;
+        $clone->manager = $manager;
+
+        return $clone;
     }
 }

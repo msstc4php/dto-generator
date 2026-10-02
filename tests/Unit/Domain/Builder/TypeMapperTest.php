@@ -91,7 +91,6 @@ final class TypeMapperTest extends TestCase
             'oneOf with a nullable member' => [['oneOf' => [['type' => 'string'], ['type' => ['integer', 'null']]]], 'string|int|null'],
             'oneOf of one type twice' => [['oneOf' => [['type' => 'string'], ['type' => 'string', 'format' => 'email']]], 'string'],
             'oneOf with an untyped member' => [['oneOf' => [['type' => 'string'], []]], 'mixed'],
-            'oneOf and anyOf together' => [['oneOf' => [['type' => 'string']], 'anyOf' => [['type' => 'boolean']]], 'string|bool'],
             'inline discriminated union' => [
                 ['oneOf' => [['$ref' => '#/components/schemas/Tag'], ['$ref' => '#/components/schemas/Note']], 'discriminator' => ['propertyName' => 'kind']],
                 'App\Dto\Tag|App\Dto\Note',
@@ -150,6 +149,7 @@ final class TypeMapperTest extends TestCase
             'allOf of two typed schemas' => [['allOf' => [['type' => 'string'], ['type' => 'integer']]], 'mixed', ["error {$at}: \"allOf\" combines several typed schemas that are not objects, which no PHP type expresses; keep one of them."]],
             'allOf with oneOf' => [['allOf' => [['$ref' => '#/components/schemas/Tag']], 'oneOf' => [['type' => 'string']]], 'mixed', ["error {$at}: \"allOf\" together with \"oneOf\" or \"anyOf\" is not supported."]],
             'undeclared allOf object' => [['allOf' => [['$ref' => '#/components/schemas/Tag'], ['properties' => ['x' => []]]]], 'mixed', ["error {$at}: This inline object is not generated (only properties of generated classes get one); move it to components/schemas and use \$ref."]],
+            'oneOf and anyOf together' => [['oneOf' => [['type' => 'string']], 'anyOf' => [['type' => 'boolean']]], 'string|bool', ["warning {$at}: \"oneOf\" and \"anyOf\" together become one union, which admits more than the schema does."]],
             'properties beside oneOf' => [['properties' => ['a' => []], 'oneOf' => [['type' => 'string']]], 'mixed', ["error {$at}: This inline object is not generated (only properties of generated classes get one); move it to components/schemas and use \$ref."]],
             'oneOf with an inline object' => [['oneOf' => [['type' => 'object', 'properties' => ['a' => []]], ['type' => 'string']]], 'mixed', ["error {$at}/oneOf/0: This inline object is not generated (only properties of generated classes get one); move it to components/schemas and use \$ref."]],
             'boolean enum' => [['type' => 'boolean', 'enum' => [true]], 'bool', ["warning {$at}: This enum has no string or integer value, so it is not generated and the property keeps its plain type."]],

@@ -2,9 +2,8 @@
 
 declare(strict_types=1);
 
-namespace MSSTC4PHP\DtoGenerator\Application\Service\Model\Build;
+namespace MSSTC4PHP\DtoGenerator\Domain\Builder;
 
-use MSSTC4PHP\DtoGenerator\Domain\Builder\Variants;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassKind;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassModel;
@@ -31,41 +30,72 @@ final class Hierarchy
     private Diagnostics $diagnostics;
 
     /**
-     * @param list<BuiltClass> $classes
+     * @param list<ClassModel> $classes
      */
     private function __construct(array $classes, Diagnostics $diagnostics)
     {
         foreach ($classes as $class) {
-            $fqcn = $class->model()->name()->fqcn();
-            $this->models[$fqcn] = $class->model();
-            $this->parents[$fqcn] = $class->model()->parent();
+            $fqcn = $class->name()->fqcn();
+            $this->models[$fqcn] = $class;
+            $this->parents[$fqcn] = $class->parent();
         }
 
         $this->diagnostics = $diagnostics;
     }
 
     /**
-     * @param list<BuiltClass> $classes
+     * @param list<ClassModel> $classes
      * @param array<string, Variants> $unions discriminated base FQCN → its variants
      *
-     * @return list<BuiltClass>
+     * @return list<ClassModel> the classes in the given order
      */
     public static function link(array $classes, array $unions, Diagnostics $diagnostics): array
     {
         $hierarchy = new self($classes, $diagnostics);
         $hierarchy->adoptVariants($unions);
         $hierarchy->breakCycles();
-        foreach ($unions as $base => $variants) {
-            $hierarchy->shareCommonProperties($base, $variants);
+        foreach (self::leavesFirst($unions) as $base) {
+            if ($unions[$base]->sharesProperties()) {
+                $hierarchy->shareCommonProperties($base, $unions[$base]);
+            }
         }
 
         $hierarchy->settle($unions);
         $hierarchy->check();
 
-        return array_map(
-            static fn (BuiltClass $class): BuiltClass => new BuiltClass($hierarchy->models[$class->model()->name()->fqcn()], $class->source()),
-            $classes,
-        );
+        return array_map(static fn (ClassModel $class): ClassModel => $hierarchy->models[$class->name()->fqcn()], $classes);
+    }
+
+    /**
+     * A base that is itself a variant shares first, so what it keeps is final when its own base compares variants.
+     *
+     * @param array<string, Variants> $unions
+     *
+     * @return list<string>
+     */
+    private static function leavesFirst(array $unions): array
+    {
+        $order = [];
+        $pending = $unions;
+        while ($pending !== []) {
+            $ready = array_filter($pending, static function (Variants $variants) use ($pending): bool {
+                foreach ($variants->classes() as $variant) {
+                    if (isset($pending[$variant->fqcn()])) {
+                        return false;
+                    }
+                }
+
+                return true;
+            });
+            // Bases that are variants of each other form a loop, which adoption reports; take them as they come.
+            $next = $ready === [] ? $pending : $ready;
+            foreach (array_keys($next) as $base) {
+                $order[] = $base;
+                unset($pending[$base]);
+            }
+        }
+
+        return $order;
     }
 
     /**
@@ -125,7 +155,7 @@ final class Hierarchy
 
         $own = $this->models[$base]->properties();
         foreach ($members as $member) {
-            $this->models[$member] = $this->models[$member]->withProperties(...$this->matching($this->models[$member]->properties(), $own, false));
+            $this->models[$member] = $this->models[$member]->withProperties(...$this->unshared($this->models[$member]->properties(), $own));
         }
 
         if (count($members) < 2) {
@@ -134,12 +164,12 @@ final class Hierarchy
 
         $common = $this->models[$members[0]]->properties();
         foreach ($members as $member) {
-            $common = $this->matching($common, $this->models[$member]->properties(), true);
+            $common = $this->shared($common, $this->models[$member]->properties());
         }
 
         $this->models[$base] = $this->models[$base]->withProperties(...array_merge($own, $common));
         foreach ($members as $member) {
-            $this->models[$member] = $this->models[$member]->withProperties(...$this->matching($this->models[$member]->properties(), $common, false));
+            $this->models[$member] = $this->models[$member]->withProperties(...$this->unshared($this->models[$member]->properties(), $common));
         }
     }
 
@@ -215,35 +245,59 @@ final class Hierarchy
     }
 
     /**
-     * The properties declared (or, with $declared false, not declared) exactly alike in the others: same names,
-     * type, requirement and default.
-     *
      * @param list<PropertyModel> $properties
      * @param list<PropertyModel> $others
      *
-     * @return list<PropertyModel>
+     * @return list<PropertyModel> the properties the others declare alike
      */
-    private function matching(array $properties, array $others, bool $declared): array
+    private function shared(array $properties, array $others): array
     {
         $result = [];
         foreach ($properties as $property) {
-            $alike = false;
-            foreach ($others as $other) {
-                $alike = $alike || (
-                    $other->name() === $property->name()
-                    && $other->wireName() === $property->wireName()
-                    && $other->type()->describe() === $property->type()->describe()
-                    && $other->isRequired() === $property->isRequired()
-                    && $this->defaultValue($other) === $this->defaultValue($property)
-                );
-            }
-
-            if ($alike === $declared) {
+            if ($this->declaredAlike($property, $others)) {
                 $result[] = $property;
             }
         }
 
         return $result;
+    }
+
+    /**
+     * @param list<PropertyModel> $properties
+     * @param list<PropertyModel> $others
+     *
+     * @return list<PropertyModel> the properties the others do not declare alike
+     */
+    private function unshared(array $properties, array $others): array
+    {
+        $result = [];
+        foreach ($properties as $property) {
+            if (!$this->declaredAlike($property, $others)) {
+                $result[] = $property;
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Same names, type, requirement and default.
+     *
+     * @param list<PropertyModel> $others
+     */
+    private function declaredAlike(PropertyModel $property, array $others): bool
+    {
+        foreach ($others as $other) {
+            if ($other->name() === $property->name()
+                && $other->wireName() === $property->wireName()
+                && $other->type()->describe() === $property->type()->describe()
+                && $other->isRequired() === $property->isRequired()
+                && $this->defaultValue($other) === $this->defaultValue($property)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

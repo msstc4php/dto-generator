@@ -13,13 +13,8 @@ final readonly class Circle extends Shape
         parent::__construct($kind);
     }
 
-    public function withKind(string $kind): self
-    {
-        return new self($kind, $this->radius);
-    }
-
     public function withRadius(float $radius): self
     {
-        return new self($this->kind, $radius);
+        return clone($this, ['radius' => $radius]);
     }
 }

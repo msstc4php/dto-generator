@@ -46,7 +46,7 @@
 - **Строки описания с `@`** экранируются как `\@`, иначе PHPDoc читал бы их как теги (`@var`, `@deprecated`).
 - **`x-php-name` суперглобалов** (`GLOBALS`, `_GET`, …) — ошибка Builder и инвариант `PropertyModel`: такой параметр не компилируется.
 - **Свойство `clone`** при wither через `clone` (7.4/8.0): временная переменная — `$copy`. Golden-класс `Copy` (без namespace) прогоняется на целях.
-- **Инварианты IR для emitter:** `PropertyModel` required ⇔ нет default; `ClassForm` строится только `mutable()`/`immutable()`; у баз (OPEN/ABSTRACT) withers нет — `new self` в базе вернул бы базу, а не наследника.
+- **Инварианты IR для emitter:** `PropertyModel` required ⇔ нет default; `ClassForm` строится только `mutable()`/`immutable()`; у баз (OPEN/ABSTRACT) на 8.1–8.4 withers нет — `new self` в базе вернул бы базу, а не наследника; clone-withers баз (7.4/8.0/8.5) возвращают `static`.
 - **symfony/console 5.4 и PHPStan (phpVersion 70400):** phpdoc `mixed` у `getOption()`/`addOption()` PHPStan читает как класс `…\mixed`; stub-файл не применился. Опции читаются через `getOptions()` (там phpdoc типизирован).
 - **Writer:** `plan()` получает список ВСЕХ outputDir конфига — иначе источник, у которого удалили все схемы, не почистит устаревшие файлы. Файл без `@generated` не перезаписывается даже если он в манифесте (заголовок стёрт руками) — ошибка.
 - **Генерация файлов** пропускается, если схемы/модель дали ошибки (`files()` → null): записи всё равно не будет.
@@ -57,8 +57,9 @@
 - **Lock-файлы** `dto-generator-<sha1>.lock` остаются в системном временном каталоге (по одному на outputDir) — не удаляются намеренно: unlink у flock-файла создаёт гонку. Ключ — realpath ближайшего существующего предка + хвост (symlink и ещё не созданный каталог дают тот же ключ). Ожидание блокировки — без таймаута и без сообщения: у writer нет канала вывода (решение ревью 3b, CR-012).
 - **JSON-вывод** печатается с `OutputInterface::OUTPUT_RAW` (форматтер Symfony вырезал бы `<tag>` и `\<` из сообщений) и с `JSON_INVALID_UTF8_SUBSTITUTE` (отчёт никогда не пустой). Пути файлов обязаны быть валидным UTF-8 (`isSafeRelativePath`), поэтому манифест кодируется без подстановок и остаётся точным. Формат — `Presentation/Cli/JsonReport` (`@phpstan-type ReportShape`).
 - **Interim-манифест** пишется только если в каталоге есть создания или удаления; чистые обновления пишут манифест один раз.
-- **OPEN-база без withers.** Конкретный `allOf`-родитель, используемый сам по себе, не имеет `with*()` (ruling 4b) — наследники получают withers всей цепочки через `new self`.
-- **Наследник 8.5** не использует `clone()` with properties: readonly-свойства родителя принадлежат его scope; withers наследника — `new self(...)`.
+- **OPEN-база без withers на 8.1–8.4.** Конкретный `allOf`-родитель теряет `with*()` на этих целях, как только у него появляется наследник (readonly-свойства не скопировать без `new self`, а `new static` небезопасен). На 7.4/8.0/8.5 база сохраняет clone-withers. Появление наследника меняет API базы — документированное ограничение (ruling CR-009).
+- **Наследник 8.5** не объявляет withers унаследованных свойств: их даёт база (`clone($this, …)` в scope базы, возврат `static`).
 - **SchemaShape — приближение без графа.** `allOf` с двумя `$ref` считается классом до разрешения ссылок; если цели — алиасы, Build сообщает «An allOf member of a class must be an object schema.».
-- **Swagger-2-наследование** (`Pet` с discriminator и `properties`, `Cat: allOf [Pet, …]`) даёт OPEN-базу без `DiscriminatorModel`; discriminator на такой схеме — warning (ruling 4b, spec §5.3 описывает только `oneOf`/`anyOf`).
+- **Swagger-2-наследование** (`Pet` с discriminator, `Cat: allOf [Pet, …]`) делает `Pet` abstract (ruling CR-010): напрямую `new Pet` больше не создать.
+- **Свойство-дискриминатор варианта** остаётся свободным параметром конструктора и wither (`new Cat('dog', …)` проходит) — фиксировать значение будет мост (ruling CR-015).
 - **GraphFixture/ModelFixture** бросают исключение при ошибках загрузки; сценарии с неразрешёнными `$ref` строятся с `failOnLoadErrors: false`.

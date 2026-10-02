@@ -4,9 +4,9 @@
 
 declare(strict_types=1);
 
-namespace App\Dto;
+namespace App\Golden;
 
-abstract class Shape
+abstract class Vehicle
 {
     protected string $kind;
 

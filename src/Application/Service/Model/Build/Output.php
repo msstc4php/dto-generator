@@ -19,6 +19,9 @@ final class Output
     /** @var list<BuiltEnum> */
     private array $enums;
 
+    /** @var array<string, ClassModel> */
+    private array $models = [];
+
     /**
      * @param list<BuiltClass> $classes in graph order, inline classes after their owners
      * @param list<BuiltEnum> $enums
@@ -26,6 +29,10 @@ final class Output
     public function __construct(array $classes, Diagnostics $diagnostics, array $enums)
     {
         $this->classes = $classes;
+        foreach ($classes as $built) {
+            $this->models[$built->model()->name()->fqcn()] = $built->model();
+        }
+
         $this->diagnostics = $diagnostics;
         $this->enums = $enums;
     }
@@ -53,11 +60,7 @@ final class Output
      */
     public function inheritedProperties(ClassModel $class): array
     {
-        $models = [];
-        foreach ($this->classes as $built) {
-            $models[$built->model()->name()->fqcn()] = $built->model();
-        }
-
+        $models = $this->models;
         // The build breaks inheritance loops, but the chain still stops where one would close.
         $seen = [$class->name()->fqcn() => $class->name()];
         $chain = [];

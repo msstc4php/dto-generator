@@ -20,7 +20,7 @@ class Animal
         return $this->id;
     }
 
-    public function setId(string $id): self
+    public function setId(string $id): static
     {
         $this->id = $id;
 
@@ -32,7 +32,7 @@ class Animal
         return $this->nickname;
     }
 
-    public function setNickname(?string $nickname): self
+    public function setNickname(?string $nickname): static
     {
         $this->nickname = $nickname;
 

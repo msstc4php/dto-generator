@@ -174,6 +174,10 @@ final class TypeMapper
      */
     private function union(Schema $schema, Diagnostics $diagnostics, array $aliases): TypeModel
     {
+        if ($schema->oneOf() !== [] && $schema->anyOf() !== []) {
+            $diagnostics->warning('"oneOf" and "anyOf" together become one union, which admits more than the schema does.', $schema->location());
+        }
+
         $members = [];
         $nullable = false;
         $mixed = false;

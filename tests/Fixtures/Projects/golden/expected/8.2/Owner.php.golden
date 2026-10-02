@@ -15,21 +15,27 @@ final readonly class Owner
          */
         public ?Tag $badge = null,
         public int|string|null $code = null,
+        public Cat|Dog|null $favourite = null,
     ) {
     }
 
     public function withPet(?Pet $pet): self
     {
-        return new self($pet, $this->badge, $this->code);
+        return new self($pet, $this->badge, $this->code, $this->favourite);
     }
 
     public function withBadge(?Tag $badge): self
     {
-        return new self($this->pet, $badge, $this->code);
+        return new self($this->pet, $badge, $this->code, $this->favourite);
     }
 
     public function withCode(int|string|null $code): self
     {
-        return new self($this->pet, $this->badge, $code);
+        return new self($this->pet, $this->badge, $code, $this->favourite);
+    }
+
+    public function withFavourite(Cat|Dog|null $favourite): self
+    {
+        return new self($this->pet, $this->badge, $this->code, $favourite);
     }
 }

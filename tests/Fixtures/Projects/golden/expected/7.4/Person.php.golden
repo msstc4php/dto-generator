@@ -23,8 +23,30 @@ class Person
         return $this->fullName;
     }
 
+    /**
+     * @return static
+     */
+    public function withFullName(string $fullName): self
+    {
+        $clone = clone $this;
+        $clone->fullName = $fullName;
+
+        return $clone;
+    }
+
     public function getNickname(): ?string
     {
         return $this->nickname;
+    }
+
+    /**
+     * @return static
+     */
+    public function withNickname(?string $nickname): self
+    {
+        $clone = clone $this;
+        $clone->nickname = $nickname;
+
+        return $clone;
     }
 }

@@ -17,7 +17,7 @@ abstract class Shape
         return $this->kind;
     }
 
-    public function setKind(string $kind): self
+    public function setKind(string $kind): static
     {
         $this->kind = $kind;
 

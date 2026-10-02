@@ -20,8 +20,24 @@ class Animal
         return $this->id;
     }
 
+    public function withId(string $id): static
+    {
+        $clone = clone $this;
+        $clone->id = $id;
+
+        return $clone;
+    }
+
     public function getNickname(): ?string
     {
         return $this->nickname;
+    }
+
+    public function withNickname(?string $nickname): static
+    {
+        $clone = clone $this;
+        $clone->nickname = $nickname;
+
+        return $clone;
     }
 }

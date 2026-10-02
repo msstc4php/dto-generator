@@ -13,18 +13,8 @@ final readonly class Cat extends Pet
         parent::__construct($petType, $name);
     }
 
-    public function withPetType(string $petType): self
-    {
-        return new self($petType, $this->name, $this->lives);
-    }
-
-    public function withName(string $name): self
-    {
-        return new self($this->petType, $name, $this->lives);
-    }
-
     public function withLives(?int $lives): self
     {
-        return new self($this->petType, $this->name, $lives);
+        return clone($this, ['lives' => $lives]);
     }
 }

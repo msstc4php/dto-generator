@@ -68,16 +68,24 @@ final class ClassBuilder
         $properties = [];
         $taken = [];
         $byWireName = [];
+        // A property any merged member excludes stays excluded, whichever member declares it first.
+        $skipped = [];
+        foreach ($this->sources($composition) as [$wireName, $propertySchema]) {
+            if (self::isSkipped($propertySchema, new Diagnostics())) {
+                $skipped[$wireName] = $wireName;
+            }
+        }
+
         foreach ($this->sources($composition) as [$wireName, $propertySchema]) {
             ExtensionVocabulary::checkProperty($propertySchema, $diagnostics);
-            if (self::isSkipped($propertySchema, $diagnostics)) {
-                if ($composition->isRequired($wireName)) {
-                    $diagnostics->warning(
-                        sprintf('Property "%s" is required but excluded by "x-php-skip".', $wireName),
-                        $propertySchema->location()->child('x-php-skip'),
-                    );
-                }
+            if (self::isSkipped($propertySchema, $diagnostics) && $composition->isRequired($wireName)) {
+                $diagnostics->warning(
+                    sprintf('Property "%s" is required but excluded by "x-php-skip".', $wireName),
+                    $propertySchema->location()->child('x-php-skip'),
+                );
+            }
 
+            if (isset($skipped[$wireName])) {
                 continue;
             }
 
@@ -97,6 +105,11 @@ final class ClassBuilder
                             $property->type()->describe(),
                             $earlier->type()->describe(),
                         ),
+                        $propertySchema->location(),
+                    );
+                } elseif ($earlier->name() !== $property->name() || $this->defaultOf($earlier) !== $this->defaultOf($property)) {
+                    $diagnostics->error(
+                        sprintf('Property "%s" of %s has another PHP name or default here than in an earlier allOf member.', $wireName, $name->fqcn()),
                         $propertySchema->location(),
                     );
                 }
@@ -164,6 +177,16 @@ final class ClassBuilder
             new DocModel('Properties the schema does not declare.'),
             $additional->location(),
         );
+    }
+
+    /**
+     * @return JsonValue
+     */
+    private function defaultOf(PropertyModel $property)
+    {
+        $default = $property->default();
+
+        return $default instanceof DefaultValue ? $default->value() : null;
     }
 
     /**

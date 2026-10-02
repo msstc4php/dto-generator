@@ -17,23 +17,13 @@ final readonly class Dog extends Animal
         parent::__construct($id, $nickname);
     }
 
-    public function withId(string $id): self
-    {
-        return new self($id, $this->breed, $this->nickname, $this->goodBoy);
-    }
-
-    public function withNickname(?string $nickname): self
-    {
-        return new self($this->id, $this->breed, $nickname, $this->goodBoy);
-    }
-
     public function withBreed(string $breed): self
     {
-        return new self($this->id, $breed, $this->nickname, $this->goodBoy);
+        return clone($this, ['breed' => $breed]);
     }
 
     public function withGoodBoy(?bool $goodBoy): self
     {
-        return new self($this->id, $this->breed, $this->nickname, $goodBoy);
+        return clone($this, ['goodBoy' => $goodBoy]);
     }
 }

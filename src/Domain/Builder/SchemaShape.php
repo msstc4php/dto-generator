@@ -73,12 +73,16 @@ final class SchemaShape
     }
 
     /**
-     * A member that brings properties: a reference (assumed to be an object until the build resolves it), an inline
-     * object or a nested composition of objects.
+     * A member that brings or constrains properties: a reference (assumed to be an object until the build resolves it),
+     * an inline object, a `required` list or a nested composition of objects.
      */
     private static function isObjectMember(Schema $member): bool
     {
-        return $member->ref() !== null || ($member->allOf() !== [] ? self::isClass($member) : $member->propertyNames() !== []);
+        if ($member->ref() !== null) {
+            return true;
+        }
+
+        return $member->allOf() !== [] ? self::isClass($member) : $member->propertyNames() !== [] || $member->required() !== [];
     }
 
     /**
@@ -86,7 +90,7 @@ final class SchemaShape
      */
     private static function composesObjects(Schema $schema): bool
     {
-        if ($schema->propertyNames() !== []) {
+        if ($schema->propertyNames() !== [] || $schema->required() !== []) {
             return true;
         }
 

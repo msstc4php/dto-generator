@@ -15,6 +15,7 @@ final readonly class Owner
          */
         public ?Tag $badge = null,
         public int|string|null $code = null,
+        public Cat|Dog|null $favourite = null,
     ) {
     }
 
@@ -31,5 +32,10 @@ final readonly class Owner
     public function withCode(int|string|null $code): self
     {
         return clone($this, ['code' => $code]);
+    }
+
+    public function withFavourite(Cat|Dog|null $favourite): self
+    {
+        return clone($this, ['favourite' => $favourite]);
     }
 }

@@ -4,16 +4,11 @@
 
 declare(strict_types=1);
 
-namespace App\Dto;
+namespace App\Golden;
 
-abstract readonly class Shape
+abstract readonly class Vehicle
 {
     protected function __construct(public string $kind)
     {
-    }
-
-    public function withKind(string $kind): static
-    {
-        return clone($this, ['kind' => $kind]);
     }
 }

@@ -14,4 +14,14 @@ readonly class Animal
     public function __construct(public string $id, public ?string $nickname = null)
     {
     }
+
+    public function withId(string $id): static
+    {
+        return clone($this, ['id' => $id]);
+    }
+
+    public function withNickname(?string $nickname): static
+    {
+        return clone($this, ['nickname' => $nickname]);
+    }
 }

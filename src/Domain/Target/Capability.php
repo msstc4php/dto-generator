@@ -19,6 +19,8 @@ final class Capability extends AbstractEnum
 
     public const MIXED_TYPE = 'mixed-type';
 
+    public const STATIC_RETURN_TYPE = 'static-return-type';
+
     public const RESERVED_NAMESPACE_SEGMENTS = 'reserved-namespace-segments';
 
     public const READONLY_PROPERTIES = 'readonly-properties';
@@ -45,6 +47,7 @@ final class Capability extends AbstractEnum
         self::UNION_TYPES => '8.0',
         self::ATTRIBUTES => '8.0',
         self::MIXED_TYPE => '8.0',
+        self::STATIC_RETURN_TYPE => '8.0',
         self::RESERVED_NAMESPACE_SEGMENTS => '8.0',
         self::READONLY_PROPERTIES => '8.1',
         self::ENUMS => '8.1',

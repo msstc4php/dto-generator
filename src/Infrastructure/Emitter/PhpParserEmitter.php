@@ -73,7 +73,7 @@ final class PhpParserEmitter implements CodeEmitter
     public function emit(ClassModel $class, TargetProfile $target, array $inherited = []): string
     {
         $this->assertSupported($class, $inherited);
-        $shape = new ClassShape($class, $inherited, $target->classFormFor($class->mutability()));
+        $shape = new ClassShape($class, $inherited, $target->classFormFor($class->mutability()), $target);
         $form = $shape->form();
         $types = new TypeRenderer($class->name()->namespace(), $target);
 
@@ -89,10 +89,9 @@ final class PhpParserEmitter implements CodeEmitter
             $members[] = $this->constructor($shape, $types);
         }
 
-        // A parent has no withers, so its child declares the ones of the inherited properties.
         foreach ($inherited as $property) {
-            if (!$form->withers()->isNone() && !$shape->isBase()) {
-                $members[] = $this->mutator('with' . Identifier::asciiUpperFirst($property->name()), $property, $types, $this->witherBody($shape, $property));
+            if ($shape->declaresInheritedWithers()) {
+                $members[] = $this->mutator($shape, 'with' . Identifier::asciiUpperFirst($property->name()), $property, $types, $this->witherBody($shape, $property));
             }
         }
 
@@ -269,15 +268,14 @@ final class PhpParserEmitter implements CodeEmitter
         }
 
         if ($form->hasSetters()) {
-            $methods[] = $this->mutator('set' . $suffix, $property, $types, [
+            $methods[] = $this->mutator($shape, 'set' . $suffix, $property, $types, [
                 new Expression(new Assign($this->fetch($name), new Variable($name))),
                 new Return_(new Variable('this')),
             ]);
         }
 
-        // A base's wither would return the base, not the subclass it is called on.
-        if (!$form->withers()->isNone() && !$shape->isBase()) {
-            $methods[] = $this->mutator('with' . $suffix, $property, $types, $this->witherBody($shape, $property));
+        if ($shape->hasWithers()) {
+            $methods[] = $this->mutator($shape, 'with' . $suffix, $property, $types, $this->witherBody($shape, $property));
         }
 
         return $methods;
@@ -286,16 +284,17 @@ final class PhpParserEmitter implements CodeEmitter
     /**
      * @param list<Stmt> $body
      */
-    private function mutator(string $method, PropertyModel $property, TypeRenderer $types, array $body): ClassMethod
+    private function mutator(ClassShape $shape, string $method, PropertyModel $property, TypeRenderer $types, array $body): ClassMethod
     {
         $node = $this->factory->method($method)
             ->makePublic()
             ->addParam($this->param($property, $types, null))
-            ->setReturnType('self')
+            ->setReturnType($shape->returnType())
             ->addStmts($body)
             ->getNode()
         ;
-        $this->document($node, DocBlock::render(null, array_merge($this->paramTag($property, $types), $this->deprecation($property->doc()))));
+        $tags = array_merge($this->paramTag($property, $types), $shape->returnTag(), $this->deprecation($property->doc()));
+        $this->document($node, DocBlock::render(null, $tags));
 
         return $node;
     }

@@ -6,10 +6,8 @@ namespace MSSTC4PHP\DtoGenerator\Domain\Builder;
 
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
-use MSSTC4PHP\DtoGenerator\Domain\Schema\ReferenceUse;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\ResolvedSchema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
-use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaGraph;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaType;
 use MSSTC4PHP\DtoGenerator\Domain\Target\AllOfStrategy;
 
@@ -19,16 +17,13 @@ use MSSTC4PHP\DtoGenerator\Domain\Target\AllOfStrategy;
  */
 final class AllOfResolver
 {
-    private SchemaGraph $graph;
-
-    private Declarations $declarations;
+    private ClassLookup $classes;
 
     private AllOfStrategy $strategy;
 
-    public function __construct(SchemaGraph $graph, Declarations $declarations, AllOfStrategy $strategy)
+    public function __construct(ClassLookup $classes, AllOfStrategy $strategy)
     {
-        $this->graph = $graph;
-        $this->declarations = $declarations;
+        $this->classes = $classes;
         $this->strategy = $strategy;
     }
 
@@ -39,62 +34,78 @@ final class AllOfResolver
             return Composition::of($schema);
         }
 
-        $strategy = $this->strategy($schema, $diagnostics);
-        $classes = [];
+        $parents = [];
         foreach ($members as $index => $member) {
-            $class = $this->referencedClass($member);
+            $target = $this->classes->target($member);
+            $class = $target instanceof ResolvedSchema ? $this->classes->classBehind($target) : null;
             if ($class instanceof ClassName) {
-                $classes[$index] = $class;
+                $parents[$index] = $class;
             }
         }
 
-        $parent = count($classes) === 1 && $strategy->value() === AllOfStrategy::EXTENDS ? $classes[array_key_first($classes)] : null;
-        $parts = [];
-        $own = [];
-        $required = [];
+        $parent = $this->parent($schema, $parents, $diagnostics);
         $key = $schema->location()->toString();
+        $parts = new CompositionParts();
         foreach ($members as $index => $member) {
-            if (!$parent instanceof ClassName || !isset($classes[$index])) {
-                $this->flatten($member, true, [$key => $key], $parts, $own, $required, $diagnostics);
+            if (!$parent instanceof ClassName || !isset($parents[$index])) {
+                $this->flatten($member, true, [$key => $key], $parts, $diagnostics);
             }
         }
 
-        $parts[] = $schema;
-        $own[] = $schema;
-        $required += Composition::required($schema);
-
-        return new Composition($parent, $parts, $own, $required);
-    }
-
-    private function strategy(Schema $schema, Diagnostics $diagnostics): AllOfStrategy
-    {
-        if (!$schema->extensions()->has('x-php-all-of')) {
-            return $this->strategy;
+        $composition = $parts->finish($schema, $parent);
+        if ($parent instanceof ClassName) {
+            $this->warnAboutInheritedRequirements($schema, $composition, $parent, $diagnostics);
         }
 
-        $value = $schema->extensions()->get('x-php-all-of');
-        $strategy = is_string($value) ? AllOfStrategy::tryFrom($value) : null;
-        if ($strategy instanceof AllOfStrategy) {
-            return $strategy;
+        return $composition;
+    }
+
+    /**
+     * @param array<int, ClassName> $parents the members that reference a generated class, by index
+     */
+    private function parent(Schema $schema, array $parents, Diagnostics $diagnostics): ?ClassName
+    {
+        $strategy = $this->strategy;
+        if ($schema->extensions()->has('x-php-all-of')) {
+            $at = $schema->location()->child('x-php-all-of');
+            $value = $schema->extensions()->get('x-php-all-of');
+            $explicit = is_string($value) ? AllOfStrategy::tryFrom($value) : null;
+            if (!$explicit instanceof AllOfStrategy) {
+                $diagnostics->error('"x-php-all-of" must be "extends" or "merge".', $at);
+            } elseif ($explicit->value() === AllOfStrategy::EXTENDS && count($parents) !== 1) {
+                $diagnostics->warning('"x-php-all-of: extends" needs exactly one $ref to a generated class, so the members are merged.', $at);
+            } else {
+                $strategy = $explicit;
+            }
         }
 
-        $diagnostics->error('"x-php-all-of" must be "extends" or "merge".', $schema->location()->child('x-php-all-of'));
-
-        return $this->strategy;
+        return count($parents) === 1 && $strategy->value() === AllOfStrategy::EXTENDS ? $parents[array_key_first($parents)] : null;
     }
 
-    private function referencedClass(Schema $member): ?ClassName
+    /**
+     * A subclass cannot make an inherited property required, so a requirement on one is lost under extends.
+     */
+    private function warnAboutInheritedRequirements(Schema $schema, Composition $composition, ClassName $parent, Diagnostics $diagnostics): void
     {
-        $target = $this->target($member);
+        $own = [];
+        foreach ($composition->parts() as $part) {
+            foreach ($part->propertyNames() as $wireName) {
+                $own[$wireName] = $wireName;
+            }
+        }
 
-        return $target instanceof ResolvedSchema ? $this->declarations->classAt($target->location()->toString()) : null;
-    }
-
-    private function target(Schema $member): ?ResolvedSchema
-    {
-        $ref = $member->ref();
-
-        return $ref === null ? null : $this->graph->resolve(new ReferenceUse($ref, $member->location()));
+        foreach ($composition->required() as $wireName) {
+            if (!isset($own[$wireName])) {
+                $diagnostics->warning(
+                    sprintf(
+                        'Required property "%s" belongs to the parent %s, where extending cannot make it required; use "x-php-all-of: merge" to require it.',
+                        $wireName,
+                        $parent->fqcn(),
+                    ),
+                    $schema->location(),
+                );
+            }
+        }
     }
 
     /**
@@ -102,22 +113,19 @@ final class AllOfResolver
      *
      * @param bool $inside whether the member is written inside the class schema, not reached through a $ref
      * @param array<string, string> $merging locations whose members are being merged, to stop loops
-     * @param list<Schema> $parts
-     * @param list<Schema> $own
-     * @param array<string, string> $required
      */
-    private function flatten(Schema $member, bool $inside, array $merging, array &$parts, array &$own, array &$required, Diagnostics $diagnostics): void
+    private function flatten(Schema $member, bool $inside, array $merging, CompositionParts $parts, Diagnostics $diagnostics): void
     {
         $schema = $member;
         if ($member->ref() !== null) {
-            $inside = false;
-            $target = $this->target($member);
+            $target = $this->classes->target($member);
             // An unresolved $ref was already reported while loading.
             if (!$target instanceof ResolvedSchema) {
                 return;
             }
 
             $schema = $target->schema();
+            $inside = false;
         }
 
         if (!$this->isObject($schema)) {
@@ -135,15 +143,10 @@ final class AllOfResolver
 
         $merging[$key] = $key;
         foreach ($schema->allOf() as $nested) {
-            $this->flatten($nested, $inside, $merging, $parts, $own, $required, $diagnostics);
+            $this->flatten($nested, $inside, $merging, $parts, $diagnostics);
         }
 
-        $parts[] = $schema;
-        if ($inside) {
-            $own[] = $schema;
-        }
-
-        $required += Composition::required($schema);
+        $parts->add($schema, $inside);
     }
 
     /**

@@ -15,6 +15,7 @@ final class Owner
          */
         private ?Tag $badge = null,
         private int|string|null $code = null,
+        private Cat|Dog|null $favourite = null,
     ) {
     }
 
@@ -53,6 +54,19 @@ final class Owner
     {
         $clone = clone $this;
         $clone->code = $code;
+
+        return $clone;
+    }
+
+    public function getFavourite(): Cat|Dog|null
+    {
+        return $this->favourite;
+    }
+
+    public function withFavourite(Cat|Dog|null $favourite): self
+    {
+        $clone = clone $this;
+        $clone->favourite = $favourite;
 
         return $clone;
     }

@@ -12,53 +12,87 @@ use MSSTC4PHP\DtoGenerator\Domain\Schema\ReferenceUse;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\ResolvedSchema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaGraph;
+use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
 
 /**
- * The variants of a discriminated `oneOf`/`anyOf` (spec §5.3) and the discriminator value of each: the explicit
- * mapping first, the schema name for every variant it leaves out.
+ * The variants of a discriminated schema (spec §5.3) and the discriminator value of each: the explicit mapping first,
+ * the schema name for every variant it leaves out.
  */
 final class VariantResolver
 {
     private SchemaGraph $graph;
 
-    private Declarations $declarations;
+    private ClassLookup $classes;
 
-    public function __construct(SchemaGraph $graph, Declarations $declarations)
+    public function __construct(SchemaGraph $graph, ClassLookup $classes)
     {
         $this->graph = $graph;
-        $this->declarations = $declarations;
+        $this->classes = $classes;
     }
 
-    public function resolve(Schema $schema, Discriminator $discriminator, Diagnostics $diagnostics): Variants
+    /**
+     * The variants a `oneOf`/`anyOf` lists.
+     */
+    public function listed(Schema $schema, Discriminator $discriminator, Diagnostics $diagnostics): Variants
     {
-        $classes = [];
-        $byLocation = [];
-        $names = [];
+        $candidates = [];
         foreach (array_merge($schema->oneOf(), $schema->anyOf()) as $member) {
-            $ref = $member->ref();
-            if ($ref === null) {
+            if ($member->ref() === null) {
                 $diagnostics->error('A variant of a discriminated union must be a $ref to an object schema.', $member->location());
 
                 continue;
             }
 
             // An unresolved $ref was already reported while loading.
-            $target = $this->graph->resolve(new ReferenceUse($ref, $member->location()));
+            $target = $this->classes->target($member);
             if (!$target instanceof ResolvedSchema) {
                 continue;
             }
 
-            $key = $target->location()->toString();
-            $class = $this->declarations->classAt($key);
+            $class = $this->classes->classBehind($target);
             if (!$class instanceof ClassName) {
                 $diagnostics->error('A variant of a discriminated union must be a $ref to an object schema.', $member->location());
 
                 continue;
             }
 
+            $candidates[] = [$target, $class, $member->location()];
+        }
+
+        return $this->variants($schema, $discriminator, $candidates, true, $diagnostics);
+    }
+
+    /**
+     * The classes that extend a discriminated schema through `allOf`, the way OpenAPI shows polymorphism.
+     *
+     * @param list<array{ResolvedSchema, ClassName}> $subclasses
+     */
+    public function subclasses(Schema $schema, Discriminator $discriminator, array $subclasses, Diagnostics $diagnostics): Variants
+    {
+        $candidates = [];
+        foreach ($subclasses as [$target, $class]) {
+            $candidates[] = [$target, $class, $target->location()];
+        }
+
+        return $this->variants($schema, $discriminator, $candidates, false, $diagnostics);
+    }
+
+    /**
+     * @param list<array{ResolvedSchema, ClassName, SchemaLocation}> $candidates
+     */
+    private function variants(Schema $schema, Discriminator $discriminator, array $candidates, bool $sharesProperties, Diagnostics $diagnostics): Variants
+    {
+        $classes = [];
+        $names = [];
+        foreach ($candidates as [$target, $class, $at]) {
+            if (isset($names[$class->fqcn()])) {
+                $diagnostics->warning(sprintf('Variant %s is listed twice.', $class->fqcn()), $at);
+
+                continue;
+            }
+
             $classes[] = $class;
-            $byLocation[$key] = $class;
-            $names[$key] = $target->name();
+            $names[$class->fqcn()] = $target->name();
         }
 
         $mapping = [];
@@ -72,23 +106,35 @@ final class VariantResolver
                 continue;
             }
 
-            $key = $target->location()->toString();
-            if (!isset($byLocation[$key])) {
+            $class = $this->classes->classBehind($target);
+            if (!$class instanceof ClassName || !isset($names[$class->fqcn()])) {
                 $diagnostics->error(sprintf('Discriminator value "%s" maps to a schema that is not one of the variants.', $value), $at);
 
                 continue;
             }
 
-            $mapping[$value] = $byLocation[$key];
-            $mapped[$key] = $value;
+            $mapping[$value] = $class;
+            $mapped[$class->fqcn()] = $value;
         }
 
-        foreach ($byLocation as $key => $class) {
-            if (!isset($mapped[$key]) && !isset($mapping[$names[$key]])) {
-                $mapping[$names[$key]] = $class;
+        foreach ($classes as $class) {
+            $name = $names[$class->fqcn()];
+            if (isset($mapped[$class->fqcn()])) {
+                continue;
             }
+
+            if (isset($mapping[$name])) {
+                $diagnostics->warning(
+                    sprintf('Variant %s gets no discriminator value: the mapping gives "%s" to another schema.', $class->fqcn(), $name),
+                    $schema->location()->child('discriminator'),
+                );
+
+                continue;
+            }
+
+            $mapping[$name] = $class;
         }
 
-        return new Variants($classes, $mapping === [] ? null : new DiscriminatorModel($discriminator->propertyName(), $mapping));
+        return new Variants($classes, $mapping === [] ? null : new DiscriminatorModel($discriminator->propertyName(), $mapping), $sharesProperties);
     }
 }

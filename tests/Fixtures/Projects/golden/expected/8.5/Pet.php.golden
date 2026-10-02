@@ -14,4 +14,14 @@ abstract readonly class Pet
     protected function __construct(public string $petType, public string $name)
     {
     }
+
+    public function withPetType(string $petType): static
+    {
+        return clone($this, ['petType' => $petType]);
+    }
+
+    public function withName(string $name): static
+    {
+        return clone($this, ['name' => $name]);
+    }
 }

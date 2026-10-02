@@ -6,19 +6,23 @@ namespace MSSTC4PHP\DtoGenerator\Application\Service\Model\Build;
 
 use MSSTC4PHP\DtoGenerator\Domain\Builder\AllOfResolver;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\ClassBuilder;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\ClassLookup;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\Composition;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\EnumBuilder;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\ExtensionVocabulary;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\Hierarchy;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\NameResolver;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\RequiredCycles;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\SchemaShape;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\TypeMapper;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\VariantResolver;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\Variants;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\Identifier;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Discriminator;
+use MSSTC4PHP\DtoGenerator\Domain\Schema\ResolvedSchema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
 
 /**
@@ -63,12 +67,18 @@ final class Action
                 continue;
             }
 
+            if ($schema->allOf() !== [] && SchemaShape::hasUnion($schema)) {
+                $diagnostics->error('"allOf" together with "oneOf" or "anyOf" is not supported.', $schema->location());
+
+                continue;
+            }
+
             if (!$isClass && !$isEnum) {
                 continue;
             }
 
-            if ($isClass) {
-                $this->warnAboutIgnoredComposition($schema, $diagnostics);
+            if ($schema->allOf() === [] && SchemaShape::hasUnion($schema) && !SchemaShape::isDiscriminated($schema)) {
+                $diagnostics->warning('"oneOf" and "anyOf" beside "properties" are not represented; the class keeps only its properties.', $schema->location());
             }
 
             $short = $this->shortName($schema, $resolved->name(), $diagnostics);
@@ -79,7 +89,7 @@ final class Action
         }
 
         // Every named class is declared by now, so `allOf` can tell which members it may extend.
-        $allOf = new AllOfResolver($input->graph(), $registry->declarations(), $config->dto()->allOfStrategy());
+        $allOf = new AllOfResolver(new ClassLookup($input->graph(), $registry->declarations()), $config->dto()->allOfStrategy());
         $compositions = [];
         // Inline classes are planned while walking, so the walk reaches inline objects nested in inline objects.
         for ($index = 0; ($planned = $registry->plannedAt($index)) !== null; $index++) {
@@ -93,18 +103,24 @@ final class Action
             new TypeMapper($input->graph(), $declarations, $input->target(), $config->formats()),
             $input->target(),
         );
-        $variants = new VariantResolver($input->graph(), $declarations);
-        $built = [];
-        $unions = [];
-        foreach ($registry->planned() as $index => [$schema, $name, $source]) {
-            $built[] = new BuiltClass($builder->build($name, $schema, $diagnostics, $compositions[$index]), $source);
-            $discriminator = SchemaShape::discriminatorOf($schema);
-            if ($discriminator instanceof Discriminator) {
-                $unions[$name->fqcn()] = $variants->resolve($schema, $discriminator, $diagnostics);
+        $models = [];
+        $subclasses = [];
+        foreach ($registry->planned() as $index => [$schema, $name]) {
+            $models[] = $builder->build($name, $schema, $diagnostics, $compositions[$index]);
+            $parent = $compositions[$index]->parent();
+            $resolved = $input->graph()->get($schema->location());
+            if ($parent instanceof ClassName && $resolved instanceof ResolvedSchema) {
+                $subclasses[$parent->fqcn()][] = [$resolved, $name];
             }
         }
 
-        $output = new Output(Hierarchy::link($built, $unions, $diagnostics), $diagnostics, $registry->enums());
+        $unions = $this->unions($input, $registry, $subclasses, $diagnostics);
+        $built = [];
+        foreach (Hierarchy::link($models, $unions, $diagnostics) as $index => $model) {
+            $built[] = new BuiltClass($model, $registry->planned()[$index][2]);
+        }
+
+        $output = new Output($built, $diagnostics, $registry->enums());
         $models = [];
         $inherited = [];
         foreach ($output->classes() as $class) {
@@ -118,24 +134,32 @@ final class Action
     }
 
     /**
-     * A discriminator without `oneOf`/`anyOf`, or a union beside properties, has no place in a class (spec §5.3).
+     * The discriminated bases: a `oneOf`/`anyOf` lists its variants, a plain class is extended by them through `allOf`.
+     *
+     * @param array<string, list<array{ResolvedSchema, ClassName}>> $subclasses parent FQCN → named classes extending it
+     *
+     * @return array<string, Variants>
      */
-    private function warnAboutIgnoredComposition(Schema $schema, Diagnostics $diagnostics): void
+    private function unions(Input $input, Registry $registry, array $subclasses, Diagnostics $diagnostics): array
     {
-        if (SchemaShape::isDiscriminated($schema) || $schema->allOf() !== []) {
-            return;
+        $variants = new VariantResolver($input->graph(), new ClassLookup($input->graph(), $registry->declarations()));
+        $unions = [];
+        foreach ($registry->planned() as [$schema, $name]) {
+            $listed = SchemaShape::discriminatorOf($schema);
+            $discriminator = $schema->discriminator();
+            if ($listed instanceof Discriminator) {
+                $unions[$name->fqcn()] = $variants->listed($schema, $listed, $diagnostics);
+            } elseif ($discriminator instanceof Discriminator && isset($subclasses[$name->fqcn()])) {
+                $unions[$name->fqcn()] = $variants->subclasses($schema, $discriminator, $subclasses[$name->fqcn()], $diagnostics);
+            } elseif ($discriminator instanceof Discriminator) {
+                $diagnostics->warning(
+                    'The discriminator is ignored: no oneOf or anyOf lists variants and no schema extends this one through allOf.',
+                    $schema->location()->child('discriminator'),
+                );
+            }
         }
 
-        if ($schema->discriminator() instanceof Discriminator) {
-            $diagnostics->warning(
-                'The discriminator is ignored: only oneOf or anyOf with a discriminator becomes a base class.',
-                $schema->location()->child('discriminator'),
-            );
-        }
-
-        if (SchemaShape::hasUnion($schema)) {
-            $diagnostics->warning('"oneOf" and "anyOf" beside "properties" are not represented; the class keeps only its properties.', $schema->location());
-        }
+        return $unions;
     }
 
     /**

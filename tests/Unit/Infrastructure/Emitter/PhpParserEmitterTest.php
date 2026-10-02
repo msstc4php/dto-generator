@@ -344,14 +344,35 @@ final class PhpParserEmitterTest extends TestCase
         return (new PhpParserEmitter())->emit($class, EmitterFixture::target($php, $mutability, $accessors));
     }
 
-    public function testGivesABaseProtectedPropertiesAndNoWithers(): void
+    public function testGivesABaseProtectedPropertiesAndCloningWithersReturningStatic(): void
     {
         $code = (new PhpParserEmitter())->emit(EmitterFixture::animal(Mutability::IMMUTABLE), EmitterFixture::target('8.0', Mutability::IMMUTABLE));
 
         self::assertStringContainsString("\nclass Animal\n", $code);
         self::assertStringContainsString('public function __construct(protected string $id, protected ?string $nickname = null)', $code);
         self::assertStringContainsString('public function getId(): string', $code);
+        self::assertStringContainsString("    public function withId(string \$id): static\n    {\n        \$clone = clone \$this;\n", $code);
+    }
+
+    public function testDocumentsTheStaticReturnOfABaseOnPhp74(): void
+    {
+        $code = (new PhpParserEmitter())->emit(EmitterFixture::animal(Mutability::IMMUTABLE), EmitterFixture::target('7.4', Mutability::IMMUTABLE));
+
+        self::assertStringContainsString("    /**\n     * @return static\n     */\n    public function withId(string \$id): self\n", $code);
+    }
+
+    public function testGivesABaseNoWithersWhereOnlyNewSelfCouldCopyIt(): void
+    {
+        $code = (new PhpParserEmitter())->emit(EmitterFixture::animal(Mutability::IMMUTABLE), EmitterFixture::target('8.1', Mutability::IMMUTABLE));
+
         self::assertStringNotContainsString('function with', $code);
+    }
+
+    public function testClonesWithPropertiesInABaseOnPhp85(): void
+    {
+        $code = (new PhpParserEmitter())->emit(EmitterFixture::animal(Mutability::IMMUTABLE), EmitterFixture::target('8.5', Mutability::IMMUTABLE));
+
+        self::assertStringContainsString("    public function withId(string \$id): static\n    {\n        return clone(\$this, ['id' => \$id]);\n    }", $code);
     }
 
     public function testPassesInheritedParametersToTheParentConstructor(): void
@@ -375,8 +396,9 @@ final class PhpParserEmitterTest extends TestCase
         self::assertStringContainsString("    private string \$breed;\n", $code);
         self::assertStringNotContainsString('$id;', $code);
         self::assertStringContainsString("        parent::__construct(\$id, \$nickname);\n        \$this->breed = \$breed;\n        \$this->goodBoy = \$goodBoy;\n", $code);
-        self::assertStringContainsString('return new self($id, $this->breed, $this->nickname, $this->goodBoy);', $code);
-        self::assertStringNotContainsString('clone', $code);
+        // The base clones itself for its own withers, so the subclass only adds those of its own properties.
+        self::assertStringNotContainsString('withId', $code);
+        self::assertStringContainsString("        \$clone = clone \$this;\n        \$clone->breed = \$breed;\n", $code);
     }
 
     public function testDocumentsInheritedParametersThePromotedSignatureCannotDeclare(): void
@@ -410,7 +432,7 @@ final class PhpParserEmitterTest extends TestCase
         $base = $emitter->emit(EmitterFixture::animal(Mutability::MUTABLE), $target);
         $child = $emitter->emit(EmitterFixture::dog(Mutability::MUTABLE), $target, EmitterFixture::animal(Mutability::MUTABLE)->properties());
 
-        self::assertStringContainsString('public function setId(string $id): self', $base);
+        self::assertStringContainsString('public function setId(string $id): static', $base);
         self::assertStringContainsString('protected string $id', $base);
         self::assertStringContainsString('public function setBreed(string $breed): self', $child);
         self::assertStringNotContainsString('setId', $child);

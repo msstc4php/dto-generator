@@ -21,13 +21,20 @@ final class Owner
     private $code;
 
     /**
-     * @param int|string|null $code
+     * @var Cat|Dog|null
      */
-    public function __construct(?Pet $pet = null, ?Tag $badge = null, $code = null)
+    private $favourite;
+
+    /**
+     * @param int|string|null $code
+     * @param Cat|Dog|null $favourite
+     */
+    public function __construct(?Pet $pet = null, ?Tag $badge = null, $code = null, $favourite = null)
     {
         $this->pet = $pet;
         $this->badge = $badge;
         $this->code = $code;
+        $this->favourite = $favourite;
     }
 
     public function getPet(): ?Pet
@@ -71,6 +78,25 @@ final class Owner
     {
         $clone = clone $this;
         $clone->code = $code;
+
+        return $clone;
+    }
+
+    /**
+     * @return Cat|Dog|null
+     */
+    public function getFavourite()
+    {
+        return $this->favourite;
+    }
+
+    /**
+     * @param Cat|Dog|null $favourite
+     */
+    public function withFavourite($favourite): self
+    {
+        $clone = clone $this;
+        $clone->favourite = $favourite;
 
         return $clone;
     }

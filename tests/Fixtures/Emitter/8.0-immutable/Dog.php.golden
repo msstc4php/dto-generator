@@ -17,16 +17,6 @@ final class Dog extends Animal
         parent::__construct($id, $nickname);
     }
 
-    public function withId(string $id): self
-    {
-        return new self($id, $this->breed, $this->nickname, $this->goodBoy);
-    }
-
-    public function withNickname(?string $nickname): self
-    {
-        return new self($this->id, $this->breed, $nickname, $this->goodBoy);
-    }
-
     public function getBreed(): string
     {
         return $this->breed;
@@ -34,7 +24,10 @@ final class Dog extends Animal
 
     public function withBreed(string $breed): self
     {
-        return new self($this->id, $breed, $this->nickname, $this->goodBoy);
+        $clone = clone $this;
+        $clone->breed = $breed;
+
+        return $clone;
     }
 
     public function getGoodBoy(): ?bool
@@ -44,6 +37,9 @@ final class Dog extends Animal
 
     public function withGoodBoy(?bool $goodBoy): self
     {
-        return new self($this->id, $this->breed, $this->nickname, $goodBoy);
+        $clone = clone $this;
+        $clone->goodBoy = $goodBoy;
+
+        return $clone;
     }
 }
