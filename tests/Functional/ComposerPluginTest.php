@@ -13,6 +13,7 @@ use Composer\IO\IOInterface;
 use Composer\Package\RootPackage;
 use Composer\Script\Event;
 use Composer\Script\ScriptEvents;
+use Composer\Util\ProcessExecutor;
 use FilesystemIterator;
 use LogicException;
 use MSSTC4PHP\DtoGenerator\ComposerPlugin;
@@ -121,6 +122,26 @@ final class ComposerPluginTest extends TestCase
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('dto-generator: the generator exited with code 2.');
         $this->dump(['dto-generator' => ['config' => 'gen/dto-generator.yaml', 'failOnError' => true]]);
+    }
+
+    public function testWarnsAboutAGeneratorThatCannotFinishUnlessToldToFail(): void
+    {
+        mkdir($this->root . '/slow-bin');
+        file_put_contents($this->root . '/slow-bin/dto-generator', "<?php\nsleep(5);\n");
+        $timeout = ProcessExecutor::getTimeout();
+        ProcessExecutor::setTimeout(1);
+
+        try {
+            $output = $this->dump(['dto-generator' => ['config' => 'gen/dto-generator.yaml']], $this->root . '/slow-bin');
+            self::assertStringStartsWith('dto-generator: the generator could not run: ', $output);
+            self::assertStringContainsString('exceeded the timeout of 1 seconds', $output);
+
+            $this->expectException(RuntimeException::class);
+            $this->expectExceptionMessage('dto-generator: the generator could not run: ');
+            $this->dump(['dto-generator' => ['config' => 'gen/dto-generator.yaml', 'failOnError' => true]], $this->root . '/slow-bin');
+        } finally {
+            ProcessExecutor::setTimeout($timeout);
+        }
     }
 
     public function testShowsTheOutputOfAFailureAsErrorsWhenItFailsTheCommand(): void
@@ -232,10 +253,10 @@ final class ComposerPluginTest extends TestCase
     /**
      * @param array<string, array<array-key, bool|int|string>|string> $extra
      */
-    private function dump(array $extra): string
+    private function dump(array $extra, ?string $binDir = null): string
     {
         $io = $this->io(false);
-        $this->runPlugin($extra, $io);
+        $this->runPlugin($extra, $io, $binDir);
 
         return $io->getOutput();
     }
@@ -249,7 +270,7 @@ final class ComposerPluginTest extends TestCase
     /**
      * @param array<string, array<array-key, bool|int|string>|string> $extra
      */
-    private function composer(array $extra): Composer
+    private function composer(array $extra, ?string $binDir = null): Composer
     {
         $composer = new Composer();
         $package = new RootPackage('acme/app', '1.0.0.0', '1.0.0');
@@ -257,7 +278,7 @@ final class ComposerPluginTest extends TestCase
 
         $composer->setPackage($package);
         $config = new Config(false, $this->root);
-        $config->merge(['config' => ['bin-dir' => dirname(__DIR__, 2) . '/bin']]);
+        $config->merge(['config' => ['bin-dir' => $binDir ?? dirname(__DIR__, 2) . '/bin']]);
 
         $composer->setConfig($config);
 
@@ -267,9 +288,9 @@ final class ComposerPluginTest extends TestCase
     /**
      * @param array<string, array<array-key, bool|int|string>|string> $extra
      */
-    private function runPlugin(array $extra, BufferIO $io): void
+    private function runPlugin(array $extra, BufferIO $io, ?string $binDir = null): void
     {
-        $composer = $this->composer($extra);
+        $composer = $this->composer($extra, $binDir);
         $composer->setEventDispatcher(new EventDispatcher($composer, $io));
 
         $plugin = new ComposerPlugin();

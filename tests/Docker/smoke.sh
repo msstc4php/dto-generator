@@ -26,7 +26,7 @@ generated_files=$(cd "$work/golden/generated/8.2" && ls | sort)
 run golden php8.2.yaml --check
 # The JSON report must be the only thing on stdout: no deprecation notice of a dependency on PHP 8.4.
 run golden php8.2.yaml --check --format=json \
-    | docker run --rm -i --entrypoint php "$image" -r 'json_decode(stream_get_contents(STDIN), true, 512, JSON_THROW_ON_ERROR);'
+    | docker run --rm -i --entrypoint php "$image" -r 'exit(json_decode(stream_get_contents(STDIN), true, 512, JSON_THROW_ON_ERROR)["status"] === "ok" ? 0 : 1);'
 [ "$(docker run --rm --entrypoint id "$image" -u)" = 1000 ]
 docker run --rm --entrypoint test "$image" -f /opt/dto-generator/LICENSE
 

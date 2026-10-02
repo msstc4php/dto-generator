@@ -94,7 +94,14 @@ final class ComposerPlugin implements PluginInterface, EventSubscriberInterface
         $command = implode(' ', array_map([ProcessExecutor::class, 'escape'], [PHP_BINARY, $bin, 'generate', '--config=' . $config, '--no-ansi']));
         $process = new ProcessExecutor($io);
         $output = null;
-        $exitCode = $process->execute($command, $output, dirname(Factory::getComposerFile()));
+        // A process that cannot start or outlives Composer's process-timeout throws; that must not break an install either.
+        try {
+            $exitCode = $process->execute($command, $output, dirname(Factory::getComposerFile()));
+        } catch (Throwable $exception) {
+            $this->fail($io, $failOnError, 'the generator could not run: ' . $exception->getMessage());
+
+            return;
+        }
 
         $style = $exitCode !== 0 && $failOnError ? 'error' : 'warning';
         foreach ($this->lines($process->getErrorOutput()) as $line) {
