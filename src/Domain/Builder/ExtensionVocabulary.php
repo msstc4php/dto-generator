@@ -13,8 +13,8 @@ use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
  */
 final class ExtensionVocabulary
 {
-    /** x-php-attributes and x-php-all-of take effect in later stages. */
-    private const KNOWN = [
+    /** The core keys; any other key starting with x-php- or x-dto- is a typo. */
+    public const KNOWN = [
         'x-php-class-name', 'x-php-name', 'x-php-type', 'x-dto-mutable', 'x-php-all-of', 'x-php-skip', 'x-php-attributes',
         'x-enum-descriptions',
     ];
