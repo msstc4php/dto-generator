@@ -51,15 +51,52 @@ final class SchemaReferencesTest extends TestCase
             'Pet' => ['type' => 'object', 'properties' => ['code' => ['$ref' => '#/components/schemas/Short', 'maxLength' => 5]]],
             'Short' => ['$ref' => '#/components/schemas/Code', 'minLength' => 2],
             'Code' => ['type' => 'string', 'maxLength' => 8],
-            'Loop' => ['$ref' => '#/components/schemas/Back'],
-            'Back' => ['$ref' => '#/components/schemas/Loop'],
-        ], [], null, false);
-        $references = new SchemaReferences($graph);
+        ]);
         $code = $this->schema($graph, 'Pet')->requireProperty('code');
 
-        self::assertSame([$code, $this->schema($graph, 'Short'), $this->schema($graph, 'Code')], $references->chain($code));
-        self::assertSame([$this->schema($graph, 'Loop'), $this->schema($graph, 'Back')], $references->chain($this->schema($graph, 'Loop')));
-        self::assertSame([$code], SchemaReferences::none()->chain($code));
+        self::assertSame([$code, $this->schema($graph, 'Short'), $this->schema($graph, 'Code')], (new SchemaReferences($graph))->chain($code));
+    }
+
+    public function testStopsTheChainWhereACycleCloses(): void
+    {
+        $graph = GraphFixture::load([
+            'Loop' => ['$ref' => '#/components/schemas/Back'],
+            'Back' => ['$ref' => '#/components/schemas/Loop'],
+            'Entry' => ['$ref' => '#/components/schemas/A'],
+            'A' => ['$ref' => '#/components/schemas/B'],
+            'B' => ['$ref' => '#/components/schemas/A'],
+            'Self' => ['$ref' => '#/components/schemas/Self'],
+        ], [], null, false);
+        $references = new SchemaReferences($graph);
+        [$loop, $back, $entry, $a, $b, $self] = array_map(fn (string $name): Schema => $this->schema($graph, $name), ['Loop', 'Back', 'Entry', 'A', 'B', 'Self']);
+
+        self::assertSame([$loop, $back], $references->chain($loop));
+        self::assertSame($loop, $references->resolve($loop));
+        self::assertSame([$entry, $a, $b], $references->chain($entry));
+        self::assertSame($a, $references->resolve($entry));
+        self::assertSame([$self], $references->chain($self));
+        self::assertSame($self, $references->resolve($self));
+    }
+
+    public function testEndsTheChainAtAReferenceItCannotFollow(): void
+    {
+        $graph = GraphFixture::load([
+            'Pet' => ['type' => 'object', 'properties' => ['owner' => ['$ref' => '#/components/schemas/Gone']]],
+        ], [], null, false);
+        $owner = $this->schema($graph, 'Pet')->requireProperty('owner');
+
+        self::assertSame([$owner], (new SchemaReferences($graph))->chain($owner));
+    }
+
+    public function testChainWithoutAGraphIsTheSchemaItself(): void
+    {
+        $graph = GraphFixture::load([
+            'Pet' => ['type' => 'object', 'properties' => ['email' => ['$ref' => '#/components/schemas/Email']]],
+            'Email' => ['type' => 'string'],
+        ]);
+        $email = $this->schema($graph, 'Pet')->requireProperty('email');
+
+        self::assertSame([$email], SchemaReferences::none()->chain($email));
     }
 
     public function testKeepsAReferenceItCannotFollow(): void

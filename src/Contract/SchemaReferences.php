@@ -41,8 +41,9 @@ final class SchemaReferences
     }
 
     /**
-     * The schema and every schema its `$ref` chain passes through, up to the one resolve() returns. Each may carry
-     * keywords beside its `$ref`, and a value must satisfy all of them.
+     * The schema and every schema its `$ref` chain passes through, until a reference does not resolve or leads back to
+     * a schema already listed (no schema repeats). Each may carry keywords beside its `$ref`, and a value must satisfy
+     * all of them.
      *
      * @return non-empty-list<Schema>
      */

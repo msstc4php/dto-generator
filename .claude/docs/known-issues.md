@@ -90,3 +90,5 @@
 - **`ProjectPackagesUnusable::$file` нельзя назвать `$file`**: у `Exception` есть protected `$file`, private-свойство с тем же именем — fatal error.
 - **Коды чужих исключений** не переносятся в `ExtensionFailed` (код `0`, исходное исключение — `previous`): у `PDOException` код строковый, а `RuntimeException` в strict_types принимает только int.
 - **`name()` расширения** вызывается под защитой и в `Load`, и в `Registry::register`; сбой → ошибка с FQCN класса.
+
+- `SchemaReferences::walk()` keeps `$seen` as a list with `in_array`, not a `[$key => true]` map: with the map, the mutant `= false` survives (`isset` is still true), so infection reports it as escaped. Chains are short, so the O(n) lookup does not matter.
