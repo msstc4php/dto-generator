@@ -370,8 +370,10 @@ interface ClassEnricher
 
 1. Явно — список FQCN в `extensions` конфига.
 2. Автообнаружение — `extra.dto-generator.extensions` в `composer.json`
-   установленных пакетов (читается из `vendor/composer/installed.json`).
-   Отключается через `discoverExtensions: false`.
+   установленных пакетов (читается из `vendor/composer/installed.json` той
+   установки, из которой запущен генератор: vendor проекта при обычной
+   установке, vendor образа в Docker; глобально установленный генератор
+   расширений проекта не видит). Отключается через `discoverExtensions: false`.
 
 Порядок применения: сначала встроенное `CustomAttributes`, затем явные
 расширения в порядке конфига, затем обнаруженные — по имени пакета.

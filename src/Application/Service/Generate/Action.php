@@ -10,6 +10,8 @@ use MSSTC4PHP\DtoGenerator\Application\Port\ClassVerifier;
 use MSSTC4PHP\DtoGenerator\Application\Port\ClassVerifierLocator;
 use MSSTC4PHP\DtoGenerator\Application\Port\CodeEmitter;
 use MSSTC4PHP\DtoGenerator\Application\Port\FileWriter;
+use MSSTC4PHP\DtoGenerator\Application\Port\ProjectPackages;
+use MSSTC4PHP\DtoGenerator\Application\Port\ProjectPackagesUnusable;
 use MSSTC4PHP\DtoGenerator\Application\Port\WriteFailed;
 use MSSTC4PHP\DtoGenerator\Application\Service\Config\Load\Action as LoadConfig;
 use MSSTC4PHP\DtoGenerator\Application\Service\Config\Load\Input as ConfigInput;
@@ -38,6 +40,8 @@ final class Action
 
     private ClassVerifierLocator $verifiers;
 
+    private ProjectPackages $packages;
+
     private LoadExtensions $loadExtensions;
 
     private LoadSchemas $loadSchemas;
@@ -53,6 +57,7 @@ final class Action
     public function __construct(
         LoadConfig $loadConfig,
         ClassVerifierLocator $verifiers,
+        ProjectPackages $packages,
         LoadExtensions $loadExtensions,
         LoadSchemas $loadSchemas,
         BuildModel $buildModel,
@@ -62,6 +67,7 @@ final class Action
     ) {
         $this->loadConfig = $loadConfig;
         $this->verifiers = $verifiers;
+        $this->packages = $packages;
         $this->loadExtensions = $loadExtensions;
         $this->loadSchemas = $loadSchemas;
         $this->buildModel = $buildModel;
@@ -127,6 +133,23 @@ final class Action
     }
 
     /**
+     * Versions are a courtesy to extensions (spec §8), so a lock that cannot be used only warns.
+     */
+    private function packages(GeneratorConfig $config, Diagnostics $diagnostics): InstalledPackages
+    {
+        try {
+            return $this->packages->read($config->baseDir());
+        } catch (ProjectPackagesUnusable $exception) {
+            $diagnostics->warning(
+                sprintf('The installed package versions are unknown: the file %s.', $exception->reason()),
+                new SchemaLocation($exception->file()),
+            );
+
+            return new InstalledPackages();
+        }
+    }
+
+    /**
      * verifyClasses (spec §4): "auto" verifies when the consumer's Composer autoloader is found and the environment does
      * not forbid it; true insists on the autoloader.
      */
@@ -164,8 +187,7 @@ final class Action
         $aliases = array_keys($config->extensions()->aliases());
         $model = ($this->buildModel)(new BuildInput($config, $target, $schemas->graph(), $formats, $aliases));
         $diagnostics->merge($model->diagnostics());
-        // Installed versions are detected in stage 6; until then extensions see none.
-        $enriched = ($this->enrichModel)(new EnrichInput($model->classes(), $model->enums(), $schemas->graph(), $target, $registry, new InstalledPackages(), $verifier));
+        $enriched = ($this->enrichModel)(new EnrichInput($model->classes(), $model->enums(), $schemas->graph(), $target, $registry, $this->packages($config, $diagnostics), $verifier));
         $diagnostics->merge($enriched->diagnostics());
         if ($diagnostics->hasErrors()) {
             return null;

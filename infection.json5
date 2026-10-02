@@ -36,7 +36,9 @@
                 "MSSTC4PHP\\DtoGenerator\\Domain\\Builder\\TypeMapper::reference",
                 "MSSTC4PHP\\DtoGenerator\\Application\\Service\\Schemas\\Load\\GraphBuilder::propagateOwners",
                 "MSSTC4PHP\\DtoGenerator\\Application\\Service\\Model\\Enrich\\AttributeVerification::__construct",
-                "MSSTC4PHP\\DtoGenerator\\Application\\Service\\Model\\Enrich\\AttributeVerification::report"
+                "MSSTC4PHP\\DtoGenerator\\Application\\Service\\Model\\Enrich\\AttributeVerification::report",
+                "MSSTC4PHP\\DtoGenerator\\Application\\Service\\Extension\\Load\\Action::load",
+                "MSSTC4PHP\\DtoGenerator\\Application\\Service\\Extension\\Load\\Action::discovered"
             ]
         },
         // Equivalent: the substr() offsets stay within the string, so it never returns false on 7.4, and
