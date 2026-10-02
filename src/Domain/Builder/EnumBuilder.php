@@ -171,11 +171,11 @@ final class EnumBuilder
             return [];
         }
 
-        // JSON decodes a map keyed 0..n-1 as a list, and openapi-generator lists descriptions by position: accept a list
-        // only where both readings agree.
-        $positions = array_values($values);
-        if (Json::isList($raw) && array_filter(array_keys($raw), static fn (int $key): bool => ($positions[$key] ?? null) !== $key) !== []) {
-            $diagnostics->error('A list of descriptions is ambiguous unless each position holds that same enum value; map enum values to descriptions.', $at);
+        if ($this->isAmbiguousList($raw, $schema)) {
+            $diagnostics->error(
+                '"x-enum-descriptions" reads as a list (as does a map keyed "0", "1", … in order), which is ambiguous unless each position N holds enum value N; map each enum value to its description.',
+                $at,
+            );
 
             return [];
         }
@@ -194,6 +194,28 @@ final class EnumBuilder
         }
 
         return $descriptions;
+    }
+
+    /**
+     * JSON decodes a map keyed 0..n-1 as a list, and openapi-generator lists descriptions by position, so a list is read
+     * only where both readings agree. Positions count every non-null value, duplicates included, as openapi-generator does.
+     *
+     * @param array<array-key, mixed> $raw
+     */
+    private function isAmbiguousList(array $raw, Schema $schema): bool
+    {
+        if (!Json::isList($raw)) {
+            return false;
+        }
+
+        $positions = array_values(array_filter($schema->enum() ?? [], static fn ($value): bool => $value !== null));
+        foreach (array_keys($raw) as $position) {
+            if (($positions[$position] ?? null) !== $position) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

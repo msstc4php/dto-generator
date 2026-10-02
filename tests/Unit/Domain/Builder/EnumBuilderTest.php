@@ -80,10 +80,14 @@ final class EnumBuilderTest extends TestCase
             'whole float' => [['enum' => [2.0]], false, ["error {$at}/enum/0: Enum value 2.0 cannot back a PHP enum; use strings or integers."]],
             'integers declared as strings' => [['type' => 'string', 'enum' => [1]], false, ["error {$at}/type: \"type\" does not match the enum values, which are integers."]],
             'empty descriptions' => [['enum' => ['a'], 'x-enum-descriptions' => []], true, []],
-            'descriptions as a list' => [['enum' => ['a'], 'x-enum-descriptions' => ['A']], true, ["error {$at}/x-enum-descriptions: A list of descriptions is ambiguous unless each position holds that same enum value; map enum values to descriptions."]],
-            'descriptions listed out of order' => [['enum' => [2, 1, 0], 'x-enum-descriptions' => ['Two.', 'One.', 'Zero.']], true, ["error {$at}/x-enum-descriptions: A list of descriptions is ambiguous unless each position holds that same enum value; map enum values to descriptions."]],
+            'descriptions as a list' => [['enum' => ['a'], 'x-enum-descriptions' => ['A']], true, ["error {$at}/x-enum-descriptions: \"x-enum-descriptions\" reads as a list (as does a map keyed \"0\", \"1\", … in order), which is ambiguous unless each position N holds enum value N; map each enum value to its description."]],
+            'descriptions listed out of order' => [['enum' => [2, 1, 0], 'x-enum-descriptions' => ['Two.', 'One.', 'Zero.']], true, ["error {$at}/x-enum-descriptions: \"x-enum-descriptions\" reads as a list (as does a map keyed \"0\", \"1\", … in order), which is ambiguous unless each position N holds enum value N; map each enum value to its description."]],
             'descriptions listed for part of the values' => [['enum' => [0, 1], 'x-enum-descriptions' => ['Zero.']], true, []],
             'descriptions listed past a null' => [['enum' => [null, 0, 1], 'x-enum-descriptions' => ['Zero.', 'One.']], true, []],
+            'descriptions listed with a duplicate' => [['enum' => [0, 0, 1], 'x-enum-descriptions' => ['Zero.', 'One.']], true, [
+                "warning {$at}/enum/1: Enum value 0 is listed twice.",
+                "error {$at}/x-enum-descriptions: \"x-enum-descriptions\" reads as a list (as does a map keyed \"0\", \"1\", … in order), which is ambiguous unless each position N holds enum value N; map each enum value to its description.",
+            ]],
             'number type for integers' => [['type' => 'number', 'enum' => [1, 2]], true, []],
             'every problem at once' => [['enum' => ['a', 1.5, true, 'A']], false, [
                 "error {$at}/enum/1: Enum value 1.5 cannot back a PHP enum; use strings or integers.",
@@ -160,5 +164,30 @@ final class EnumBuilderTest extends TestCase
         self::assertInstanceOf(EnumModel::class, $enum);
         self::assertSame('Zero.', $enum->cases()[0]->doc()->description());
         self::assertSame(['VALUE_0' => 0, 'VALUE_1' => 1], self::cases($enum));
+    }
+
+    /**
+     * @dataProvider listedDescriptions
+     *
+     * @param array<array-key, mixed> $schema
+     * @param list<string|null> $expected
+     */
+    public function testDescribesListedCases(array $schema, array $expected): void
+    {
+        [$enum] = $this->build($schema);
+
+        self::assertInstanceOf(EnumModel::class, $enum);
+        self::assertSame($expected, array_map(static fn (EnumCase $case): ?string => $case->doc()->description(), $enum->cases()));
+    }
+
+    /**
+     * @return array<string, array{array<array-key, mixed>, list<string|null>}>
+     */
+    public static function listedDescriptions(): array
+    {
+        return [
+            'part of the values' => [['enum' => [0, 1], 'x-enum-descriptions' => ['Zero.']], ['Zero.', null]],
+            'past a null' => [['enum' => [null, 0, 1], 'x-enum-descriptions' => ['Zero.', 'One.']], ['Zero.', 'One.']],
+        ];
     }
 }

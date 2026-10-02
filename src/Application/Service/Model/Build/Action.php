@@ -125,7 +125,7 @@ final class Action
      */
     private function hoist(Schema $owner, ClassName $ownerName, int $source, Registry $registry, EnumBuilder $enums, Diagnostics $diagnostics): void
     {
-        // Each candidate: the schema, `<Parent><Property>` (null without usable characters), the wire name.
+        /** @var list<array{Schema, ?string, string}> $candidates schema, `<Parent><Property>` (null without usable characters), wire name */
         $candidates = [];
         foreach ($owner->propertyNames() as $wireName) {
             $property = $owner->requireProperty($wireName);

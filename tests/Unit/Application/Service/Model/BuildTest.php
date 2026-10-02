@@ -518,6 +518,7 @@ final class BuildTest extends TestCase
             'properties' => [
                 'scores' => ['type' => 'object', 'additionalProperties' => ['type' => 'string', 'x-php-class-name' => 'Score', 'x-php-foo' => 1]],
                 'grid' => ['type' => 'array', 'items' => ['type' => 'object', 'additionalProperties' => ['type' => 'string', 'x-dto-mutable' => true]]],
+                'lists' => ['type' => 'object', 'additionalProperties' => ['type' => 'array', 'items' => ['type' => 'string', 'x-php-bar' => 1]]],
             ],
             'additionalProperties' => ['type' => 'integer', 'x-dto-mutable' => true],
         ]]);
@@ -528,8 +529,21 @@ final class BuildTest extends TestCase
                 "warning {$at}User/properties/scores/additionalProperties/x-php-class-name: \"x-php-class-name\" has no effect here.",
                 "error {$at}User/properties/scores/additionalProperties/x-php-foo: Unknown extension \"x-php-foo\"; known: x-php-class-name, x-php-name, x-php-type, x-dto-mutable, x-php-all-of, x-php-skip, x-php-attributes, x-enum-descriptions.",
                 "warning {$at}User/properties/grid/items/additionalProperties/x-dto-mutable: \"x-dto-mutable\" has no effect here.",
+                "error {$at}User/properties/lists/additionalProperties/items/x-php-bar: Unknown extension \"x-php-bar\"; known: x-php-class-name, x-php-name, x-php-type, x-dto-mutable, x-php-all-of, x-php-skip, x-php-attributes, x-enum-descriptions.",
             ],
             ModelFixture::messages($output),
         );
+    }
+
+    public function testTakesClassKeysOnAnInlineMapValue(): void
+    {
+        $output = ModelFixture::build(['User' => ['type' => 'object', 'properties' => [
+            'scores' => ['type' => 'object', 'additionalProperties' => [
+                'type' => 'object', 'x-php-class-name' => 'Score', 'x-dto-mutable' => true, 'properties' => ['value' => ['type' => 'number']],
+            ]],
+        ]]]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(['App\\Dto\\User', 'App\\Dto\\Score'], array_keys(ModelFixture::classes($output)));
     }
 }
