@@ -39,21 +39,12 @@ final class Action
     }
 
     /**
-     * Only rendered attributes need one import per alias; annotations render from a later version.
+     * Rendered metadata, attributes or annotations, needs one import per alias.
      */
     private function checkRendering(ClassModel $class, MetadataMode $metadata, Diagnostics $diagnostics): void
     {
-        if ($metadata->isAttributes()) {
+        if ($metadata->value() !== MetadataMode::NONE) {
             AttributeRules::checkImportAliases($class, $diagnostics);
-
-            return;
-        }
-
-        if ($metadata->value() === MetadataMode::ANNOTATIONS && AttributeRules::carries($class)) {
-            $diagnostics->warning(
-                sprintf('%s has attributes, which are rendered as annotations from a later version; they are left out.', $class->name()->fqcn()),
-                $class->source(),
-            );
         }
     }
 

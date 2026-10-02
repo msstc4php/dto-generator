@@ -243,16 +243,14 @@ final class EnrichTest extends TestCase
         self::assertSame(['App\Dto\Order' => ['inline: App\Attr\OnInline'], 'App\Dto\OrderInline' => [], 'App\Dto\OrderLinesItem' => []], $this->attributes($output));
     }
 
-    public function testWarnsThatAnnotationsDoNotRenderYet(): void
+    public function testChecksImportAliasesOfAnnotationsToo(): void
     {
-        $output = $this->enrich(['Pet' => self::SCHEMAS['Pet']], static function (ExtensionRegistry $registry): void {
-            (new MarkingExtension())->register($registry, []);
-        }, '7.4', true, MetadataMode::ANNOTATIONS);
+        $output = $this->enrich(['Pet' => self::SCHEMAS['Pet']], self::conflictingAliases(), '7.4', true, MetadataMode::ANNOTATIONS);
 
-        self::assertSame(['warning ' . self::AT . 'Pet: App\\Dto\\Pet has attributes, which are rendered as annotations from a later version; they are left out.'], $this->messages($output));
+        self::assertSame(['error ' . self::AT . 'Pet: Import alias "Assert" stands for both App\\One and App\\Two in App\\Dto\\Pet.'], $this->messages($output));
     }
 
-    public function testChecksImportAliasesOnlyWhenAttributesRender(): void
+    public function testChecksImportAliasesOnlyWhenMetadataRenders(): void
     {
         $output = $this->enrich(['Pet' => self::SCHEMAS['Pet']], $this->conflictingAliases(), '8.2', true, MetadataMode::NONE);
 

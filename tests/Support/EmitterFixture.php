@@ -43,7 +43,7 @@ final class EmitterFixture
     private const SPEC = '/project/api/openapi.yaml';
 
     /**
-     * Attribute metadata from PHP 8.0, none below until annotations render (stage 5b).
+     * The metadata mode a config with "auto" gets: attributes from PHP 8.0, annotations below.
      */
     public static function target(string $php, string $mutability, string $accessors = AccessorStyle::AUTO, ?string $metadata = null): TargetProfile
     {
@@ -51,7 +51,7 @@ final class EmitterFixture
 
         return new TargetProfile(
             $version,
-            MetadataMode::from($metadata ?? ($version->isAtLeast(PhpVersion::fromString('8.0')) ? MetadataMode::ATTRIBUTES : MetadataMode::NONE)),
+            MetadataMode::from($metadata ?? MetadataMode::defaultFor($version)->value()),
             Mutability::from($mutability),
             AccessorStyle::from($accessors),
             DateTimeClass::from(DateTimeClass::IMMUTABLE),

@@ -6,8 +6,13 @@ declare(strict_types=1);
 
 namespace App\Dto;
 
+use App\Attr\Constraints as Assert;
+
 /**
  * A sample DTO.
+ *
+ * @\App\Attr\Table(name="sample	dto")
+ * @Assert\Valid
  */
 final class Sample
 {
@@ -15,6 +20,7 @@ final class Sample
      * Identifier.
      *
      * @var positive-int
+     * @Assert\Positive
      */
     public int $id;
 
@@ -29,6 +35,7 @@ final class Sample
 
     /**
      * @var int|string
+     * @\App\Attr\Choice(choices={1, "A"}, mode=\App\Attr\Mode::STRICT)
      */
     public $code;
 
@@ -64,6 +71,7 @@ final class Sample
      * Settlement currency.
      *
      * @var ?Currency::*
+     * @\App\Attr\Meta(Currency::class)
      */
     public ?string $currency;
 

@@ -83,11 +83,6 @@ final class AttributeRules
         }
     }
 
-    public static function carries(ClassModel $class): bool
-    {
-        return self::all($class) !== [];
-    }
-
     /**
      * @return list<AttributeModel>
      */

@@ -96,8 +96,7 @@ final class PhpParserEmitter implements CodeEmitter
         $shape = new ClassShape($class, $inherited, $target->classFormFor($class->mutability()), $target);
         $form = $shape->form();
         $types = new TypeRenderer($class->name()->namespace(), $target);
-        // Annotations render from stage 5b; until then they, like metadata "none", leave attributes out.
-        $attributes = new AttributeRenderer($types, $this->factory, $target->metadata()->isAttributes(), $refused);
+        $attributes = new AttributeRenderer($types, $this->factory, $target->metadata(), $refused);
 
         $members = [];
         if (!$form->isPromoted()) {
@@ -130,7 +129,7 @@ final class PhpParserEmitter implements CodeEmitter
         $node = $builder->getNode();
         $node->flags = $this->modifiers($class->kind(), $form);
         $node->attrGroups = $attributes->groups($class->attributes());
-        $this->document($node, DocBlock::render($class->doc()->description(), $this->deprecation($class->doc())));
+        $this->document($node, DocBlock::render($class->doc()->description(), array_merge($this->deprecation($class->doc()), $attributes->annotations($class->attributes()))));
 
         return [$node, $attributes];
     }
@@ -221,7 +220,7 @@ final class PhpParserEmitter implements CodeEmitter
 
         $node = $builder->getNode();
         $node->attrGroups = $attributes->groups($property->attributes());
-        $this->document($node, $this->propertyDoc($property, $types));
+        $this->document($node, $this->propertyDoc($property, $types, $attributes));
 
         return $node;
     }
@@ -248,7 +247,7 @@ final class PhpParserEmitter implements CodeEmitter
                 $param->attrGroups = $attributes->groups($property->attributes());
                 $param->flags = ($form->hasPublicProperties() ? Modifiers::PUBLIC : $shape->visibility())
                     | ($form->hasReadonlyProperties() ? Modifiers::READONLY : 0);
-                $this->document($param, $this->propertyDoc($property, $types));
+                $this->document($param, $this->propertyDoc($property, $types, $attributes));
             } else {
                 $tags = array_merge($tags, $this->paramTag($property, $types));
                 $body[] = new Expression(new Assign($this->fetch($property->name()), new Variable($property->name())));
@@ -378,11 +377,11 @@ final class PhpParserEmitter implements CodeEmitter
         return $types->needsDoc($property->type()) ? ['@param ' . $types->doc($property->type()) . ' $' . $property->name()] : [];
     }
 
-    private function propertyDoc(PropertyModel $property, TypeRenderer $types): ?string
+    private function propertyDoc(PropertyModel $property, TypeRenderer $types, AttributeRenderer $attributes): ?string
     {
         $var = $types->needsDoc($property->type()) ? ['@var ' . $types->doc($property->type())] : [];
 
-        return DocBlock::render($property->doc()->description(), array_merge($var, $this->deprecation($property->doc())));
+        return DocBlock::render($property->doc()->description(), array_merge($var, $this->deprecation($property->doc()), $attributes->annotations($property->attributes())));
     }
 
     /**

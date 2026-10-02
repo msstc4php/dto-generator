@@ -158,7 +158,7 @@ final class PhpParserEmitterTest extends TestCase
 
     public function testDocumentsTypesTheTargetCannotDeclare(): void
     {
-        $class = EmitterFixture::model('App\Dto\Sample', null, [EmitterFixture::sample()->properties()[3]]);
+        $class = EmitterFixture::model('App\Dto\Sample', null, [EmitterFixture::property('code', new UnionType(ScalarType::int(), ScalarType::string()), true)]);
         $code = (new PhpParserEmitter())->emit($class, EmitterFixture::target('7.4', Mutability::IMMUTABLE));
 
         self::assertStringContainsString("    /**\n     * @var int|string\n     */\n    private \$code;\n", $code);
@@ -573,10 +573,88 @@ final class Order
     public function testRefusesAnAliasWhateverTheCaseItIsGivenIn(): void
     {
         $types = new TypeRenderer('App\\Dto', $this->attributesTarget('8.2'));
-        $renderer = new AttributeRenderer($types, new BuilderFactory(), true, ['Assert']);
+        $renderer = new AttributeRenderer($types, new BuilderFactory(), MetadataMode::from(MetadataMode::ATTRIBUTES), ['Assert']);
 
         $renderer->groups([new AttributeModel(ClassName::fromFqcn('Lib\\Constraints\\Valid'), [], new ImportAlias('Lib\\Constraints', 'assert'))]);
 
         self::assertSame([], $renderer->uses());
+    }
+
+    public function testRendersAnnotationsInTheDocBlocksOfTheClassAndItsProperties(): void
+    {
+        $class = EmitterFixture::model('App\Dto\Order', 'An order.', [
+            EmitterFixture::property('id', ScalarType::int('positive-int'), true)->withAddedAttributes(
+                new AttributeModel(ClassName::fromFqcn('App\Attr\Constraints\Positive'), [], new ImportAlias('App\Attr\Constraints', 'Assert')),
+                new AttributeModel(ClassName::fromFqcn('App\Dto\Marker')),
+            ),
+            EmitterFixture::property('note', new NullableType(ScalarType::string()), false, new DefaultValue(null)),
+        ])->withAddedAttributes(new AttributeModel(ClassName::fromFqcn('App\Attr\Table'), [AttributeArgument::named('name', ArgumentValue::literal('orders'))]));
+
+        $code = (new PhpParserEmitter())->emit($class, EmitterFixture::target('7.4', Mutability::IMMUTABLE));
+
+        self::assertStringContainsString("namespace App\\Dto;\n\nuse App\\Attr\\Constraints as Assert;\n\n/**\n * An order.\n *\n * @\\App\\Attr\\Table(name=\"orders\")\n */\nfinal class Order\n", $code);
+        self::assertStringContainsString("    /**\n     * @var positive-int\n     * @Assert\\Positive\n     * @Marker\n     */\n    private int \$id;\n", $code);
+        self::assertStringContainsString("    private ?string \$note;\n", $code);
+        self::assertStringNotContainsString('#[', $code);
+    }
+
+    public function testRendersEveryKindOfAnnotationArgument(): void
+    {
+        $attribute = new AttributeModel(ClassName::fromFqcn('App\Attr\Rule'), [
+            AttributeArgument::positional(ArgumentValue::listOf(ArgumentValue::literal("say \"hi\"\n*/"), ArgumentValue::literal(1), ArgumentValue::literal(null), ArgumentValue::literal(2.0))),
+            AttributeArgument::named('map', ArgumentValue::mapOf(['k' => ArgumentValue::literal(true), 3 => ArgumentValue::literal(false)])),
+            AttributeArgument::named('mode', ArgumentValue::constant('STRICT', ClassName::fromFqcn('App\Attr\Level'))),
+            AttributeArgument::named('limit', ArgumentValue::constant('PHP_INT_MAX')),
+            AttributeArgument::named('target', ArgumentValue::classReference(ClassName::fromFqcn('App\Dto\Tag'))),
+            AttributeArgument::named('inner', ArgumentValue::listOf(
+                ArgumentValue::newInstance(ClassName::fromFqcn('App\Attr\Inner'), AttributeArgument::named('size', ArgumentValue::literal(2))),
+                ArgumentValue::newInstance(ClassName::fromFqcn('App\Attr\Blank')),
+            )),
+        ]);
+        $class = EmitterFixture::model('App\Dto\Order', null, [])->withAddedAttributes($attribute);
+
+        $code = (new PhpParserEmitter())->emit($class, EmitterFixture::target('7.4', Mutability::IMMUTABLE));
+
+        self::assertStringContainsString(
+            "/**\n * @\\App\\Attr\\Rule(\n *     {\"say \"\"hi\"\"\\n*\\/\", 1, null, 2.0},\n *     map={\"k\"=true, 3=false},\n *     mode=\\App\\Attr\\Level::STRICT,\n *     limit=PHP_INT_MAX,\n *     target=Tag::class,\n *     inner={@\\App\\Attr\\Inner(size=2), @\\App\\Attr\\Blank}\n * )\n */\nfinal class Order\n",
+            $code,
+        );
+    }
+
+    public function testCollectsSeveralPositionalAnnotationArgumentsIntoValue(): void
+    {
+        $class = EmitterFixture::model('App\Dto\Order', null, [])->withAddedAttributes(new AttributeModel(ClassName::fromFqcn('App\Attr\Pair'), [
+            AttributeArgument::positional(ArgumentValue::literal('a')),
+            AttributeArgument::positional(ArgumentValue::literal('b')),
+            AttributeArgument::named('strict', ArgumentValue::literal(true)),
+        ]));
+
+        $code = (new PhpParserEmitter())->emit($class, EmitterFixture::target('7.4', Mutability::IMMUTABLE));
+
+        self::assertStringContainsString(' * @\App\Attr\Pair(value={"a", "b"}, strict=true)' . "\n", $code);
+    }
+
+    public function testRendersAnnotationsOnPromotedParametersWhenAsked(): void
+    {
+        $class = EmitterFixture::model('App\Dto\Order', null, [
+            EmitterFixture::property('id', ScalarType::int(), true)->withAddedAttributes(new AttributeModel(ClassName::fromFqcn('App\Attr\Id'))),
+        ]);
+
+        $code = (new PhpParserEmitter())->emit($class, EmitterFixture::target('8.0', Mutability::IMMUTABLE, AccessorStyle::AUTO, MetadataMode::ANNOTATIONS));
+
+        self::assertStringContainsString("        /**\n         * @\\App\\Attr\\Id\n         */\n        private int \$id", $code);
+        self::assertStringNotContainsString('#[', $code);
+    }
+
+    public function testWritesAnAnnotationInFullWhenItsAliasMatchesANameOfTheFile(): void
+    {
+        $class = EmitterFixture::model('App\Dto\Assert', null, [])
+            ->withAddedAttributes(new AttributeModel(ClassName::fromFqcn('Lib\Constraints\Valid'), [], new ImportAlias('Lib\Constraints', 'Assert')))
+        ;
+
+        $code = (new PhpParserEmitter())->emit($class, EmitterFixture::target('7.4', Mutability::IMMUTABLE));
+
+        self::assertStringNotContainsString('use ', $code);
+        self::assertStringContainsString(' * @\Lib\Constraints\Valid' . "\n", $code);
     }
 }

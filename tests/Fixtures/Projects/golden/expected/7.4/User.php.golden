@@ -19,6 +19,10 @@ final class User
      */
     private int $id;
 
+    /**
+     * @\App\Attr\Sensitive(mask="*", keep=4)
+     * @\App\Attr\Audited(level="personal")
+     */
     private string $email;
 
     private \DateTimeImmutable $createdAt;
