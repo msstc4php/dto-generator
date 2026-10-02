@@ -29,4 +29,12 @@ final class DefaultValue
     {
         return $this->value;
     }
+
+    /**
+     * The value as JSON writes it, so `1` and `1.0` of a number compare equal.
+     */
+    public function toJson(): string
+    {
+        return (string) json_encode($this->value, JSON_INVALID_UTF8_SUBSTITUTE);
+    }
 }

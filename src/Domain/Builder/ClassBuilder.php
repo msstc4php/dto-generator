@@ -59,26 +59,55 @@ final class ClassBuilder
         return $value;
     }
 
-    public function build(ClassName $name, Schema $schema, Diagnostics $diagnostics): ClassModel
+    /**
+     * The class takes the properties of every part of its composition; its parent's arrive through inheritance.
+     */
+    public function build(ClassName $name, Schema $schema, Diagnostics $diagnostics, ?Composition $composition = null): ClassModel
     {
+        $composition ??= Composition::of($schema);
         $properties = [];
         $taken = [];
-        foreach ($schema->propertyNames() as $wireName) {
-            $propertySchema = $schema->requireProperty($wireName);
+        $byWireName = [];
+        $sources = $this->sources($composition);
+        $skipped = $this->skippedWireNames($sources);
+        foreach ($sources as [$wireName, $propertySchema]) {
             ExtensionVocabulary::checkProperty($propertySchema, $diagnostics);
-            if (self::isSkipped($propertySchema, $diagnostics)) {
-                if ($schema->isRequired($wireName)) {
-                    $diagnostics->warning(
-                        sprintf('Property "%s" is required but excluded by "x-php-skip".', $wireName),
-                        $propertySchema->location()->child('x-php-skip'),
-                    );
-                }
+            if (self::isSkipped($propertySchema, $diagnostics) && $composition->isRequired($wireName)) {
+                $diagnostics->warning(
+                    sprintf('Property "%s" is required but excluded by "x-php-skip".', $wireName),
+                    $propertySchema->location()->child('x-php-skip'),
+                );
+            }
 
+            if (isset($skipped[$wireName])) {
                 continue;
             }
 
-            $property = $this->property($schema, $wireName, $propertySchema, $diagnostics);
+            $property = $this->property($wireName, $propertySchema, $composition->isRequired($wireName), $diagnostics);
             if (!$property instanceof PropertyModel) {
+                continue;
+            }
+
+            $earlier = $byWireName[$wireName] ?? null;
+            if ($earlier instanceof PropertyModel) {
+                if ($earlier->type()->describe() !== $property->type()->describe()) {
+                    $diagnostics->error(
+                        sprintf(
+                            'Property "%s" of %s is %s here, but %s in an earlier allOf member.',
+                            $wireName,
+                            $name->fqcn(),
+                            $property->type()->describe(),
+                            $earlier->type()->describe(),
+                        ),
+                        $propertySchema->location(),
+                    );
+                } elseif ($earlier->name() !== $property->name() || $this->defaultOf($earlier) !== $this->defaultOf($property)) {
+                    $diagnostics->error(
+                        sprintf('Property "%s" of %s has another PHP name or default here than in an earlier allOf member.', $wireName, $name->fqcn()),
+                        $propertySchema->location(),
+                    );
+                }
+
                 continue;
             }
 
@@ -94,6 +123,7 @@ final class ClassBuilder
             }
 
             $taken[$key] = $wireName;
+            $byWireName[$wireName] = $property;
             $properties[] = $property;
         }
 
@@ -105,7 +135,7 @@ final class ClassBuilder
         return new ClassModel(
             $name,
             ClassKind::from(ClassKind::FINAL),
-            null,
+            $composition->parent(),
             $properties,
             $this->mutability($schema, $diagnostics),
             new DocModel($schema->description(), $schema->isDeprecated()),
@@ -143,7 +173,52 @@ final class ClassBuilder
         );
     }
 
-    private function property(Schema $owner, string $wireName, Schema $schema, Diagnostics $diagnostics): ?PropertyModel
+    /**
+     * A property any merged member excludes stays excluded, whichever member declares it first.
+     *
+     * @param list<array{string, Schema}> $sources
+     *
+     * @return array<string, string>
+     */
+    private function skippedWireNames(array $sources): array
+    {
+        $skipped = [];
+        foreach ($sources as [$wireName, $propertySchema]) {
+            // Reported when the property itself is built.
+            if (self::isSkipped($propertySchema, new Diagnostics())) {
+                $skipped[$wireName] = $wireName;
+            }
+        }
+
+        return $skipped;
+    }
+
+    /**
+     * The default as JSON writes it: `1` and `1.0` of a number are the same default.
+     */
+    private function defaultOf(PropertyModel $property): string
+    {
+        $default = $property->default();
+
+        return $default instanceof DefaultValue ? $default->toJson() : '';
+    }
+
+    /**
+     * @return list<array{string, Schema}> wire name and schema of every property, part by part
+     */
+    private function sources(Composition $composition): array
+    {
+        $sources = [];
+        foreach ($composition->parts() as $part) {
+            foreach ($part->propertyNames() as $wireName) {
+                $sources[] = [$wireName, $part->requireProperty($wireName)];
+            }
+        }
+
+        return $sources;
+    }
+
+    private function property(string $wireName, Schema $schema, bool $required, Diagnostics $diagnostics): ?PropertyModel
     {
         $name = $this->propertyName($wireName, $schema, $diagnostics);
         if ($name === null) {
@@ -151,7 +226,7 @@ final class ClassBuilder
         }
 
         $type = $this->types->map($schema, $diagnostics);
-        $required = $owner->isRequired($wireName) && !$type instanceof NullableType;
+        $required = $required && !$type instanceof NullableType;
         $default = null;
         if (!$required) {
             $type = TypeMapper::nullable($type);

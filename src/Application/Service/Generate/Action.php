@@ -118,7 +118,11 @@ final class Action
             $source = $config->sources()[$built->source()];
             $class = $built->model();
             // Build places every class directly in the namespace of its source.
-            $files[] = new GeneratedFile($source->outputDir(), $class->name()->shortName() . '.php', $this->emitter->emit($class, $target));
+            $files[] = new GeneratedFile(
+                $source->outputDir(),
+                $class->name()->shortName() . '.php',
+                $this->emitter->emit($class, $target, $model->inheritedProperties($class)),
+            );
         }
 
         foreach ($model->enums() as $built) {

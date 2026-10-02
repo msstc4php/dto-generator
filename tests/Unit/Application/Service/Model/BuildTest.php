@@ -144,9 +144,8 @@ final class BuildTest extends TestCase
         self::assertSame(["warning {$at}User/properties/secret: \$ref points to a schema excluded by \"x-php-skip\"."], ModelFixture::messages($output));
     }
 
-    public function testWarnsAboutSelectedSchemasItCannotBuildYet(): void
+    public function testGeneratesNoClassForAUnionWithoutDiscriminator(): void
     {
-        $at = self::AT;
         $output = ModelFixture::build([
             'Currency' => ['type' => 'string', 'enum' => ['EUR']],
             'Pet' => ['oneOf' => [['$ref' => '#/components/schemas/Cat']]],
@@ -154,12 +153,7 @@ final class BuildTest extends TestCase
         ]);
 
         self::assertSame(['App\Dto\Cat'], array_keys(ModelFixture::classes($output)));
-        self::assertSame(
-            [
-                "warning {$at}Pet: \"oneOf\" is not supported yet, so no class is generated for \"Pet\".",
-            ],
-            ModelFixture::messages($output),
-        );
+        self::assertSame([], ModelFixture::messages($output));
     }
 
     public function testKeepsGraphOrder(): void

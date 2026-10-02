@@ -7,6 +7,7 @@ namespace MSSTC4PHP\DtoGenerator\Domain\Builder;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassType;
+use MSSTC4PHP\DtoGenerator\Domain\Model\PropertyModel;
 
 /**
  * Finds required properties whose class needs, through required properties only, an instance of the owner:
@@ -20,14 +21,15 @@ final class RequiredCycles
 
     /**
      * @param list<ClassModel> $classes
+     * @param array<string, list<PropertyModel>> $inherited FQCN → the properties it inherits
      */
-    public static function check(array $classes, Diagnostics $diagnostics): void
+    public static function check(array $classes, Diagnostics $diagnostics, array $inherited = []): void
     {
-        $edges = self::edges($classes);
+        $edges = self::edges($classes, $inherited);
         $reachable = array_map(static fn (array $targets): array => self::reachableFrom($edges, $targets), $edges);
         foreach ($classes as $class) {
             $owner = $class->name()->fqcn();
-            foreach ($class->properties() as $property) {
+            foreach (array_merge($inherited[$owner] ?? [], $class->properties()) as $property) {
                 $type = $property->type();
                 if (!$property->isRequired() || !$type instanceof ClassType) {
                     continue;
@@ -49,15 +51,16 @@ final class RequiredCycles
 
     /**
      * @param list<ClassModel> $classes
+     * @param array<string, list<PropertyModel>> $inherited
      *
      * @return array<string, list<string>> FQCN → FQCNs of its required class-typed properties
      */
-    private static function edges(array $classes): array
+    private static function edges(array $classes, array $inherited): array
     {
         $edges = [];
         foreach ($classes as $class) {
             $targets = [];
-            foreach ($class->properties() as $property) {
+            foreach (array_merge($inherited[$class->name()->fqcn()] ?? [], $class->properties()) as $property) {
                 $type = $property->type();
                 if ($property->isRequired() && $type instanceof ClassType) {
                     $targets[] = $type->className()->fqcn();

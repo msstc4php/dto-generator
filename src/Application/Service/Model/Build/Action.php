@@ -4,18 +4,26 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Application\Service\Model\Build;
 
+use MSSTC4PHP\DtoGenerator\Domain\Builder\AllOfResolver;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\ClassBuilder;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\ClassLookup;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\Composition;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\EnumBuilder;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\ExtensionVocabulary;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\Hierarchy;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\NamedClass;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\NameResolver;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\RequiredCycles;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\SchemaShape;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\TypeMapper;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\VariantResolver;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\Variants;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
-use MSSTC4PHP\DtoGenerator\Domain\Model\ClassModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\Identifier;
+use MSSTC4PHP\DtoGenerator\Domain\Schema\Discriminator;
+use MSSTC4PHP\DtoGenerator\Domain\Schema\ResolvedSchema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
 
 /**
@@ -44,8 +52,7 @@ final class Action
             $schema = $resolved->schema();
             $isClass = SchemaShape::isClass($schema);
             $isEnum = SchemaShape::isEnum($schema);
-            $unsupported = SchemaShape::unsupportedKeyword($schema);
-            if ($isClass || $isEnum || $unsupported !== null) {
+            if ($isClass || $isEnum) {
                 ExtensionVocabulary::checkClass($schema, $diagnostics);
             } else {
                 ExtensionVocabulary::checkAlias($schema, $diagnostics);
@@ -61,15 +68,18 @@ final class Action
                 continue;
             }
 
-            if (!$isClass && !$isEnum) {
-                if ($unsupported !== null && $resolved->isSelected()) {
-                    $diagnostics->warning(
-                        sprintf('"%s" is not supported yet, so no class is generated for "%s".', $unsupported, $resolved->name()),
-                        $schema->location(),
-                    );
-                }
+            if (SchemaShape::mayBeObject($schema) && $schema->allOf() !== [] && SchemaShape::hasUnion($schema)) {
+                $diagnostics->error('"allOf" together with "oneOf" or "anyOf" is not supported.', $schema->location());
 
                 continue;
+            }
+
+            if (!$isClass && !$isEnum) {
+                continue;
+            }
+
+            if ($schema->allOf() === [] && SchemaShape::hasUnion($schema) && !SchemaShape::isDiscriminated($schema)) {
+                $diagnostics->warning('"oneOf" and "anyOf" beside "properties" are not represented; the class keeps only its properties.', $schema->location());
             }
 
             $short = $this->shortName($schema, $resolved->name(), $diagnostics);
@@ -79,24 +89,137 @@ final class Action
             }
         }
 
+        // Every named class is declared by now, so `allOf` can tell which members it may extend.
+        $allOf = new AllOfResolver(new ClassLookup($input->graph(), $registry->declarations()), $config->dto()->allOfStrategy());
+        $compositions = [];
         // Inline classes are planned while walking, so the walk reaches inline objects nested in inline objects.
         for ($index = 0; ($planned = $registry->plannedAt($index)) !== null; $index++) {
-            $this->hoist($planned[0], $planned[1], $planned[2], $registry, $enums, $diagnostics);
+            $compositions[$index] = $allOf->compose($planned[0], $diagnostics);
+            $this->hoist($planned[0], $compositions[$index], $planned[1], $planned[2], $registry, $enums, $diagnostics);
         }
 
+        $declarations = $registry->declarations();
         $builder = new ClassBuilder(
             $this->names,
-            new TypeMapper($input->graph(), $registry->declarations(), $input->target(), $config->formats()),
+            new TypeMapper($input->graph(), $declarations, $input->target(), $config->formats()),
             $input->target(),
         );
-        $built = [];
-        foreach ($registry->planned() as [$schema, $name, $source]) {
-            $built[] = new BuiltClass($builder->build($name, $schema, $diagnostics), $source);
+        $models = [];
+        $children = [];
+        foreach ($registry->planned() as $index => [$schema, $name]) {
+            $models[] = $builder->build($name, $schema, $diagnostics, $compositions[$index]);
+            $parent = $compositions[$index]->parent();
+            $resolved = $input->graph()->get($schema->location());
+            if ($parent instanceof ClassName && $resolved instanceof ResolvedSchema) {
+                $children[$parent->fqcn()][] = new NamedClass($resolved, $name);
+            }
         }
 
-        RequiredCycles::check(array_map(static fn (BuiltClass $class): ClassModel => $class->model(), $built), $diagnostics);
+        $subclasses = [];
+        foreach (array_keys($children) as $parent) {
+            $subclasses[$parent] = $this->descendants($parent, $children);
+        }
 
-        return new Output($built, $diagnostics, $registry->enums());
+        $unions = $this->unions($input, $registry, $children, $subclasses, $diagnostics);
+        $built = [];
+        foreach (Hierarchy::link($models, $unions, $diagnostics) as $index => $model) {
+            $built[] = new BuiltClass($model, $registry->planned()[$index][2]);
+        }
+
+        $output = new Output($built, $diagnostics, $registry->enums());
+        $models = [];
+        $inherited = [];
+        foreach ($output->classes() as $class) {
+            $models[] = $class->model();
+            $inherited[$class->model()->name()->fqcn()] = $output->inheritedProperties($class->model());
+        }
+
+        RequiredCycles::check($models, $diagnostics, $inherited);
+
+        return $output;
+    }
+
+    /**
+     * The discriminated bases: a `oneOf`/`anyOf` lists its variants, a plain class is extended by them through `allOf`.
+     *
+     * @param array<string, list<NamedClass>> $children parent FQCN → named classes extending it directly
+     * @param array<string, list<NamedClass>> $subclasses parent FQCN → every named class below it
+     *
+     * @return array<string, Variants>
+     */
+    private function unions(Input $input, Registry $registry, array $children, array $subclasses, Diagnostics $diagnostics): array
+    {
+        $variants = new VariantResolver($input->graph(), new ClassLookup($input->graph(), $registry->declarations()));
+        $unions = [];
+        foreach ($registry->planned() as [$schema, $name]) {
+            $listed = SchemaShape::discriminatorOf($schema);
+            $discriminator = $schema->discriminator();
+            if ($listed instanceof Discriminator) {
+                $unions[$name->fqcn()] = $variants->listed($schema, $listed, $diagnostics);
+                // A deeper subclass descends from one of these children, listed or reported.
+                $this->warnAboutUnlistedSubclasses($name, $unions[$name->fqcn()], $children[$name->fqcn()] ?? [], $diagnostics);
+            } elseif ($discriminator instanceof Discriminator && isset($subclasses[$name->fqcn()])) {
+                $unions[$name->fqcn()] = $variants->subclasses($schema, $discriminator, $subclasses[$name->fqcn()], $diagnostics);
+            } elseif ($discriminator instanceof Discriminator) {
+                $diagnostics->warning(
+                    'The discriminator is ignored: no oneOf or anyOf lists variants and no named schema extends this one through allOf.',
+                    $schema->location()->child('discriminator'),
+                );
+            }
+        }
+
+        return $unions;
+    }
+
+    /**
+     * Every named class below a parent, nearest first, so a whole Swagger-2 hierarchy shares one discriminator.
+     *
+     * @param array<string, list<NamedClass>> $children parent FQCN → named classes extending it directly
+     *
+     * @return list<NamedClass>
+     */
+    private function descendants(string $parent, array $children): array
+    {
+        $found = [];
+        $seen = [$parent => $parent];
+        for ($pending = $children[$parent]; $pending !== []; $pending = $next) {
+            $next = [];
+            foreach ($pending as $child) {
+                $fqcn = $child->name()->fqcn();
+                if (!isset($seen[$fqcn])) {
+                    $seen[$fqcn] = $fqcn;
+                    $found[] = $child;
+                    $next = array_merge($next, $children[$fqcn] ?? []);
+                }
+            }
+        }
+
+        return $found;
+    }
+
+    /**
+     * @param list<NamedClass> $subclasses
+     */
+    private function warnAboutUnlistedSubclasses(ClassName $base, Variants $variants, array $subclasses, Diagnostics $diagnostics): void
+    {
+        $listed = [];
+        foreach ($variants->classes() as $variant) {
+            $listed[$variant->fqcn()] = $variant;
+        }
+
+        foreach ($subclasses as $subclass) {
+            $fqcn = $subclass->name()->fqcn();
+            if (!isset($listed[$fqcn])) {
+                $diagnostics->warning(
+                    sprintf(
+                        '%s extends the discriminated base %s but is not one of its variants, so it gets no discriminator value.',
+                        $fqcn,
+                        $base->fqcn(),
+                    ),
+                    $subclass->schema()->location(),
+                );
+            }
+        }
     }
 
     /**
@@ -123,16 +246,18 @@ final class Action
     /**
      * Declares the inline objects and enums of a class's properties, looking through arrays (`…Item`).
      */
-    private function hoist(Schema $owner, ClassName $ownerName, int $source, Registry $registry, EnumBuilder $enums, Diagnostics $diagnostics): void
+    private function hoist(Schema $owner, Composition $composition, ClassName $ownerName, int $source, Registry $registry, EnumBuilder $enums, Diagnostics $diagnostics): void
     {
         /** @var list<array{Schema, ?string, string}> $candidates schema, `<Parent><Property>` (null without usable characters), wire name */
         $candidates = [];
-        foreach ($owner->propertyNames() as $wireName) {
-            $property = $owner->requireProperty($wireName);
-            // The class builder reports a malformed x-php-skip; here it only decides whether to look further.
-            if (!ClassBuilder::isSkipped($property, new Diagnostics())) {
-                $base = $this->names->className($wireName);
-                $candidates[] = [$property, $base === null ? null : $ownerName->shortName() . $base, $wireName];
+        foreach ($composition->ownParts() as $part) {
+            foreach ($part->propertyNames() as $wireName) {
+                $property = $part->requireProperty($wireName);
+                // The class builder reports a malformed x-php-skip; here it only decides whether to look further.
+                if (!ClassBuilder::isSkipped($property, new Diagnostics())) {
+                    $base = $this->names->className($wireName);
+                    $candidates[] = [$property, $base === null ? null : $ownerName->shortName() . $base, $wireName];
+                }
             }
         }
 
@@ -181,7 +306,8 @@ final class Action
      */
     private function inline(Schema $schema, string $suffix): ?array
     {
-        if (SchemaShape::isClass($schema) || SchemaShape::isEnum($schema)) {
+        // A discriminated union becomes a base class only as a named schema (spec §5.3); inline it is a union type.
+        if ((SchemaShape::isClass($schema) && !SchemaShape::isDiscriminated($schema)) || SchemaShape::isEnum($schema)) {
             return [$schema, $suffix];
         }
 

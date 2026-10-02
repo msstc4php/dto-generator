@@ -138,6 +138,22 @@ final class TypeModelTest extends TestCase
         new UnionType(ScalarType::string(), ScalarType::string());
     }
 
+    public function testUnionOfCollapsesToTheOnlyDistinctMember(): void
+    {
+        $string = ScalarType::string();
+
+        self::assertSame($string, UnionType::of($string, ScalarType::string()));
+        self::assertSame('string|int', UnionType::of($string, ScalarType::int(), $string)->describe());
+    }
+
+    public function testUnionOfRejectsANullableMemberAnywhere(): void
+    {
+        $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('wrap the whole union in NullableType');
+
+        UnionType::of(ScalarType::string(), ScalarType::string(), new NullableType(ScalarType::string()));
+    }
+
     public function testUnionRejectsNullableMembers(): void
     {
         $this->expectException(InvalidModel::class);

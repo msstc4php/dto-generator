@@ -158,6 +158,21 @@ final class ClassModel
         );
     }
 
+    public function withHierarchy(ClassKind $kind, ?ClassName $parent, ?DiscriminatorModel $discriminator): self
+    {
+        return new self(
+            $this->name,
+            $kind,
+            $parent,
+            $this->properties,
+            $this->mutability,
+            $this->doc,
+            $this->source,
+            $this->attributes,
+            $discriminator,
+        );
+    }
+
     public function withProperties(PropertyModel ...$properties): self
     {
         return new self(

@@ -20,6 +20,11 @@ final class ConfigMother
 
     public static function config(SourceConfig $source, SourceConfig ...$more): GeneratorConfig
     {
+        return self::configWith(AllOfStrategy::from(AllOfStrategy::EXTENDS), $source, ...$more);
+    }
+
+    public static function configWith(AllOfStrategy $allOfStrategy, SourceConfig $source, SourceConfig ...$more): GeneratorConfig
+    {
         return new GeneratorConfig(
             self::PATH,
             new TargetSettings(null, null, true),
@@ -27,7 +32,7 @@ final class ConfigMother
                 Mutability::from(Mutability::IMMUTABLE),
                 AccessorStyle::from(AccessorStyle::AUTO),
                 DateTimeClass::from(DateTimeClass::IMMUTABLE),
-                AllOfStrategy::from(AllOfStrategy::EXTENDS),
+                $allOfStrategy,
             ),
             [],
             new ExtensionSettings([], true, [], [], null),

@@ -8,6 +8,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\ClassKind;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassType;
+use MSSTC4PHP\DtoGenerator\Domain\Model\DiscriminatorModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\DocModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumBacking;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumCase;
@@ -52,12 +53,78 @@ final class EmitterFixture
     /**
      * @return list<ClassModel>
      */
-    public static function classes(): array
+    public static function classes(string $mutability = Mutability::IMMUTABLE): array
     {
-        return [self::sample(), self::tag(), self::copy()];
+        return [
+            self::sample($mutability),
+            self::tag($mutability),
+            self::copy($mutability),
+            self::animal($mutability),
+            self::dog($mutability),
+            self::shape($mutability),
+            self::circle($mutability),
+        ];
     }
 
-    public static function sample(): ClassModel
+    /**
+     * The properties a fixture class inherits, root first.
+     *
+     * @return list<PropertyModel>
+     */
+    public static function inherited(ClassModel $class): array
+    {
+        $byName = [];
+        foreach (self::classes($class->mutability()->value()) as $candidate) {
+            $byName[$candidate->name()->fqcn()] = $candidate;
+        }
+
+        $parent = $class->parent();
+
+        return $parent instanceof ClassName ? array_merge(self::inherited($byName[$parent->fqcn()]), $byName[$parent->fqcn()]->properties()) : [];
+    }
+
+    /**
+     * An `allOf` base: open, with one required and one optional property.
+     */
+    public static function animal(string $mutability = Mutability::IMMUTABLE): ClassModel
+    {
+        return self::model('App\Dto\Animal', 'An animal.', [
+            self::property('id', ScalarType::string(), true),
+            self::property('nickname', new NullableType(ScalarType::string()), false, new DefaultValue(null)),
+        ], $mutability)->withHierarchy(ClassKind::from(ClassKind::OPEN), null, null);
+    }
+
+    /**
+     * Interleaves its own required and optional parameters with the inherited ones.
+     */
+    public static function dog(string $mutability = Mutability::IMMUTABLE): ClassModel
+    {
+        return self::model('App\Dto\Dog', null, [
+            self::property('breed', ScalarType::string(), true),
+            self::property('goodBoy', new NullableType(ScalarType::bool()), false, new DefaultValue(true)),
+        ], $mutability)->withHierarchy(ClassKind::from(ClassKind::FINAL), ClassName::fromFqcn('App\Dto\Animal'), null);
+    }
+
+    /**
+     * A discriminated base.
+     */
+    public static function shape(string $mutability = Mutability::IMMUTABLE): ClassModel
+    {
+        return self::model('App\Dto\Shape', null, [self::property('kind', ScalarType::string(), true)], $mutability)->withHierarchy(
+            ClassKind::from(ClassKind::ABSTRACT),
+            null,
+            new DiscriminatorModel('kind', ['circle' => ClassName::fromFqcn('App\Dto\Circle')]),
+        );
+    }
+
+    public static function circle(string $mutability = Mutability::IMMUTABLE): ClassModel
+    {
+        return self::model('App\Dto\Circle', null, [self::property('radius', ScalarType::float(), true)], $mutability)
+            ->withHierarchy(ClassKind::from(ClassKind::FINAL), ClassName::fromFqcn('App\Dto\Shape'), null)
+        ;
+    }
+
+    public static function sample(string $mutability = Mutability::IMMUTABLE): ClassModel
     {
         $tag = new ClassType(ClassName::fromFqcn('App\Dto\Tag'));
 
@@ -72,19 +139,19 @@ final class EmitterFixture
             self::property('flags', new NullableType(new ListType(ScalarType::bool())), false, new DefaultValue([true, false])),
             self::property('extra', new MixedType(), false, new DefaultValue(null), null, true),
             self::property('currency', new NullableType(EnumType::of(self::currency())), false, new DefaultValue('EUR'), 'Settlement currency.'),
-        ]);
+        ], $mutability);
     }
 
     /**
      * A class without a namespace whose property name collides with the clone-assign temporary.
      */
-    public static function copy(): ClassModel
+    public static function copy(string $mutability = Mutability::IMMUTABLE): ClassModel
     {
         return self::model('Copy', null, [
             self::property('clone', ScalarType::int(), true),
             // Long enough that `clone($this, [...])` and `new self(...)` break across lines on 8.1+.
             self::property('deliberatelyLongPropertyNameThatBreaksTheWitherCall', ScalarType::int(), false, new DefaultValue(0)),
-        ]);
+        ], $mutability);
     }
 
     /**
@@ -106,9 +173,9 @@ final class EmitterFixture
         );
     }
 
-    public static function tag(): ClassModel
+    public static function tag(string $mutability = Mutability::IMMUTABLE): ClassModel
     {
-        return self::model('App\Dto\Tag', null, [self::property('label', ScalarType::string(), true)]);
+        return self::model('App\Dto\Tag', null, [self::property('label', ScalarType::string(), true)], $mutability);
     }
 
     /**

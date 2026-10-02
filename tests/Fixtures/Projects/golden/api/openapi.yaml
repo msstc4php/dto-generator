@@ -94,3 +94,93 @@ components:
       x-enum-descriptions:
         '1': Reader.
         '3': Owner.
+    Pet:
+      description: A pet of either kind.
+      oneOf:
+        - $ref: '#/components/schemas/Cat'
+        - $ref: '#/components/schemas/Dog'
+      discriminator:
+        propertyName: petType
+        mapping:
+          cat: '#/components/schemas/Cat'
+    Cat:
+      type: object
+      required: [petType, name]
+      properties:
+        petType:
+          type: string
+        name:
+          type: string
+        lives:
+          type: integer
+          default: 9
+    Dog:
+      type: object
+      required: [petType, name]
+      properties:
+        petType:
+          type: string
+        bark:
+          type: boolean
+        name:
+          type: string
+    Person:
+      type: object
+      required: [fullName]
+      properties:
+        fullName:
+          type: string
+        nickname:
+          type: string
+    Employee:
+      description: A person on the payroll.
+      allOf:
+        - $ref: '#/components/schemas/Person'
+        - type: object
+          required: [salary]
+          properties:
+            salary:
+              type: number
+            manager:
+              oneOf:
+                - $ref: '#/components/schemas/Person'
+                - type: string
+                - type: 'null'
+    Contact:
+      x-php-all-of: merge
+      allOf:
+        - $ref: '#/components/schemas/Person'
+        - $ref: '#/components/schemas/Tag'
+    Owner:
+      type: object
+      properties:
+        pet:
+          $ref: '#/components/schemas/Pet'
+        badge:
+          description: The badge on the collar.
+          allOf:
+            - $ref: '#/components/schemas/Tag'
+        code:
+          anyOf:
+            - type: integer
+            - type: string
+        favourite:
+          oneOf:
+            - $ref: '#/components/schemas/Cat'
+            - $ref: '#/components/schemas/Dog'
+            - type: 'null'
+    Vehicle:
+      type: object
+      required: [kind]
+      properties:
+        kind:
+          type: string
+      discriminator:
+        propertyName: kind
+    Car:
+      allOf:
+        - $ref: '#/components/schemas/Vehicle'
+        - type: object
+          properties:
+            doors:
+              type: integer

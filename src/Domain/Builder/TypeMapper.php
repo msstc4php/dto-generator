@@ -34,6 +34,8 @@ final class TypeMapper
         'relative-json-pointer',
     ];
 
+    public const ONE_OF_AND_ANY_OF = '"oneOf" and "anyOf" together become one union, which admits more than the schema does.';
+
     private const DATE_FORMATS = ['date-time', 'date'];
 
     private const INTEGER_FORMATS = ['int32', 'int64'];
@@ -99,19 +101,26 @@ final class TypeMapper
             return $declared;
         }
 
-        $unsupported = SchemaShape::unsupportedKeyword($schema);
-        if ($unsupported !== null) {
-            $diagnostics->error(
-                sprintf('"%s" is not supported yet; enums, composition and inline objects arrive in a later version.', $unsupported),
-                $schema->location(),
-            );
+        $ref = $schema->ref();
+        if ($ref !== null) {
+            return $this->reference($schema, $ref, $diagnostics, $aliases);
+        }
+
+        if (SchemaShape::mayBeObject($schema) && $schema->allOf() !== [] && SchemaShape::hasUnion($schema)) {
+            $diagnostics->error('"allOf" together with "oneOf" or "anyOf" is not supported.', $schema->location());
 
             return new MixedType();
         }
 
-        $ref = $schema->ref();
-        if ($ref !== null) {
-            return $this->reference($schema, $ref, $diagnostics, $aliases);
+        // A discriminated union becomes a base class only as a named schema; anywhere else it is a plain union.
+        // Members without a type of their own only constrain the schema's type (`anyOf` of patterns).
+        $union = array_merge($schema->oneOf(), $schema->anyOf());
+        if ($this->typed($union) !== [] && ($schema->propertyNames() === [] || SchemaShape::isDiscriminated($schema))) {
+            if ($schema->allOf() !== []) {
+                $diagnostics->warning('"allOf" beside a typed "oneOf" or "anyOf" is not represented; the union alone gives the type.', $schema->location());
+            }
+
+            return $this->union($schema, $diagnostics, $aliases);
         }
 
         if (SchemaShape::isClass($schema)) {
@@ -121,6 +130,17 @@ final class TypeMapper
             );
 
             return new MixedType();
+        }
+
+        $typed = $this->typed($schema->allOf());
+        if (count($typed) > 1) {
+            $diagnostics->error('"allOf" combines several typed schemas that are not objects, which no PHP type expresses; keep one of them.', $schema->location());
+
+            return new MixedType();
+        }
+
+        if ($typed !== []) {
+            return $this->mapWithin($typed[0], $diagnostics, $aliases);
         }
 
         if (SchemaShape::isEnum($schema)) {
@@ -153,6 +173,75 @@ final class TypeMapper
 
         // Parsed type lists hold no duplicates, so two or more members always form a valid union.
         return count($members) === 1 ? $members[0] : new UnionType(...$members);
+    }
+
+    /**
+     * Null members make the union nullable; one member of unknown type makes all of it mixed.
+     *
+     * @param array<string, true> $aliases
+     */
+    private function union(Schema $schema, Diagnostics $diagnostics, array $aliases): TypeModel
+    {
+        if ($schema->oneOf() !== [] && $schema->anyOf() !== []) {
+            $diagnostics->warning(self::ONE_OF_AND_ANY_OF, $schema->location());
+        }
+
+        $members = [];
+        $nullable = false;
+        $mixed = false;
+        foreach (array_merge($schema->oneOf(), $schema->anyOf()) as $member) {
+            if ($member->ref() === null && $member->isNullable() && $member->nonNullTypes() === [] && !SchemaShape::isComposed($member)) {
+                $nullable = true;
+
+                continue;
+            }
+
+            // A member that only constrains (a pattern) admits the schema's own type.
+            if ($this->typed([$member]) === [] && $schema->nonNullTypes() !== []) {
+                foreach ($schema->nonNullTypes() as $own) {
+                    $members[] = $this->single($own, $schema, $diagnostics, $aliases);
+                }
+
+                continue;
+            }
+
+            $type = $this->mapWithin($member, $diagnostics, $aliases);
+            if ($type instanceof NullableType) {
+                $nullable = true;
+                $type = $type->inner();
+            }
+
+            $mixed = $mixed || $type instanceof MixedType;
+            $members[] = $type;
+        }
+
+        if ($mixed || $members === []) {
+            return new MixedType();
+        }
+
+        $type = UnionType::of(...$members);
+
+        return $nullable ? self::nullable($type) : $type;
+    }
+
+    /**
+     * The members of a composition that carry a type; the others only constrain it.
+     *
+     * @param list<Schema> $members
+     *
+     * @return list<Schema>
+     */
+    private function typed(array $members): array
+    {
+        return array_values(array_filter(
+            $members,
+            static fn (Schema $member): bool => $member->ref() !== null
+                || $member->nonNullTypes() !== []
+                || $member->enum() !== null
+                || SchemaShape::isComposed($member)
+                || $member->propertyNames() !== []
+                || $member->extensions()->has('x-php-type'),
+        ));
     }
 
     private function explicitType(Schema $schema, Diagnostics $diagnostics): TypeModel

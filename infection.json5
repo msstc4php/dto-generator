@@ -13,6 +13,12 @@
     },
     "mutators": {
         "@default": true,
+        // Equivalent: a cache of ancestor compositions; recomputing gives the same result.
+        "AssignCoalesce": {
+            "ignore": [
+                "MSSTC4PHP\\DtoGenerator\\Domain\\Builder\\AllOfResolver::ancestor",
+            ],
+        },
         // Equivalent: isset()-only seen-maps, so the stored value is never read.
         "TrueValue": {
             "ignore": [
@@ -36,6 +42,8 @@
         "CastString": {
             "ignore": [
                 "MSSTC4PHP\\DtoGenerator\\Domain\\Model\\ClassName::fromFqcn",
+                // Equivalent: json_encode() with JSON_INVALID_UTF8_SUBSTITUTE never returns false for a JSON value.
+                "MSSTC4PHP\\DtoGenerator\\Domain\\Shared\\DefaultValue::toJson",
                 "MSSTC4PHP\\DtoGenerator\\Domain\\Model\\Identifier::normalizeQualifiedName",
                 "MSSTC4PHP\\DtoGenerator\\Domain\\Schema\\JsonPointer::segments",
                 "MSSTC4PHP\\DtoGenerator\\Domain\\Schema\\Reference::target",
