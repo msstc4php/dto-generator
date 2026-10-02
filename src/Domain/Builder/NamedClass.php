@@ -17,10 +17,25 @@ final class NamedClass
 
     private ClassName $name;
 
-    public function __construct(ResolvedSchema $schema, ClassName $name)
+    /** @var list<Schema> */
+    private array $via;
+
+    /**
+     * @param list<Schema> $via the aliases and `allOf` wrappers a reference passed before it reached the class
+     */
+    public function __construct(ResolvedSchema $schema, ClassName $name, array $via = [])
     {
         $this->schema = $schema;
         $this->name = $name;
+        $this->via = $via;
+    }
+
+    /**
+     * @return list<Schema>
+     */
+    public function via(): array
+    {
+        return $this->via;
     }
 
     public function schema(): ResolvedSchema

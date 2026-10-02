@@ -70,6 +70,15 @@ final class AllOfResolver
 
         $key = $schema->location()->toString();
         $parts = new CompositionParts();
+        // Requirements beside the parent's $ref, or on the aliases and wrappers before it, name inherited properties:
+        // warnAboutInheritedRequirements() reports them.
+        if ($index !== null) {
+            $parts->requireFrom($members[$index]);
+            foreach ($parents[$index]->via() as $passed) {
+                $parts->requireFrom($passed);
+            }
+        }
+
         foreach ($members as $at => $member) {
             if ($at !== $index && $at !== $itself) {
                 $this->flatten($member, true, [$key => $key], $parts, $diagnostics);
@@ -168,13 +177,14 @@ final class AllOfResolver
      *
      * @param bool $inside whether the member is written inside the class schema, not reached through a $ref
      * @param array<string, string> $merging locations whose members are being merged, to stop loops
-     * @param Schema|null $origin the member written in the class, when $member is an alias it reached; errors point there
+     * @param Schema|null $origin the member written in the class; errors found through aliases point there
      */
     private function flatten(Schema $member, bool $inside, array $merging, CompositionParts $parts, Diagnostics $diagnostics, ?Schema $origin = null): void
     {
         $origin ??= $member;
         $schema = $member;
         if ($member->ref() !== null) {
+            $parts->requireFrom($member);
             $target = $this->classes->target($member);
             // An unresolved $ref was already reported while loading.
             if (!$target instanceof ResolvedSchema) {
@@ -212,7 +222,7 @@ final class AllOfResolver
     }
 
     /**
-     * An alias (`{$ref: Pet}`) merges what it names, and the requirements written beside its `$ref`.
+     * An alias (`{$ref: Pet}`) merges what it names; flatten() takes the requirements beside its `$ref`.
      *
      * @param Schema $origin the member written in the class
      * @param bool $inside false: the alias was reached through a $ref
@@ -229,7 +239,6 @@ final class AllOfResolver
 
         $merging[$key] = $key;
         $this->flatten($alias, $inside, $merging, $parts, $diagnostics, $origin);
-        $parts->requireFrom($alias);
     }
 
     /**

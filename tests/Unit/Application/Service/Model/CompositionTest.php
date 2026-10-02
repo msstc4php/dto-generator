@@ -734,6 +734,35 @@ final class CompositionTest extends TestCase
         self::assertSame(['name: string', 'lives: int|null'], ModelFixture::classes($output)['App\Dto\Cat']);
     }
 
+    public function testKeepsTheRequirementsBesideAReferenceMember(): void
+    {
+        $output = ModelFixture::build([
+            'Pet' => ['type' => 'object', 'properties' => ['name' => ['type' => 'string']]],
+            'Cat' => ['allOf' => [['$ref' => '#/components/schemas/Pet', 'required' => ['name']], ['properties' => ['lives' => ['type' => 'integer']]]]],
+        ], [], ['*'], AllOfStrategy::MERGE);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(['name: string', 'lives: int|null'], ModelFixture::classes($output)['App\Dto\Cat']);
+    }
+
+    public function testWarnsThatTheParentKeepsTheRequirementsBesideItsReference(): void
+    {
+        $warning = 'warning /project/api/openapi.yaml#/components/schemas/Cat: Required property "name" belongs to the parent App\\Dto\\Pet, where extending cannot make it required; use "x-php-all-of: merge" to require it.';
+        $pet = ['type' => 'object', 'properties' => ['name' => ['type' => 'string']]];
+        $lives = ['properties' => ['lives' => ['type' => 'integer']]];
+
+        $inline = ModelFixture::build(['Pet' => $pet, 'Cat' => ['allOf' => [['$ref' => '#/components/schemas/Pet', 'required' => ['name']], $lives]]]);
+        $aliased = ModelFixture::build([
+            'Pet' => $pet,
+            'Alias' => ['$ref' => '#/components/schemas/Pet', 'required' => ['name']],
+            'Cat' => ['allOf' => [['$ref' => '#/components/schemas/Alias'], $lives]],
+        ]);
+
+        self::assertSame([$warning], ModelFixture::messages($inline));
+        self::assertSame([$warning], ModelFixture::messages($aliased));
+        self::assertSame('final extends App\Dto\Pet', ModelFixture::hierarchy($aliased)['App\Dto\Cat']);
+    }
+
     public function testReportsANonObjectBehindAnAliasAtTheMemberThatUsesIt(): void
     {
         $output = ModelFixture::build([
@@ -779,7 +808,7 @@ final class CompositionTest extends TestCase
             'Cat' => ['type' => 'object', 'properties' => ['petType' => ['type' => 'string']]],
         ]);
 
-        self::assertContains('warning /project/api/openapi.yaml#/components/schemas/Pet/oneOf/1: Variant App\\Dto\\Cat is listed twice.', ModelFixture::messages($output));
+        self::assertSame(['warning /project/api/openapi.yaml#/components/schemas/Pet/oneOf/1: Variant App\\Dto\\Cat is listed twice.'], ModelFixture::messages($output));
     }
 
     public function testReportsAnAllOfMemberWhoseAliasesLoop(): void
