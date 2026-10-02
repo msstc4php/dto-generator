@@ -17,8 +17,12 @@ final class ComposerLockPackages implements ProjectPackages
     public function read(string $directory): InstalledPackages
     {
         $project = ComposerProject::nearest($directory);
+        if ($project === null) {
+            return new InstalledPackages();
+        }
+
         $lock = $project . '/composer.lock';
-        if ($project === null || !is_file($lock)) {
+        if (!is_file($lock)) {
             return new InstalledPackages();
         }
 
@@ -33,16 +37,16 @@ final class ComposerLockPackages implements ProjectPackages
             throw ProjectPackagesUnusable::because($lock, 'is not valid JSON');
         }
 
-        // JSON lists decode to arrays too; only "{}" may be empty.
+        // JSON lists decode to arrays too; an empty one passes like "{}", with no packages.
         if (!is_array($data) || ($data !== [] && array_values($data) === $data)) {
-            throw ProjectPackagesUnusable::because($lock, 'must contain an object');
+            throw ProjectPackagesUnusable::because($lock, 'does not contain an object');
         }
 
         $versions = [];
         foreach (['packages', 'packages-dev'] as $section) {
             $packages = $data[$section] ?? [];
             if (!is_array($packages)) {
-                throw ProjectPackagesUnusable::because($lock, sprintf('"%s" must be a list', $section));
+                throw ProjectPackagesUnusable::because($lock, sprintf('has "%s" that is no list', $section));
             }
 
             foreach ($packages as $package) {

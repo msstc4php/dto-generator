@@ -82,9 +82,9 @@ final class ComposerLockPackagesTest extends TestCase
     public function unusableLocks(): iterable
     {
         yield 'invalid JSON' => ['{', 'is not valid JSON'];
-        yield 'no object' => ['[1]', 'must contain an object'];
-        yield 'packages no list' => ['{"packages": "psr/log"}', '"packages" must be a list'];
-        yield 'dev packages no list' => ['{"packages-dev": 1}', '"packages-dev" must be a list'];
+        yield 'no object' => ['[1]', 'does not contain an object'];
+        yield 'packages no list' => ['{"packages": "psr/log"}', 'has "packages" that is no list'];
+        yield 'dev packages no list' => ['{"packages-dev": 1}', 'has "packages-dev" that is no list'];
         yield 'package no object' => ['{"packages": ["psr/log"]}', 'has a package without a name or version'];
         yield 'package without version' => ['{"packages": [{"name": "psr/log"}]}', 'has a package without a name or version'];
         yield 'package without name' => ['{"packages-dev": [{"version": "1.0.0"}]}', 'has a package without a name or version'];

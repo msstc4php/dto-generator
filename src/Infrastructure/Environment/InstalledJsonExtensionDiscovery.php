@@ -43,9 +43,10 @@ final class InstalledJsonExtensionDiscovery implements ExtensionDiscovery
             return $this->unusable('is not valid JSON');
         }
 
-        // Composer 2 writes {"packages": [...]}, Composer 1 the list itself.
+        // Composer 2 writes {"packages": [...]}, Composer 1 the list itself; composer-runtime-api ^2 rules Composer 1
+        // out for this package, but a hand-made or migrated file may still be a list.
         $packages = is_array($data) && array_key_exists('packages', $data) ? $data['packages'] : $data;
-        if (!is_array($packages)) {
+        if (!is_array($packages) || array_values($packages) !== $packages) {
             return $this->unusable('has no list of packages');
         }
 
@@ -53,7 +54,7 @@ final class InstalledJsonExtensionDiscovery implements ExtensionDiscovery
         $problems = [];
         foreach ($packages as $package) {
             $name = is_array($package) ? $package['name'] ?? null : null;
-            if (!is_array($package) || !is_string($name)) {
+            if (!is_array($package) || !is_string($name) || $name === '') {
                 $problems[] = sprintf('A package without a name in %s is skipped.', $this->file);
 
                 continue;
@@ -66,6 +67,7 @@ final class InstalledJsonExtensionDiscovery implements ExtensionDiscovery
     }
 
     /**
+     * @param non-empty-string $name
      * @param array<array-key, mixed> $package one entry of installed.json, as decoded
      * @param list<DiscoveredExtension> $extensions
      * @param list<string> $problems
@@ -85,7 +87,7 @@ final class InstalledJsonExtensionDiscovery implements ExtensionDiscovery
         }
 
         $classes = $section['extensions'] ?? [];
-        if (!is_array($classes)) {
+        if (!is_array($classes) || array_values($classes) !== $classes) {
             $problems[] = sprintf('Package "%s" declares extra.dto-generator.extensions that is no list of class names.', $name);
 
             return;

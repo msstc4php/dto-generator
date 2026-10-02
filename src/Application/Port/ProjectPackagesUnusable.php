@@ -12,6 +12,9 @@ final class ProjectPackagesUnusable extends RuntimeException
 
     private string $reason = '';
 
+    /**
+     * @param string $reason what is wrong with the file, as a predicate: "is not valid JSON", "cannot be read"
+     */
     public static function because(string $file, string $reason): self
     {
         $exception = new self(sprintf('%s %s.', $file, $reason));

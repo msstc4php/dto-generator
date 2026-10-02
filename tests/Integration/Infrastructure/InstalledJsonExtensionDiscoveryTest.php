@@ -53,7 +53,9 @@ final class InstalledJsonExtensionDiscoveryTest extends TestCase
             ['name' => 'acme/string', 'extra' => ['dto-generator' => ['extensions' => 'Acme\One']]],
             ['name' => 'acme/mixed', 'extra' => ['dto-generator' => ['extensions' => ['Acme\Good', 'not a class', 3]]]],
             ['name' => 'acme/section', 'extra' => ['dto-generator' => 'Acme\One']],
+            ['name' => 'acme/map', 'extra' => ['dto-generator' => ['extensions' => ['a' => 'Acme\One']]]],
             ['extra' => ['dto-generator' => ['extensions' => ['Acme\Nameless']]]],
+            ['name' => '', 'extra' => ['dto-generator' => ['extensions' => ['Acme\Empty']]]],
         ]]);
 
         $found = (new InstalledJsonExtensionDiscovery($this->file))->discover();
@@ -65,6 +67,8 @@ final class InstalledJsonExtensionDiscoveryTest extends TestCase
                 'Package "acme/mixed" declares "not a class" in extra.dto-generator.extensions, which is no class name.',
                 'Package "acme/mixed" declares 3 in extra.dto-generator.extensions, which is no class name.',
                 'Package "acme/section" declares extra.dto-generator that is no object.',
+                'Package "acme/map" declares extra.dto-generator.extensions that is no list of class names.',
+                'A package without a name in ' . $this->file . ' is skipped.',
                 'A package without a name in ' . $this->file . ' is skipped.',
             ],
             $found->problems(),
@@ -87,6 +91,7 @@ final class InstalledJsonExtensionDiscoveryTest extends TestCase
         yield 'invalid JSON' => ['{', 'is not valid JSON'];
         yield 'no packages' => ['{"packages": 1}', 'has no list of packages'];
         yield 'scalar' => ['"x"', 'has no list of packages'];
+        yield 'object without packages' => ['{"dev": true}', 'has no list of packages'];
     }
 
     /**
@@ -115,10 +120,8 @@ final class InstalledJsonExtensionDiscoveryTest extends TestCase
 
     public function testReadsTheInstallationTheGeneratorRunsFrom(): void
     {
-        $found = (new InstalledJsonExtensionDiscovery())->discover();
-
-        self::assertSame([], $found->extensions());
-        self::assertSame([], $found->problems());
+        // This repository's own vendor; its packages may declare extensions some day, but never wrongly.
+        self::assertSame([], (new InstalledJsonExtensionDiscovery())->discover()->problems());
     }
 
     /**

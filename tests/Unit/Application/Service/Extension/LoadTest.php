@@ -90,6 +90,15 @@ final class LoadTest extends TestCase
         self::assertSame(['a', 'b', 'c', 'd', 'e'], $order);
     }
 
+    public function testSkipsADiscoveredExtensionThatIsBuiltIn(): void
+    {
+        $discovery = new FixedExtensionDiscovery(['acme/pkg' => [MarkingExtension::class]]);
+
+        $output = (new Action($this->loader([MarkingExtension::class => new MarkingExtension()]), static fn (): array => [new MarkingExtension()], $discovery))(new Input($this->config([], true)));
+
+        self::assertSame([], $this->messages($output));
+    }
+
     public function testDiscoversNothingWhenTurnedOff(): void
     {
         $discovery = new FixedExtensionDiscovery(['zeta/pkg' => ['App\Zeta']], ['ignored']);

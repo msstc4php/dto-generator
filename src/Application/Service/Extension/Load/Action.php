@@ -80,6 +80,10 @@ final class Action
         $settings = $config->extensions();
         $loaded = array_map(static fn (Extension $extension): array => [$extension, $config->location(), get_class($extension)], ($this->builtIn)($settings->aliases()));
         $listed = [];
+        foreach ($loaded as [, , $class]) {
+            $listed[Identifier::asciiLower($class)] = true;
+        }
+
         foreach ($settings->classes() as $index => $class) {
             $listed[Identifier::asciiLower($class->fqcn())] = true;
             $at = $config->location()->child('extensions', (string) $index);

@@ -187,7 +187,6 @@ final class Action
         $aliases = array_keys($config->extensions()->aliases());
         $model = ($this->buildModel)(new BuildInput($config, $target, $schemas->graph(), $formats, $aliases));
         $diagnostics->merge($model->diagnostics());
-        // Installed versions are detected in stage 6; until then extensions see none.
         $enriched = ($this->enrichModel)(new EnrichInput($model->classes(), $model->enums(), $schemas->graph(), $target, $registry, $this->packages($config, $diagnostics), $verifier));
         $diagnostics->merge($enriched->diagnostics());
         if ($diagnostics->hasErrors()) {

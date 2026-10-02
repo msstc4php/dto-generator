@@ -14,7 +14,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
  */
 final class FixedExtensionDiscovery implements ExtensionDiscovery
 {
-    /** @var array<string, list<string>> */
+    /** @var array<non-empty-string, list<string>> */
     private array $packages;
 
     /** @var list<string> */
@@ -23,7 +23,7 @@ final class FixedExtensionDiscovery implements ExtensionDiscovery
     public int $calls = 0;
 
     /**
-     * @param array<string, list<string>> $packages
+     * @param array<non-empty-string, list<string>> $packages
      * @param list<string> $problems
      */
     public function __construct(array $packages = [], array $problems = [])
