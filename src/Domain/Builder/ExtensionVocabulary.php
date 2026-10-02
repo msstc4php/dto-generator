@@ -16,9 +16,12 @@ final class ExtensionVocabulary
     /** x-php-attributes and x-php-all-of take effect in later stages. */
     private const KNOWN = [
         'x-php-class-name', 'x-php-name', 'x-php-type', 'x-dto-mutable', 'x-php-all-of', 'x-php-skip', 'x-php-attributes',
+        'x-enum-descriptions',
     ];
 
-    private const CLASS_SCHEMA = ['x-php-class-name', 'x-php-type', 'x-dto-mutable', 'x-php-all-of', 'x-php-skip', 'x-php-attributes'];
+    private const CLASS_SCHEMA = [
+        'x-php-class-name', 'x-php-type', 'x-dto-mutable', 'x-php-all-of', 'x-php-skip', 'x-php-attributes', 'x-enum-descriptions',
+    ];
 
     private const ALIAS_SCHEMA = ['x-php-type', 'x-php-skip'];
 

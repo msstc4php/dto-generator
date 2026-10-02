@@ -33,6 +33,16 @@ final class EnumType implements TypeModel
         $this->cases = $cases;
     }
 
+    public static function of(EnumModel $enum): self
+    {
+        $cases = [];
+        foreach ($enum->cases() as $case) {
+            $cases[$case->value()] = $case->name();
+        }
+
+        return new self($enum->name(), $enum->backing(), $cases);
+    }
+
     public function className(): ClassName
     {
         return $this->className;
