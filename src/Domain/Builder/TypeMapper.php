@@ -130,6 +130,13 @@ final class TypeMapper
             );
         }
 
+        if ($schema->enum() !== null && !SchemaShape::isEnum($schema)) {
+            $diagnostics->warning(
+                'This enum has no string or integer value, so it is not generated and the property keeps its plain type.',
+                $schema->location(),
+            );
+        }
+
         $format = $schema->format();
         if ($format !== null && isset($this->formats[$format])) {
             return new ClassType($this->formats[$format]);

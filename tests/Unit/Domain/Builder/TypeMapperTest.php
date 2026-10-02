@@ -127,6 +127,8 @@ final class TypeMapperTest extends TestCase
             'oneOf' => [['oneOf' => [['type' => 'string']]], 'mixed', ["error {$at}: \"oneOf\" is not supported yet; enums, composition and inline objects arrive in a later version."]],
             'allOf' => [['allOf' => [['type' => 'string']]], 'mixed', ["error {$at}: \"allOf\" is not supported yet; enums, composition and inline objects arrive in a later version."]],
             'discriminator alone' => [['discriminator' => ['propertyName' => 'kind']], 'mixed', ["error {$at}: \"discriminator\" is not supported yet; enums, composition and inline objects arrive in a later version."]],
+            'boolean enum' => [['type' => 'boolean', 'enum' => [true]], 'bool', ["warning {$at}: This enum has no string or integer value, so it is not generated and the property keeps its plain type."]],
+            'nullable class by reference' => [['$ref' => '#/components/schemas/MaybeTag'], 'App\Dto\Tag|null', []],
             'map schema' => [['type' => 'object', 'additionalProperties' => ['type' => 'string']], 'array<array-key, string>', []],
             'nullable map schema' => [['type' => ['object', 'null'], 'additionalProperties' => ['type' => 'integer']], 'array<array-key, int>|null', []],
             'undeclared inline object' => [['type' => 'object', 'properties' => ['a' => []]], 'mixed', ["error {$at}: This inline object is not generated (only properties of generated classes get one); move it to components/schemas and use \$ref."]],
@@ -162,6 +164,9 @@ final class TypeMapperTest extends TestCase
         self::assertFalse($shapes['Holder']);
         self::assertFalse($shapes['Email']);
         self::assertFalse(SchemaShape::isEnum(GraphFixture::load(['E' => ['enum' => ['a'], 'x-php-type' => 'App\\Money']])->all()[0]->schema()));
+        self::assertFalse(SchemaShape::isEnum(GraphFixture::load(['E' => ['enum' => [true, null]]])->all()[0]->schema()));
+        self::assertFalse(SchemaShape::isEnum(GraphFixture::load(['E' => ['type' => 'object', 'enum' => [['a' => 1]], 'properties' => ['a' => []]]])->all()[0]->schema()));
+        self::assertTrue(SchemaShape::isEnum(GraphFixture::load(['E' => ['enum' => [1.5, 'a']]])->all()[0]->schema()));
         self::assertFalse(SchemaShape::isEnum(GraphFixture::load(['E' => ['enum' => ['a'], 'oneOf' => [['type' => 'string']]]])->all()[0]->schema()));
         self::assertFalse(SchemaShape::isEnum(GraphFixture::load(['E' => ['enum' => ['a'], '$ref' => '#/components/schemas/F'], 'F' => ['type' => 'string']])->all()[0]->schema()));
     }
@@ -175,7 +180,7 @@ final class TypeMapperTest extends TestCase
         }
 
         self::assertSame(
-            ['Holder' => true, 'Tag' => true, 'Email' => false, 'MaybeCount' => false, 'Currency' => false, 'MaybeCurrency' => false, 'Failed' => false, 'LoopA' => false, 'LoopB' => false, 'Hidden' => true, 'Free' => false, 'RefWithProperties' => false, 'StringWithProperties' => false],
+            ['Holder' => true, 'Tag' => true, 'Email' => false, 'MaybeCount' => false, 'Currency' => false, 'MaybeTag' => true, 'MaybeCurrency' => false, 'Failed' => false, 'LoopA' => false, 'LoopB' => false, 'Hidden' => true, 'Free' => false, 'RefWithProperties' => false, 'StringWithProperties' => false],
             $shapes,
         );
     }
@@ -212,7 +217,7 @@ final class TypeMapperTest extends TestCase
         $at = '/project/api/openapi.yaml#/components/schemas/';
 
         return new Declarations(
-            [self::TAG => ClassName::fromFqcn('App\Dto\Tag')],
+            [self::TAG => ClassName::fromFqcn('App\Dto\Tag'), $at . 'MaybeTag' => ClassName::fromFqcn('App\Dto\Tag')],
             [
                 $at . 'Currency' => new EnumType(ClassName::fromFqcn('App\Dto\Currency'), EnumBacking::from(EnumBacking::STRING), ['EUR' => 'EUR']),
                 $at . 'MaybeCurrency' => new EnumType(ClassName::fromFqcn('App\Dto\MaybeCurrency'), EnumBacking::from(EnumBacking::STRING), ['EUR' => 'EUR']),
@@ -262,6 +267,7 @@ final class TypeMapperTest extends TestCase
             'Email' => ['type' => 'string', 'format' => 'email'],
             'MaybeCount' => ['type' => ['integer', 'null']],
             'Currency' => ['type' => 'string', 'enum' => ['EUR']],
+            'MaybeTag' => ['type' => ['object', 'null'], 'properties' => ['label' => ['type' => 'string']]],
             'MaybeCurrency' => ['enum' => ['EUR', null]],
             'Failed' => ['enum' => ['a', 1]],
             'LoopA' => ['$ref' => '#/components/schemas/LoopB'],

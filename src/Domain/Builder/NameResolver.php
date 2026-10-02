@@ -57,7 +57,12 @@ final class NameResolver
     public function enumCaseName($value): ?string
     {
         if (is_int($value)) {
-            return $value < 0 ? 'VALUE_MINUS_' . abs($value) : 'VALUE_' . $value;
+            // The digits of the string form: abs(PHP_INT_MIN) overflows to a float.
+            return $value < 0 ? 'VALUE_MINUS_' . substr((string) $value, 1) : 'VALUE_' . $value;
+        }
+
+        if ($value === '') {
+            return 'EMPTY';
         }
 
         // "inProgress" is two words, like "in-progress".

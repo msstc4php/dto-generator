@@ -80,7 +80,22 @@ final class EnumBuilderTest extends TestCase
             'whole float' => [['enum' => [2.0]], false, ["error {$at}/enum/0: Enum value 2.0 cannot back a PHP enum; use strings or integers."]],
             'integers declared as strings' => [['type' => 'string', 'enum' => [1]], false, ["error {$at}/type: \"type\" does not match the enum values, which are integers."]],
             'empty descriptions' => [['enum' => ['a'], 'x-enum-descriptions' => []], true, []],
-            'descriptions as a list' => [['enum' => ['a'], 'x-enum-descriptions' => ['A']], true, ["error {$at}/x-enum-descriptions: \"x-enum-descriptions\" must map enum values to descriptions."]],
+            'descriptions as a list' => [['enum' => ['a'], 'x-enum-descriptions' => ['A']], true, ["error {$at}/x-enum-descriptions/0: There is no enum value \"0\"."]],
+            'number type for integers' => [['type' => 'number', 'enum' => [1, 2]], true, []],
+            'every problem at once' => [['enum' => ['a', 1.5, true, 'A']], false, [
+                "error {$at}/enum/1: Enum value 1.5 cannot back a PHP enum; use strings or integers.",
+                "error {$at}/enum/2: Enum value true cannot back a PHP enum; use strings or integers.",
+            ]],
+            'unusable value before a collision' => [['enum' => ['***', 'a', 'A']], false, [
+                "error {$at}/enum/0: Enum value \"***\" has no characters usable in a case name.",
+                "error {$at}/enum/2: Enum values \"a\" and \"A\" both become case A.",
+            ]],
+            'every collision at once' => [['enum' => ['a', 'A', 'b', 'B']], false, [
+                "error {$at}/enum/1: Enum values \"a\" and \"A\" both become case A.",
+                "error {$at}/enum/3: Enum values \"b\" and \"B\" both become case B.",
+            ]],
+            'empty string' => [['enum' => ['', 'x']], true, []],
+            'lowest integer' => [['enum' => [PHP_INT_MIN]], true, []],
             'same case' => [['enum' => ['eur', 'EUR']], false, ["error {$at}/enum/1: Enum values \"eur\" and \"EUR\" both become case EUR."]],
             'no usable characters' => [['enum' => ['***']], false, ["error {$at}/enum/0: Enum value \"***\" has no characters usable in a case name."]],
             'descriptions not a map' => [['enum' => ['a'], 'x-enum-descriptions' => 'A'], true, ["error {$at}/x-enum-descriptions: \"x-enum-descriptions\" must map enum values to descriptions."]],
@@ -132,5 +147,15 @@ final class EnumBuilderTest extends TestCase
         self::assertInstanceOf(EnumModel::class, $enum);
         self::assertNull($enum->cases()[0]->doc()->description());
         self::assertSame('Two.', $enum->cases()[1]->doc()->description());
+    }
+
+    public function testDescribesTheCasesOfAZeroBasedIntegerEnum(): void
+    {
+        [$enum, $messages] = $this->build(['enum' => [0, 1], 'x-enum-descriptions' => ['Zero.', 'One.']]);
+
+        self::assertSame([], $messages);
+        self::assertInstanceOf(EnumModel::class, $enum);
+        self::assertSame('Zero.', $enum->cases()[0]->doc()->description());
+        self::assertSame(['VALUE_0' => 0, 'VALUE_1' => 1], self::cases($enum));
     }
 }

@@ -33,7 +33,11 @@ final class SchemaShape
      */
     public static function isEnum(Schema $schema): bool
     {
-        return $schema->enum() !== null
+        // Booleans or numbers alone cannot back a PHP enum; an object with properties stays a class.
+        $values = array_filter($schema->enum() ?? [], static fn ($value): bool => is_int($value) || is_string($value));
+
+        return $values !== []
+            && !self::isClass($schema)
             && $schema->ref() === null
             && !$schema->extensions()->has('x-php-type')
             && $schema->allOf() === []

@@ -20,7 +20,7 @@ final class Output
      * @param list<BuiltClass> $classes in graph order, inline classes after their owners
      * @param list<BuiltEnum> $enums
      */
-    public function __construct(array $classes, Diagnostics $diagnostics, array $enums = [])
+    public function __construct(array $classes, Diagnostics $diagnostics, array $enums)
     {
         $this->classes = $classes;
         $this->diagnostics = $diagnostics;

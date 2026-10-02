@@ -58,6 +58,13 @@ final class Registry
         return true;
     }
 
+    public function isDeclared(Schema $schema): bool
+    {
+        $key = $schema->location()->toString();
+
+        return isset($this->classes[$key]) || isset($this->enums[$key]);
+    }
+
     public function planClass(Schema $schema, ClassName $name, int $source): void
     {
         $this->classes[$schema->location()->toString()] = $name;

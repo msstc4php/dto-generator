@@ -51,26 +51,33 @@ final class EnumBuilder
         $descriptions = $this->descriptions($schema, $values, $diagnostics);
         $cases = [];
         $taken = [];
+        $failed = false;
         foreach ($values as $index => $value) {
             $case = $this->names->enumCaseName($value);
             if ($case === null) {
-                $diagnostics->error(sprintf('Enum value %s has no characters usable in a case name.', $this->show($value)), $at->child((string) $index));
+                $diagnostics->error(sprintf('Enum value %s has no characters usable in a case name.', self::show($value)), $at->child((string) $index));
+                $failed = true;
 
-                return null;
+                continue;
             }
 
             if (isset($taken[$case])) {
                 $diagnostics->error(
-                    sprintf('Enum values %s and %s both become case %s.', $this->show($taken[$case]), $this->show($value), $case),
+                    sprintf('Enum values %s and %s both become case %s.', self::show($taken[$case]), self::show($value), $case),
                     $at->child((string) $index),
                 );
+                $failed = true;
 
-                return null;
+                continue;
             }
 
             $taken[$case] = $value;
             $description = $descriptions[$value] ?? null;
             $cases[] = new EnumCase($case, $value, new DocModel($description));
+        }
+
+        if ($failed) {
+            return null;
         }
 
         return new EnumModel($name, $backing, $cases, new DocModel($schema->description(), $schema->isDeprecated()), $schema->location());
@@ -85,6 +92,7 @@ final class EnumBuilder
     {
         $values = [];
         $seen = [];
+        $valid = true;
         foreach ($schema->enum() ?? [] as $index => $value) {
             $value = Json::value($value);
             if ($value === null) {
@@ -93,26 +101,27 @@ final class EnumBuilder
 
             if (!is_int($value) && !is_string($value)) {
                 $diagnostics->error(
-                    sprintf('Enum value %s cannot back a PHP enum; use strings or integers.', $this->show($value)),
+                    sprintf('Enum value %s cannot back a PHP enum; use strings or integers.', self::show($value)),
                     $schema->location()->child('enum', (string) $index),
                 );
-
-                return null;
-            }
-
-            // JSON keeps "1" and 1 apart.
-            $key = self::show($value);
-            if (in_array($key, $seen, true)) {
-                $diagnostics->warning(sprintf('Enum value %s is listed twice.', $this->show($value)), $schema->location()->child('enum', (string) $index));
+                $valid = false;
 
                 continue;
             }
 
-            $seen[] = $key;
+            // JSON keeps "1" and 1 apart.
+            $key = self::show($value);
+            if (isset($seen[$key])) {
+                $diagnostics->warning(sprintf('Enum value %s is listed twice.', self::show($value)), $schema->location()->child('enum', (string) $index));
+
+                continue;
+            }
+
+            $seen[$key] = $index;
             $values[$index] = $value;
         }
 
-        return $values;
+        return $valid ? $values : null;
     }
 
     /**
@@ -129,8 +138,9 @@ final class EnumBuilder
 
         $backing = EnumBacking::from($strings === 0 ? EnumBacking::INT : EnumBacking::STRING);
         $declared = $schema->nonNullTypes();
-        $expected = SchemaType::from($strings === 0 ? SchemaType::INTEGER : SchemaType::STRING);
-        if ($declared !== [] && $declared !== [$expected]) {
+        // JSON Schema counts integers as numbers too.
+        $accepted = $strings === 0 ? [[SchemaType::from(SchemaType::INTEGER)], [SchemaType::from(SchemaType::NUMBER)]] : [[SchemaType::from(SchemaType::STRING)]];
+        if ($declared !== [] && !in_array($declared, $accepted, true)) {
             $diagnostics->error(
                 sprintf('"type" does not match the enum values, which are %s.', $strings === 0 ? 'integers' : 'strings'),
                 $schema->location()->child('type'),
@@ -155,7 +165,8 @@ final class EnumBuilder
 
         $at = $schema->location()->child('x-enum-descriptions');
         $raw = $schema->extensions()->get('x-enum-descriptions');
-        if (!is_array($raw) || ($raw !== [] && Json::isList($raw))) {
+        // A list is a map with keys 0..n-1, which is how JSON decodes descriptions of the integer enum 0..n-1.
+        if (!is_array($raw)) {
             $diagnostics->error('"x-enum-descriptions" must map enum values to descriptions.', $at);
 
             return [];

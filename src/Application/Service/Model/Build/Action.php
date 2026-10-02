@@ -125,27 +125,52 @@ final class Action
      */
     private function hoist(Schema $owner, ClassName $ownerName, int $source, Registry $registry, EnumBuilder $enums, Diagnostics $diagnostics): void
     {
+        $candidates = [];
         foreach ($owner->propertyNames() as $wireName) {
-            $candidate = $owner->requireProperty($wireName);
+            $property = $owner->requireProperty($wireName);
             // The class builder reports a malformed x-php-skip; here it only decides whether to look further.
-            if (ClassBuilder::isSkipped($candidate, new Diagnostics())) {
-                continue;
+            if (!ClassBuilder::isSkipped($property, new Diagnostics())) {
+                $base = $this->names->className($wireName);
+                $candidates[] = [$property, $base === null ? null : $ownerName->shortName() . $base, $wireName];
             }
+        }
 
-            $inline = $this->inline($candidate, '');
-            if ($inline === null) {
+        $additional = $owner->additionalProperties();
+        if ($additional instanceof Schema) {
+            $candidates[] = [$additional, $ownerName->shortName() . 'AdditionalProperty', null];
+        }
+
+        foreach ($candidates as [$schema, $baseName, $wireName]) {
+            $inline = $this->inline($schema, '');
+            // A schema reached by $ref from elsewhere may already carry its own name.
+            if ($inline === null || $registry->isDeclared($inline[0])) {
                 continue;
             }
 
             [$candidate, $suffix] = $inline;
-            $isEnum = SchemaShape::isEnum($candidate);
-            $base = $this->names->className($wireName);
-            $short = $base === null ? null : $this->shortName($candidate, $ownerName->shortName() . $base . $suffix, $diagnostics);
+            $short = $this->inlineName($candidate, $baseName === null ? null : $baseName . $suffix, (string) $wireName, $diagnostics);
             $name = $short === null ? null : ClassName::fromFqcn(($ownerName->namespace() === '' ? '' : $ownerName->namespace() . '\\') . $short);
-            if (!$name instanceof ClassName || !$registry->claim($name, $candidate, $diagnostics) || !$this->declare($candidate, $name, $source, $isEnum, $registry, $enums, $diagnostics)) {
+            if (!$name instanceof ClassName || !$registry->claim($name, $candidate, $diagnostics) || !$this->declare($candidate, $name, $source, SchemaShape::isEnum($candidate), $registry, $enums, $diagnostics)) {
                 $registry->abandon($candidate);
             }
         }
+    }
+
+    /**
+     * x-php-class-name, or `<Parent><Property>…`; a property name with no usable characters needs the override.
+     */
+    private function inlineName(Schema $schema, ?string $derived, string $wireName, Diagnostics $diagnostics): ?string
+    {
+        if ($derived !== null || $schema->extensions()->has('x-php-class-name')) {
+            return $this->shortName($schema, (string) $derived, $diagnostics);
+        }
+
+        $diagnostics->error(
+            sprintf('Property name "%s" gives no class name for its inline schema; set "x-php-class-name".', $wireName),
+            $schema->location(),
+        );
+
+        return null;
     }
 
     /**
@@ -160,8 +185,13 @@ final class Action
         }
 
         $items = $schema->items();
+        if ($items instanceof Schema) {
+            return $this->inline($items, $suffix . 'Item');
+        }
 
-        return $items instanceof Schema ? $this->inline($items, $suffix . 'Item') : null;
+        $values = $schema->additionalProperties();
+
+        return $values instanceof Schema ? $this->inline($values, $suffix . 'Value') : null;
     }
 
     /**

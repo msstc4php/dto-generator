@@ -25,12 +25,12 @@ final class ExtensionVocabulary
 
     private const ALIAS_SCHEMA = ['x-php-type', 'x-php-skip'];
 
-    /** An inline object or enum in a property takes the keys of the class it becomes. */
-    private const PROPERTY = [
-        'x-php-name', 'x-php-type', 'x-php-skip', 'x-php-attributes', 'x-php-class-name', 'x-dto-mutable', 'x-enum-descriptions',
-    ];
+    private const PROPERTY = ['x-php-name', 'x-php-type', 'x-php-skip', 'x-php-attributes'];
 
-    private const ITEMS = ['x-php-type', 'x-php-class-name', 'x-dto-mutable', 'x-enum-descriptions'];
+    /** An inline object or enum becomes a class or an enum, so it takes the keys of one. */
+    private const DECLARATION = ['x-php-class-name', 'x-dto-mutable', 'x-enum-descriptions'];
+
+    private const ITEMS = ['x-php-type'];
 
     private function __construct()
     {
@@ -62,10 +62,20 @@ final class ExtensionVocabulary
      */
     private static function check(Schema $schema, array $allowed, Diagnostics $diagnostics): void
     {
-        self::checkKeys($schema, $allowed, $diagnostics);
+        self::checkKeys($schema, self::withDeclaration($schema, $allowed), $diagnostics);
         for ($items = $schema->items(); $items instanceof Schema; $items = $items->items()) {
-            self::checkKeys($items, self::ITEMS, $diagnostics);
+            self::checkKeys($items, self::withDeclaration($items, self::ITEMS), $diagnostics);
         }
+    }
+
+    /**
+     * @param list<string> $allowed
+     *
+     * @return list<string>
+     */
+    private static function withDeclaration(Schema $schema, array $allowed): array
+    {
+        return SchemaShape::isClass($schema) || SchemaShape::isEnum($schema) ? array_merge($allowed, self::DECLARATION) : $allowed;
     }
 
     /**
@@ -74,7 +84,8 @@ final class ExtensionVocabulary
     private static function checkKeys(Schema $schema, array $allowed, Diagnostics $diagnostics): void
     {
         foreach ($schema->extensions()->keys() as $key) {
-            if (strncmp($key, 'x-php-', 6) !== 0 && strncmp($key, 'x-dto-', 6) !== 0) {
+            // x-enum-descriptions belongs to the vocabulary without the x-php-/x-dto- prefix that marks the rest.
+            if (strncmp($key, 'x-php-', 6) !== 0 && strncmp($key, 'x-dto-', 6) !== 0 && !in_array($key, self::KNOWN, true)) {
                 continue;
             }
 

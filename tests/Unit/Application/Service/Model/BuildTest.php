@@ -407,7 +407,106 @@ final class BuildTest extends TestCase
             'grid' => ['type' => 'array', 'items' => ['type' => 'array', 'items' => ['type' => 'object', 'properties' => ['cell' => ['type' => 'string']]]]],
         ]]]);
 
-        self::assertSame(["error {$at}User/properties/---: Property name \"---\" has no usable characters; set \"x-php-name\"."], ModelFixture::messages($output));
+        self::assertSame(
+            [
+                "error {$at}User/properties/---: Property name \"---\" gives no class name for its inline schema; set \"x-php-class-name\".",
+                "error {$at}User/properties/---: Property name \"---\" has no usable characters; set \"x-php-name\".",
+            ],
+            ModelFixture::messages($output),
+        );
         self::assertSame(['App\\Dto\\User', 'App\\Dto\\UserGridItemItem'], array_keys(ModelFixture::classes($output)));
+    }
+
+    public function testDeclaresAPropertySchemaReachedByReferenceOnce(): void
+    {
+        $output = ModelFixture::build([
+            'User' => ['type' => 'object', 'properties' => [
+                'address' => ['type' => 'object', 'properties' => ['city' => ['type' => 'string']]],
+                'kind' => ['type' => 'string', 'enum' => ['a', 'b']],
+            ]],
+            'Order' => ['type' => 'object', 'properties' => [
+                'ship' => ['$ref' => '#/components/schemas/User/properties/address'],
+                'kind' => ['$ref' => '#/components/schemas/User/properties/kind'],
+            ]],
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        $classes = ModelFixture::classes($output);
+        self::assertCount(3, $classes);
+        self::assertCount(1, ModelFixture::enums($output));
+        $address = array_values(array_diff(array_keys($classes), ['App\\Dto\\User', 'App\\Dto\\Order']))[0];
+        self::assertContains('address: ' . $address . '|null', $classes['App\\Dto\\User']);
+        self::assertContains('ship: ' . $address . '|null', $classes['App\\Dto\\Order']);
+    }
+
+    public function testNamesAnInlineClassOfAnUnnamedPropertyFromItsOverride(): void
+    {
+        $at = self::AT;
+        $output = ModelFixture::build(['User' => ['type' => 'object', 'properties' => [
+            "\u{20AC}" => ['type' => 'object', 'x-php-name' => 'euro', 'x-php-class-name' => 'Euro', 'properties' => ['cents' => ['type' => 'integer']]],
+            '***' => ['type' => 'object', 'x-php-name' => 'stars', 'properties' => ['n' => ['type' => 'integer']]],
+        ]]]);
+
+        self::assertSame(
+            ["error {$at}User/properties/***: Property name \"***\" gives no class name for its inline schema; set \"x-php-class-name\"."],
+            ModelFixture::messages($output),
+        );
+        self::assertSame(["\u{20AC}: App\\Dto\\Euro|null", '***: mixed'], ModelFixture::classes($output)['App\\Dto\\User']);
+    }
+
+    public function testDeclaresInlineSchemasOfMaps(): void
+    {
+        $output = ModelFixture::build(['User' => [
+            'type' => 'object',
+            'properties' => [
+                'scores' => ['type' => 'object', 'additionalProperties' => ['type' => 'object', 'properties' => ['value' => ['type' => 'number']]]],
+            ],
+            'additionalProperties' => ['type' => 'string', 'enum' => ['x', 'y']],
+        ]]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(
+            ['scores: array<array-key, App\\Dto\\UserScoresValue>|null', 'additionalProperties: array<array-key, App\\Dto\\UserAdditionalProperty>'],
+            ModelFixture::classes($output)['App\\Dto\\User'],
+        );
+        self::assertSame(['App\\Dto\\UserAdditionalProperty'], ModelFixture::enums($output));
+    }
+
+    public function testWarnsAboutClassKeysOnPropertiesThatDeclareNothing(): void
+    {
+        $at = self::AT;
+        $output = ModelFixture::build(['User' => ['type' => 'object', 'properties' => [
+            'id' => ['type' => 'string', 'x-php-class-name' => 'Id'],
+            'tags' => ['type' => 'array', 'items' => ['type' => 'string', 'x-enum-descriptions' => ['a' => 'A']]],
+        ]]]);
+
+        self::assertSame(
+            [
+                "warning {$at}User/properties/id/x-php-class-name: \"x-php-class-name\" has no effect here.",
+                "warning {$at}User/properties/tags/items/x-enum-descriptions: \"x-enum-descriptions\" has no effect here.",
+            ],
+            ModelFixture::messages($output),
+        );
+    }
+
+    public function testAcceptsTheKeysOfClassesAndEnums(): void
+    {
+        $output = ModelFixture::build([
+            'User' => ['type' => 'object', 'x-dto-mutable' => true, 'x-php-all-of' => 'extends', 'properties' => ['id' => []]],
+            'Level' => ['enum' => ['low'], 'x-php-class-name' => 'Grade', 'x-enum-descriptions' => ['low' => 'Low.'], 'x-php-attributes' => [['class' => 'App\\Attr\\Audited']]],
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(['App\\Dto\\Grade'], ModelFixture::enums($output));
+    }
+
+    public function testNamesInlineSchemasInMapsInsideArrays(): void
+    {
+        $output = ModelFixture::build(['User' => ['type' => 'object', 'properties' => [
+            'grid' => ['type' => 'array', 'items' => ['type' => 'object', 'additionalProperties' => ['type' => 'object', 'properties' => ['cell' => []]]]],
+        ]]]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(['App\\Dto\\User', 'App\\Dto\\UserGridItemValue'], array_keys(ModelFixture::classes($output)));
     }
 }

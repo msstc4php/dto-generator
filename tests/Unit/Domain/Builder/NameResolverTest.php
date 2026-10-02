@@ -109,10 +109,11 @@ final class NameResolverTest extends TestCase
             'other keyword' => ['new', 'NEW'],
             'non-ascii' => ["\u{00FC}ber", "\u{00FC}BER"],
             'nothing usable' => ['***', null],
-            'empty' => ['', null],
             'zero' => [0, 'VALUE_0'],
             'positive' => [42, 'VALUE_42'],
             'negative' => [-1, 'VALUE_MINUS_1'],
+            'lowest integer' => [PHP_INT_MIN, 'VALUE_MINUS_9223372036854775808'],
+            'empty string' => ['', 'EMPTY'],
         ];
     }
 }
