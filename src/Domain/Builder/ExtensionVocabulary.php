@@ -25,9 +25,12 @@ final class ExtensionVocabulary
 
     private const ALIAS_SCHEMA = ['x-php-type', 'x-php-skip'];
 
-    private const PROPERTY = ['x-php-name', 'x-php-type', 'x-php-skip', 'x-php-attributes'];
+    /** An inline object or enum in a property takes the keys of the class it becomes. */
+    private const PROPERTY = [
+        'x-php-name', 'x-php-type', 'x-php-skip', 'x-php-attributes', 'x-php-class-name', 'x-dto-mutable', 'x-enum-descriptions',
+    ];
 
-    private const ITEMS = ['x-php-type'];
+    private const ITEMS = ['x-php-type', 'x-php-class-name', 'x-dto-mutable', 'x-enum-descriptions'];
 
     private function __construct()
     {

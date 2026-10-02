@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MSSTC4PHP\DtoGenerator\Application\Service\Model\Build;
 
 use MSSTC4PHP\DtoGenerator\Domain\Builder\ClassBuilder;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\EnumBuilder;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\ExtensionVocabulary;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\NameResolver;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\RequiredCycles;
@@ -13,12 +14,14 @@ use MSSTC4PHP\DtoGenerator\Domain\Builder\TypeMapper;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
+use MSSTC4PHP\DtoGenerator\Domain\Model\EnumModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\Identifier;
-use MSSTC4PHP\DtoGenerator\Domain\Schema\ResolvedSchema;
+use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
 
 /**
- * Turns the schema graph into the IR: one class per object schema, including schemas only reached by $ref,
- * in the namespace of the source that owns them.
+ * Turns the schema graph into the IR: one class per object schema and one enum per enum schema, including schemas
+ * only reached by $ref, in the namespace of the source that owns them. Inline objects and enums of class
+ * properties become `<Parent><Property>` declarations (spec §5.3).
  */
 final class Action
 {
@@ -33,22 +36,16 @@ final class Action
     {
         $diagnostics = new Diagnostics();
         $config = $input->config();
-        /** @var array<string, ClassName> $classes */
-        $classes = [];
-        /** @var array<string, true> $skipped */
-        $skipped = [];
-        /** @var array<string, string> $taken lower-cased FQCN → location that claimed it */
-        $taken = [];
-        /** @var list<array{ResolvedSchema, ClassName, int}> $planned */
-        $planned = [];
+        $registry = new Registry();
+        $enums = new EnumBuilder($this->names);
 
         foreach ($input->graph()->all() as $resolved) {
             $source = $resolved->source();
             $schema = $resolved->schema();
-            $key = $resolved->location()->toString();
             $isClass = SchemaShape::isClass($schema);
+            $isEnum = SchemaShape::isEnum($schema);
             $unsupported = SchemaShape::unsupportedKeyword($schema);
-            if ($isClass || $unsupported !== null) {
+            if ($isClass || $isEnum || $unsupported !== null) {
                 ExtensionVocabulary::checkClass($schema, $diagnostics);
             } else {
                 ExtensionVocabulary::checkAlias($schema, $diagnostics);
@@ -59,12 +56,12 @@ final class Action
             }
 
             if (ClassBuilder::isSkipped($schema, $diagnostics)) {
-                $skipped[$key] = true;
+                $registry->skip($schema);
 
                 continue;
             }
 
-            if (!$isClass) {
+            if (!$isClass && !$isEnum) {
                 if ($unsupported !== null && $resolved->isSelected()) {
                     $diagnostics->warning(
                         sprintf('"%s" is not supported yet, so no class is generated for "%s".', $unsupported, $resolved->name()),
@@ -75,45 +72,91 @@ final class Action
                 continue;
             }
 
-            $short = $this->shortName($resolved, $diagnostics);
-            if ($short === null) {
-                continue;
+            $short = $this->shortName($schema, $resolved->name(), $diagnostics);
+            $name = $short === null ? null : ClassName::fromFqcn($config->sources()[$source]->namespace() . '\\' . $short);
+            if ($name instanceof ClassName && $registry->claim($name, $schema, $diagnostics)) {
+                $this->declare($schema, $name, $source, $isEnum, $registry, $enums, $diagnostics);
             }
+        }
 
-            $name = ClassName::fromFqcn($config->sources()[$source]->namespace() . '\\' . $short);
-            $lower = Identifier::asciiLower($name->fqcn());
-            if (isset($taken[$lower])) {
-                $diagnostics->error(
-                    sprintf('Class %s is already generated from %s; set "x-php-class-name" on one of them.', $name->fqcn(), $taken[$lower]),
-                    $schema->location(),
-                );
-
-                continue;
-            }
-
-            $taken[$lower] = $key;
-            $classes[$key] = $name;
-            $planned[] = [$resolved, $name, $source];
+        // Inline classes are planned while walking, so the walk reaches inline objects nested in inline objects.
+        for ($index = 0; ($planned = $registry->plannedAt($index)) !== null; $index++) {
+            $this->hoist($planned[0], $planned[1], $planned[2], $registry, $enums, $diagnostics);
         }
 
         $builder = new ClassBuilder(
             $this->names,
-            new TypeMapper($input->graph(), $classes, $skipped, $input->target(), $config->formats()),
+            new TypeMapper($input->graph(), $registry->declarations(), $input->target(), $config->formats()),
             $input->target(),
         );
         $built = [];
-        foreach ($planned as [$resolved, $name, $source]) {
-            $built[] = new BuiltClass($builder->build($name, $resolved, $diagnostics), $source);
+        foreach ($registry->planned() as [$schema, $name, $source]) {
+            $built[] = new BuiltClass($builder->build($name, $schema, $diagnostics), $source);
         }
 
         RequiredCycles::check(array_map(static fn (BuiltClass $class): ClassModel => $class->model(), $built), $diagnostics);
 
-        return new Output($built, $diagnostics);
+        return new Output($built, $diagnostics, $registry->enums());
     }
 
-    private function shortName(ResolvedSchema $resolved, Diagnostics $diagnostics): ?string
+    /**
+     * False when the enum could not be built (the reason was reported).
+     */
+    private function declare(Schema $schema, ClassName $name, int $source, bool $isEnum, Registry $registry, EnumBuilder $enums, Diagnostics $diagnostics): bool
     {
-        $schema = $resolved->schema();
+        if (!$isEnum) {
+            $registry->planClass($schema, $name, $source);
+
+            return true;
+        }
+
+        $enum = $enums->build($name, $schema, $diagnostics);
+        if (!$enum instanceof EnumModel) {
+            return false;
+        }
+
+        $registry->addEnum($schema, $enum, $source);
+
+        return true;
+    }
+
+    /**
+     * Declares the inline objects and enums of a class's properties, looking through arrays (`…Item`).
+     */
+    private function hoist(Schema $owner, ClassName $ownerName, int $source, Registry $registry, EnumBuilder $enums, Diagnostics $diagnostics): void
+    {
+        foreach ($owner->propertyNames() as $wireName) {
+            $candidate = $owner->requireProperty($wireName);
+            // The class builder reports a malformed x-php-skip; here it only decides whether to look further.
+            if (ClassBuilder::isSkipped($candidate, new Diagnostics())) {
+                continue;
+            }
+
+            $suffix = '';
+            while ($candidate->ref() === null && !SchemaShape::isClass($candidate) && !SchemaShape::isEnum($candidate) && $candidate->items() instanceof Schema) {
+                $candidate = $candidate->items();
+                $suffix .= 'Item';
+            }
+
+            $isEnum = SchemaShape::isEnum($candidate);
+            if (!$isEnum && !SchemaShape::isClass($candidate)) {
+                continue;
+            }
+
+            $base = $this->names->className($wireName);
+            $short = $base === null ? null : $this->shortName($candidate, $ownerName->shortName() . $base . $suffix, $diagnostics);
+            $name = $short === null ? null : ClassName::fromFqcn(($ownerName->namespace() === '' ? '' : $ownerName->namespace() . '\\') . $short);
+            if (!$name instanceof ClassName || !$registry->claim($name, $candidate, $diagnostics) || !$this->declare($candidate, $name, $source, $isEnum, $registry, $enums, $diagnostics)) {
+                $registry->abandon($candidate);
+            }
+        }
+    }
+
+    /**
+     * x-php-class-name, or the PascalCase form of the schema name (an inline name is already PascalCase).
+     */
+    private function shortName(Schema $schema, string $schemaName, Diagnostics $diagnostics): ?string
+    {
         if ($schema->extensions()->has('x-php-class-name')) {
             $override = $schema->extensions()->get('x-php-class-name');
             if (is_string($override) && Identifier::isValid($override) && !Identifier::isReserved($override)) {
@@ -128,10 +171,10 @@ final class Action
             return null;
         }
 
-        $name = $this->names->className($resolved->name());
+        $name = $this->names->className($schemaName);
         if ($name === null) {
             $diagnostics->error(
-                sprintf('Schema name "%s" has no usable characters; set "x-php-class-name".', $resolved->name()),
+                sprintf('Schema name "%s" has no usable characters; set "x-php-class-name".', $schemaName),
                 $schema->location(),
             );
         }

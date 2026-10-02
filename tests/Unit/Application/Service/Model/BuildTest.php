@@ -156,7 +156,6 @@ final class BuildTest extends TestCase
         self::assertSame(['App\Dto\Cat'], array_keys(ModelFixture::classes($output)));
         self::assertSame(
             [
-                "warning {$at}Currency: \"enum\" is not supported yet, so no class is generated for \"Currency\".",
                 "warning {$at}Pet: \"oneOf\" is not supported yet, so no class is generated for \"Pet\".",
             ],
             ModelFixture::messages($output),
@@ -264,7 +263,6 @@ final class BuildTest extends TestCase
                 "error {$at}S/x-php-nmae: Unknown extension \"x-php-nmae\"; {$known}",
                 "warning {$at}S/x-php-class-name: \"x-php-class-name\" has no effect here.",
                 "error {$at}Hidden/x-php-clas-name: Unknown extension \"x-php-clas-name\"; {$known}",
-                "warning {$at}Currency: \"enum\" is not supported yet, so no class is generated for \"Currency\".",
                 "error {$at}Tags/items/x-php-nmae: Unknown extension \"x-php-nmae\"; {$known}",
             ],
             ModelFixture::messages($output),
@@ -311,5 +309,92 @@ final class BuildTest extends TestCase
             ],
             ModelFixture::messages($output),
         );
+    }
+
+    public function testBuildsEnumsAndInlineDeclarations(): void
+    {
+        $output = ModelFixture::build([
+            'User' => ['type' => 'object', 'required' => ['currency'], 'properties' => [
+                'currency' => ['$ref' => '#/components/schemas/Currency'],
+                'status' => ['type' => 'string', 'enum' => ['active', 'blocked', null]],
+                'address' => ['type' => 'object', 'properties' => [
+                    'city' => ['type' => 'string'],
+                    'geo' => ['type' => 'object', 'properties' => ['lat' => ['type' => 'number']]],
+                ]],
+                'tags' => ['type' => 'array', 'items' => ['type' => 'object', 'properties' => ['label' => ['type' => 'string']]]],
+                'extra' => ['type' => 'object', 'x-php-class-name' => 'Extras', 'properties' => ['note' => ['type' => 'string']]],
+                'skipped' => ['type' => 'object', 'x-php-skip' => true, 'properties' => ['x' => []]],
+                'counts' => ['type' => 'object', 'additionalProperties' => ['type' => 'integer']],
+            ]],
+            'Currency' => ['type' => 'string', 'enum' => ['EUR', 'USD']],
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(
+            [
+                'App\Dto\User' => [
+                    'currency: App\Dto\Currency',
+                    'status: App\Dto\UserStatus|null',
+                    'address: App\Dto\UserAddress|null',
+                    'tags: list<App\Dto\UserTagsItem>|null',
+                    'extra: App\Dto\Extras|null',
+                    'counts: array<array-key, int>|null',
+                ],
+                'App\Dto\UserAddress' => ['city: string|null', 'geo: App\Dto\UserAddressGeo|null'],
+                'App\Dto\UserTagsItem' => ['label: string|null'],
+                'App\Dto\Extras' => ['note: string|null'],
+                'App\Dto\UserAddressGeo' => ['lat: float|null'],
+            ],
+            ModelFixture::classes($output),
+        );
+        self::assertSame(['App\Dto\Currency', 'App\Dto\UserStatus'], ModelFixture::enums($output));
+    }
+
+    public function testRefusesAnInlineNameThatIsTaken(): void
+    {
+        $at = self::AT;
+        $output = ModelFixture::build([
+            'User' => ['type' => 'object', 'properties' => ['address' => ['type' => 'object', 'properties' => ['city' => []]]]],
+            'UserAddress' => ['type' => 'object', 'properties' => ['street' => []]],
+        ]);
+
+        self::assertSame(
+            ["error {$at}User/properties/address: Class App\\Dto\\UserAddress is already generated from {$at}UserAddress; set \"x-php-class-name\" on one of them."],
+            ModelFixture::messages($output),
+        );
+        self::assertSame(['App\Dto\User' => ['address: mixed'], 'App\Dto\UserAddress' => ['street: mixed']], ModelFixture::classes($output));
+    }
+
+    public function testReportsAnEnumItCannotBuildOnce(): void
+    {
+        $at = self::AT;
+        $output = ModelFixture::build([
+            'User' => ['type' => 'object', 'properties' => ['level' => ['$ref' => '#/components/schemas/Level']]],
+            'Level' => ['enum' => ['low', 1]],
+        ]);
+
+        self::assertSame(["error {$at}Level/enum: The enum mixes strings and integers, which no PHP enum can back."], ModelFixture::messages($output));
+        self::assertSame(['App\Dto\User' => ['level: mixed']], ModelFixture::classes($output));
+        self::assertSame([], ModelFixture::enums($output));
+    }
+
+    public function testTreatsAMapSchemaAsAnAlias(): void
+    {
+        $output = ModelFixture::build([
+            'User' => ['type' => 'object', 'properties' => ['scores' => ['$ref' => '#/components/schemas/Scores']]],
+            'Scores' => ['type' => 'object', 'additionalProperties' => ['type' => 'number']],
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(['App\Dto\User' => ['scores: array<array-key, float>|null']], ModelFixture::classes($output));
+    }
+
+    public function testReportsAnInlineEnumItCannotBuildOnce(): void
+    {
+        $at = self::AT;
+        $output = ModelFixture::build(['User' => ['type' => 'object', 'properties' => ['level' => ['enum' => ['low', 1]]]]]);
+
+        self::assertSame(["error {$at}User/properties/level/enum: The enum mixes strings and integers, which no PHP enum can back."], ModelFixture::messages($output));
+        self::assertSame(['App\\Dto\\User' => ['level: mixed']], ModelFixture::classes($output));
     }
 }

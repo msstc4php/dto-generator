@@ -42,11 +42,7 @@ final class TypeMapper
 
     private SchemaGraph $graph;
 
-    /** @var array<string, ClassName> */
-    private array $classes;
-
-    /** @var array<string, true> */
-    private array $skipped;
+    private Declarations $declarations;
 
     private TargetProfile $target;
 
@@ -54,15 +50,12 @@ final class TypeMapper
     private array $formats;
 
     /**
-     * @param array<string, ClassName> $classes class of every class-shaped schema, by location key
-     * @param array<string, true> $skipped location keys of schemas excluded by x-php-skip
      * @param array<int|string, ClassName> $formats custom formats from the config
      */
-    public function __construct(SchemaGraph $graph, array $classes, array $skipped, TargetProfile $target, array $formats)
+    public function __construct(SchemaGraph $graph, Declarations $declarations, TargetProfile $target, array $formats)
     {
         $this->graph = $graph;
-        $this->classes = $classes;
-        $this->skipped = $skipped;
+        $this->declarations = $declarations;
         $this->target = $target;
         $this->formats = $formats;
     }
@@ -84,7 +77,7 @@ final class TypeMapper
     {
         $type = $this->bareType($schema, $diagnostics, $aliases);
 
-        return $schema->isNullable() ? self::nullable($type) : $type;
+        return $this->admitsNull($schema) ? self::nullable($type) : $type;
     }
 
     /**
@@ -94,6 +87,16 @@ final class TypeMapper
     {
         if ($schema->extensions()->has('x-php-type')) {
             return $this->explicitType($schema, $diagnostics);
+        }
+
+        $key = $schema->location()->toString();
+        $declared = $this->declared($key);
+        if ($declared instanceof TypeModel) {
+            return $declared;
+        }
+
+        if ($this->declarations->isAbandoned($key)) {
+            return new MixedType();
         }
 
         $unsupported = SchemaShape::unsupportedKeyword($schema);
@@ -112,9 +115,19 @@ final class TypeMapper
         }
 
         if (SchemaShape::isClass($schema)) {
-            $diagnostics->error('Inline object schemas are not supported yet; move it to components/schemas and use $ref.', $schema->location());
+            $diagnostics->error(
+                'This inline object is not generated (only properties of generated classes get one); move it to components/schemas and use $ref.',
+                $schema->location(),
+            );
 
             return new MixedType();
+        }
+
+        if (SchemaShape::isEnum($schema)) {
+            $diagnostics->warning(
+                'This inline enum is not generated (only properties of generated classes get one), so the property keeps its plain type.',
+                $schema->location(),
+            );
         }
 
         $format = $schema->format();
@@ -184,18 +197,20 @@ final class TypeMapper
         }
 
         $key = $target->location()->toString();
-        if (isset($this->classes[$key])) {
-            return new ClassType($this->classes[$key]);
+        $declared = $this->declared($key);
+        if ($declared instanceof TypeModel) {
+            return $this->admitsNull($target->schema()) ? self::nullable($declared) : $declared;
         }
 
-        if (isset($this->skipped[$key])) {
+        if ($this->declarations->isSkipped($key)) {
             $diagnostics->warning('$ref points to a schema excluded by "x-php-skip".', $schema->location());
 
             return new MixedType();
         }
 
-        // A class-shaped target without a class lost its namespace to an ambiguity that was already reported.
-        if (SchemaShape::isClass($target->schema())) {
+        // A class- or enum-shaped target without a declaration lost its namespace to an ambiguity or failed to build;
+        // either was already reported.
+        if (SchemaShape::isClass($target->schema()) || SchemaShape::isEnum($target->schema())) {
             return new MixedType();
         }
 
@@ -233,7 +248,9 @@ final class TypeMapper
 
                 return new ListType($items instanceof Schema ? $this->mapWithin($items, $diagnostics, $aliases) : new MixedType());
             default:
-                return new MapType(new MixedType());
+                $additional = $schema->additionalProperties();
+
+                return new MapType($additional instanceof Schema ? $this->mapWithin($additional, $diagnostics, $aliases) : new MixedType());
         }
     }
 
@@ -327,5 +344,23 @@ final class TypeMapper
         }
 
         return $lower ? max($a, $b) : min($a, $b);
+    }
+
+    private function declared(string $key): ?TypeModel
+    {
+        $class = $this->declarations->classAt($key);
+        if ($class instanceof ClassName) {
+            return new ClassType($class);
+        }
+
+        return $this->declarations->enumAt($key);
+    }
+
+    /**
+     * Null is allowed by `type: [T, "null"]` and, for an enum, by a null among its values.
+     */
+    private function admitsNull(Schema $schema): bool
+    {
+        return $schema->isNullable() || in_array(null, (array) $schema->enum(), true);
     }
 }

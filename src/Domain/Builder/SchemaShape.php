@@ -15,25 +15,17 @@ final class SchemaShape
     }
 
     /**
-     * The first keyword the builder cannot handle yet; composition, enums and maps of schemas arrive in stage 4.
+     * The first keyword the builder cannot handle yet; composition and discriminators arrive in stage 4b.
      */
     public static function unsupportedKeyword(Schema $schema): ?string
     {
-        if ($schema->enum() !== null) {
-            return 'enum';
-        }
-
         foreach (['allOf' => $schema->allOf(), 'oneOf' => $schema->oneOf(), 'anyOf' => $schema->anyOf()] as $keyword => $schemas) {
             if ($schemas !== []) {
                 return $keyword;
             }
         }
 
-        if ($schema->discriminator() instanceof Discriminator) {
-            return 'discriminator';
-        }
-
-        return $schema->additionalProperties() instanceof Schema ? 'additionalProperties' : null;
+        return $schema->discriminator() instanceof Discriminator ? 'discriminator' : null;
     }
 
     /**

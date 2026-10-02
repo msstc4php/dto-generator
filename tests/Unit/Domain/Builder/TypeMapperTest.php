@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Tests\Unit\Domain\Builder;
 
+use MSSTC4PHP\DtoGenerator\Domain\Builder\Declarations;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\SchemaShape;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\TypeMapper;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostic;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
+use MSSTC4PHP\DtoGenerator\Domain\Model\EnumBacking;
+use MSSTC4PHP\DtoGenerator\Domain\Model\EnumType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\MixedType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\NullableType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ScalarType;
@@ -19,6 +22,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Target\MetadataMode;
 use MSSTC4PHP\DtoGenerator\Domain\Target\Mutability;
 use MSSTC4PHP\DtoGenerator\Domain\Target\PhpVersion;
 use MSSTC4PHP\DtoGenerator\Domain\Target\TargetProfile;
+use MSSTC4PHP\DtoGenerator\Tests\Support\EmitterFixture;
 use MSSTC4PHP\DtoGenerator\Tests\Support\GraphFixture;
 use PHPUnit\Framework\TestCase;
 
@@ -119,13 +123,16 @@ final class TypeMapperTest extends TestCase
             'exclusive minimum at the top' => [['type' => 'integer', 'exclusiveMinimum' => PHP_INT_MAX], 'int', ["warning {$at}/exclusiveMinimum: \"exclusiveMinimum\" leaves no integer above it, so it is ignored."]],
             'exclusive maximum at the bottom' => [['type' => 'integer', 'exclusiveMaximum' => PHP_INT_MIN], 'int', ["warning {$at}/exclusiveMaximum: \"exclusiveMaximum\" leaves no integer below it, so it is ignored."]],
             'empty range' => [['type' => 'integer', 'minimum' => 10, 'maximum' => 5], 'int', ["warning {$at}: The minimum is greater than the maximum, so no range is applied."]],
-            'enum' => [['type' => 'string', 'enum' => ['a']], 'mixed', ["error {$at}: \"enum\" is not supported yet; enums, composition and inline objects arrive in a later version."]],
+            'undeclared inline enum' => [['type' => 'string', 'enum' => ['a']], 'string', ["warning {$at}: This inline enum is not generated (only properties of generated classes get one), so the property keeps its plain type."]],
             'oneOf' => [['oneOf' => [['type' => 'string']]], 'mixed', ["error {$at}: \"oneOf\" is not supported yet; enums, composition and inline objects arrive in a later version."]],
             'allOf' => [['allOf' => [['type' => 'string']]], 'mixed', ["error {$at}: \"allOf\" is not supported yet; enums, composition and inline objects arrive in a later version."]],
             'discriminator alone' => [['discriminator' => ['propertyName' => 'kind']], 'mixed', ["error {$at}: \"discriminator\" is not supported yet; enums, composition and inline objects arrive in a later version."]],
-            'map schema' => [['type' => 'object', 'additionalProperties' => ['type' => 'string']], 'mixed', ["error {$at}: \"additionalProperties\" is not supported yet; enums, composition and inline objects arrive in a later version."]],
-            'inline object' => [['type' => 'object', 'properties' => ['a' => []]], 'mixed', ["error {$at}: Inline object schemas are not supported yet; move it to components/schemas and use \$ref."]],
-            'enum behind an alias' => [['$ref' => '#/components/schemas/Currency'], 'mixed', ['error /project/api/openapi.yaml#/components/schemas/Currency: "enum" is not supported yet; enums, composition and inline objects arrive in a later version.']],
+            'map schema' => [['type' => 'object', 'additionalProperties' => ['type' => 'string']], 'array<array-key, string>', []],
+            'nullable map schema' => [['type' => ['object', 'null'], 'additionalProperties' => ['type' => 'integer']], 'array<array-key, int>|null', []],
+            'undeclared inline object' => [['type' => 'object', 'properties' => ['a' => []]], 'mixed', ["error {$at}: This inline object is not generated (only properties of generated classes get one); move it to components/schemas and use \$ref."]],
+            'enum by reference' => [['$ref' => '#/components/schemas/Currency'], 'App\Dto\Currency', []],
+            'nullable enum by reference' => [['$ref' => '#/components/schemas/MaybeCurrency'], 'App\Dto\MaybeCurrency|null', []],
+            'ungenerated enum by reference' => [['$ref' => '#/components/schemas/Failed'], 'mixed', []],
             'alias loop' => [['$ref' => '#/components/schemas/LoopA'], 'mixed', ['error /project/api/openapi.yaml#/components/schemas/LoopA: The $ref chain loops back to itself without reaching an object schema.']],
             'skipped target' => [['$ref' => '#/components/schemas/Hidden'], 'mixed', ["warning {$at}: \$ref points to a schema excluded by \"x-php-skip\"."]],
             'x-php-type not a string' => [['x-php-type' => 5], 'mixed', ["error {$at}/x-php-type: \"x-php-type\" must be a class name."]],
@@ -168,8 +175,49 @@ final class TypeMapperTest extends TestCase
         }
 
         self::assertSame(
-            ['Holder' => true, 'Tag' => true, 'Email' => false, 'MaybeCount' => false, 'Currency' => false, 'LoopA' => false, 'LoopB' => false, 'Hidden' => true, 'Free' => false, 'RefWithProperties' => false, 'StringWithProperties' => false],
+            ['Holder' => true, 'Tag' => true, 'Email' => false, 'MaybeCount' => false, 'Currency' => false, 'MaybeCurrency' => false, 'Failed' => false, 'LoopA' => false, 'LoopB' => false, 'Hidden' => true, 'Free' => false, 'RefWithProperties' => false, 'StringWithProperties' => false],
             $shapes,
+        );
+    }
+
+    public function testUsesTheDeclarationOfAnInlineSchema(): void
+    {
+        $graph = GraphFixture::load(['Holder' => ['type' => 'object', 'properties' => [
+            'address' => ['type' => 'object', 'properties' => ['city' => []]],
+            'status' => ['enum' => ['on', null]],
+        ]]]);
+        $at = '/project/api/openapi.yaml#/components/schemas/Holder/properties/';
+        $mapper = new TypeMapper(
+            $graph,
+            new Declarations(
+                [$at . 'address' => ClassName::fromFqcn('App\Dto\HolderAddress')],
+                [$at . 'status' => new EnumType(ClassName::fromFqcn('App\Dto\HolderStatus'), EnumBacking::from(EnumBacking::STRING), ['on' => 'ON'])],
+            ),
+            EmitterFixture::target('8.2', Mutability::IMMUTABLE),
+            [],
+        );
+        $holder = $graph->all()[0]->schema();
+        $diagnostics = new Diagnostics();
+
+        self::assertSame('App\Dto\HolderAddress', $mapper->map($holder->requireProperty('address'), $diagnostics)->describe());
+        self::assertSame('App\Dto\HolderStatus|null', $mapper->map($holder->requireProperty('status'), $diagnostics)->describe());
+        self::assertSame([], $diagnostics->all());
+    }
+
+    /**
+     * @return Declarations the classes, enums and skipped schemas of the shared graph
+     */
+    private function declarations(): Declarations
+    {
+        $at = '/project/api/openapi.yaml#/components/schemas/';
+
+        return new Declarations(
+            [self::TAG => ClassName::fromFqcn('App\Dto\Tag')],
+            [
+                $at . 'Currency' => new EnumType(ClassName::fromFqcn('App\Dto\Currency'), EnumBacking::from(EnumBacking::STRING), ['EUR' => 'EUR']),
+                $at . 'MaybeCurrency' => new EnumType(ClassName::fromFqcn('App\Dto\MaybeCurrency'), EnumBacking::from(EnumBacking::STRING), ['EUR' => 'EUR']),
+            ],
+            [$at . 'Hidden' => true],
         );
     }
 
@@ -184,8 +232,7 @@ final class TypeMapperTest extends TestCase
         $graph = $this->graph($property);
         $mapper = new TypeMapper(
             $graph,
-            [self::TAG => ClassName::fromFqcn('App\Dto\Tag')],
-            ['/project/api/openapi.yaml#/components/schemas/Hidden' => true],
+            $this->declarations(),
             new TargetProfile(
                 PhpVersion::fromString($php),
                 MetadataMode::from(MetadataMode::NONE),
@@ -215,6 +262,8 @@ final class TypeMapperTest extends TestCase
             'Email' => ['type' => 'string', 'format' => 'email'],
             'MaybeCount' => ['type' => ['integer', 'null']],
             'Currency' => ['type' => 'string', 'enum' => ['EUR']],
+            'MaybeCurrency' => ['enum' => ['EUR', null]],
+            'Failed' => ['enum' => ['a', 1]],
             'LoopA' => ['$ref' => '#/components/schemas/LoopB'],
             'LoopB' => ['$ref' => '#/components/schemas/LoopA'],
             'Hidden' => ['type' => 'object', 'properties' => ['x' => []], 'x-php-skip' => true],
@@ -230,8 +279,7 @@ final class TypeMapperTest extends TestCase
         $withoutEdges = new SchemaGraph($loaded->all());
         $mapper = new TypeMapper(
             $withoutEdges,
-            [],
-            [],
+            new Declarations(),
             new TargetProfile(
                 PhpVersion::fromString('8.2'),
                 MetadataMode::from(MetadataMode::NONE),
