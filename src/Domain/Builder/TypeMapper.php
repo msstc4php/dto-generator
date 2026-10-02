@@ -48,11 +48,11 @@ final class TypeMapper
 
     private TargetProfile $target;
 
-    /** @var array<int|string, ClassName> */
+    /** @var array<int|string, TypeModel> */
     private array $formats;
 
     /**
-     * @param array<int|string, ClassName> $formats custom formats from the config
+     * @param array<int|string, TypeModel> $formats custom formats of the config and the extensions
      */
     public function __construct(SchemaGraph $graph, Declarations $declarations, TargetProfile $target, array $formats)
     {
@@ -159,7 +159,7 @@ final class TypeMapper
 
         $format = $schema->format();
         if ($format !== null && isset($this->formats[$format])) {
-            return new ClassType($this->formats[$format]);
+            return $this->formats[$format];
         }
 
         $members = [];

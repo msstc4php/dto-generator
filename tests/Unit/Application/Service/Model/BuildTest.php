@@ -10,6 +10,9 @@ use MSSTC4PHP\DtoGenerator\Application\Service\Schemas\Load\Action as LoadSchema
 use MSSTC4PHP\DtoGenerator\Application\Service\Schemas\Load\Input as SchemasInput;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\NameResolver;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\SchemaParser;
+use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
+use MSSTC4PHP\DtoGenerator\Domain\Model\ClassType;
+use MSSTC4PHP\DtoGenerator\Domain\Model\ScalarType;
 use MSSTC4PHP\DtoGenerator\Domain\Target\AccessorStyle;
 use MSSTC4PHP\DtoGenerator\Domain\Target\DateTimeClass;
 use MSSTC4PHP\DtoGenerator\Domain\Target\MetadataMode;
@@ -17,6 +20,8 @@ use MSSTC4PHP\DtoGenerator\Domain\Target\Mutability;
 use MSSTC4PHP\DtoGenerator\Domain\Target\PhpVersion;
 use MSSTC4PHP\DtoGenerator\Domain\Target\TargetProfile;
 use MSSTC4PHP\DtoGenerator\Tests\Support\ConfigMother;
+use MSSTC4PHP\DtoGenerator\Tests\Support\EmitterFixture;
+use MSSTC4PHP\DtoGenerator\Tests\Support\GraphFixture;
 use MSSTC4PHP\DtoGenerator\Tests\Support\InMemoryDocumentLoader;
 use MSSTC4PHP\DtoGenerator\Tests\Support\ModelFixture;
 use PHPUnit\Framework\TestCase;
@@ -539,5 +544,35 @@ final class BuildTest extends TestCase
 
         self::assertSame([], ModelFixture::messages($output));
         self::assertSame(['App\\Dto\\User', 'App\\Dto\\Score'], array_keys(ModelFixture::classes($output)));
+    }
+
+    public function testMapsFormatsToTheGivenTypes(): void
+    {
+        $graph = GraphFixture::load(['User' => ['type' => 'object', 'properties' => ['id' => ['type' => 'string', 'format' => 'uuid'], 'at' => ['type' => 'string', 'format' => 'day']]]]);
+        $input = new Input(
+            ConfigMother::config(ConfigMother::source(GraphFixture::SPEC)),
+            EmitterFixture::target('8.2', Mutability::IMMUTABLE),
+            $graph,
+            ['uuid' => new ClassType(ClassName::fromFqcn('App\Uuid')), 'day' => ScalarType::string('non-empty-string')],
+        );
+
+        $output = (new Action(new NameResolver()))($input);
+
+        self::assertSame(['id: App\Uuid|null', 'at: non-empty-string|null'], ModelFixture::classes($output)['App\Dto\User']);
+    }
+
+    public function testAcceptsAliasKeysOnClassesAndProperties(): void
+    {
+        $at = self::AT;
+        $graph = GraphFixture::load(['User' => [
+            'type' => 'object',
+            'x-audit' => 'high',
+            'properties' => ['id' => ['type' => 'string', 'x-audit' => 'low'], 'tags' => ['type' => 'array', 'items' => ['type' => 'string', 'x-audit' => 'none']]],
+        ]]);
+        $input = new Input(ConfigMother::config(ConfigMother::source(GraphFixture::SPEC)), EmitterFixture::target('8.2', Mutability::IMMUTABLE), $graph, [], ['x-audit']);
+
+        $output = (new Action(new NameResolver()))($input);
+
+        self::assertSame(["warning {$at}User/properties/tags/items/x-audit: \"x-audit\" has no effect here."], ModelFixture::messages($output));
     }
 }

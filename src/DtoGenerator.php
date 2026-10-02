@@ -8,14 +8,17 @@ use Composer\InstalledVersions;
 use MSSTC4PHP\DtoGenerator\Application\Config\ConfigFactory;
 use MSSTC4PHP\DtoGenerator\Application\Config\TargetResolver;
 use MSSTC4PHP\DtoGenerator\Application\Service\Config\Load\Action as LoadConfig;
+use MSSTC4PHP\DtoGenerator\Application\Service\Extension\Load\Action as LoadExtensions;
 use MSSTC4PHP\DtoGenerator\Application\Service\Generate\Action as Generate;
 use MSSTC4PHP\DtoGenerator\Application\Service\Model\Build\Action as BuildModel;
+use MSSTC4PHP\DtoGenerator\Application\Service\Model\Enrich\Action as EnrichModel;
 use MSSTC4PHP\DtoGenerator\Application\Service\Schemas\Load\Action as LoadSchemas;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\NameResolver;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\SchemaParser;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Document\FileDocumentLoader;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Emitter\PhpParserEmitter;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Environment\ComposerJsonPhpConstraint;
+use MSSTC4PHP\DtoGenerator\Infrastructure\Extension\ClassExtensionLoader;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Writer\FilesystemWriter;
 use MSSTC4PHP\DtoGenerator\Presentation\Cli\ErrorOutput;
 use MSSTC4PHP\DtoGenerator\Presentation\Cli\GenerateCommand;
@@ -46,8 +49,10 @@ final class DtoGenerator
 
         return new Generate(
             new LoadConfig($loader, new ConfigFactory(), new TargetResolver(new ComposerJsonPhpConstraint())),
+            new LoadExtensions(new ClassExtensionLoader(), static fn (): array => []),
             new LoadSchemas($loader, new SchemaParser()),
             new BuildModel(new NameResolver()),
+            new EnrichModel(),
             new PhpParserEmitter(),
             new FilesystemWriter(),
         );

@@ -23,6 +23,23 @@ final class ConfigMother
         return self::configWith(AllOfStrategy::from(AllOfStrategy::EXTENDS), $source, ...$more);
     }
 
+    public static function configWithExtensions(ExtensionSettings $extensions, SourceConfig $source): GeneratorConfig
+    {
+        return new GeneratorConfig(
+            self::PATH,
+            new TargetSettings(null, null, true),
+            new DtoSettings(
+                Mutability::from(Mutability::IMMUTABLE),
+                AccessorStyle::from(AccessorStyle::AUTO),
+                DateTimeClass::from(DateTimeClass::IMMUTABLE),
+                AllOfStrategy::from(AllOfStrategy::EXTENDS),
+            ),
+            [],
+            $extensions,
+            [$source],
+        );
+    }
+
     public static function configWith(AllOfStrategy $allOfStrategy, SourceConfig $source, SourceConfig ...$more): GeneratorConfig
     {
         return new GeneratorConfig(

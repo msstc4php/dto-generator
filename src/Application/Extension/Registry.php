@@ -143,7 +143,7 @@ final class Registry implements ExtensionRegistry
             try {
                 array_push($attributes, ...$enricher->enrichProperty($context));
             } catch (Throwable $exception) {
-                $this->diagnostics->error(
+                $context->diagnostics()->error(
                     sprintf('Extension "%s" failed on property "%s": %s', $this->owners[spl_object_hash($enricher)], $context->property()->wireName(), $exception->getMessage()),
                     $context->schema()->location(),
                 );
@@ -163,7 +163,7 @@ final class Registry implements ExtensionRegistry
             try {
                 array_push($attributes, ...$enricher->enrichClass($context));
             } catch (Throwable $exception) {
-                $this->diagnostics->error(
+                $context->diagnostics()->error(
                     sprintf('Extension "%s" failed on class %s: %s', $this->owners[spl_object_hash($enricher)], $context->class()->name()->fqcn(), $exception->getMessage()),
                     $context->schema()->location(),
                 );

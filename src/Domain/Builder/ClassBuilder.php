@@ -36,11 +36,18 @@ final class ClassBuilder
 
     private TargetProfile $target;
 
-    public function __construct(NameResolver $names, TypeMapper $types, TargetProfile $target)
+    /** @var list<string> */
+    private array $aliases;
+
+    /**
+     * @param list<string> $aliases keys of attributeAliases, which properties may carry
+     */
+    public function __construct(NameResolver $names, TypeMapper $types, TargetProfile $target, array $aliases = [])
     {
         $this->names = $names;
         $this->types = $types;
         $this->target = $target;
+        $this->aliases = $aliases;
     }
 
     public static function isSkipped(Schema $schema, Diagnostics $diagnostics): bool
@@ -71,7 +78,7 @@ final class ClassBuilder
         $sources = $this->sources($composition);
         $skipped = $this->skippedWireNames($sources);
         foreach ($sources as [$wireName, $propertySchema]) {
-            ExtensionVocabulary::checkProperty($propertySchema, $diagnostics);
+            ExtensionVocabulary::checkProperty($propertySchema, $diagnostics, $this->aliases);
             if (self::isSkipped($propertySchema, $diagnostics) && $composition->isRequired($wireName)) {
                 $diagnostics->warning(
                     sprintf('Property "%s" is required but excluded by "x-php-skip".', $wireName),

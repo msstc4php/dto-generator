@@ -168,6 +168,7 @@ final class ConfigFactoryTest extends TestCase
             'unknown dto key' => [['version' => 1, 'dto' => ['mutable' => true], 'sources' => [$source]], 'Unknown key "mutable"', '/dto/mutable'],
             'unknown format key' => [['version' => 1, 'formats' => ['uuid' => ['type' => 'App\Uuid', 'kind' => 1]], 'sources' => [$source]], 'Unknown key "kind"', '/formats/uuid/kind'],
             'reserved x-dto alias' => [['version' => 1, 'attributeAliases' => ['x-dto-audit' => []], 'sources' => [$source]], 'outside the reserved', '/attributeAliases/x-dto-audit'],
+            'alias of a core key' => [['version' => 1, 'attributeAliases' => ['x-enum-descriptions' => ['class' => 'App\A']], 'sources' => [$source]], 'outside the reserved', '/attributeAliases/x-enum-descriptions'],
             'alias list' => [['version' => 1, 'attributeAliases' => ['x-audit' => ['App\A']], 'sources' => [$source]], 'An alias must be an object', '/attributeAliases/x-audit'],
             'empty spec' => [['version' => 1, 'sources' => [['spec' => ''] + $source]], '"spec" must be a non-empty string', '/sources/0/spec'],
             'numeric spec' => [['version' => 1, 'sources' => [['spec' => 5] + $source]], '"spec" must be a non-empty string', '/sources/0/spec'],
