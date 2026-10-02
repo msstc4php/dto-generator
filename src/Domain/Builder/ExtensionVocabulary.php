@@ -9,7 +9,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
 
 /**
  * The core x-php-* / x-dto-* vocabulary (spec §7) and where each key takes effect; other x- keys belong to
- * enrichers and are left alone. Every check also covers the schema's nested `items`.
+ * enrichers and are left alone. Every check also covers the schema's nested `items` and `additionalProperties`.
  */
 final class ExtensionVocabulary
 {
@@ -63,8 +63,19 @@ final class ExtensionVocabulary
     private static function check(Schema $schema, array $allowed, Diagnostics $diagnostics): void
     {
         self::checkKeys($schema, self::withDeclaration($schema, $allowed), $diagnostics);
-        for ($items = $schema->items(); $items instanceof Schema; $items = $items->items()) {
-            self::checkKeys($items, self::withDeclaration($items, self::ITEMS), $diagnostics);
+        self::checkValues($schema, $diagnostics);
+    }
+
+    /**
+     * The `items` and `additionalProperties` schemas, down to any depth.
+     */
+    private static function checkValues(Schema $schema, Diagnostics $diagnostics): void
+    {
+        foreach ([$schema->items(), $schema->additionalProperties()] as $value) {
+            if ($value instanceof Schema) {
+                self::checkKeys($value, self::withDeclaration($value, self::ITEMS), $diagnostics);
+                self::checkValues($value, $diagnostics);
+            }
         }
     }
 

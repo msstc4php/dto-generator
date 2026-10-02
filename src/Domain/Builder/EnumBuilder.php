@@ -55,7 +55,7 @@ final class EnumBuilder
         foreach ($values as $index => $value) {
             $case = $this->names->enumCaseName($value);
             if ($case === null) {
-                $diagnostics->error(sprintf('Enum value %s has no characters usable in a case name.', self::show($value)), $at->child((string) $index));
+                $diagnostics->error(sprintf('Enum value %s has no characters usable in a case name.', $this->show($value)), $at->child((string) $index));
                 $failed = true;
 
                 continue;
@@ -63,7 +63,7 @@ final class EnumBuilder
 
             if (isset($taken[$case])) {
                 $diagnostics->error(
-                    sprintf('Enum values %s and %s both become case %s.', self::show($taken[$case]), self::show($value), $case),
+                    sprintf('Enum values %s and %s both become case %s.', $this->show($taken[$case]), $this->show($value), $case),
                     $at->child((string) $index),
                 );
                 $failed = true;
@@ -101,7 +101,7 @@ final class EnumBuilder
 
             if (!is_int($value) && !is_string($value)) {
                 $diagnostics->error(
-                    sprintf('Enum value %s cannot back a PHP enum; use strings or integers.', self::show($value)),
+                    sprintf('Enum value %s cannot back a PHP enum; use strings or integers.', $this->show($value)),
                     $schema->location()->child('enum', (string) $index),
                 );
                 $valid = false;
@@ -110,9 +110,9 @@ final class EnumBuilder
             }
 
             // JSON keeps "1" and 1 apart.
-            $key = self::show($value);
+            $key = $this->show($value);
             if (isset($seen[$key])) {
-                $diagnostics->warning(sprintf('Enum value %s is listed twice.', self::show($value)), $schema->location()->child('enum', (string) $index));
+                $diagnostics->warning(sprintf('Enum value %s is listed twice.', $this->show($value)), $schema->location()->child('enum', (string) $index));
 
                 continue;
             }
@@ -165,9 +165,17 @@ final class EnumBuilder
 
         $at = $schema->location()->child('x-enum-descriptions');
         $raw = $schema->extensions()->get('x-enum-descriptions');
-        // A list is a map with keys 0..n-1, which is how JSON decodes descriptions of the integer enum 0..n-1.
         if (!is_array($raw)) {
             $diagnostics->error('"x-enum-descriptions" must map enum values to descriptions.', $at);
+
+            return [];
+        }
+
+        // JSON decodes a map keyed 0..n-1 as a list, and openapi-generator lists descriptions by position: accept a list
+        // only where both readings agree.
+        $positions = array_values($values);
+        if (Json::isList($raw) && array_filter(array_keys($raw), static fn (int $key): bool => ($positions[$key] ?? null) !== $key) !== []) {
+            $diagnostics->error('A list of descriptions is ambiguous unless each position holds that same enum value; map enum values to descriptions.', $at);
 
             return [];
         }

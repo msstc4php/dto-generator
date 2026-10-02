@@ -125,6 +125,7 @@ final class Action
      */
     private function hoist(Schema $owner, ClassName $ownerName, int $source, Registry $registry, EnumBuilder $enums, Diagnostics $diagnostics): void
     {
+        // Each candidate: the schema, `<Parent><Property>` (null without usable characters), the wire name.
         $candidates = [];
         foreach ($owner->propertyNames() as $wireName) {
             $property = $owner->requireProperty($wireName);
@@ -137,7 +138,7 @@ final class Action
 
         $additional = $owner->additionalProperties();
         if ($additional instanceof Schema) {
-            $candidates[] = [$additional, $ownerName->shortName() . 'AdditionalProperty', null];
+            $candidates[] = [$additional, $ownerName->shortName() . 'AdditionalProperty', 'additionalProperties'];
         }
 
         foreach ($candidates as [$schema, $baseName, $wireName]) {
@@ -148,7 +149,7 @@ final class Action
             }
 
             [$candidate, $suffix] = $inline;
-            $short = $this->inlineName($candidate, $baseName === null ? null : $baseName . $suffix, (string) $wireName, $diagnostics);
+            $short = $this->inlineName($candidate, $baseName === null ? null : $baseName . $suffix, $wireName, $diagnostics);
             $name = $short === null ? null : ClassName::fromFqcn(($ownerName->namespace() === '' ? '' : $ownerName->namespace() . '\\') . $short);
             if (!$name instanceof ClassName || !$registry->claim($name, $candidate, $diagnostics) || !$this->declare($candidate, $name, $source, SchemaShape::isEnum($candidate), $registry, $enums, $diagnostics)) {
                 $registry->abandon($candidate);

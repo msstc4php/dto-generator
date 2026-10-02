@@ -80,7 +80,10 @@ final class EnumBuilderTest extends TestCase
             'whole float' => [['enum' => [2.0]], false, ["error {$at}/enum/0: Enum value 2.0 cannot back a PHP enum; use strings or integers."]],
             'integers declared as strings' => [['type' => 'string', 'enum' => [1]], false, ["error {$at}/type: \"type\" does not match the enum values, which are integers."]],
             'empty descriptions' => [['enum' => ['a'], 'x-enum-descriptions' => []], true, []],
-            'descriptions as a list' => [['enum' => ['a'], 'x-enum-descriptions' => ['A']], true, ["error {$at}/x-enum-descriptions/0: There is no enum value \"0\"."]],
+            'descriptions as a list' => [['enum' => ['a'], 'x-enum-descriptions' => ['A']], true, ["error {$at}/x-enum-descriptions: A list of descriptions is ambiguous unless each position holds that same enum value; map enum values to descriptions."]],
+            'descriptions listed out of order' => [['enum' => [2, 1, 0], 'x-enum-descriptions' => ['Two.', 'One.', 'Zero.']], true, ["error {$at}/x-enum-descriptions: A list of descriptions is ambiguous unless each position holds that same enum value; map enum values to descriptions."]],
+            'descriptions listed for part of the values' => [['enum' => [0, 1], 'x-enum-descriptions' => ['Zero.']], true, []],
+            'descriptions listed past a null' => [['enum' => [null, 0, 1], 'x-enum-descriptions' => ['Zero.', 'One.']], true, []],
             'number type for integers' => [['type' => 'number', 'enum' => [1, 2]], true, []],
             'every problem at once' => [['enum' => ['a', 1.5, true, 'A']], false, [
                 "error {$at}/enum/1: Enum value 1.5 cannot back a PHP enum; use strings or integers.",

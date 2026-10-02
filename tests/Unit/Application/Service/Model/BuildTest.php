@@ -509,4 +509,27 @@ final class BuildTest extends TestCase
         self::assertSame([], ModelFixture::messages($output));
         self::assertSame(['App\\Dto\\User', 'App\\Dto\\UserGridItemValue'], array_keys(ModelFixture::classes($output)));
     }
+
+    public function testChecksExtensionKeysOfMapValues(): void
+    {
+        $at = self::AT;
+        $output = ModelFixture::build(['User' => [
+            'type' => 'object',
+            'properties' => [
+                'scores' => ['type' => 'object', 'additionalProperties' => ['type' => 'string', 'x-php-class-name' => 'Score', 'x-php-foo' => 1]],
+                'grid' => ['type' => 'array', 'items' => ['type' => 'object', 'additionalProperties' => ['type' => 'string', 'x-dto-mutable' => true]]],
+            ],
+            'additionalProperties' => ['type' => 'integer', 'x-dto-mutable' => true],
+        ]]);
+
+        self::assertSame(
+            [
+                "warning {$at}User/additionalProperties/x-dto-mutable: \"x-dto-mutable\" has no effect here.",
+                "warning {$at}User/properties/scores/additionalProperties/x-php-class-name: \"x-php-class-name\" has no effect here.",
+                "error {$at}User/properties/scores/additionalProperties/x-php-foo: Unknown extension \"x-php-foo\"; known: x-php-class-name, x-php-name, x-php-type, x-dto-mutable, x-php-all-of, x-php-skip, x-php-attributes, x-enum-descriptions.",
+                "warning {$at}User/properties/grid/items/additionalProperties/x-dto-mutable: \"x-dto-mutable\" has no effect here.",
+            ],
+            ModelFixture::messages($output),
+        );
+    }
 }
