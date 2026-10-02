@@ -21,7 +21,7 @@ final class ManifestCodec
     {
         ksort($files, SORT_STRING);
 
-        return json_encode(['generator' => 'msstc4php/dto-generator', 'files' => $files], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n";
+        return json_encode(['generator' => 'msstc4php/dto-generator', 'files' => $files], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE) . "\n";
     }
 
     /**

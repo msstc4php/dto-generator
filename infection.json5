@@ -43,7 +43,7 @@
                 // file_get_contents() of a file just found, json_encode() of plain arrays and getcwd() do not fail.
                 "MSSTC4PHP\\DtoGenerator\\Infrastructure\\Writer\\FilesystemWriter::plan",
                 "MSSTC4PHP\\DtoGenerator\\Infrastructure\\Writer\\FilesystemWriter::readManifest",
-                "MSSTC4PHP\\DtoGenerator\\Presentation\\Cli\\ErrorOutput::encode",
+                "MSSTC4PHP\\DtoGenerator\\Presentation\\Cli\\JsonReport::encode",
                 "MSSTC4PHP\\DtoGenerator\\DtoGenerator::console"
             ]
         },
@@ -90,8 +90,9 @@
         "DecrementInteger": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Infrastructure\\Environment\\ComposerJsonPhpConstraint::read", "MSSTC4PHP\\DtoGenerator\\Infrastructure\\Writer\\FilesystemWriter::temporaryPath"] },
         // Equivalent: the refinement comes from TypeMapper, which always starts an integer range with "int<".
         // Equivalent: config loading reports an error whenever it returns no config or target.
-        // Equivalent for the suite: without it, run() would end the PHPUnit process itself.
-        "MethodCallRemoval": { "ignore": ["MSSTC4PHP\\DtoGenerator\\DtoGenerator::withoutAutoExit"] },
+        // Equivalent for the suite: without it, run() would end the PHPUnit process itself; fclose() of a handle that
+        // could not be locked only frees a descriptor.
+        "MethodCallRemoval": { "ignore": ["MSSTC4PHP\\DtoGenerator\\DtoGenerator::withoutAutoExit", "MSSTC4PHP\\DtoGenerator\\Infrastructure\\Writer\\DirectoryLocks::open"] },
         "LogicalOr": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Application\\Service\\Generate\\Action::__invoke"] },
         "PregMatchRemoveCaret": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Domain\\Builder\\DefaultFit::inRange"] }
     },

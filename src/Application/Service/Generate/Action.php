@@ -60,10 +60,8 @@ final class Action
         }
 
         $outputDirs = array_values(array_unique(array_map(static fn (SourceConfig $source): string => $source->outputDir(), $config->sources())));
-        $plan = $this->writer->plan($outputDirs, $files);
-
         try {
-            return $this->conclude($input->mode(), $plan, $files, $diagnostics);
+            return $this->conclude($input->mode(), $this->writer->plan($outputDirs, $files), $files, $diagnostics);
         } finally {
             // plan() locks the output directories; apply() releases them, but a check or an error never applies.
             $this->writer->release();

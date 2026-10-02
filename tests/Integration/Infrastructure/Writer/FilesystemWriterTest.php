@@ -363,11 +363,20 @@ final class FilesystemWriterTest extends TestCase
         self::assertStringNotContainsString('"Old.php"', $plan->manifests()[$this->dir . '/out/.dto-generator.manifest.json']);
     }
 
-    public function testNeedsNoInterimManifestWhenNothingIsDeleted(): void
+    public function testNeedsNoInterimManifestWhenOnlyUpdating(): void
+    {
+        $this->write([$this->file('User.php', 'old')]);
+
+        $plan = (new FilesystemWriter())->plan([$this->dir . '/out'], [$this->file('User.php', 'new')]);
+
+        self::assertSame([], $plan->interimManifests());
+    }
+
+    public function testRecordsNewFilesInTheInterimManifest(): void
     {
         $plan = (new FilesystemWriter())->plan([$this->dir . '/out'], [$this->file('New.php', 'new')]);
 
-        self::assertSame([], $plan->interimManifests());
+        self::assertStringContainsString('"New.php"', $plan->interimManifests()[$this->dir . '/out/.dto-generator.manifest.json']);
     }
 
     public function testRefusesAnOutputDirWithANulByte(): void
@@ -507,6 +516,123 @@ final class FilesystemWriterTest extends TestCase
         }
 
         self::assertSame('0664', substr(sprintf('%o', fileperms($this->dir . '/out/User.php')), -4));
+    }
+
+    public function testReportsAManifestItCannotRead(): void
+    {
+        if (function_exists('posix_geteuid') && posix_geteuid() === 0) {
+            self::markTestSkipped('root can read anything');
+        }
+
+        $this->write([$this->file('User.php', 'user')]);
+        $manifest = $this->dir . '/out/.dto-generator.manifest.json';
+        chmod($manifest, 0000);
+
+        $plan = (new FilesystemWriter())->plan([$this->dir . '/out'], [$this->file('User.php', 'user')]);
+        chmod($manifest, 0644);
+
+        self::assertSame([$manifest => 'The manifest cannot be read; fix its permissions.'], $plan->conflicts());
+    }
+
+    public function testTreatsAnEmptyManifestFileAsExisting(): void
+    {
+        mkdir($this->dir . '/out');
+        file_put_contents($this->dir . '/out/.dto-generator.manifest.json', '');
+
+        $plan = (new FilesystemWriter())->plan([$this->dir . '/out'], [$this->file('User.php', 'user')]);
+
+        self::assertFalse($plan->isNewManifest($this->dir . '/out/.dto-generator.manifest.json'));
+        self::assertSame([], $plan->conflicts());
+    }
+
+    public function testKeepsOneHolderWhenPlanningTwice(): void
+    {
+        $writer = new FilesystemWriter();
+        $writer->plan([$this->dir . '/out'], []);
+        $writer->plan([$this->dir . '/out'], []);
+
+        $writer->release();
+
+        self::assertTrue($this->canLock(DirectoryLocks::path($this->dir . '/out')));
+    }
+
+    public function testReleasesTwiceWithoutHarm(): void
+    {
+        $first = new FilesystemWriter();
+        $second = new FilesystemWriter();
+        $first->plan([$this->dir . '/out'], []);
+        $second->plan([$this->dir . '/out'], []);
+
+        $first->release();
+        $first->release();
+
+        self::assertFalse($this->canLock(DirectoryLocks::path($this->dir . '/out')));
+        $second->release();
+    }
+
+    public function testReleasesTheLockWhenApplyFails(): void
+    {
+        $writer = new FilesystemWriter();
+        $plan = $writer->plan([$this->dir . '/out'], [$this->file('User.php', 'user')]);
+        mkdir($this->dir . '/out/.dto-generator.manifest.json', 0777, true);
+
+        try {
+            $writer->apply($plan);
+            self::fail('Writing over a directory succeeded.');
+        } catch (WriteFailed $exception) {
+        }
+
+        self::assertTrue($this->canLock(DirectoryLocks::path($this->dir . '/out')));
+    }
+
+    public function testSharesTheLockOfADirectoryReachedThroughASymlink(): void
+    {
+        mkdir($this->dir . '/real');
+        symlink($this->dir . '/real', $this->dir . '/link');
+
+        self::assertSame(DirectoryLocks::path($this->dir . '/real/out/sub'), DirectoryLocks::path($this->dir . '/link/out/sub'));
+        self::assertSame(DirectoryLocks::path($this->dir . '/real'), DirectoryLocks::path($this->dir . '/link'));
+    }
+
+    public function testWritesAManifestForANonUtf8FileName(): void
+    {
+        $this->write([$this->file("\xFF.php", 'odd')]);
+
+        self::assertStringContainsString('"files"', (string) file_get_contents($this->dir . '/out/.dto-generator.manifest.json'));
+    }
+
+    public function testPrefersAWriterWideConflictOverAPerDirectoryOne(): void
+    {
+        $plan = (new FilesystemWriter())->plan([$this->dir . '/out'], [
+            $this->file('User.php', 'a'),
+            new GeneratedFile($this->dir . '/out', 'user.php', self::HEADER . 'b'),
+        ]);
+
+        self::assertStringStartsWith('Another generated class', $plan->conflicts()[$this->dir . '/out/user.php']);
+    }
+
+    public function testLocksTheOtherDirectoriesWhenOneLockFileCannotBeOpened(): void
+    {
+        if (function_exists('posix_geteuid') && posix_geteuid() === 0) {
+            self::markTestSkipped('root can open anything');
+        }
+
+        $directories = [$this->dir . '/a', $this->dir . '/b'];
+        usort($directories, static fn (string $x, string $y): int => strcmp(DirectoryLocks::path($x), DirectoryLocks::path($y)));
+        [$blocked, $open] = $directories;
+        touch(DirectoryLocks::path($blocked));
+        chmod(DirectoryLocks::path($blocked), 0000);
+        $locks = new DirectoryLocks();
+
+        try {
+            $locks->acquire([$blocked, $open]);
+
+            self::assertFalse($this->canLock(DirectoryLocks::path($open)));
+        } finally {
+            $locks->release();
+            chmod(DirectoryLocks::path($blocked), 0644);
+            unlink(DirectoryLocks::path($blocked));
+        }
     }
 
     private function canLock(string $path): bool

@@ -36,11 +36,11 @@ deptrac:
       collectors:
         - type: directory
           value: src/Extension/.*
-    # PHPStan type aliases from Domain\Shared\Json; deptrac resolves them as if they were classes.
+    # PHPStan type aliases (Domain\Shared\Json, Presentation\Cli\JsonReport); deptrac resolves them as if they were classes.
     - name: TypeAlias
       collectors:
         - type: classNameRegex
-          value: '#^MSSTC4PHP\\DtoGenerator\\.*\\Json(Value|Scalar)$#'
+          value: '#^MSSTC4PHP\\DtoGenerator\\.*\\(Json(Value|Scalar)|ReportShape|ChangeShape|DiagnosticShape)$#'
     - name: Symfony
       collectors:
         - type: classNameRegex

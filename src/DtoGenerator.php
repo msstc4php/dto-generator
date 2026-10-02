@@ -19,6 +19,7 @@ use MSSTC4PHP\DtoGenerator\Infrastructure\Environment\ComposerJsonPhpConstraint;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Writer\FilesystemWriter;
 use MSSTC4PHP\DtoGenerator\Presentation\Cli\ErrorOutput;
 use MSSTC4PHP\DtoGenerator\Presentation\Cli\GenerateCommand;
+use MSSTC4PHP\DtoGenerator\Presentation\Cli\JsonReport;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\CommandLoader\FactoryCommandLoader;
 use Symfony\Component\Console\Exception\ExceptionInterface;
@@ -84,7 +85,7 @@ final class DtoGenerator
             // getParameterOption() is documented as "mixed", which PHPStan reads as a class on phpVersion 70400;
             // json_encode() takes any value and gives a plain string to compare.
             if (json_encode($input->getParameterOption('--format')) === '"json"') {
-                $output->writeln(ErrorOutput::json($exception->getMessage()));
+                $output->writeln(JsonReport::failure($exception->getMessage()), OutputInterface::OUTPUT_RAW);
             } else {
                 ErrorOutput::of($output)->writeln('error: ' . $exception->getMessage());
             }

@@ -27,9 +27,26 @@ final class DirectoryLocks
      */
     public static function path(string $directory): string
     {
-        $real = realpath($directory);
+        return sys_get_temp_dir() . '/dto-generator-' . sha1(self::canonical(rtrim($directory, '/'))) . '.lock';
+    }
 
-        return sys_get_temp_dir() . '/dto-generator-' . sha1($real !== false ? $real : rtrim($directory, '/')) . '.lock';
+    /**
+     * The real path of the nearest existing ancestor plus the rest, so one directory has one key before and after
+     * a run creates it.
+     */
+    private static function canonical(string $directory): string
+    {
+        $tail = '';
+        $existing = $directory;
+        while ($existing !== '' && realpath($existing) === false) {
+            $tail = '/' . basename($existing) . $tail;
+            $parent = dirname($existing);
+            $existing = $parent === $existing ? '' : $parent;
+        }
+
+        $real = $existing === '' ? false : realpath($existing);
+
+        return ($real === false ? $existing : rtrim($real, '/')) . $tail;
     }
 
     /**
@@ -50,14 +67,36 @@ final class DirectoryLocks
                 continue;
             }
 
-            set_error_handler(static fn (): bool => true);
-            $handle = fopen($path, 'c');
-            restore_error_handler();
-            if ($handle !== false && flock($handle, LOCK_EX)) {
-                self::$held[$path] = [$handle, 1];
-                $this->mine[] = $path;
+            $handle = $this->open($path);
+            if ($handle === null) {
+                continue;
             }
+
+            self::$held[$path] = [$handle, 1];
+            $this->mine[] = $path;
         }
+    }
+
+    /**
+     * @return resource|null a locked handle, or null when the lock file cannot be opened or locked (another user's
+     *                       file in a shared /tmp, a network filesystem without flock())
+     */
+    private function open(string $path)
+    {
+        set_error_handler(static fn (): bool => true);
+        $handle = fopen($path, 'c');
+        restore_error_handler();
+        if ($handle === false) {
+            return null;
+        }
+
+        if (!flock($handle, LOCK_EX)) {
+            fclose($handle);
+
+            return null;
+        }
+
+        return $handle;
     }
 
     public function release(): void

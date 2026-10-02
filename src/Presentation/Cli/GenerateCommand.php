@@ -21,6 +21,9 @@ use Symfony\Component\Console\Output\OutputInterface;
 /**
  * `dto-generator generate [--config=] [--check] [--dry-run] [--format=text|json]` with the exit codes of spec §9.2.
  * The report goes to stdout; in text mode, diagnostics go to stderr.
+ *
+ * @phpstan-import-type ChangeShape from JsonReport
+ * @phpstan-import-type DiagnosticShape from JsonReport
  */
 final class GenerateCommand extends Command
 {
@@ -82,7 +85,8 @@ final class GenerateCommand extends Command
         $mode = Mode::from($check ? Mode::CHECK : ($dryRun ? Mode::DRY_RUN : Mode::WRITE));
         $result = ($this->generate)(new Input($config, $mode));
         if ($json) {
-            $output->writeln($this->json($result->status()->value(), $this->diagnostics($result), $this->changes($result->plan())));
+            // Raw: the console formatter would strip anything that looks like a <tag> from the JSON.
+            $output->writeln(JsonReport::encode(['status' => $result->status()->value(), 'diagnostics' => $this->diagnostics($result), 'changes' => $this->changes($result->plan())]), OutputInterface::OUTPUT_RAW);
         } else {
             $this->text($result, $mode, $output);
         }
@@ -112,7 +116,7 @@ final class GenerateCommand extends Command
     private function usageError(OutputInterface $output, bool $json, string $message): int
     {
         if ($json) {
-            $output->writeln(ErrorOutput::json($message));
+            $output->writeln(JsonReport::failure($message), OutputInterface::OUTPUT_RAW);
         } else {
             ErrorOutput::of($output)->writeln('error: ' . $message);
         }
@@ -169,7 +173,7 @@ final class GenerateCommand extends Command
     /**
      * Files that change, then the manifests that change with them.
      *
-     * @return list<array{kind: string, path: string}>
+     * @return list<ChangeShape>
      */
     private function changes(?WritePlan $plan): array
     {
@@ -200,7 +204,7 @@ final class GenerateCommand extends Command
     }
 
     /**
-     * @return list<array{severity: string, location: string, message: string}>
+     * @return list<DiagnosticShape>
      */
     private function diagnostics(Output $result): array
     {
@@ -209,14 +213,5 @@ final class GenerateCommand extends Command
             'location' => $this->formatter->location($diagnostic->location()),
             'message' => $diagnostic->message(),
         ], $result->diagnostics()->all());
-    }
-
-    /**
-     * @param list<array{severity: string, location: string, message: string}> $diagnostics
-     * @param list<array{kind: string, path: string}> $changes
-     */
-    private function json(string $status, array $diagnostics, array $changes): string
-    {
-        return ErrorOutput::encode(['status' => $status, 'diagnostics' => $diagnostics, 'changes' => $changes]);
     }
 }

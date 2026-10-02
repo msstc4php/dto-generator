@@ -135,4 +135,18 @@ final class DtoGeneratorTest extends TestCase
         self::assertStringNotContainsString('#0 ', $short);
         self::assertStringContainsString("\n#0 ", $veryVerbose->fetch());
     }
+
+    public function testPrintsJsonVerbatim(): void
+    {
+        $output = new BufferedOutput();
+
+        DtoGenerator::run(new ArrayInput(['command' => 'no\\<pe<comment>x</comment>', '--format' => 'json']), $output);
+
+        $report = json_decode($output->fetch(), true);
+        self::assertIsArray($report);
+        self::assertIsArray($report['diagnostics']);
+        self::assertIsArray($report['diagnostics'][0]);
+        self::assertIsString($report['diagnostics'][0]['message']);
+        self::assertStringContainsString('no\\<pe<comment>x</comment>', $report['diagnostics'][0]['message']);
+    }
 }

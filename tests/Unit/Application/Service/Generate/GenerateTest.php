@@ -43,6 +43,7 @@ final class GenerateTest extends TestCase
         self::assertStringContainsString("final readonly class User\n", $output->files()[0]->contents());
         self::assertSame('/project/other', $output->files()[2]->outputDir());
         self::assertTrue($writer->applied);
+        self::assertTrue($writer->released);
         self::assertNotNull($output->plan());
     }
 
@@ -87,6 +88,7 @@ final class GenerateTest extends TestCase
         self::assertSame('generation-failed', $output->status()->value());
         self::assertSame(['error /project/src/Dto/Tag.php#: Not ours.'], $this->messages($output));
         self::assertFalse($writer->applied);
+        self::assertTrue($writer->released);
     }
 
     public function testChecksWithoutWriting(): void
@@ -109,6 +111,7 @@ final class GenerateTest extends TestCase
 
         self::assertSame('ok', $output->status()->value());
         self::assertFalse($writer->applied);
+        self::assertTrue($writer->released);
     }
 
     public function testReportsAFailedWrite(): void

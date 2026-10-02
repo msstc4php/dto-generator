@@ -73,8 +73,8 @@ final class FilesystemWriter implements FileWriter
     {
         try {
             // Recorded first, so a run that stops halfway still knows every file it may have written or not yet deleted.
-            foreach ($plan->manifests() as $path => $contents) {
-                $this->writeAtomically($path, $plan->interimManifests()[$path] ?? $contents);
+            foreach ($plan->interimManifests() as $path => $contents) {
+                $this->writeAtomically($path, $contents);
             }
 
             // Deletions first: on a case-insensitive filesystem a class renamed from Foo to FOO deletes and writes one file.
@@ -111,8 +111,14 @@ final class FilesystemWriter implements FileWriter
     {
         ksort($contents, SORT_STRING);
         $manifestPath = $directory . '/' . ManifestCodec::FILE;
-        $manifestText = file_exists($manifestPath) ? $this->read($manifestPath) : '';
-        $previous = $manifestText === '' ? [] : $this->codec->decode((string) $manifestText);
+        $manifestExists = file_exists($manifestPath);
+        $manifestText = $manifestExists ? $this->read($manifestPath) : '';
+        if ($manifestText === null) {
+            return new WritePlan([], [$manifestPath => 'The manifest cannot be read; fix its permissions.'], []);
+        }
+
+        // An empty manifest (a truncated checkout) lists nothing, but it exists.
+        $previous = $manifestText === '' ? [] : $this->codec->decode($manifestText);
         if ($previous === null) {
             return new WritePlan([], [$manifestPath => 'The manifest is not a valid dto-generator manifest, so stale files cannot be found; fix it or delete it.'], []);
         }
@@ -151,15 +157,17 @@ final class FilesystemWriter implements FileWriter
         }
 
         // An output directory that never received a file gets no manifest either.
-        if ($owned === [] && $manifestText === '') {
+        if ($owned === [] && !$manifestExists) {
             return new WritePlan($changes, $conflicts, []);
         }
 
         $manifest = $this->codec->encode($owned);
-        $manifests = $manifestText !== null && $this->sameText($manifestText, $manifest) ? [] : [$manifestPath => $manifest];
-        $interim = $deleted === [] ? [] : [$manifestPath => $this->codec->encode($owned + $deleted)];
+        $manifests = $this->sameText($manifestText, $manifest) ? [] : [$manifestPath => $manifest];
+        $creates = array_filter($changes, static fn (FileChange $change): bool => $change->kind() === FileChange::CREATE);
+        // Before any file is created or deleted, the manifest must already list it, so an interrupted run leaves no orphan.
+        $interim = $deleted === [] && $creates === [] ? [] : [$manifestPath => $this->codec->encode($owned + $deleted)];
 
-        return new WritePlan($changes, $conflicts, $manifests, $interim, $manifestText === '' ? [$manifestPath] : []);
+        return new WritePlan($changes, $conflicts, $manifests, $interim, $manifestExists ? [] : [$manifestPath]);
     }
 
     /**
