@@ -41,6 +41,7 @@
                 "MSSTC4PHP\\DtoGenerator\\Application\\Service\\Model\\Enrich\\AttributeVerification::report",
                 "MSSTC4PHP\\DtoGenerator\\Application\\Service\\Extension\\Load\\Action::load",
                 "MSSTC4PHP\\DtoGenerator\\Application\\Service\\Extension\\Load\\Action::discovered",
+                // isset()-only seen map of the $ref chain.
                 "MSSTC4PHP\\DtoGenerator\\Contract\\SchemaReferences::resolve"
             ]
         },

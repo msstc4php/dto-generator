@@ -34,13 +34,13 @@ final class PropertyContext
      */
     public function __construct(PropertyModel $property, ClassModel $owner, Schema $schema, TargetProfile $target, InstalledPackages $packages, Diagnostics $diagnostics, ?SchemaReferences $references = null)
     {
-        $this->references = $references ?? SchemaReferences::none();
         $this->property = $property;
         $this->owner = $owner;
         $this->schema = $schema;
         $this->target = $target;
         $this->packages = $packages;
         $this->diagnostics = $diagnostics;
+        $this->references = $references ?? SchemaReferences::none();
     }
 
     public function property(): PropertyModel

@@ -31,8 +31,9 @@ final class SchemaReferences
     }
 
     /**
-     * The schema at the end of a `$ref` chain; the schema itself when it has no `$ref`, when the reference does not
-     * resolve, or at a cycle.
+     * The schema at the end of a `$ref` chain; the schema itself when it has no `$ref` or when the reference does not
+     * resolve; at a cycle, the schema where it closes. Keywords beside a `$ref` (`{$ref: Email, maxLength: 64}`) stay
+     * on the schema that has them: a caller that needs both reads that schema first, then the resolved one.
      */
     public function resolve(Schema $schema): Schema
     {

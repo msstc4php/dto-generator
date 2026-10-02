@@ -26,7 +26,7 @@ UTF-8 BOM срезается; NUL-байт в пути — `DocumentLoadFailed::
 
 ## SPI: разрешение `$ref` (для моста Symfony)
 
-`PropertyContext::references()` / `ClassContext::references()` → `Contract\SchemaReferences::resolve(Schema): Schema` идёт по цепочке `$ref` через `SchemaGraph::resolve(ReferenceUse)`; неразрешимая ссылка или цикл — последняя схема цепочки. Контекст, созданный без графа (тесты расширений), получает `SchemaReferences::none()`: схема как есть. `Enrich` создаёт один `SchemaReferences` на запуск (`EnrichmentRun::references()`).
+`PropertyContext::references()` / `ClassContext::references()` → `Contract\SchemaReferences::resolve(Schema): Schema` идёт по цепочке `$ref` через `SchemaGraph::resolve(ReferenceUse)`; неразрешимая ссылка — сама схема со ссылкой; цикл — схема, на которой он замыкается. Ключевые слова рядом с `$ref` не объединяются: они остаются на исходной схеме, расширение читает её первой. Контекст, созданный без графа (тесты расширений), получает `SchemaReferences::none()`: схема как есть. `Enrich` создаёт один `SchemaReferences` на запуск (`EnrichmentRun::references()`).
 
 ## SPI для авторов расширений (этап 5a)
 - Расширение создаётся без аргументов; `name()` — ключ секции `extensionConfig` (секция не-объект → ошибка, расширение получает `[]`).

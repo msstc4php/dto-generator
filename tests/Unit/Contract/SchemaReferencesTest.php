@@ -31,6 +31,20 @@ final class SchemaReferencesTest extends TestCase
         self::assertSame($pet->requireProperty('name'), $references->resolve($pet->requireProperty('name')));
     }
 
+    public function testLeavesTheKeywordsBesideAReferenceOnItsOwnSchema(): void
+    {
+        $graph = GraphFixture::load([
+            'Pet' => ['type' => 'object', 'properties' => ['email' => ['$ref' => '#/components/schemas/Email', 'maxLength' => 64]]],
+            'Email' => ['type' => 'string', 'format' => 'email'],
+        ]);
+        $email = $this->schema($graph, 'Pet')->requireProperty('email');
+        $resolved = (new SchemaReferences($graph))->resolve($email);
+
+        self::assertSame(64, $email->keyword('maxLength'));
+        self::assertFalse($resolved->hasKeyword('maxLength'));
+        self::assertSame('email', $resolved->format());
+    }
+
     public function testKeepsAReferenceItCannotFollow(): void
     {
         $graph = GraphFixture::load([
@@ -42,7 +56,8 @@ final class SchemaReferencesTest extends TestCase
         $owner = $this->schema($graph, 'Pet')->requireProperty('owner');
 
         self::assertSame($owner, $references->resolve($owner));
-        self::assertNotNull($references->resolve($this->schema($graph, 'Loop'))->ref());
+        $loop = $this->schema($graph, 'Loop');
+        self::assertSame($loop, $references->resolve($loop));
     }
 
     public function testResolvesNothingWithoutAGraph(): void

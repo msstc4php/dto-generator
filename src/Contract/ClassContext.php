@@ -30,19 +30,17 @@ final class ClassContext
 
     /**
      * @param bool $inline whether the class comes from an object written inside a property, whose schema is the property's
-     */
-    /**
      * @param SchemaReferences|null $references how `$ref`s resolve; none when omitted
      */
     public function __construct(ClassModel $class, Schema $schema, TargetProfile $target, InstalledPackages $packages, Diagnostics $diagnostics, bool $inline = false, ?SchemaReferences $references = null)
     {
-        $this->references = $references ?? SchemaReferences::none();
         $this->class = $class;
         $this->schema = $schema;
         $this->target = $target;
         $this->packages = $packages;
         $this->diagnostics = $diagnostics;
         $this->inline = $inline;
+        $this->references = $references ?? SchemaReferences::none();
     }
 
     /**
