@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Tests\Support;
 
+use MSSTC4PHP\DtoGenerator\Domain\Model\ArgumentValue;
+use MSSTC4PHP\DtoGenerator\Domain\Model\AttributeArgument;
+use MSSTC4PHP\DtoGenerator\Domain\Model\AttributeModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassKind;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
@@ -14,6 +17,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\EnumBacking;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumCase;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumType;
+use MSSTC4PHP\DtoGenerator\Domain\Model\ImportAlias;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ListType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\MapType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\MixedType;
@@ -38,11 +42,16 @@ final class EmitterFixture
 {
     private const SPEC = '/project/api/openapi.yaml';
 
-    public static function target(string $php, string $mutability, string $accessors = AccessorStyle::AUTO): TargetProfile
+    /**
+     * Attribute metadata from PHP 8.0, none below until annotations render (stage 5b).
+     */
+    public static function target(string $php, string $mutability, string $accessors = AccessorStyle::AUTO, ?string $metadata = null): TargetProfile
     {
+        $version = PhpVersion::fromString($php);
+
         return new TargetProfile(
-            PhpVersion::fromString($php),
-            MetadataMode::from(MetadataMode::NONE),
+            $version,
+            MetadataMode::from($metadata ?? ($version->isAtLeast(PhpVersion::fromString('8.0')) ? MetadataMode::ATTRIBUTES : MetadataMode::NONE)),
             Mutability::from($mutability),
             AccessorStyle::from($accessors),
             DateTimeClass::from(DateTimeClass::IMMUTABLE),
@@ -128,18 +137,31 @@ final class EmitterFixture
     {
         $tag = new ClassType(ClassName::fromFqcn('App\Dto\Tag'));
 
+        $assert = new ImportAlias('App\Attr\Constraints', 'Assert');
+
         return self::model('App\Dto\Sample', 'A sample DTO.', [
-            self::property('id', ScalarType::int('positive-int'), true, null, 'Identifier.'),
+            self::property('id', ScalarType::int('positive-int'), true, null, 'Identifier.')
+                ->withAddedAttributes(new AttributeModel(ClassName::fromFqcn('App\Attr\Constraints\Positive'), [], $assert)),
             self::property('name', new NullableType(ScalarType::string('non-empty-string')), false, new DefaultValue('anonymous')),
             self::property('tags', new ListType($tag), true, null, "Labels.\nAt most */ ten.\n@var string is text, not a tag."),
-            self::property('code', new UnionType(ScalarType::int(), ScalarType::string()), true),
+            self::property('code', new UnionType(ScalarType::int(), ScalarType::string()), true)->withAddedAttributes(new AttributeModel(
+                ClassName::fromFqcn('App\Attr\Choice'),
+                [
+                    AttributeArgument::named('choices', ArgumentValue::listOf(ArgumentValue::literal(1), ArgumentValue::literal('A'))),
+                    AttributeArgument::named('mode', ArgumentValue::constant('STRICT', ClassName::fromFqcn('App\Attr\Mode'))),
+                ],
+            )),
             self::property('createdAt', new NullableType(new ClassType(ClassName::fromFqcn('DateTimeImmutable'))), false, new DefaultValue(null), 'When it was created.'),
             self::property('score', new NullableType(ScalarType::float()), false, new DefaultValue(1.5)),
             self::property('meta', new NullableType(new MapType(ScalarType::int())), false, new DefaultValue(null)),
             self::property('flags', new NullableType(new ListType(ScalarType::bool())), false, new DefaultValue([true, false])),
             self::property('extra', new MixedType(), false, new DefaultValue(null), null, true),
-            self::property('currency', new NullableType(EnumType::of(self::currency())), false, new DefaultValue('EUR'), 'Settlement currency.'),
-        ], $mutability);
+            self::property('currency', new NullableType(EnumType::of(self::currency())), false, new DefaultValue('EUR'), 'Settlement currency.')
+                ->withAddedAttributes(new AttributeModel(ClassName::fromFqcn('App\Attr\Meta'), [AttributeArgument::positional(ArgumentValue::classReference(ClassName::fromFqcn('App\Dto\Currency')))])),
+        ], $mutability)->withAddedAttributes(
+            new AttributeModel(ClassName::fromFqcn('App\Attr\Table'), [AttributeArgument::named('name', ArgumentValue::literal("sample\tdto"))]),
+            new AttributeModel(ClassName::fromFqcn('App\Attr\Constraints\Valid'), [], $assert),
+        );
     }
 
     /**

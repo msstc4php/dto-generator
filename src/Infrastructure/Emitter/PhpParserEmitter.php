@@ -52,6 +52,7 @@ use PhpParser\Node\Stmt\Expression;
 use PhpParser\Node\Stmt\Nop;
 use PhpParser\Node\Stmt\Property;
 use PhpParser\Node\Stmt\Return_;
+use PhpParser\Node\Stmt\Use_;
 use PhpParser\PhpVersion as ParserPhpVersion;
 
 /**
@@ -76,17 +77,19 @@ final class PhpParserEmitter implements CodeEmitter
         $shape = new ClassShape($class, $inherited, $target->classFormFor($class->mutability()), $target);
         $form = $shape->form();
         $types = new TypeRenderer($class->name()->namespace(), $target);
+        // Annotations render from stage 5b; until then they, like metadata "none", leave attributes out.
+        $attributes = new AttributeRenderer($types, $this->factory, $target->metadata()->isAttributes());
 
         $members = [];
         if (!$form->isPromoted()) {
             // Declared in constructor order, like promoted properties, so the object layout is the same on every target.
             foreach ($this->constructorOrder($class->properties()) as $property) {
-                $members[] = $this->declaration($property, $shape, $types);
+                $members[] = $this->declaration($property, $shape, $types, $attributes);
             }
         }
 
         if ($shape->all() !== []) {
-            $members[] = $this->constructor($shape, $types);
+            $members[] = $this->constructor($shape, $types, $attributes);
         }
 
         foreach ($inherited as $property) {
@@ -107,9 +110,10 @@ final class PhpParserEmitter implements CodeEmitter
 
         $node = $builder->getNode();
         $node->flags = $this->modifiers($class->kind(), $form);
+        $node->attrGroups = $attributes->groups($class->attributes());
         $this->document($node, DocBlock::render($class->doc()->description(), $this->deprecation($class->doc())));
 
-        return $this->file($node, $class->name(), $target);
+        return $this->file($node, $class->name(), $target, $attributes->uses());
     }
 
     public function emitEnum(EnumModel $enum, TargetProfile $target): string
@@ -137,14 +141,21 @@ final class PhpParserEmitter implements CodeEmitter
         return $this->file($node, $enum->name(), $target);
     }
 
-    private function file(Node $declaration, ClassName $name, TargetProfile $target): string
+    /**
+     * @param list<Use_> $uses
+     */
+    private function file(Stmt $declaration, ClassName $name, TargetProfile $target, array $uses = []): string
     {
         $header = new Nop();
         $header->setAttribute('comments', [new Comment(self::HEADER)]);
 
         $statements = [$header, new Declare_([new DeclareItem('strict_types', new Int_(1))])];
         $namespace = $name->namespace();
-        $statements[] = $namespace === '' ? $declaration : $this->factory->namespace($namespace)->addStmt($declaration)->getNode();
+        if ($namespace === '') {
+            array_push($statements, ...$uses, ...[$declaration]);
+        } else {
+            $statements[] = $this->factory->namespace($namespace)->addStmts(array_merge($uses, [$declaration]))->getNode();
+        }
 
         $printer = new GeneratedCodePrinter([
             'phpVersion' => ParserPhpVersion::fromComponents($target->php()->major(), $target->php()->minor()),
@@ -163,15 +174,6 @@ final class PhpParserEmitter implements CodeEmitter
         if ($inherited !== [] && !$class->parent() instanceof ClassName) {
             throw new LogicException(sprintf('%s inherits properties but extends no class.', $fqcn));
         }
-
-        $attributes = $class->attributes() !== [];
-        foreach ($class->properties() as $property) {
-            $attributes = $attributes || $property->attributes() !== [];
-        }
-
-        if ($attributes) {
-            throw new LogicException(sprintf('%s has attributes; attributes are emitted from stage 5.', $fqcn));
-        }
     }
 
     private function modifiers(ClassKind $kind, ClassForm $form): int
@@ -184,7 +186,7 @@ final class PhpParserEmitter implements CodeEmitter
         return $kind->equals(ClassKind::from(ClassKind::FINAL)) ? $flags | Modifiers::FINAL : $flags;
     }
 
-    private function declaration(PropertyModel $property, ClassShape $shape, TypeRenderer $types): Property
+    private function declaration(PropertyModel $property, ClassShape $shape, TypeRenderer $types, AttributeRenderer $attributes): Property
     {
         $builder = $this->factory->property($property->name());
         // The builder declares a property public unless told otherwise; declared (unpromoted) properties exist
@@ -199,6 +201,7 @@ final class PhpParserEmitter implements CodeEmitter
         }
 
         $node = $builder->getNode();
+        $node->attrGroups = $attributes->groups($property->attributes());
         $this->document($node, $this->propertyDoc($property, $types));
 
         return $node;
@@ -207,7 +210,7 @@ final class PhpParserEmitter implements CodeEmitter
     /**
      * Inherited parameters are plain and go to the parent constructor; the class's own are promoted or assigned.
      */
-    private function constructor(ClassShape $shape, TypeRenderer $types): ClassMethod
+    private function constructor(ClassShape $shape, TypeRenderer $types, AttributeRenderer $attributes): ClassMethod
     {
         $form = $shape->form();
         $params = [];
@@ -223,6 +226,7 @@ final class PhpParserEmitter implements CodeEmitter
             if (!$shape->owns($property)) {
                 $tags = array_merge($tags, $this->paramTag($property, $types));
             } elseif ($form->isPromoted()) {
+                $param->attrGroups = $attributes->groups($property->attributes());
                 $param->flags = ($form->hasPublicProperties() ? Modifiers::PUBLIC : $shape->visibility())
                     | ($form->hasReadonlyProperties() ? Modifiers::READONLY : 0);
                 $this->document($param, $this->propertyDoc($property, $types));
@@ -405,27 +409,6 @@ final class PhpParserEmitter implements CodeEmitter
     }
 
     /**
-     * Strings with control characters are printed double-quoted with escapes, not as raw multi-line literals.
-     */
-    private static function readable(Expr $value): Expr
-    {
-        if ($value instanceof String_ && preg_match('/[\x00-\x1f]/', $value->value) === 1) {
-            $value->setAttribute('kind', String_::KIND_DOUBLE_QUOTED);
-        }
-
-        if ($value instanceof Array_) {
-            foreach ($value->items as $item) {
-                $item->value = self::readable($item->value);
-                if ($item->key instanceof Expr) {
-                    $item->key = self::readable($item->key);
-                }
-            }
-        }
-
-        return $value;
-    }
-
-    /**
      * Enum values become `Name::CASE`, a constant expression on every target; anything else a literal.
      *
      * @param JsonValue $value
@@ -449,6 +432,6 @@ final class PhpParserEmitter implements CodeEmitter
             return new Array_($items);
         }
 
-        return self::readable($this->factory->val($value));
+        return ReadableLiteral::of($this->factory->val($value));
     }
 }

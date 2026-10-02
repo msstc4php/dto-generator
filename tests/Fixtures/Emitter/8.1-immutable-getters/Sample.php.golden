@@ -6,9 +6,13 @@ declare(strict_types=1);
 
 namespace App\Dto;
 
+use App\Attr\Constraints as Assert;
+
 /**
  * A sample DTO.
  */
+#[\App\Attr\Table(name: "sample\tdto")]
+#[Assert\Valid]
 final class Sample
 {
     public function __construct(
@@ -17,7 +21,7 @@ final class Sample
          *
          * @var positive-int
          */
-        private readonly int $id,
+        #[Assert\Positive] private readonly int $id,
         /**
          * Labels.
          * At most *\/ ten.
@@ -26,7 +30,7 @@ final class Sample
          * @var list<Tag>
          */
         private readonly array $tags,
-        private readonly int|string $code,
+        #[\App\Attr\Choice(choices: [1, 'A'], mode: \App\Attr\Mode::STRICT)] private readonly int|string $code,
         /**
          * @var ?non-empty-string
          */
@@ -51,7 +55,7 @@ final class Sample
         /**
          * Settlement currency.
          */
-        private readonly ?Currency $currency = Currency::EUR,
+        #[\App\Attr\Meta(Currency::class)] private readonly ?Currency $currency = Currency::EUR,
     ) {
     }
 
