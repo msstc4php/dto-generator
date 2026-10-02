@@ -201,6 +201,14 @@ final class CompositionTest extends TestCase
                 ],
                 ["error {$at}A: Class App\\Dto\\A extends itself through App\\Dto\\B."],
             ],
+            'class extending itself' => [
+                ['A' => ['type' => 'object', 'properties' => ['a' => []], 'allOf' => [['$ref' => '#/components/schemas/A']]]],
+                ["error {$at}A/allOf/0: Class App\\Dto\\A extends itself."],
+            ],
+            'class merging itself' => [
+                ['A' => ['type' => 'object', 'properties' => ['a' => []], 'allOf' => [['$ref' => '#/components/schemas/A']], 'x-php-all-of' => 'merge']],
+                ["error {$at}A/allOf/0: The allOf chain loops back to a schema it is already merging."],
+            ],
             'class extending into a loop' => [
                 [
                     'C' => ['allOf' => [['$ref' => '#/components/schemas/A'], ['properties' => ['c' => []]]]],
@@ -671,6 +679,59 @@ final class CompositionTest extends TestCase
         ]);
 
         self::assertSame(['y: string|null'], ModelFixture::classes($output)['App\Dto\C']);
+    }
+
+    public function testBuildsAClassThatExtendsItselfWithoutThatMember(): void
+    {
+        $self = ['$ref' => '#/components/schemas/A'];
+        $output = ModelFixture::build([
+            'A' => ['type' => 'object', 'properties' => ['a' => ['type' => 'string']], 'allOf' => [$self, ['properties' => ['b' => ['type' => 'integer']]]]],
+            'W' => ['allOf' => [$self]],
+        ]);
+
+        self::assertSame(['error /project/api/openapi.yaml#/components/schemas/A/allOf/0: Class App\\Dto\\A extends itself.'], ModelFixture::messages($output));
+        self::assertSame(['b: int|null', 'a: string|null'], ModelFixture::classes($output)['App\Dto\A']);
+        self::assertSame('final', ModelFixture::hierarchy($output)['App\Dto\A']);
+    }
+
+    public function testFollowsAReferenceAliasAsAnAllOfMember(): void
+    {
+        $schemas = [
+            'Pet' => ['type' => 'object', 'properties' => ['name' => ['type' => 'string']]],
+            'Alias' => ['$ref' => '#/components/schemas/Pet'],
+            'Cat' => ['allOf' => [['$ref' => '#/components/schemas/Alias'], ['properties' => ['lives' => ['type' => 'integer']]]]],
+        ];
+        $extends = ModelFixture::build($schemas);
+        $merge = ModelFixture::build($schemas, [], ['*'], AllOfStrategy::MERGE);
+
+        self::assertSame([], ModelFixture::messages($extends));
+        self::assertSame('final extends App\Dto\Pet', ModelFixture::hierarchy($extends)['App\Dto\Cat']);
+        self::assertSame(['lives: int|null'], ModelFixture::classes($extends)['App\Dto\Cat']);
+        self::assertSame([], ModelFixture::messages($merge));
+        self::assertSame(['name: string|null', 'lives: int|null'], ModelFixture::classes($merge)['App\Dto\Cat']);
+    }
+
+    public function testReportsAnAliasThatLeadsBackToTheClass(): void
+    {
+        $schemas = [
+            'A' => ['allOf' => [['$ref' => '#/components/schemas/Alias'], ['properties' => ['a' => ['type' => 'string']]]]],
+            'Alias' => ['$ref' => '#/components/schemas/A'],
+        ];
+
+        self::assertSame(['error /project/api/openapi.yaml#/components/schemas/A/allOf/0: Class App\\Dto\\A extends itself.'], ModelFixture::messages(ModelFixture::build($schemas)));
+        self::assertSame(['error /project/api/openapi.yaml#/components/schemas/Alias: The allOf chain loops back to a schema it is already merging.'], ModelFixture::messages(ModelFixture::build($schemas, [], ['*'], AllOfStrategy::MERGE)));
+    }
+
+    public function testReportsAnAllOfMemberWhoseAliasesLoop(): void
+    {
+        $output = ModelFixture::build([
+            'A' => ['allOf' => [['$ref' => '#/components/schemas/X'], ['properties' => ['a' => ['type' => 'string']]]]],
+            'X' => ['$ref' => '#/components/schemas/Y'],
+            'Y' => ['$ref' => '#/components/schemas/X'],
+        ]);
+
+        self::assertSame(['error /project/api/openapi.yaml#/components/schemas/Y: The allOf chain loops back to a schema it is already merging.'], ModelFixture::messages($output));
+        self::assertSame(['a: string|null'], ModelFixture::classes($output)['App\Dto\A']);
     }
 
     public function testExtendsAClassBehindAReferenceWrapper(): void
