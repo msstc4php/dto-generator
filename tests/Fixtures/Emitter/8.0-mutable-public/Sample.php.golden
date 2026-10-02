@@ -48,6 +48,12 @@ final class Sample
          * @deprecated
          */
         public mixed $extra = null,
+        /**
+         * Settlement currency.
+         *
+         * @var ?Currency::*
+         */
+        public ?string $currency = Currency::EUR,
     ) {
     }
 }

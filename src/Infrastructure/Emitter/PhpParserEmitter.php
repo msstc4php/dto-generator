@@ -11,9 +11,16 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\ClassModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\DiscriminatorModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\DocModel;
+use MSSTC4PHP\DtoGenerator\Domain\Model\EnumModel;
+use MSSTC4PHP\DtoGenerator\Domain\Model\EnumType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\Identifier;
+use MSSTC4PHP\DtoGenerator\Domain\Model\ListType;
+use MSSTC4PHP\DtoGenerator\Domain\Model\NullableType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\PropertyModel;
+use MSSTC4PHP\DtoGenerator\Domain\Model\TypeModel;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\DefaultValue;
+use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
+use MSSTC4PHP\DtoGenerator\Domain\Target\Capability;
 use MSSTC4PHP\DtoGenerator\Domain\Target\ClassForm;
 use MSSTC4PHP\DtoGenerator\Domain\Target\TargetProfile;
 use MSSTC4PHP\DtoGenerator\Domain\Target\WitherStyle;
@@ -28,6 +35,7 @@ use PhpParser\Node\DeclareItem;
 use PhpParser\Node\Expr;
 use PhpParser\Node\Expr\Array_;
 use PhpParser\Node\Expr\Assign;
+use PhpParser\Node\Expr\ClassConstFetch;
 use PhpParser\Node\Expr\Clone_;
 use PhpParser\Node\Expr\FuncCall;
 use PhpParser\Node\Expr\New_;
@@ -48,6 +56,8 @@ use PhpParser\PhpVersion as ParserPhpVersion;
 
 /**
  * Renders one IR class as a PHP file in the shape the target dictates (spec §6.2).
+ *
+ * @phpstan-import-type JsonValue from Json
  */
 final class PhpParserEmitter implements CodeEmitter
 {
@@ -86,12 +96,42 @@ final class PhpParserEmitter implements CodeEmitter
         $node->flags = $this->modifiers($class->kind(), $form);
         $this->document($node, DocBlock::render($class->doc()->description(), $this->deprecation($class->doc())));
 
+        return $this->file($node, $class->name(), $target);
+    }
+
+    public function emitEnum(EnumModel $enum, TargetProfile $target): string
+    {
+        $native = $target->supports(Capability::from(Capability::ENUMS));
+        $members = [];
+        foreach ($enum->cases() as $case) {
+            $member = $native
+                ? $this->factory->enumCase($case->name())->setValue($case->value())->getNode()
+                : $this->factory->classConst($case->name(), $case->value())->makePublic()->getNode();
+            $this->document($member, DocBlock::render($case->doc()->description(), $this->deprecation($case->doc())));
+            $members[] = $member;
+        }
+
+        if ($native) {
+            $node = $this->factory->enum($enum->name()->shortName())->setScalarType($enum->backing()->value())->addStmts($members)->getNode();
+        } else {
+            // Only the constants are meant to be used; nothing should create an instance.
+            $members[] = $this->factory->method('__construct')->makePrivate()->getNode();
+            $node = $this->factory->class($enum->name()->shortName())->makeFinal()->addStmts($members)->getNode();
+        }
+
+        $this->document($node, DocBlock::render($enum->doc()->description(), $this->deprecation($enum->doc())));
+
+        return $this->file($node, $enum->name(), $target);
+    }
+
+    private function file(Node $declaration, ClassName $name, TargetProfile $target): string
+    {
         $header = new Nop();
         $header->setAttribute('comments', [new Comment(self::HEADER)]);
 
         $statements = [$header, new Declare_([new DeclareItem('strict_types', new Int_(1))])];
-        $namespace = $class->name()->namespace();
-        $statements[] = $namespace === '' ? $node : $this->factory->namespace($namespace)->addStmt($node)->getNode();
+        $namespace = $name->namespace();
+        $statements[] = $namespace === '' ? $declaration : $this->factory->namespace($namespace)->addStmt($declaration)->getNode();
 
         $printer = new GeneratedCodePrinter([
             'phpVersion' => ParserPhpVersion::fromComponents($target->php()->major(), $target->php()->minor()),
@@ -276,7 +316,7 @@ final class PhpParserEmitter implements CodeEmitter
 
         $param = $builder->getNode();
         if ($default instanceof DefaultValue) {
-            $param->default = self::readable($this->factory->val($default->value()));
+            $param->default = $this->defaultValue($default->value(), $property->type(), $types);
         }
 
         return $param;
@@ -356,5 +396,32 @@ final class PhpParserEmitter implements CodeEmitter
         }
 
         return $value;
+    }
+
+    /**
+     * Enum values become `Name::CASE`, a constant expression on every target; anything else a literal.
+     *
+     * @param JsonValue $value
+     */
+    private function defaultValue($value, TypeModel $type, TypeRenderer $types): Expr
+    {
+        $type = $type instanceof NullableType ? $type->inner() : $type;
+        if ($type instanceof EnumType && (is_int($value) || is_string($value))) {
+            $case = $type->caseFor($value);
+            if ($case !== null) {
+                return new ClassConstFetch($types->nameOf($type->className()), $case);
+            }
+        }
+
+        if ($type instanceof ListType && is_array($value) && Json::isList($value)) {
+            $items = [];
+            foreach ($value as $item) {
+                $items[] = new ArrayItem($this->defaultValue(Json::value($item), $type->item(), $types));
+            }
+
+            return new Array_($items);
+        }
+
+        return self::readable($this->factory->val($value));
     }
 }

@@ -8,8 +8,15 @@ namespace App\Golden;
 
 final class Settings
 {
-    public function __construct(private ?string $theme = 'dark')
-    {
+    public function __construct(
+        private ?string $theme = 'dark',
+        /**
+         * Properties the schema does not declare.
+         *
+         * @var array<array-key, int>
+         */
+        private array $additionalProperties = [],
+    ) {
     }
 
     public function getTheme(): ?string
@@ -20,6 +27,24 @@ final class Settings
     public function setTheme(?string $theme): self
     {
         $this->theme = $theme;
+
+        return $this;
+    }
+
+    /**
+     * @return array<array-key, int>
+     */
+    public function getAdditionalProperties(): array
+    {
+        return $this->additionalProperties;
+    }
+
+    /**
+     * @param array<array-key, int> $additionalProperties
+     */
+    public function setAdditionalProperties(array $additionalProperties): self
+    {
+        $this->additionalProperties = $additionalProperties;
 
         return $this;
     }

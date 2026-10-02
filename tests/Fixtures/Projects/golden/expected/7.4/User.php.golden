@@ -54,10 +54,30 @@ final class User
     private ?\DateTimeZone $timeZone;
 
     /**
+     * @var ?UserStatus::*
+     */
+    private ?string $status;
+
+    /**
+     * @var ?Role::*
+     */
+    private ?int $role;
+
+    private ?UserPreferences $preferences;
+
+    /**
+     * @var ?array<array-key, string>
+     */
+    private ?array $labels;
+
+    /**
      * @param positive-int $id
      * @param ?non-empty-string $name
      * @param ?int<0, 150> $age
      * @param ?list<Tag> $tags
+     * @param ?UserStatus::* $status
+     * @param ?Role::* $role
+     * @param ?array<array-key, string> $labels
      */
     public function __construct(
         int $id,
@@ -71,7 +91,11 @@ final class User
         ?Address $address = null,
         ?string $nickname = null,
         ?string $legacy = null,
-        ?\DateTimeZone $timeZone = null
+        ?\DateTimeZone $timeZone = null,
+        ?string $status = UserStatus::ACTIVE,
+        ?int $role = null,
+        ?UserPreferences $preferences = null,
+        ?array $labels = null
     ) {
         $this->id = $id;
         $this->email = $email;
@@ -85,6 +109,10 @@ final class User
         $this->nickname = $nickname;
         $this->legacy = $legacy;
         $this->timeZone = $timeZone;
+        $this->status = $status;
+        $this->role = $role;
+        $this->preferences = $preferences;
+        $this->labels = $labels;
     }
 
     /**
@@ -269,6 +297,76 @@ final class User
     {
         $clone = clone $this;
         $clone->timeZone = $timeZone;
+
+        return $clone;
+    }
+
+    /**
+     * @return ?UserStatus::*
+     */
+    public function getStatus(): ?string
+    {
+        return $this->status;
+    }
+
+    /**
+     * @param ?UserStatus::* $status
+     */
+    public function withStatus(?string $status): self
+    {
+        $clone = clone $this;
+        $clone->status = $status;
+
+        return $clone;
+    }
+
+    /**
+     * @return ?Role::*
+     */
+    public function getRole(): ?int
+    {
+        return $this->role;
+    }
+
+    /**
+     * @param ?Role::* $role
+     */
+    public function withRole(?int $role): self
+    {
+        $clone = clone $this;
+        $clone->role = $role;
+
+        return $clone;
+    }
+
+    public function getPreferences(): ?UserPreferences
+    {
+        return $this->preferences;
+    }
+
+    public function withPreferences(?UserPreferences $preferences): self
+    {
+        $clone = clone $this;
+        $clone->preferences = $preferences;
+
+        return $clone;
+    }
+
+    /**
+     * @return ?array<array-key, string>
+     */
+    public function getLabels(): ?array
+    {
+        return $this->labels;
+    }
+
+    /**
+     * @param ?array<array-key, string> $labels
+     */
+    public function withLabels(?array $labels): self
+    {
+        $clone = clone $this;
+        $clone->labels = $labels;
 
         return $clone;
     }

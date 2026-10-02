@@ -9,6 +9,10 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\ClassModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\DocModel;
+use MSSTC4PHP\DtoGenerator\Domain\Model\EnumBacking;
+use MSSTC4PHP\DtoGenerator\Domain\Model\EnumCase;
+use MSSTC4PHP\DtoGenerator\Domain\Model\EnumModel;
+use MSSTC4PHP\DtoGenerator\Domain\Model\EnumType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ListType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\MapType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\MixedType;
@@ -67,6 +71,7 @@ final class EmitterFixture
             self::property('meta', new NullableType(new MapType(ScalarType::int())), false, new DefaultValue(null)),
             self::property('flags', new NullableType(new ListType(ScalarType::bool())), false, new DefaultValue([true, false])),
             self::property('extra', new MixedType(), false, new DefaultValue(null), null, true),
+            self::property('currency', new NullableType(EnumType::of(self::currency())), false, new DefaultValue('EUR'), 'Settlement currency.'),
         ]);
     }
 
@@ -80,6 +85,25 @@ final class EmitterFixture
             // Long enough that `clone($this, [...])` and `new self(...)` break across lines on 8.1+.
             self::property('deliberatelyLongPropertyNameThatBreaksTheWitherCall', ScalarType::int(), false, new DefaultValue(0)),
         ]);
+    }
+
+    /**
+     * @return list<EnumModel>
+     */
+    public static function enums(): array
+    {
+        return [self::currency()];
+    }
+
+    public static function currency(): EnumModel
+    {
+        return new EnumModel(
+            ClassName::fromFqcn('App\Dto\Currency'),
+            EnumBacking::from(EnumBacking::STRING),
+            [new EnumCase('EUR', 'EUR', new DocModel('Euro.')), new EnumCase('IN_PROGRESS', 'in-progress')],
+            new DocModel('A currency.'),
+            new SchemaLocation(self::SPEC, '/components/schemas/Currency'),
+        );
     }
 
     public static function tag(): ClassModel

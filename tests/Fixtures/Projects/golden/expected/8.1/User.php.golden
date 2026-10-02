@@ -42,6 +42,13 @@ final class User
          */
         public readonly ?string $legacy = null,
         public readonly ?\DateTimeZone $timeZone = null,
+        public readonly ?UserStatus $status = UserStatus::ACTIVE,
+        public readonly ?Role $role = null,
+        public readonly ?UserPreferences $preferences = null,
+        /**
+         * @var ?array<array-key, string>
+         */
+        public readonly ?array $labels = null,
     ) {
     }
 
@@ -63,6 +70,10 @@ final class User
             $this->nickname,
             $this->legacy,
             $this->timeZone,
+            $this->status,
+            $this->role,
+            $this->preferences,
+            $this->labels,
         );
     }
 
@@ -81,6 +92,10 @@ final class User
             $this->nickname,
             $this->legacy,
             $this->timeZone,
+            $this->status,
+            $this->role,
+            $this->preferences,
+            $this->labels,
         );
     }
 
@@ -102,6 +117,10 @@ final class User
             $this->nickname,
             $this->legacy,
             $this->timeZone,
+            $this->status,
+            $this->role,
+            $this->preferences,
+            $this->labels,
         );
     }
 
@@ -120,6 +139,10 @@ final class User
             $this->nickname,
             $this->legacy,
             $this->timeZone,
+            $this->status,
+            $this->role,
+            $this->preferences,
+            $this->labels,
         );
     }
 
@@ -138,6 +161,10 @@ final class User
             $this->nickname,
             $this->legacy,
             $this->timeZone,
+            $this->status,
+            $this->role,
+            $this->preferences,
+            $this->labels,
         );
     }
 
@@ -159,6 +186,10 @@ final class User
             $this->nickname,
             $this->legacy,
             $this->timeZone,
+            $this->status,
+            $this->role,
+            $this->preferences,
+            $this->labels,
         );
     }
 
@@ -177,6 +208,10 @@ final class User
             $this->nickname,
             $this->legacy,
             $this->timeZone,
+            $this->status,
+            $this->role,
+            $this->preferences,
+            $this->labels,
         );
     }
 
@@ -198,6 +233,10 @@ final class User
             $this->nickname,
             $this->legacy,
             $this->timeZone,
+            $this->status,
+            $this->role,
+            $this->preferences,
+            $this->labels,
         );
     }
 
@@ -216,6 +255,10 @@ final class User
             $this->nickname,
             $this->legacy,
             $this->timeZone,
+            $this->status,
+            $this->role,
+            $this->preferences,
+            $this->labels,
         );
     }
 
@@ -234,6 +277,10 @@ final class User
             $nickname,
             $this->legacy,
             $this->timeZone,
+            $this->status,
+            $this->role,
+            $this->preferences,
+            $this->labels,
         );
     }
 
@@ -255,6 +302,10 @@ final class User
             $this->nickname,
             $legacy,
             $this->timeZone,
+            $this->status,
+            $this->role,
+            $this->preferences,
+            $this->labels,
         );
     }
 
@@ -273,6 +324,101 @@ final class User
             $this->nickname,
             $this->legacy,
             $timeZone,
+            $this->status,
+            $this->role,
+            $this->preferences,
+            $this->labels,
+        );
+    }
+
+    public function withStatus(?UserStatus $status): self
+    {
+        return new self(
+            $this->id,
+            $this->email,
+            $this->createdAt,
+            $this->name,
+            $this->externalId,
+            $this->age,
+            $this->score,
+            $this->tags,
+            $this->address,
+            $this->nickname,
+            $this->legacy,
+            $this->timeZone,
+            $status,
+            $this->role,
+            $this->preferences,
+            $this->labels,
+        );
+    }
+
+    public function withRole(?Role $role): self
+    {
+        return new self(
+            $this->id,
+            $this->email,
+            $this->createdAt,
+            $this->name,
+            $this->externalId,
+            $this->age,
+            $this->score,
+            $this->tags,
+            $this->address,
+            $this->nickname,
+            $this->legacy,
+            $this->timeZone,
+            $this->status,
+            $role,
+            $this->preferences,
+            $this->labels,
+        );
+    }
+
+    public function withPreferences(?UserPreferences $preferences): self
+    {
+        return new self(
+            $this->id,
+            $this->email,
+            $this->createdAt,
+            $this->name,
+            $this->externalId,
+            $this->age,
+            $this->score,
+            $this->tags,
+            $this->address,
+            $this->nickname,
+            $this->legacy,
+            $this->timeZone,
+            $this->status,
+            $this->role,
+            $preferences,
+            $this->labels,
+        );
+    }
+
+    /**
+     * @param ?array<array-key, string> $labels
+     */
+    public function withLabels(?array $labels): self
+    {
+        return new self(
+            $this->id,
+            $this->email,
+            $this->createdAt,
+            $this->name,
+            $this->externalId,
+            $this->age,
+            $this->score,
+            $this->tags,
+            $this->address,
+            $this->nickname,
+            $this->legacy,
+            $this->timeZone,
+            $this->status,
+            $this->role,
+            $this->preferences,
+            $labels,
         );
     }
 }

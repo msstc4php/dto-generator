@@ -7,6 +7,7 @@ namespace MSSTC4PHP\DtoGenerator\Infrastructure\Emitter;
 use LogicException;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassType;
+use MSSTC4PHP\DtoGenerator\Domain\Model\EnumType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ListType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\MapType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\MixedType;
@@ -74,6 +75,12 @@ final class TypeRenderer
 
         if ($type instanceof ClassType) {
             return $this->printer->type($this->className($type->className()));
+        }
+
+        if ($type instanceof EnumType) {
+            $name = $this->printer->type($this->className($type->className()));
+
+            return $this->enums() ? $name : $name . '::*';
         }
 
         if ($type instanceof ListType) {
@@ -155,6 +162,11 @@ final class TypeRenderer
      */
     private function single(TypeModel $type): Node
     {
+        if ($type instanceof EnumType) {
+            // Before 8.1 an enum is a class of constants, so the property holds the backing value.
+            return $this->enums() ? $this->className($type->className()) : new Identifier($type->backing()->value());
+        }
+
         if ($type instanceof ScalarType) {
             return new Identifier($type->kind());
         }
@@ -168,6 +180,19 @@ final class TypeRenderer
         }
 
         throw $this->unsupported($type);
+    }
+
+    private function enums(): bool
+    {
+        return $this->target->supports(Capability::from(Capability::ENUMS));
+    }
+
+    /**
+     * Short inside the namespace, fully qualified outside it.
+     */
+    public function nameOf(ClassName $name): Name
+    {
+        return $this->className($name);
     }
 
     private function className(ClassName $name): Name

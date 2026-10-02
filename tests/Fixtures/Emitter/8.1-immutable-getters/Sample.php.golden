@@ -48,6 +48,10 @@ final class Sample
          * @deprecated
          */
         private readonly mixed $extra = null,
+        /**
+         * Settlement currency.
+         */
+        private readonly ?Currency $currency = Currency::EUR,
     ) {
     }
 
@@ -74,6 +78,7 @@ final class Sample
             $this->meta,
             $this->flags,
             $this->extra,
+            $this->currency,
         );
     }
 
@@ -100,6 +105,7 @@ final class Sample
             $this->meta,
             $this->flags,
             $this->extra,
+            $this->currency,
         );
     }
 
@@ -126,6 +132,7 @@ final class Sample
             $this->meta,
             $this->flags,
             $this->extra,
+            $this->currency,
         );
     }
 
@@ -146,6 +153,7 @@ final class Sample
             $this->meta,
             $this->flags,
             $this->extra,
+            $this->currency,
         );
     }
 
@@ -166,6 +174,7 @@ final class Sample
             $this->meta,
             $this->flags,
             $this->extra,
+            $this->currency,
         );
     }
 
@@ -186,6 +195,7 @@ final class Sample
             $this->meta,
             $this->flags,
             $this->extra,
+            $this->currency,
         );
     }
 
@@ -212,6 +222,7 @@ final class Sample
             $meta,
             $this->flags,
             $this->extra,
+            $this->currency,
         );
     }
 
@@ -238,6 +249,7 @@ final class Sample
             $this->meta,
             $flags,
             $this->extra,
+            $this->currency,
         );
     }
 
@@ -264,6 +276,28 @@ final class Sample
             $this->meta,
             $this->flags,
             $extra,
+            $this->currency,
+        );
+    }
+
+    public function getCurrency(): ?Currency
+    {
+        return $this->currency;
+    }
+
+    public function withCurrency(?Currency $currency): self
+    {
+        return new self(
+            $this->id,
+            $this->tags,
+            $this->code,
+            $this->name,
+            $this->createdAt,
+            $this->score,
+            $this->meta,
+            $this->flags,
+            $this->extra,
+            $currency,
         );
     }
 }

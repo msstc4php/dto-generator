@@ -121,6 +121,12 @@ final class Action
             $files[] = new GeneratedFile($source->outputDir(), $class->name()->shortName() . '.php', $this->emitter->emit($class, $target));
         }
 
+        foreach ($model->enums() as $built) {
+            $source = $config->sources()[$built->source()];
+            $enum = $built->model();
+            $files[] = new GeneratedFile($source->outputDir(), $enum->name()->shortName() . '.php', $this->emitter->emitEnum($enum, $target));
+        }
+
         return $files;
     }
 }

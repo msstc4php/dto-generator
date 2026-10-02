@@ -48,6 +48,10 @@ final class Sample
          * @deprecated
          */
         private mixed $extra = null,
+        /**
+         * Settlement currency.
+         */
+        private ?Currency $currency = Currency::EUR,
     ) {
     }
 
@@ -191,6 +195,18 @@ final class Sample
     public function setExtra(mixed $extra): self
     {
         $this->extra = $extra;
+
+        return $this;
+    }
+
+    public function getCurrency(): ?Currency
+    {
+        return $this->currency;
+    }
+
+    public function setCurrency(?Currency $currency): self
+    {
+        $this->currency = $currency;
 
         return $this;
     }

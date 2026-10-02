@@ -12,6 +12,7 @@ set_error_handler(static function (int $severity, string $message): bool {
 });
 
 $profile = $argv[1] ?? '';
+require $profile . 'Currency.php.golden';
 require $profile . 'Tag.php.golden';
 require $profile . 'Sample.php.golden';
 require $profile . 'Copy.php.golden';
@@ -44,6 +45,8 @@ check(read($sample, 'name') === 'anonymous', 'string default');
 check(read($sample, 'score') === 1.5, 'float default');
 check(read($sample, 'flags') === [true, false], 'list default');
 check(read($sample, 'createdAt') === null, 'null default');
+// A native enum case from PHP 8.1, the backing value of a class constant before.
+check(read($sample, 'currency') === constant('App\\Dto\\Currency::EUR'), 'enum default');
 
 if (method_exists($sample, 'withId')) {
     $copy = $sample->withId(8);
@@ -54,7 +57,7 @@ $properties = array_map(
     static fn (ReflectionProperty $property): string => $property->getName(),
     (new ReflectionClass($sample))->getProperties(),
 );
-check(count($properties) === 9, 'every Sample property is exercised');
+check(count($properties) === 10, 'every Sample property is exercised');
 
 foreach ($properties as $property) {
     $suffix = ucfirst($property);
