@@ -126,9 +126,10 @@ final class AllOfResolver
         for ($ancestor = $parent; $ancestor instanceof NamedClass && !isset($seen[$ancestor->name()->fqcn()]); $ancestor = $next) {
             $seen[$ancestor->name()->fqcn()] = $ancestor;
             [$ancestry, $next] = $this->ancestor($ancestor->schema());
-            $inherited += $this->propertyNames($ancestry);
+            $declared = $this->propertyNames($ancestry);
+            $inherited += array_fill_keys($declared, $ancestor->name()->fqcn());
             // Only an ancestor's own properties can be required there; extending drops the rest, as it does here.
-            $alreadyRequired += array_intersect_key($ancestry->required(), $this->propertyNames($ancestry));
+            $alreadyRequired += array_intersect_key($ancestry->required(), $declared);
         }
 
         foreach ($composition->required() as $wireName) {
@@ -137,7 +138,7 @@ final class AllOfResolver
                     sprintf(
                         'Required property "%s" belongs to the parent %s, where extending cannot make it required; use "x-php-all-of: merge" to require it.',
                         $wireName,
-                        $parent->name()->fqcn(),
+                        $inherited[$wireName],
                     ),
                     $schema->location(),
                 );
