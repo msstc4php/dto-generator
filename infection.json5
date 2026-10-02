@@ -62,7 +62,9 @@
                 "MSSTC4PHP\\DtoGenerator\\Domain\\Builder\\NameResolver::enumCaseName",
                 "MSSTC4PHP\\DtoGenerator\\Infrastructure\\Writer\\FilesystemWriter::readManifest",
                 "MSSTC4PHP\\DtoGenerator\\Presentation\\Cli\\JsonReport::encode",
-                "MSSTC4PHP\\DtoGenerator\\DtoGenerator::console"
+                "MSSTC4PHP\\DtoGenerator\\DtoGenerator::console",
+                // getcwd() fails only when the working directory has been removed.
+                "MSSTC4PHP\\DtoGenerator\\ComposerPlugin::generate"
             ]
         },
         // Equivalent: defensive throws whose preconditions the constructors guarantee.
@@ -76,6 +78,10 @@
         },
         "InstanceOf_": {
             "ignore": [
+                // A write that did not fail always has a plan.
+                "MSSTC4PHP\\DtoGenerator\\ComposerPlugin::summary",
+                // Closure::bind() of a static closure to a class that exists never returns null.
+                "MSSTC4PHP\\DtoGenerator\\ComposerPlugin::runsScripts",
                 // Config loading reports an error whenever it returns no config or target.
                 "MSSTC4PHP\\DtoGenerator\\Application\\Service\\Generate\\Action::__invoke",
                 "MSSTC4PHP\\DtoGenerator\\Domain\\Shared\\AbstractEnum::tryFrom",

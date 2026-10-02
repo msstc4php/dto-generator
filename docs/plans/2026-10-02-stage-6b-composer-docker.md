@@ -11,10 +11,10 @@
 
 ## Решения
 - **Пакет — Composer-плагин.**
-  - `type: composer-plugin`, `extra.class: MSSTC4PHP\DtoGenerator\Presentation\Composer\Plugin`, `require: composer-plugin-api ^2.0`. Отдельного пакета нет, как и сказано в §9.3.
+  - `type: composer-plugin`, `extra.class: MSSTC4PHP\DtoGenerator\ComposerPlugin`, `require: composer-plugin-api ^2.0`. Отдельного пакета нет, как и сказано в §9.3.
   - Цена: Composer 2.2+ спросит `allow-plugins` при установке. Отказ отключает только плагин; CLI и PHP API работают.
   - `require-dev: composer/composer ^2.2` — типы плагина для тестов и PHPStan.
-- **Плагин** (`Presentation/Composer/Plugin`): `PluginInterface` + `EventSubscriberInterface`, подписка на `ScriptEvents::POST_AUTOLOAD_DUMP`.
+- **Плагин** (`src/ComposerPlugin.php`, слой EntryPoint: его создаёт сам Composer, и он собирает генератор через `DtoGenerator`): `PluginInterface` + `EventSubscriberInterface`, подписка на `ScriptEvents::POST_AUTOLOAD_DUMP`.
   - Нет `extra.dto-generator` или `config` — ничего не делает.
   - `config` — непустая строка, путь относительно каталога `composer.json` проекта (рабочий каталог Composer). `failOnError` — bool, по умолчанию `false`. Неверный тип — сообщение и (при `failOnError: true`) провал команды.
   - Запуск `DtoGenerator::generator()` в режиме записи. Итог печатается через IO Composer: `dto-generator: N files written, M deleted` или `up to date`; диагностика — строками как в CLI (`<warning>`/`<error>`).
