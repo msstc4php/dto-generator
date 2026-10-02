@@ -40,7 +40,9 @@
                 "MSSTC4PHP\\DtoGenerator\\Application\\Service\\Model\\Enrich\\AttributeVerification::__construct",
                 "MSSTC4PHP\\DtoGenerator\\Application\\Service\\Model\\Enrich\\AttributeVerification::report",
                 "MSSTC4PHP\\DtoGenerator\\Application\\Service\\Extension\\Load\\Action::load",
-                "MSSTC4PHP\\DtoGenerator\\Application\\Service\\Extension\\Load\\Action::discovered"
+                "MSSTC4PHP\\DtoGenerator\\Application\\Service\\Extension\\Load\\Action::discovered",
+                // isset()-only seen map of the $ref chain.
+                "MSSTC4PHP\\DtoGenerator\\Contract\\SchemaReferences::resolve"
             ]
         },
         // Equivalent: the substr() offsets stay within the string, so it never returns false on 7.4, and

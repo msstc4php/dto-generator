@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MSSTC4PHP\DtoGenerator\Application\Service\Model\Enrich;
 
 use MSSTC4PHP\DtoGenerator\Application\Port\ClassVerifier;
+use MSSTC4PHP\DtoGenerator\Contract\SchemaReferences;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
 use MSSTC4PHP\DtoGenerator\Domain\Model\AttributeModel;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaIndex;
@@ -23,10 +24,13 @@ final class EnrichmentRun
 
     private ?AttributeVerification $verification = null;
 
+    private SchemaReferences $references;
+
     public function __construct(Input $input, Diagnostics $diagnostics)
     {
         $this->input = $input;
         $this->index = SchemaIndex::of($input->graph());
+        $this->references = new SchemaReferences($input->graph());
         $this->diagnostics = $diagnostics;
         $verifier = $input->verifier();
         if ($verifier instanceof ClassVerifier && !$input->target()->metadata()->isNone()) {
@@ -42,6 +46,11 @@ final class EnrichmentRun
     public function index(): SchemaIndex
     {
         return $this->index;
+    }
+
+    public function references(): SchemaReferences
+    {
+        return $this->references;
     }
 
     public function diagnostics(): Diagnostics
