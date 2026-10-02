@@ -70,8 +70,8 @@ final class AllOfResolver
 
         $key = $schema->location()->toString();
         $parts = new CompositionParts();
-        // Requirements beside the parent's $ref, or on the aliases and wrappers before it, name inherited properties:
-        // warnAboutInheritedRequirements() reports them.
+        // Requirements beside the parent's $ref, or beside the $refs of the aliases and wrappers before it, name inherited
+        // properties: warnAboutInheritedRequirements() reports them.
         if ($index !== null) {
             $parts->requireFrom($members[$index]);
             foreach ($parents[$index]->via() as $passed) {
@@ -127,7 +127,8 @@ final class AllOfResolver
             $seen[$ancestor->name()->fqcn()] = $ancestor;
             [$ancestry, $next] = $this->ancestor($ancestor->schema());
             $inherited += $this->propertyNames($ancestry);
-            $alreadyRequired += $ancestry->required();
+            // Only an ancestor's own properties can be required there; extending drops the rest, as it does here.
+            $alreadyRequired += array_intersect_key($ancestry->required(), $this->propertyNames($ancestry));
         }
 
         foreach ($composition->required() as $wireName) {

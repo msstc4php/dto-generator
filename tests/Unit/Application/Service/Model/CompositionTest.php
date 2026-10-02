@@ -758,9 +758,32 @@ final class CompositionTest extends TestCase
             'Cat' => ['allOf' => [['$ref' => '#/components/schemas/Alias'], $lives]],
         ]);
 
+        $wrapped = ModelFixture::build([
+            'Pet' => $pet,
+            'Wrapper' => ['allOf' => [['$ref' => '#/components/schemas/Pet', 'required' => ['name']]]],
+            'Cat' => ['allOf' => [['$ref' => '#/components/schemas/Wrapper'], $lives]],
+        ]);
+
         self::assertSame([$warning], ModelFixture::messages($inline));
         self::assertSame([$warning], ModelFixture::messages($aliased));
+        self::assertSame([$warning], ModelFixture::messages($wrapped));
         self::assertSame('final extends App\Dto\Pet', ModelFixture::hierarchy($aliased)['App\Dto\Cat']);
+    }
+
+    public function testWarnsAboutEachSubclassWhoseRequirementTheParentCannotEnforce(): void
+    {
+        $output = ModelFixture::build([
+            'Animal' => ['type' => 'object', 'properties' => ['name' => ['type' => 'string']]],
+            'Pet' => ['allOf' => [['$ref' => '#/components/schemas/Animal', 'required' => ['name']], ['properties' => ['owner' => ['type' => 'string']]]]],
+            'Kitten' => ['allOf' => [['$ref' => '#/components/schemas/Pet'], ['required' => ['name'], 'properties' => ['age' => ['type' => 'integer']]]]],
+        ]);
+        $at = '/project/api/openapi.yaml#/components/schemas/';
+        $tail = ', where extending cannot make it required; use "x-php-all-of: merge" to require it.';
+
+        self::assertSame([
+            "warning {$at}Pet: Required property \"name\" belongs to the parent App\\Dto\\Animal{$tail}",
+            "warning {$at}Kitten: Required property \"name\" belongs to the parent App\\Dto\\Pet{$tail}",
+        ], ModelFixture::messages($output));
     }
 
     public function testReportsANonObjectBehindAnAliasAtTheMemberThatUsesIt(): void
