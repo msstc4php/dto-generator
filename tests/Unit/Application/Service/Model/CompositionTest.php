@@ -301,9 +301,9 @@ final class CompositionTest extends TestCase
                     'Cat' => ['allOf' => [self::PET, ['required' => ['lives', 'id', 'name', 'tag'], 'properties' => ['age' => [], 'lives' => []]]]],
                 ],
                 [
-                    "warning {$at}Cat: Required property \"id\" belongs to the parent App\\Dto\\Pet, where extending cannot make it required; use \"x-php-all-of: merge\" to require it.",
+                    "warning {$at}Cat: Required property \"id\" belongs to the parent App\\Dto\\Animal, where extending cannot make it required; use \"x-php-all-of: merge\" to require it.",
                     "warning {$at}Cat: Required property \"name\" belongs to the parent App\\Dto\\Pet, where extending cannot make it required; use \"x-php-all-of: merge\" to require it.",
-                    "warning {$at}Cat: Required property \"tag\" belongs to the parent App\\Dto\\Pet, where extending cannot make it required; use \"x-php-all-of: merge\" to require it.",
+                    "warning {$at}Cat: Required property \"tag\" belongs to the parent App\\Dto\\Animal, where extending cannot make it required; use \"x-php-all-of: merge\" to require it.",
                 ],
             ],
             'discriminated parent in an inheritance loop' => [
@@ -775,14 +775,15 @@ final class CompositionTest extends TestCase
         $output = ModelFixture::build([
             'Animal' => ['type' => 'object', 'properties' => ['name' => ['type' => 'string']]],
             'Pet' => ['allOf' => [['$ref' => '#/components/schemas/Animal', 'required' => ['name']], ['properties' => ['owner' => ['type' => 'string']]]]],
-            'Kitten' => ['allOf' => [['$ref' => '#/components/schemas/Pet'], ['required' => ['name'], 'properties' => ['age' => ['type' => 'integer']]]]],
+            'Kitten' => ['allOf' => [['$ref' => '#/components/schemas/Pet'], ['required' => ['name', 'owner'], 'properties' => ['age' => ['type' => 'integer']]]]],
         ]);
         $at = '/project/api/openapi.yaml#/components/schemas/';
         $tail = ', where extending cannot make it required; use "x-php-all-of: merge" to require it.';
 
         self::assertSame([
             "warning {$at}Pet: Required property \"name\" belongs to the parent App\\Dto\\Animal{$tail}",
-            "warning {$at}Kitten: Required property \"name\" belongs to the parent App\\Dto\\Pet{$tail}",
+            "warning {$at}Kitten: Required property \"name\" belongs to the parent App\\Dto\\Animal{$tail}",
+            "warning {$at}Kitten: Required property \"owner\" belongs to the parent App\\Dto\\Pet{$tail}",
         ], ModelFixture::messages($output));
     }
 
