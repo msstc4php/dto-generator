@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Tests\Integration\Infrastructure\Writer;
 
+use Closure;
 use MSSTC4PHP\DtoGenerator\Application\Port\WriteFailed;
 use MSSTC4PHP\DtoGenerator\Application\Service\Generate\FileChange;
 use MSSTC4PHP\DtoGenerator\Application\Service\Generate\GeneratedFile;
@@ -42,6 +43,7 @@ final class FilesystemWriterTest extends TestCase
             file_get_contents($this->dir . '/out/.dto-generator.manifest.json'),
         );
         self::assertSame('0644', substr(sprintf('%o', fileperms($this->dir . '/out/User.php')), -4));
+        self::assertSame(sprintf('%o', 0777 & ~umask()), substr(sprintf('%o', fileperms($this->dir . '/out/Sub')), -3));
         self::assertSame([], glob($this->dir . '/out/.*.tmp'));
     }
 
@@ -213,6 +215,55 @@ final class FilesystemWriterTest extends TestCase
         $plan = (new FilesystemWriter())->plan([$this->dir . '/fresh'], []);
 
         self::assertFalse($plan->hasChanges());
+    }
+
+    public function testDeletesEveryStaleFileAfterAKeptOne(): void
+    {
+        $this->write([$this->file('A.php', 'a'), $this->file('B.php', 'b'), $this->file('C.php', 'c')]);
+
+        $plan = $this->write([$this->file('A.php', 'a')]);
+
+        self::assertSame([['unchanged', 'A.php'], ['delete', 'B.php'], ['delete', 'C.php']], $this->summary($plan));
+    }
+
+    public function testAcceptsAnOutputDirWithATrailingSlash(): void
+    {
+        $this->write([$this->file('User.php', 'user')]);
+        $writer = new FilesystemWriter();
+
+        $plan = $writer->plan([$this->dir . '/out/'], []);
+
+        self::assertSame([['delete', 'User.php']], $this->summary($plan));
+    }
+
+    public function testKeepsPlanningOtherOutputDirsAfterAnEmptyNewOne(): void
+    {
+        $plan = (new FilesystemWriter())->plan([$this->dir . '/fresh', $this->dir . '/out'], [$this->file('User.php', 'user')]);
+
+        self::assertSame([$this->dir . '/out/.dto-generator.manifest.json'], array_keys($plan->manifests()));
+    }
+
+    public function testKeepsTheManifestSortedWhenAKeptFileSortsFirst(): void
+    {
+        $this->write([$this->file('A.php', 'a'), $this->file('B.php', 'b')]);
+        file_put_contents($this->dir . '/out/A.php', "<?php\n// hand-written now\n");
+        $writer = new FilesystemWriter();
+
+        $writer->apply($writer->plan([$this->dir . '/out'], [$this->file('B.php', 'b2')]));
+
+        $manifest = (string) file_get_contents($this->dir . '/out/.dto-generator.manifest.json');
+        self::assertLessThan(strpos($manifest, '"B.php"'), strpos($manifest, '"A.php"'));
+    }
+
+    public function testRestoresTheErrorHandler(): void
+    {
+        $this->write([$this->file('User.php', 'user')]);
+
+        $previous = set_error_handler(static fn (): bool => false);
+        restore_error_handler();
+
+        // The writer silences warnings with a closure; PHPUnit's own handler is an object.
+        self::assertNotInstanceOf(Closure::class, $previous);
     }
 
     /**

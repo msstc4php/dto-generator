@@ -20,6 +20,7 @@ final class WritePlanTest extends TestCase
         self::assertSame('Sub/User.php', $file->relativePath());
         self::assertSame('/out/Sub/User.php', $file->path());
         self::assertSame('<?php', $file->contents());
+        self::assertSame('/out/User.php', (new GeneratedFile('/out/', 'User.php', ''))->path());
     }
 
     /**

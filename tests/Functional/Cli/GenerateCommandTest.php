@@ -174,6 +174,25 @@ final class GenerateCommandTest extends TestCase
         self::assertSame(['severity', 'location', 'message'], array_keys((array) $report['diagnostics'][0]));
     }
 
+    public function testCountsUpdatedFilesAsWritten(): void
+    {
+        $this->execute([]);
+        file_put_contents($this->dir . '/api/openapi.yaml', str_replace('id: { type: integer }', 'id: { type: string }', self::SPEC));
+
+        self::assertSame([0, "Written: 1, deleted: 0, unchanged: 1.\n"], $this->execute([]));
+    }
+
+    public function testPrintsReadableJson(): void
+    {
+        file_put_contents($this->dir . '/api/openapi.yaml', str_replace('label: { type: string }', "label: { type: string, format: f\u{00E4}rg }", self::SPEC));
+
+        $display = $this->execute(['--format' => 'json', '--dry-run' => true])[1];
+
+        self::assertStringContainsString("\n    \"status\": \"ok\",\n", $display);
+        self::assertStringContainsString('"path": "src/Dto/Tag.php"', $display);
+        self::assertStringContainsString("f\u{00E4}rg", $display);
+    }
+
     /**
      * @param array<string, string|bool> $options
      *

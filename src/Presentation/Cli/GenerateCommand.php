@@ -66,8 +66,8 @@ final class GenerateCommand extends Command
             return $this->usageError($output, '--format must be "text" or "json".');
         }
 
-        $check = ($options['check'] ?? false) === true;
-        $dryRun = ($options['dry-run'] ?? false) === true;
+        $check = $options['check'] === true;
+        $dryRun = $options['dry-run'] === true;
         if ($check && $dryRun) {
             return $this->usageError($output, '--check and --dry-run cannot be combined.');
         }
@@ -134,7 +134,7 @@ final class GenerateCommand extends Command
             return;
         }
 
-        $changes = $result->plan() instanceof WritePlan ? $result->plan()->changes() : [];
+        $changes = $this->changes($result);
         $counts = [FileChange::CREATE => 0, FileChange::UPDATE => 0, FileChange::DELETE => 0, FileChange::UNCHANGED => 0];
         foreach ($changes as $change) {
             $counts[$change->kind()]++;
@@ -184,7 +184,7 @@ final class GenerateCommand extends Command
     private function json(Output $result): string
     {
         $changes = [];
-        foreach ($result->plan() instanceof WritePlan ? $result->plan()->changes() : [] as $change) {
+        foreach ($this->changes($result) as $change) {
             if ($change->isChange()) {
                 $changes[] = ['kind' => $change->kind(), 'path' => $this->formatter->path($change->path())];
             }
@@ -202,5 +202,15 @@ final class GenerateCommand extends Command
             ],
             JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE,
         );
+    }
+
+    /**
+     * @return list<FileChange>
+     */
+    private function changes(Output $result): array
+    {
+        $plan = $result->plan();
+
+        return $plan instanceof WritePlan ? $plan->changes() : [];
     }
 }

@@ -120,6 +120,25 @@ final class GenerateTest extends TestCase
         self::assertSame(['error /project/dto-generator.yaml#: Cannot write "/project/src/Dto/User.php".'], $this->messages($output));
     }
 
+    public function testPassesEachOutputDirOnce(): void
+    {
+        $writer = new RecordingWriter(new WritePlan([], [], []));
+        $loader = new InMemoryDocumentLoader([
+            self::CONFIG => ['version' => 1, 'target' => ['php' => '8.2'], 'sources' => [
+                ['spec' => 'api/a.yaml', 'namespace' => 'App\A', 'outputDir' => 'shared'],
+                ['spec' => 'api/b.yaml', 'namespace' => 'App\B', 'outputDir' => 'shared'],
+                ['spec' => 'api/c.yaml', 'namespace' => 'App\C', 'outputDir' => 'own'],
+            ]],
+            '/project/api/a.yaml' => ['openapi' => '3.1.0'],
+            '/project/api/b.yaml' => ['openapi' => '3.1.0'],
+            '/project/api/c.yaml' => ['openapi' => '3.1.0'],
+        ]);
+
+        $this->action($loader, $writer)(new Input(self::CONFIG, Mode::from(Mode::WRITE)));
+
+        self::assertSame(['/project/shared', '/project/own'], $writer->outputDirs);
+    }
+
     /**
      * @param array<string, array<array-key, mixed>> $extraSchemas
      */

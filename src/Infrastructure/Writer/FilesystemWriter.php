@@ -131,10 +131,17 @@ final class FilesystemWriter implements FileWriter
             $this->quietly(static fn (): bool => mkdir($directory, 0777, true), $path, 'write');
         }
 
-        // The temporary file lives next to the target, so rename() never crosses a filesystem.
-        $temporary = $directory . '/.' . basename($path) . '.' . bin2hex(random_bytes(6)) . '.tmp';
+        $temporary = $this->temporaryPath($path);
         $this->quietly(static fn (): bool => file_put_contents($temporary, $contents) === strlen($contents), $path, 'write');
         $this->quietly(static fn (): bool => chmod($temporary, 0644) && rename($temporary, $path), $path, 'write');
+    }
+
+    /**
+     * Next to the target, so rename() never crosses a filesystem; hidden and random, so it never clashes.
+     */
+    private function temporaryPath(string $path): string
+    {
+        return dirname($path) . '/.' . basename($path) . '.' . bin2hex(random_bytes(6)) . '.tmp';
     }
 
     /**
@@ -145,12 +152,8 @@ final class FilesystemWriter implements FileWriter
     private function quietly(callable $operation, string $path, string $action): void
     {
         set_error_handler(static fn (): bool => true);
-
-        try {
-            $succeeded = $operation();
-        } finally {
-            restore_error_handler();
-        }
+        $succeeded = $operation();
+        restore_error_handler();
 
         if (!$succeeded) {
             throw WriteFailed::at($path, $action);

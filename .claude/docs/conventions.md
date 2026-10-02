@@ -34,3 +34,7 @@
 - `make test-targets` (вне песочницы, Docker): `php -l` + `tests/Targets/smoke.php` на версии профиля (deprecation/notice = провал), затем PHPStan max по профилю с его `phpVersion` (`fileExtensions: [golden]`). Новый профиль = новая строка в `GoldenEmitterTest::profiles()` (тест сверяет список с каталогами).
 - `EmitterFixture::model()` принимает mutability явно — в тестах класс должен совпадать с профилем.
 
+## Сквозной golden-проект (этап 3b)
+- `tests/Fixtures/Projects/golden/` — `api/openapi.yaml`, `api/shared/common.yaml`, конфиги `php<ver>.yaml`; эталоны `expected/<ver>/*.php.golden`. `GoldenProjectTest` гоняет `DtoGenerator::generator()` в dry-run, `UPDATE_SNAPSHOTS=1` перезаписывает; `make test-targets` линтует и прогоняет PHPStan max по `expected/<ver>`.
+- Функциональные тесты CLI — suite `functional` (`tests/Functional`), они же входят в infection (`testFrameworkOptions`).
+

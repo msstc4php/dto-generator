@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Application\Service\Generate;
 
-use LogicException;
 use MSSTC4PHP\DtoGenerator\Application\Config\GeneratorConfig;
 use MSSTC4PHP\DtoGenerator\Application\Config\SourceConfig;
 use MSSTC4PHP\DtoGenerator\Application\Port\CodeEmitter;
@@ -17,7 +16,6 @@ use MSSTC4PHP\DtoGenerator\Application\Service\Model\Build\Input as BuildInput;
 use MSSTC4PHP\DtoGenerator\Application\Service\Schemas\Load\Action as LoadSchemas;
 use MSSTC4PHP\DtoGenerator\Application\Service\Schemas\Load\Input as SchemasInput;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
-use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
 use MSSTC4PHP\DtoGenerator\Domain\Target\TargetProfile;
 
@@ -108,19 +106,10 @@ final class Action
         foreach ($model->classes() as $built) {
             $source = $config->sources()[$built->source()];
             $class = $built->model();
-            $files[] = new GeneratedFile($source->outputDir(), $this->relativePath($class->name(), $source->namespace()), $this->emitter->emit($class, $target));
+            // Build places every class directly in the namespace of its source.
+            $files[] = new GeneratedFile($source->outputDir(), $class->name()->shortName() . '.php', $this->emitter->emit($class, $target));
         }
 
         return $files;
-    }
-
-    private function relativePath(ClassName $class, string $namespace): string
-    {
-        $prefix = $namespace === '' ? '' : $namespace . '\\';
-        if (strncmp($class->fqcn(), $prefix, strlen($prefix)) !== 0) {
-            throw new LogicException(sprintf('Class %s lies outside the source namespace %s.', $class->fqcn(), $namespace));
-        }
-
-        return str_replace('\\', '/', substr($class->fqcn(), strlen($prefix))) . '.php';
     }
 }

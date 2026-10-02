@@ -47,4 +47,9 @@
 - **`x-php-name` суперглобалов** (`GLOBALS`, `_GET`, …) — ошибка Builder и инвариант `PropertyModel`: такой параметр не компилируется.
 - **Свойство `clone`** при wither через `clone` (7.4/8.0): временная переменная — `$copy`. Golden-класс `Copy` (без namespace) прогоняется на целях.
 - **Инварианты IR для emitter:** `PropertyModel` required ⇔ нет default; `ClassForm` строится только `mutable()`/`immutable()`; не-final класс со свойствами emitter отвергает до этапа 4 (`new self` в abstract недопустим).
+- **symfony/console 5.4 и PHPStan (phpVersion 70400):** phpdoc `mixed` у `getOption()`/`addOption()` PHPStan читает как класс `…\mixed`; stub-файл не применился. Опции читаются через `getOptions()` (там phpdoc типизирован).
+- **Writer:** `plan()` получает список ВСЕХ outputDir конфига — иначе источник, у которого удалили все схемы, не почистит устаревшие файлы. Файл без `@generated` не перезаписывается даже если он в манифесте (заголовок стёрт руками) — ошибка.
+- **Генерация файлов** пропускается, если схемы/модель дали ошибки (`files()` → null): записи всё равно не будет.
+- **Пути файлов:** Build кладёт каждый класс прямо в namespace источника → файл `<outputDir>/<ShortName>.php`; вложенные namespace появятся только с этапом 4+.
+- **CI (`.github/workflows/ci.yml`) локально не прогонялся**: матрица PHP 7.4–8.5 × lowest/highest (`composer config platform --unset`), static на 8.4, `make test-targets`, infection.
 

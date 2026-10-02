@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Tests on PHP ${{ matrix.php }} (${{ matrix.dependencies }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['7.4', '8.0', '8.1', '8.2', '8.3', '8.4', '8.5']
+        dependencies: [lowest, highest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+      - name: Install dependencies
+        # composer.json pins the platform to 7.4 for local installs; CI resolves for the PHP it runs on.
+        run: |
+          composer config platform --unset
+          composer update --no-interaction --no-progress ${{ matrix.dependencies == 'lowest' && '--prefer-lowest --prefer-stable' || '' }}
+      - name: Lint sources with this PHP
+        run: find src tests -name '*.php' -print0 | xargs -0 -n1 php -l > /dev/null
+      - name: PHPUnit
+        run: vendor/bin/phpunit
+
+  static:
+    name: Static analysis
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+      - run: composer install --no-interaction --no-progress
+      - run: composer install --no-interaction --no-progress --working-dir=tools
+      - run: tools/vendor/bin/phpstan analyse --memory-limit=512M -c phpstan.dist.neon --no-progress
+      - run: tools/vendor/bin/php-cs-fixer check
+      - run: composer validate --strict --no-check-publish
+      - run: tools/vendor/bin/rector process -n
+      - run: tools/vendor/bin/deptrac analyse --config-file=deptrac.yaml --no-progress --fail-on-uncovered
+
+  targets:
+    name: Generated code on PHP 7.4–8.5
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+      - run: composer install --no-interaction --no-progress
+      - run: composer install --no-interaction --no-progress --working-dir=tools
+      - run: make test-targets
+
+  mutation:
+    name: Mutation testing
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: xdebug
+      - run: composer install --no-interaction --no-progress
+      - run: composer install --no-interaction --no-progress --working-dir=tools
+      - run: make infection
