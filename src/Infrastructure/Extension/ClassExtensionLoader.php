@@ -16,6 +16,9 @@ use Throwable;
  */
 final class ClassExtensionLoader implements ExtensionLoader
 {
+    /**
+     * Codes of foreign exceptions are not always ints (PDO uses strings), so only the message and the cause carry over.
+     */
     public function load(ClassName $class): Extension
     {
         $fqcn = $class->fqcn();
@@ -23,7 +26,7 @@ final class ClassExtensionLoader implements ExtensionLoader
         try {
             $exists = class_exists($fqcn) || interface_exists($fqcn);
         } catch (Throwable $exception) {
-            throw new ExtensionFailed(sprintf('Class %s could not be loaded: %s', $fqcn, $exception->getMessage()), $exception->getCode(), $exception);
+            throw new ExtensionFailed(sprintf('Class %s could not be loaded: %s', $fqcn, $exception->getMessage()), 0, $exception);
         }
 
         if (!$exists) {
@@ -47,7 +50,7 @@ final class ClassExtensionLoader implements ExtensionLoader
         try {
             return $reflection->newInstance();
         } catch (Throwable $exception) {
-            throw new ExtensionFailed(sprintf('Class %s could not be created: %s', $fqcn, $exception->getMessage()), $exception->getCode(), $exception);
+            throw new ExtensionFailed(sprintf('Class %s could not be created: %s', $fqcn, $exception->getMessage()), 0, $exception);
         }
     }
 }

@@ -65,11 +65,13 @@ final class Registry implements ExtensionRegistry
      */
     public function register(Extension $extension, array $config): void
     {
-        $this->current = $extension->name();
+        $this->current = '';
         try {
+            $this->current = $extension->name();
             $extension->register($this, $config);
         } catch (Throwable $exception) {
-            $this->diagnostics->error(sprintf('Extension "%s" failed to register: %s', $this->current, $exception->getMessage()), $this->location);
+            $who = $this->current === '' ? get_class($extension) : sprintf('"%s"', $this->current);
+            $this->diagnostics->error(sprintf('Extension %s failed to register: %s', $who, $exception->getMessage()), $this->location);
         }
     }
 
@@ -228,14 +230,25 @@ final class Registry implements ExtensionRegistry
 
         // Every x-php-*/x-dto-* key belongs to the core, which reports unknown ones as typos: the text before the first
         // wildcard must already tell the claim apart from those prefixes.
-        $literal = substr($glob, 0, strcspn($glob, '*?'));
         foreach (['x-php-', 'x-dto-'] as $prefix) {
-            if (strncmp($literal, $prefix, min(strlen($literal), strlen($prefix))) === 0 && ($literal !== $glob || strlen($literal) >= strlen($prefix))) {
+            if ($this->mayReach($glob, $prefix)) {
                 return 'it covers keys of the core vocabulary';
             }
         }
 
         return null;
+    }
+
+    /**
+     * Whether a glob can match a key starting with the prefix: its text before the first wildcard agrees with the prefix
+     * as far as both go, and either a wildcard follows or the text covers the whole prefix.
+     */
+    private function mayReach(string $glob, string $prefix): bool
+    {
+        $literal = substr($glob, 0, strcspn($glob, '*?'));
+        $agrees = strncmp($literal, $prefix, min(strlen($literal), strlen($prefix))) === 0;
+
+        return $agrees && ($literal !== $glob || strlen($literal) >= strlen($prefix));
     }
 
     private function matches(string $glob, string $key): bool

@@ -91,7 +91,7 @@
         "ArrayOneItem": { "ignoreSourceCodeByRegex": [".*return \\$default;.*"] },
         // Equivalent: enum items are already JSON values; the map only narrows the type for PHPStan.
         // Equivalent in Load\Action: the extension config is already JSON; the map only narrows its type.
-        "UnwrapArrayMap": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Domain\\Builder\\SchemaParser::applyStructural", "MSSTC4PHP\\DtoGenerator\\Application\\Service\\Extension\\Load\\Action::__invoke"] },
+        "UnwrapArrayMap": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Domain\\Builder\\SchemaParser::applyStructural", "MSSTC4PHP\\DtoGenerator\\Application\\Service\\Extension\\Load\\Action::registerOnce"] },
         // Equivalent: the result is only iterated.
         "UnwrapArrayValues": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Domain\\Schema\\Schema::subschemas"] },
         // Equivalent: preg_split() only returns false on a regex error, ini_set() cannot fail for serialize_precision, and

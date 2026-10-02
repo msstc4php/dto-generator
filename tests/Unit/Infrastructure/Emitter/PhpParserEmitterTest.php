@@ -31,8 +31,11 @@ use MSSTC4PHP\DtoGenerator\Domain\Target\MetadataMode;
 use MSSTC4PHP\DtoGenerator\Domain\Target\Mutability;
 use MSSTC4PHP\DtoGenerator\Domain\Target\PhpVersion;
 use MSSTC4PHP\DtoGenerator\Domain\Target\TargetProfile;
+use MSSTC4PHP\DtoGenerator\Infrastructure\Emitter\AttributeRenderer;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Emitter\PhpParserEmitter;
+use MSSTC4PHP\DtoGenerator\Infrastructure\Emitter\TypeRenderer;
 use MSSTC4PHP\DtoGenerator\Tests\Support\EmitterFixture;
+use PhpParser\BuilderFactory;
 use PHPUnit\Framework\TestCase;
 
 final class PhpParserEmitterTest extends TestCase
@@ -551,5 +554,29 @@ final class Order
         self::assertStringContainsString('#[Sub\\Mark] public int $other', $formCode);
         self::assertStringContainsString('#[\\App\\Checks\\Strict] public Check $check', $formCode);
         self::assertStringNotContainsString('as Check;', $formCode);
+    }
+
+    public function testWritesAnAttributeInFullWhenItsAliasMatchesANameOnlyThePhpDocUses(): void
+    {
+        $class = EmitterFixture::model('App\\Dto\\Box', null, [
+            EmitterFixture::property('items', new ListType(new ClassType(ClassName::fromFqcn('App\\Dto\\Item'))), true)
+                ->withAddedAttributes(new AttributeModel(ClassName::fromFqcn('App\\Rules\\Count'), [], new ImportAlias('App\\Rules', 'Item'))),
+        ]);
+
+        $code = (new PhpParserEmitter())->emit($class, $this->attributesTarget('8.2'));
+
+        self::assertStringContainsString('@var list<Item>', $code);
+        self::assertStringContainsString('#[\\App\\Rules\\Count] public array $items', $code);
+        self::assertStringNotContainsString('use ', $code);
+    }
+
+    public function testRefusesAnAliasWhateverTheCaseItIsGivenIn(): void
+    {
+        $types = new TypeRenderer('App\\Dto', $this->attributesTarget('8.2'));
+        $renderer = new AttributeRenderer($types, new BuilderFactory(), true, ['Assert']);
+
+        $renderer->groups([new AttributeModel(ClassName::fromFqcn('Lib\\Constraints\\Valid'), [], new ImportAlias('Lib\\Constraints', 'assert'))]);
+
+        self::assertSame([], $renderer->uses());
     }
 }

@@ -606,4 +606,30 @@ final class BuildTest extends TestCase
             ModelFixture::messages($output),
         );
     }
+
+    public function testChecksTheMembersOfAnInlineComposition(): void
+    {
+        $at = self::AT;
+        $output = ModelFixture::build([
+            'Base' => ['type' => 'object', 'properties' => ['id' => ['type' => 'string']]],
+            'Order' => ['type' => 'object', 'properties' => [
+                'comp' => ['allOf' => [['$ref' => '#/components/schemas/Base'], [
+                    'type' => 'object',
+                    'x-php-attributes' => [['class' => 'App\\Attr\\OnMember']],
+                    'x-php-typo' => 1,
+                    'properties' => ['z' => ['type' => 'string']],
+                ]]],
+                'list' => ['type' => 'array', 'items' => ['allOf' => [['$ref' => '#/components/schemas/Base'], ['properties' => ['w' => []], 'x-php-name' => 'w']]]],
+            ]],
+        ]);
+
+        self::assertSame(
+            [
+                "warning {$at}Order/properties/comp/allOf/1/x-php-attributes: \"x-php-attributes\" has no effect here.",
+                "error {$at}Order/properties/comp/allOf/1/x-php-typo: Unknown extension \"x-php-typo\"; known: x-php-class-name, x-php-name, x-php-type, x-dto-mutable, x-php-all-of, x-php-skip, x-php-attributes, x-enum-descriptions.",
+                "warning {$at}Order/properties/list/items/allOf/1/x-php-name: \"x-php-name\" has no effect here.",
+            ],
+            ModelFixture::messages($output),
+        );
+    }
 }

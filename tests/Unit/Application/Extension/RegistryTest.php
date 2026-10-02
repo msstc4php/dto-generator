@@ -23,6 +23,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\ScalarType;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
 use MSSTC4PHP\DtoGenerator\Domain\Target\Mutability;
 use MSSTC4PHP\DtoGenerator\Tests\Support\EmitterFixture;
+use MSSTC4PHP\DtoGenerator\Tests\Support\Extensions\NamelessExtension;
 use MSSTC4PHP\DtoGenerator\Tests\Support\GraphFixture;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
@@ -296,7 +297,7 @@ final class RegistryTest extends TestCase
                 public function enrichProperty(PropertyContext $context): array
                 {
                     // Reason: the test breaks the declared list<AttributeModel> on purpose, as a careless extension would.
-                    // @phpstan-ignore-next-line return.type
+                    // @phpstan-ignore return.type
                     return [new AttributeModel(ClassName::fromFqcn('App\Fine')), 'not an attribute'];
                 }
             });
@@ -304,7 +305,7 @@ final class RegistryTest extends TestCase
                 public function enrichClass(ClassContext $context): array
                 {
                     // Reason: a keyed array still passes, as PHP cannot enforce list<AttributeModel>.
-                    // @phpstan-ignore-next-line return.type
+                    // @phpstan-ignore return.type
                     return ['a' => new AttributeModel(ClassName::fromFqcn('App\Keyed'))];
                 }
             });
@@ -312,7 +313,7 @@ final class RegistryTest extends TestCase
                 public function enrichClass(ClassContext $context): array
                 {
                     // Reason: the test breaks the declared list<AttributeModel> on purpose.
-                    // @phpstan-ignore-next-line return.type
+                    // @phpstan-ignore return.type
                     return [5];
                 }
             });
@@ -329,5 +330,13 @@ final class RegistryTest extends TestCase
             ],
             $this->messages($diagnostics),
         );
+    }
+
+    public function testReportsAnExtensionThatCannotTellItsName(): void
+    {
+        $registry = $this->registry($diagnostics);
+        $registry->register(new NamelessExtension(), []);
+
+        self::assertSame(['error ' . self::CONFIG . '#: Extension MSSTC4PHP\\DtoGenerator\\Tests\\Support\\Extensions\\NamelessExtension failed to register: no name yet'], $this->messages($diagnostics));
     }
 }

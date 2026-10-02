@@ -115,6 +115,7 @@ final class CustomAttributesTest extends TestCase
             'class constant of ::class' => [[['class' => 'App\Broken', 'args' => [['const' => 'App\A::class']]]], ["error {$at}/0/args/0/const: \"const\" names a constant; for the name of class App\\A use {class: App\\A}."]],
             'global constant named class' => [[['class' => 'App\Broken', 'args' => [['const' => 'class']]]], ["error {$at}/0/args/0/const: \"class\" is not a valid constant name; use classReference() for ::class."]],
             'constant of an invalid class' => [[['class' => 'App\Broken', 'args' => [['const' => 'Not A::X']]]], ["error {$at}/0/args/0/const: \"Not A\" is not a valid class name: segment \"Not A\" is not a PHP identifier."]],
+            'class constant of no class' => [[['class' => 'App\Broken', 'args' => [['const' => '::class']]]], ["error {$at}/0/args/0/const: Class name \"\" must not be empty."]],
             'constant without a name' => [[['class' => 'App\Broken', 'args' => [['const' => 'App\A::']]]], ["error {$at}/0/args/0/const: \"const\" must be a constant name like \"App\\Mask::TAIL\"."]],
             'positional after named' => [[['class' => 'App\Broken', 'args' => ['name' => 1, '0' => 2]], ['class' => 'App\Good']], ["error {$at}/0/args: Positional argument after named arguments."]],
             'positional after named in new' => [[['class' => 'App\Broken', 'args' => [['new' => ['class' => 'App\X', 'args' => ['a' => 1, '0' => 2]]]]]], ["error {$at}/0/args/0/new/args: Positional argument after named arguments."]],

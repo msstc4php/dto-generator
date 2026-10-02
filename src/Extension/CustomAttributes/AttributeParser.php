@@ -171,7 +171,7 @@ final class AttributeParser
             throw new GrammarError('"const" must be a constant name like "App\Mask::TAIL".', $at);
         }
 
-        if ($separator !== false && strcasecmp($name, 'class') === 0) {
+        if ($separator > 0 && strcasecmp($name, 'class') === 0) {
             $class = substr($value, 0, $separator);
 
             throw new GrammarError(sprintf('"const" names a constant; for the name of class %s use {class: %s}.', $class, $class), $at);

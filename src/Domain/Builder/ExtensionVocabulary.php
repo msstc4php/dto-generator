@@ -76,6 +76,7 @@ final class ExtensionVocabulary
     public static function checkProperty(Schema $schema, Diagnostics $diagnostics, array $aliases = []): void
     {
         self::check($schema, array_merge(self::PROPERTY, $aliases), $diagnostics, $aliases);
+        self::checkMembers($schema, $diagnostics, $aliases);
     }
 
     /**
@@ -113,6 +114,7 @@ final class ExtensionVocabulary
             if ($value instanceof Schema) {
                 self::checkKeys($value, self::withDeclaration($value, self::ITEMS), $diagnostics, $aliases);
                 self::checkValues($value, $diagnostics, $aliases);
+                self::checkMembers($value, $diagnostics, $aliases);
             }
         }
     }

@@ -41,14 +41,13 @@ final class AttributeRenderer
     /** @var array<string, ImportAlias> */
     private array $imports = [];
 
-    /**
-     * @param bool $enabled false for a target without attribute metadata, which renders none
-     */
     /** @var array<string, string> lower-cased aliases written in full instead */
     private array $refused = [];
 
     /**
-     * @param list<string> $refused import aliases that collide with a name of the file; their attributes are written in full
+     * @param bool $enabled false for a target without attribute metadata, which renders none
+     * @param list<string> $refused import aliases that collide with a name of the file, in any case; their attributes are
+     *                              written in full
      */
     public function __construct(TypeRenderer $types, BuilderFactory $factory, bool $enabled, array $refused = [])
     {
@@ -56,7 +55,7 @@ final class AttributeRenderer
         $this->factory = $factory;
         $this->enabled = $enabled;
         foreach ($refused as $alias) {
-            $this->refused[$alias] = $alias;
+            $this->refused[Identifier::asciiLower($alias)] = $alias;
         }
     }
 

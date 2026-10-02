@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MSSTC4PHP\DtoGenerator\Application\Service\Extension\Load;
 
 use Closure;
+use MSSTC4PHP\DtoGenerator\Application\Config\GeneratorConfig;
 use MSSTC4PHP\DtoGenerator\Application\Extension\Registry;
 use MSSTC4PHP\DtoGenerator\Application\Port\ExtensionFailed;
 use MSSTC4PHP\DtoGenerator\Application\Port\ExtensionLoader;
@@ -12,6 +13,7 @@ use MSSTC4PHP\DtoGenerator\Contract\Extension;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
 use MSSTC4PHP\DtoGenerator\Domain\Model\AttributeModel;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
+use Throwable;
 
 /**
  * Registers the extensions of a run (spec §8): the built-in ones first, then those the config lists, in its order.
@@ -38,17 +40,40 @@ final class Action
     public function __invoke(Input $input): Output
     {
         $config = $input->config();
-        $settings = $config->extensions();
         $diagnostics = new Diagnostics();
         $registry = new Registry($diagnostics, $config->location());
-        $sections = $settings->config();
 
-        $extensions = ($this->builtIn)($settings->aliases());
-        $origins = array_map(static fn (Extension $extension): ?int => null, $extensions);
+        $named = $this->registerOnce($this->load($config, $diagnostics), $config, $registry, $diagnostics);
+        foreach (array_keys($config->extensions()->config()) as $name) {
+            if (!isset($named[$name])) {
+                $diagnostics->warning(
+                    sprintf('No loaded extension is named "%s", so this config is not used.', $name),
+                    $config->location()->child('extensionConfig', (string) $name),
+                );
+            }
+        }
+
+        foreach (array_keys($config->extensions()->aliases()) as $alias) {
+            if ($registry->isClaimed($alias)) {
+                $diagnostics->error(sprintf('Alias "%s" is claimed by an extension.', $alias), $config->location()->child('attributeAliases', $alias));
+            }
+        }
+
+        return new Output($registry, $diagnostics);
+    }
+
+    /**
+     * The built-in extensions, then the configured ones that load, each with its index in `extensions` (null if built in).
+     *
+     * @return list<array{Extension, int|null}>
+     */
+    private function load(GeneratorConfig $config, Diagnostics $diagnostics): array
+    {
+        $settings = $config->extensions();
+        $loaded = array_map(static fn (Extension $extension): array => [$extension, null], ($this->builtIn)($settings->aliases()));
         foreach ($settings->classes() as $index => $class) {
             try {
-                $extensions[] = $this->loader->load($class);
-                $origins[] = $index;
+                $loaded[] = [$this->loader->load($class), $index];
             } catch (ExtensionFailed $exception) {
                 $diagnostics->error(
                     sprintf('Extension %s cannot be loaded: %s', $class->fqcn(), $exception->getMessage()),
@@ -57,16 +82,34 @@ final class Action
             }
         }
 
+        return $loaded;
+    }
+
+    /**
+     * Registers each extension under its own name, with its section of extensionConfig.
+     *
+     * @param list<array{Extension, int|null}> $loaded
+     *
+     * @return array<string, string> the names registered
+     */
+    private function registerOnce(array $loaded, GeneratorConfig $config, Registry $registry, Diagnostics $diagnostics): array
+    {
+        $classes = $config->extensions()->classes();
+        $sections = $config->extensions()->config();
         $named = [];
-        $classes = $settings->classes();
-        foreach ($extensions as $position => $extension) {
-            $name = $extension->name();
-            $origin = $origins[$position];
-            if (isset($named[$name]) && $origin !== null) {
-                $diagnostics->error(
-                    sprintf('Extension %s is named "%s" like an extension before it; it is not used.', $classes[$origin]->fqcn(), $name),
-                    $config->location()->child('extensions', (string) $origin),
-                );
+        foreach ($loaded as [$extension, $origin]) {
+            $at = $origin === null ? $config->location() : $config->location()->child('extensions', (string) $origin);
+            $class = $origin === null ? get_class($extension) : $classes[$origin]->fqcn();
+            try {
+                $name = $extension->name();
+            } catch (Throwable $exception) {
+                $diagnostics->error(sprintf('Extension %s failed to give its name: %s', $class, $exception->getMessage()), $at);
+
+                continue;
+            }
+
+            if (isset($named[$name])) {
+                $diagnostics->error(sprintf('Extension %s is named "%s" like an extension before it; it is not used.', $class, $name), $at);
 
                 continue;
             }
@@ -74,28 +117,13 @@ final class Action
             $named[$name] = $name;
             $section = $sections[$name] ?? [];
             if (!is_array($section)) {
-                $diagnostics->error(
-                    sprintf('The config of extension "%s" must be an object or a list.', $extension->name()),
-                    $config->location()->child('extensionConfig', $extension->name()),
-                );
+                $diagnostics->error(sprintf('The config of extension "%s" must be an object or a list.', $name), $config->location()->child('extensionConfig', $name));
                 $section = [];
             }
 
             $registry->register($extension, array_map([Json::class, 'value'], $section));
         }
 
-        foreach (array_keys($sections) as $name) {
-            if (!isset($named[$name])) {
-                $diagnostics->warning(sprintf('No extension is named "%s", so this config is not used.', $name), $config->location()->child('extensionConfig', (string) $name));
-            }
-        }
-
-        foreach (array_keys($settings->aliases()) as $alias) {
-            if ($registry->isClaimed($alias)) {
-                $diagnostics->error(sprintf('Alias "%s" is claimed by an extension.', $alias), $config->location()->child('attributeAliases', $alias));
-            }
-        }
-
-        return new Output($registry, $diagnostics);
+        return $named;
     }
 }
