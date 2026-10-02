@@ -104,14 +104,16 @@ final class TypeMapper
             return $this->reference($schema, $ref, $diagnostics, $aliases);
         }
 
-        if ($schema->allOf() !== [] && SchemaShape::hasUnion($schema)) {
+        if (SchemaShape::mayBeObject($schema) && $schema->allOf() !== [] && SchemaShape::hasUnion($schema)) {
             $diagnostics->error('"allOf" together with "oneOf" or "anyOf" is not supported.', $schema->location());
 
             return new MixedType();
         }
 
         // A discriminated union becomes a base class only as a named schema; anywhere else it is a plain union.
-        if (SchemaShape::hasUnion($schema) && ($schema->propertyNames() === [] || SchemaShape::isDiscriminated($schema))) {
+        // Members without a type of their own only constrain the schema's type (`anyOf` of patterns).
+        $union = array_merge($schema->oneOf(), $schema->anyOf());
+        if ($this->typed($union) !== [] && ($schema->propertyNames() === [] || SchemaShape::isDiscriminated($schema))) {
             return $this->union($schema, $diagnostics, $aliases);
         }
 
@@ -124,7 +126,7 @@ final class TypeMapper
             return new MixedType();
         }
 
-        $typed = $this->typedMembers($schema);
+        $typed = $this->typed($schema->allOf());
         if (count($typed) > 1) {
             $diagnostics->error('"allOf" combines several typed schemas that are not objects, which no PHP type expresses; keep one of them.', $schema->location());
 
@@ -208,14 +210,16 @@ final class TypeMapper
     }
 
     /**
-     * The members of a non-object `allOf` that carry a type; the others only constrain it.
+     * The members of a composition that carry a type; the others only constrain it.
+     *
+     * @param list<Schema> $members
      *
      * @return list<Schema>
      */
-    private function typedMembers(Schema $schema): array
+    private function typed(array $members): array
     {
         return array_values(array_filter(
-            $schema->allOf(),
+            $members,
             static fn (Schema $member): bool => $member->ref() !== null
                 || $member->nonNullTypes() !== []
                 || $member->enum() !== null

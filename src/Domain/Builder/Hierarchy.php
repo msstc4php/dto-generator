@@ -11,13 +11,10 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\Identifier;
 use MSSTC4PHP\DtoGenerator\Domain\Model\PropertyModel;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\DefaultValue;
-use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
 
 /**
  * Links the built classes into one inheritance forest (spec §5.3): variants extend their discriminated base, which
  * takes the properties all of them share; every parent stops being final.
- *
- * @phpstan-import-type JsonValue from Json
  */
 final class Hierarchy
 {
@@ -62,6 +59,7 @@ final class Hierarchy
 
         $hierarchy->settle($unions);
         $hierarchy->check();
+        $hierarchy->checkDiscriminators($unions);
 
         return array_map(static fn (ClassModel $class): ClassModel => $hierarchy->models[$class->name()->fqcn()], $classes);
     }
@@ -105,6 +103,11 @@ final class Hierarchy
     {
         foreach ($unions as $base => $variants) {
             $baseName = $this->models[$base]->name();
+            // Subclasses found through allOf already descend from the base.
+            if (!$variants->sharesProperties()) {
+                continue;
+            }
+
             foreach ($variants->classes() as $variant) {
                 $fqcn = $variant->fqcn();
                 $current = $this->parents[$fqcn] ?? null;
@@ -218,6 +221,59 @@ final class Hierarchy
         }
     }
 
+    /**
+     * @param array<string, Variants> $unions
+     */
+    private function checkDiscriminators(array $unions): void
+    {
+        foreach ($unions as $base => $variants) {
+            $discriminator = $variants->discriminator();
+            if ($discriminator === null) {
+                continue;
+            }
+
+            foreach ($variants->classes() as $variant) {
+                $model = $this->models[$variant->fqcn()];
+                [$ancestors, $wireNames] = $this->lineage($model);
+                // A variant that could not be adopted was reported already.
+                if (isset($ancestors[$base]) && !in_array($discriminator->propertyName(), $wireNames, true)) {
+                    $this->diagnostics->warning(
+                        sprintf('Variant %s has no property "%s", which the discriminator reads.', $variant->fqcn(), $discriminator->propertyName()),
+                        $model->source(),
+                    );
+                }
+            }
+        }
+    }
+
+    /**
+     * The ancestors of a class, and the wire names it declares or inherits.
+     *
+     * @return array{array<string, ClassModel>, list<string>}
+     */
+    private function lineage(ClassModel $model): array
+    {
+        $wireNames = [];
+        $seen = [];
+        for ($class = $model; $class instanceof ClassModel && !isset($seen[$class->name()->fqcn()]); $class = $this->parentOf($class)) {
+            $seen[$class->name()->fqcn()] = $class;
+            foreach ($class->properties() as $property) {
+                $wireNames[] = $property->wireName();
+            }
+        }
+
+        unset($seen[$model->name()->fqcn()]);
+
+        return [$seen, $wireNames];
+    }
+
+    private function parentOf(ClassModel $model): ?ClassModel
+    {
+        $parent = $model->parent();
+
+        return $parent instanceof ClassName ? $this->models[$parent->fqcn()] ?? null : null;
+    }
+
     private function checkRedeclarations(ClassModel $model): void
     {
         $names = [];
@@ -292,7 +348,7 @@ final class Hierarchy
                 && $other->wireName() === $property->wireName()
                 && $other->type()->describe() === $property->type()->describe()
                 && $other->isRequired() === $property->isRequired()
-                && $this->defaultValue($other) === $this->defaultValue($property)) {
+                && $this->defaultOf($other) === $this->defaultOf($property)) {
                 return true;
             }
         }
@@ -301,14 +357,12 @@ final class Hierarchy
     }
 
     /**
-     * Only optional properties have a default, so properties alike in requirement differ at most in its value.
-     *
-     * @return JsonValue
+     * The default as JSON writes it: `1` and `1.0` of a number are the same default.
      */
-    private function defaultValue(PropertyModel $property)
+    private function defaultOf(PropertyModel $property): string
     {
         $default = $property->default();
 
-        return $default instanceof DefaultValue ? $default->value() : null;
+        return $default instanceof DefaultValue ? (string) json_encode($default->value(), JSON_INVALID_UTF8_SUBSTITUTE) : '';
     }
 }

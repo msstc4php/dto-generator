@@ -36,6 +36,9 @@
         "CastString": {
             "ignore": [
                 "MSSTC4PHP\\DtoGenerator\\Domain\\Model\\ClassName::fromFqcn",
+                // Equivalent: json_encode() with JSON_INVALID_UTF8_SUBSTITUTE never returns false for a JSON value.
+                "MSSTC4PHP\\DtoGenerator\\Domain\\Builder\\ClassBuilder::defaultOf",
+                "MSSTC4PHP\\DtoGenerator\\Domain\\Builder\\Hierarchy::defaultOf",
                 "MSSTC4PHP\\DtoGenerator\\Domain\\Model\\Identifier::normalizeQualifiedName",
                 "MSSTC4PHP\\DtoGenerator\\Domain\\Schema\\JsonPointer::segments",
                 "MSSTC4PHP\\DtoGenerator\\Domain\\Schema\\Reference::target",

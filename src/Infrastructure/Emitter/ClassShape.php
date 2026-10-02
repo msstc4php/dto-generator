@@ -89,21 +89,22 @@ final class ClassShape
     }
 
     /**
-     * A base clones itself, which keeps the subclass it is called on; `new self` in a base would build the base.
+     * A wither of a base must return the subclass it is called on: cloning does, `new self` would build the base.
+     * So with `new self` a base has no withers, and a final class rebuilds itself for the inherited properties too.
      */
     public function hasWithers(): bool
     {
-        $style = $this->form->withers();
-
-        return !$style->isNone() && (!$this->isBase() || !$style->equals(WitherStyle::from(WitherStyle::NEW_SELF)));
+        return !$this->form->withers()->isNone() && (!$this->isBase() || !$this->isNewSelf());
     }
 
-    /**
-     * Where bases have no withers, a final class rebuilds itself for the inherited properties too.
-     */
     public function declaresInheritedWithers(): bool
     {
-        return !$this->isBase() && $this->form->withers()->equals(WitherStyle::from(WitherStyle::NEW_SELF));
+        return !$this->isBase() && $this->isNewSelf();
+    }
+
+    private function isNewSelf(): bool
+    {
+        return $this->form->withers()->equals(WitherStyle::from(WitherStyle::NEW_SELF));
     }
 
     /**

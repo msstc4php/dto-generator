@@ -29,41 +29,55 @@ final class AllOfResolver
 
     public function compose(Schema $schema, Diagnostics $diagnostics): Composition
     {
-        $members = $schema->allOf();
-        if ($members === []) {
-            return Composition::of($schema);
-        }
-
-        $parents = [];
-        foreach ($members as $index => $member) {
-            $target = $this->classes->target($member);
-            $class = $target instanceof ResolvedSchema ? $this->classes->classBehind($target) : null;
-            if ($class instanceof ClassName) {
-                $parents[$index] = $class;
-            }
-        }
-
-        $parent = $this->parent($schema, $parents, $diagnostics);
-        $key = $schema->location()->toString();
-        $parts = new CompositionParts();
-        foreach ($members as $index => $member) {
-            if (!$parent instanceof ClassName || !isset($parents[$index])) {
-                $this->flatten($member, true, [$key => $key], $parts, $diagnostics);
-            }
-        }
-
-        $composition = $parts->finish($schema, $parent);
-        if ($parent instanceof ClassName) {
-            $this->warnAboutInheritedRequirements($schema, $composition, $parent, $diagnostics);
+        [$composition, $parent] = $this->resolve($schema, $diagnostics);
+        if ($parent !== null) {
+            $this->warnAboutInheritedRequirements($schema, $composition, $parent[0], $parent[1], $diagnostics);
         }
 
         return $composition;
     }
 
     /**
-     * @param array<int, ClassName> $parents the members that reference a generated class, by index
+     * The composition and the schema and class it extends.
+     *
+     * @return array{Composition, array{ResolvedSchema, ClassName}|null}
      */
-    private function parent(Schema $schema, array $parents, Diagnostics $diagnostics): ?ClassName
+    private function resolve(Schema $schema, Diagnostics $diagnostics): array
+    {
+        $members = $schema->allOf();
+        if ($members === []) {
+            return [Composition::of($schema), null];
+        }
+
+        $parents = [];
+        foreach ($members as $index => $member) {
+            $target = $this->classes->target($member);
+            $behind = $target instanceof ResolvedSchema ? $this->classes->behind($target) : null;
+            if ($behind !== null) {
+                $parents[$index] = $behind;
+            }
+        }
+
+        $index = $this->parentIndex($schema, $parents, $diagnostics);
+        $key = $schema->location()->toString();
+        $parts = new CompositionParts();
+        foreach ($members as $at => $member) {
+            if ($at !== $index) {
+                $this->flatten($member, true, [$key => $key], $parts, $diagnostics);
+            }
+        }
+
+        $parent = $index === null ? null : $parents[$index];
+
+        return [$parts->finish($schema, $parent === null ? null : $parent[1]), $parent];
+    }
+
+    /**
+     * The member the class extends, if any.
+     *
+     * @param array<int, array{ResolvedSchema, ClassName}> $parents the members that reference a generated class, by index
+     */
+    private function parentIndex(Schema $schema, array $parents, Diagnostics $diagnostics): ?int
     {
         $strategy = $this->strategy;
         if ($schema->extensions()->has('x-php-all-of')) {
@@ -79,33 +93,53 @@ final class AllOfResolver
             }
         }
 
-        return count($parents) === 1 && $strategy->value() === AllOfStrategy::EXTENDS ? $parents[array_key_first($parents)] : null;
+        return count($parents) === 1 && $strategy->value() === AllOfStrategy::EXTENDS ? array_key_first($parents) : null;
     }
 
     /**
      * A subclass cannot make an inherited property required, so a requirement on one is lost under extends.
      */
-    private function warnAboutInheritedRequirements(Schema $schema, Composition $composition, ClassName $parent, Diagnostics $diagnostics): void
+    private function warnAboutInheritedRequirements(Schema $schema, Composition $composition, ResolvedSchema $parent, ClassName $class, Diagnostics $diagnostics): void
     {
-        $own = [];
-        foreach ($composition->parts() as $part) {
-            foreach ($part->propertyNames() as $wireName) {
-                $own[$wireName] = $wireName;
-            }
+        $own = $this->propertyNames($composition);
+        $inherited = [];
+        $alreadyRequired = [];
+        $seen = [];
+        for ($ancestor = $parent; $ancestor instanceof ResolvedSchema && !isset($seen[$ancestor->location()->toString()]); $ancestor = $next) {
+            $seen[$ancestor->location()->toString()] = $ancestor;
+            [$ancestry, $grandparent] = $this->resolve($ancestor->schema(), new Diagnostics());
+            $next = $grandparent === null ? null : $grandparent[0];
+            $inherited += $this->propertyNames($ancestry);
+            $alreadyRequired += $ancestry->required();
         }
 
         foreach ($composition->required() as $wireName) {
-            if (!isset($own[$wireName])) {
+            if (!isset($own[$wireName]) && !isset($alreadyRequired[$wireName]) && isset($inherited[$wireName])) {
                 $diagnostics->warning(
                     sprintf(
                         'Required property "%s" belongs to the parent %s, where extending cannot make it required; use "x-php-all-of: merge" to require it.',
                         $wireName,
-                        $parent->fqcn(),
+                        $class->fqcn(),
                     ),
                     $schema->location(),
                 );
             }
         }
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function propertyNames(Composition $composition): array
+    {
+        $names = [];
+        foreach ($composition->parts() as $part) {
+            foreach ($part->propertyNames() as $wireName) {
+                $names[$wireName] = $wireName;
+            }
+        }
+
+        return $names;
     }
 
     /**

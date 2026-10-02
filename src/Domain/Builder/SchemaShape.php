@@ -99,7 +99,10 @@ final class SchemaShape
         return count($members) > 1 || (count($members) === 1 && $members[0]->ref() === null);
     }
 
-    private static function mayBeObject(Schema $schema): bool
+    /**
+     * Neither a reference nor mapped to an existing class by x-php-type, and typed as an object or not at all.
+     */
+    public static function mayBeObject(Schema $schema): bool
     {
         if ($schema->ref() !== null || $schema->extensions()->has('x-php-type')) {
             return false;

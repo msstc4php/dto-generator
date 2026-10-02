@@ -235,7 +235,7 @@ final class CompositionTest extends TestCase
             ],
             'discriminator without variants' => [
                 ['Pet' => $pet + ['discriminator' => ['propertyName' => 'name']]],
-                ["warning {$at}Pet/discriminator: The discriminator is ignored: no oneOf or anyOf lists variants and no schema extends this one through allOf."],
+                ["warning {$at}Pet/discriminator: The discriminator is ignored: no oneOf or anyOf lists variants and no named schema extends this one through allOf."],
             ],
             'required property of the parent' => [
                 ['Pet' => $pet, 'Cat' => ['allOf' => [self::PET, ['required' => ['name', 'lives'], 'properties' => ['lives' => ['type' => 'integer']]]]]],
@@ -270,6 +270,65 @@ final class CompositionTest extends TestCase
                 ],
                 [],
             ],
+            'merged number default written two ways' => [
+                [
+                    'A' => ['type' => 'object', 'properties' => ['a' => ['type' => 'number', 'default' => 1]]],
+                    'B' => ['type' => 'object', 'properties' => ['a' => ['type' => 'number', 'default' => 1.0]]],
+                    'C' => ['allOf' => [['$ref' => '#/components/schemas/A'], ['$ref' => '#/components/schemas/B']]],
+                ],
+                [],
+            ],
+            'requirement the parent already makes' => [
+                [
+                    'Animal' => ['type' => 'object', 'required' => ['id'], 'properties' => ['id' => ['type' => 'string']]],
+                    'Pet' => ['allOf' => [['$ref' => '#/components/schemas/Animal'], ['required' => ['name'], 'properties' => ['name' => ['type' => 'string']]]]],
+                    'Cat' => ['allOf' => [self::PET, ['required' => ['id', 'name', 'unknown'], 'properties' => ['lives' => []]]]],
+                ],
+                [],
+            ],
+            'requirement on a grandparent property' => [
+                [
+                    'Animal' => ['type' => 'object', 'properties' => ['id' => ['type' => 'string'], 'tag' => ['type' => 'string']]],
+                    'Pet' => ['allOf' => [['$ref' => '#/components/schemas/Animal'], ['properties' => ['name' => []]]]],
+                    'Cat' => ['allOf' => [self::PET, ['required' => ['lives', 'id', 'name', 'tag'], 'properties' => ['age' => [], 'lives' => []]]]],
+                ],
+                [
+                    "warning {$at}Cat: Required property \"id\" belongs to the parent App\\Dto\\Pet, where extending cannot make it required; use \"x-php-all-of: merge\" to require it.",
+                    "warning {$at}Cat: Required property \"name\" belongs to the parent App\\Dto\\Pet, where extending cannot make it required; use \"x-php-all-of: merge\" to require it.",
+                    "warning {$at}Cat: Required property \"tag\" belongs to the parent App\\Dto\\Pet, where extending cannot make it required; use \"x-php-all-of: merge\" to require it.",
+                ],
+            ],
+            'discriminated parent in an inheritance loop' => [
+                [
+                    'A' => ['allOf' => [['$ref' => '#/components/schemas/B'], ['properties' => ['kind' => []]]], 'discriminator' => ['propertyName' => 'kind']],
+                    'B' => ['allOf' => [['$ref' => '#/components/schemas/A'], ['properties' => ['b' => []]]]],
+                ],
+                ["error {$at}A: Class App\\Dto\\A extends itself through App\\Dto\\B."],
+            ],
+            'unmapped subclass of a listed base' => [
+                [
+                    'Pet' => ['properties' => ['kind' => ['type' => 'string']], 'oneOf' => [['$ref' => '#/components/schemas/Cat']], 'discriminator' => ['propertyName' => 'kind']],
+                    'Cat' => ['type' => 'object', 'properties' => ['lives' => []]],
+                    'Dog' => ['allOf' => [self::PET, ['properties' => ['bark' => []]]]],
+                ],
+                ["warning {$at}Dog: App\\Dto\\Dog extends the discriminated base App\\Dto\\Pet but is not one of its variants, so it gets no discriminator value."],
+            ],
+            'discriminator property no variant has' => [
+                [
+                    'Pet' => ['oneOf' => [['$ref' => '#/components/schemas/Cat'], ['$ref' => '#/components/schemas/Dog']], 'discriminator' => ['propertyName' => 'kind']],
+                    'Cat' => ['type' => 'object', 'properties' => ['kind' => ['type' => 'string'], 'a' => []]],
+                    'Dog' => ['type' => 'object', 'properties' => ['b' => []]],
+                ],
+                ["warning {$at}Dog: Variant App\\Dto\\Dog has no property \"kind\", which the discriminator reads."],
+            ],
+            'discriminated base listing with oneOf and anyOf' => [
+                [
+                    'Pet' => ['oneOf' => [['$ref' => '#/components/schemas/Cat']], 'anyOf' => [['$ref' => '#/components/schemas/Dog']], 'discriminator' => ['propertyName' => 'kind']],
+                    'Cat' => ['type' => 'object', 'properties' => ['kind' => ['type' => 'string']]],
+                    'Dog' => ['type' => 'object', 'properties' => ['kind' => ['type' => 'string']]],
+                ],
+                ["warning {$at}Pet: \"oneOf\" and \"anyOf\" together become one union, which admits more than the schema does."],
+            ],
             'merged property with another default' => [
                 [
                     'A' => ['type' => 'object', 'properties' => ['x' => ['type' => 'string', 'default' => 'a']]],
@@ -294,7 +353,10 @@ final class CompositionTest extends TestCase
             'Tagged' => ['allOf' => [self::PET, ['properties' => ['tag' => ['type' => 'string']]]]],
         ]);
 
-        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(
+            ['warning ' . self::AT . 'Tagged: App\\Dto\\Tagged extends the discriminated base App\\Dto\\Pet but is not one of its variants, so it gets no discriminator value.'],
+            ModelFixture::messages($output),
+        );
         self::assertSame('final extends App\Dto\Pet', ModelFixture::hierarchy($output)['App\Dto\Tagged']);
     }
 
@@ -603,8 +665,8 @@ final class CompositionTest extends TestCase
     public function testDropsAPropertySkippedInAnyMergedMember(): void
     {
         $output = ModelFixture::build([
-            'A' => ['type' => 'object', 'properties' => ['x' => ['type' => 'string', 'x-php-skip' => true]]],
-            'B' => ['type' => 'object', 'properties' => ['x' => ['type' => 'integer'], 'y' => ['type' => 'string']]],
+            'A' => ['type' => 'object', 'properties' => ['x' => ['type' => 'string', 'x-php-skip' => true], 'z' => ['x-php-skip' => true]]],
+            'B' => ['type' => 'object', 'properties' => ['x' => ['type' => 'integer'], 'y' => ['type' => 'string'], 'z' => ['type' => 'string']]],
             'C' => ['allOf' => [['$ref' => '#/components/schemas/A'], ['$ref' => '#/components/schemas/B']]],
         ]);
 
@@ -617,7 +679,7 @@ final class CompositionTest extends TestCase
             'Pet' => ['type' => 'object', 'properties' => ['name' => ['type' => 'string']]],
             'AnyPet' => ['allOf' => [['description' => 'Any pet.'], self::PET]],
             'Cat' => ['allOf' => [['$ref' => '#/components/schemas/AnyPet'], ['properties' => ['lives' => ['type' => 'integer']]]]],
-            'Other' => ['type' => 'object', 'properties' => ['size' => ['type' => 'integer']]],
+            'Other' => ['type' => 'object', 'properties' => ['name' => ['type' => 'integer']]],
             'Zoo' => [
                 'oneOf' => [['$ref' => '#/components/schemas/AnyPet'], ['$ref' => '#/components/schemas/Other']],
                 'discriminator' => ['propertyName' => 'name'],
@@ -744,5 +806,86 @@ final class CompositionTest extends TestCase
         self::assertSame([], ModelFixture::messages($output));
         self::assertSame('abstract by kind {Car: App\Dto\Car}', ModelFixture::hierarchy($output)['App\Dto\Vehicle']);
         self::assertSame('final extends App\Dto\Vehicle', ModelFixture::hierarchy($output)['App\Dto\GarageSpare']);
+    }
+
+    public function testAcceptsAnExplicitTypeForACompositionItCannotGenerate(): void
+    {
+        $output = ModelFixture::build([
+            'A' => ['type' => 'object', 'properties' => ['a' => ['type' => 'string']]],
+            'Ext' => [
+                'x-php-type' => 'App\\Custom\\Shape',
+                'allOf' => [['$ref' => '#/components/schemas/A']],
+                'oneOf' => [['type' => 'object', 'properties' => ['b' => ['type' => 'string']]]],
+            ],
+            'Scalar' => ['type' => 'string', 'allOf' => [['minLength' => 1]], 'anyOf' => [['pattern' => 'a'], ['pattern' => 'b']]],
+            'H' => ['type' => 'object', 'properties' => ['e' => ['$ref' => '#/components/schemas/Ext'], 's' => ['$ref' => '#/components/schemas/Scalar']]],
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(['e: App\Custom\Shape|null', 's: string|null'], ModelFixture::classes($output)['App\Dto\H']);
+    }
+
+    public function testMapsEveryNamedDescendantOfADiscriminatedAllOfParent(): void
+    {
+        $output = ModelFixture::build([
+            'Pet' => ['type' => 'object', 'properties' => ['petType' => ['type' => 'string']], 'discriminator' => ['propertyName' => 'petType']],
+            'Cat' => ['allOf' => [self::PET, ['properties' => ['lives' => ['type' => 'integer']]]]],
+            'Lion' => ['allOf' => [['$ref' => '#/components/schemas/Cat'], ['properties' => ['mane' => ['type' => 'boolean']]]]],
+            'Dog' => ['allOf' => [self::PET, ['properties' => ['bark' => ['type' => 'boolean']]]]],
+            'Puppy' => ['allOf' => [['$ref' => '#/components/schemas/Dog'], ['properties' => ['age' => ['type' => 'integer']]]]],
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(
+            [
+                'App\Dto\Pet' => 'abstract by petType {Cat: App\Dto\Cat, Dog: App\Dto\Dog, Lion: App\Dto\Lion, Puppy: App\Dto\Puppy}',
+                'App\Dto\Cat' => 'open extends App\Dto\Pet',
+                'App\Dto\Lion' => 'final extends App\Dto\Cat',
+                'App\Dto\Dog' => 'open extends App\Dto\Pet',
+                'App\Dto\Puppy' => 'final extends App\Dto\Dog',
+            ],
+            ModelFixture::hierarchy($output),
+        );
+    }
+
+    public function testAdoptsListedVariantsAfterABaseWithSubclasses(): void
+    {
+        $output = ModelFixture::build([
+            'Vehicle' => ['type' => 'object', 'properties' => ['kind' => ['type' => 'string']], 'discriminator' => ['propertyName' => 'kind']],
+            'Car' => ['allOf' => [['$ref' => '#/components/schemas/Vehicle'], ['properties' => ['doors' => ['type' => 'integer']]]]],
+            'Pet' => ['oneOf' => [['$ref' => '#/components/schemas/Cat']], 'discriminator' => ['propertyName' => 'kind']],
+            'Cat' => ['type' => 'object', 'properties' => ['kind' => ['type' => 'string']]],
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame('final extends App\Dto\Pet', ModelFixture::hierarchy($output)['App\Dto\Cat']);
+    }
+
+    public function testKeepsADiscriminatedParentOutOfItsOwnMappingInALoop(): void
+    {
+        $output = ModelFixture::build([
+            'A' => ['allOf' => [['$ref' => '#/components/schemas/B'], ['properties' => ['kind' => []]]], 'discriminator' => ['propertyName' => 'kind']],
+            'B' => ['allOf' => [['$ref' => '#/components/schemas/A'], ['properties' => ['b' => []]]]],
+        ]);
+
+        self::assertSame('abstract by kind {B: App\\Dto\\B}', ModelFixture::hierarchy($output)['App\\Dto\\A']);
+    }
+
+    public function testChecksTheDiscriminatorOfEveryBaseAfterOneWithoutVariants(): void
+    {
+        $at = self::AT;
+        $output = ModelFixture::build([
+            'Empty' => ['oneOf' => [['type' => 'object', 'properties' => ['a' => []]]], 'discriminator' => ['propertyName' => 'kind']],
+            'Pet' => ['oneOf' => [['$ref' => '#/components/schemas/Cat']], 'discriminator' => ['propertyName' => 'kind']],
+            'Cat' => ['type' => 'object', 'properties' => ['lives' => []]],
+        ]);
+
+        self::assertSame(
+            [
+                "error {$at}Empty/oneOf/0: A variant of a discriminated union must be a \$ref to an object schema.",
+                "warning {$at}Cat: Variant App\\Dto\\Cat has no property \"kind\", which the discriminator reads.",
+            ],
+            ModelFixture::messages($output),
+        );
     }
 }

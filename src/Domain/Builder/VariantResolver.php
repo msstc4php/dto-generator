@@ -35,6 +35,10 @@ final class VariantResolver
      */
     public function listed(Schema $schema, Discriminator $discriminator, Diagnostics $diagnostics): Variants
     {
+        if ($schema->oneOf() !== [] && $schema->anyOf() !== []) {
+            $diagnostics->warning('"oneOf" and "anyOf" together become one union, which admits more than the schema does.', $schema->location());
+        }
+
         $candidates = [];
         foreach (array_merge($schema->oneOf(), $schema->anyOf()) as $member) {
             if ($member->ref() === null) {

@@ -68,15 +68,9 @@ final class ClassBuilder
         $properties = [];
         $taken = [];
         $byWireName = [];
-        // A property any merged member excludes stays excluded, whichever member declares it first.
-        $skipped = [];
-        foreach ($this->sources($composition) as [$wireName, $propertySchema]) {
-            if (self::isSkipped($propertySchema, new Diagnostics())) {
-                $skipped[$wireName] = $wireName;
-            }
-        }
-
-        foreach ($this->sources($composition) as [$wireName, $propertySchema]) {
+        $sources = $this->sources($composition);
+        $skipped = $this->skippedWireNames($sources);
+        foreach ($sources as [$wireName, $propertySchema]) {
             ExtensionVocabulary::checkProperty($propertySchema, $diagnostics);
             if (self::isSkipped($propertySchema, $diagnostics) && $composition->isRequired($wireName)) {
                 $diagnostics->warning(
@@ -180,13 +174,33 @@ final class ClassBuilder
     }
 
     /**
-     * @return JsonValue
+     * A property any merged member excludes stays excluded, whichever member declares it first.
+     *
+     * @param list<array{string, Schema}> $sources
+     *
+     * @return array<string, string>
      */
-    private function defaultOf(PropertyModel $property)
+    private function skippedWireNames(array $sources): array
+    {
+        $skipped = [];
+        foreach ($sources as [$wireName, $propertySchema]) {
+            // Reported when the property itself is built.
+            if (self::isSkipped($propertySchema, new Diagnostics())) {
+                $skipped[$wireName] = $wireName;
+            }
+        }
+
+        return $skipped;
+    }
+
+    /**
+     * The default as JSON writes it: `1` and `1.0` of a number are the same default.
+     */
+    private function defaultOf(PropertyModel $property): string
     {
         $default = $property->default();
 
-        return $default instanceof DefaultValue ? $default->value() : null;
+        return $default instanceof DefaultValue ? (string) json_encode($default->value(), JSON_INVALID_UTF8_SUBSTITUTE) : '';
     }
 
     /**

@@ -67,7 +67,7 @@ final class Action
                 continue;
             }
 
-            if ($schema->allOf() !== [] && SchemaShape::hasUnion($schema)) {
+            if (SchemaShape::mayBeObject($schema) && $schema->allOf() !== [] && SchemaShape::hasUnion($schema)) {
                 $diagnostics->error('"allOf" together with "oneOf" or "anyOf" is not supported.', $schema->location());
 
                 continue;
@@ -104,14 +104,19 @@ final class Action
             $input->target(),
         );
         $models = [];
-        $subclasses = [];
+        $children = [];
         foreach ($registry->planned() as $index => [$schema, $name]) {
             $models[] = $builder->build($name, $schema, $diagnostics, $compositions[$index]);
             $parent = $compositions[$index]->parent();
             $resolved = $input->graph()->get($schema->location());
             if ($parent instanceof ClassName && $resolved instanceof ResolvedSchema) {
-                $subclasses[$parent->fqcn()][] = [$resolved, $name];
+                $children[$parent->fqcn()][] = [$resolved, $name];
             }
+        }
+
+        $subclasses = [];
+        foreach (array_keys($children) as $parent) {
+            $subclasses[$parent] = $this->descendants($parent, $children);
         }
 
         $unions = $this->unions($input, $registry, $subclasses, $diagnostics);
@@ -149,17 +154,64 @@ final class Action
             $discriminator = $schema->discriminator();
             if ($listed instanceof Discriminator) {
                 $unions[$name->fqcn()] = $variants->listed($schema, $listed, $diagnostics);
+                $this->warnAboutUnlistedSubclasses($name, $unions[$name->fqcn()], $subclasses[$name->fqcn()] ?? [], $diagnostics);
             } elseif ($discriminator instanceof Discriminator && isset($subclasses[$name->fqcn()])) {
                 $unions[$name->fqcn()] = $variants->subclasses($schema, $discriminator, $subclasses[$name->fqcn()], $diagnostics);
             } elseif ($discriminator instanceof Discriminator) {
                 $diagnostics->warning(
-                    'The discriminator is ignored: no oneOf or anyOf lists variants and no schema extends this one through allOf.',
+                    'The discriminator is ignored: no oneOf or anyOf lists variants and no named schema extends this one through allOf.',
                     $schema->location()->child('discriminator'),
                 );
             }
         }
 
         return $unions;
+    }
+
+    /**
+     * Every named class below a parent, nearest first, so a whole Swagger-2 hierarchy shares one discriminator.
+     *
+     * @param array<string, list<array{ResolvedSchema, ClassName}>> $children parent FQCN → named classes extending it
+     *
+     * @return list<array{ResolvedSchema, ClassName}>
+     */
+    private function descendants(string $parent, array $children): array
+    {
+        $found = [];
+        $seen = [$parent => $parent];
+        for ($pending = $children[$parent]; $pending !== []; $pending = $next) {
+            $next = [];
+            foreach ($pending as $child) {
+                $fqcn = $child[1]->fqcn();
+                if (!isset($seen[$fqcn])) {
+                    $seen[$fqcn] = $fqcn;
+                    $found[] = $child;
+                    $next = array_merge($next, $children[$fqcn] ?? []);
+                }
+            }
+        }
+
+        return $found;
+    }
+
+    /**
+     * @param list<array{ResolvedSchema, ClassName}> $subclasses
+     */
+    private function warnAboutUnlistedSubclasses(ClassName $base, Variants $variants, array $subclasses, Diagnostics $diagnostics): void
+    {
+        $listed = [];
+        foreach ($variants->classes() as $variant) {
+            $listed[$variant->fqcn()] = $variant;
+        }
+
+        foreach ($subclasses as [$resolved, $class]) {
+            if (!isset($listed[$class->fqcn()])) {
+                $diagnostics->warning(
+                    sprintf('%s extends the discriminated base %s but is not one of its variants, so it gets no discriminator value.', $class->fqcn(), $base->fqcn()),
+                    $resolved->location(),
+                );
+            }
+        }
     }
 
     /**

@@ -106,6 +106,7 @@ final class TypeMapperTest extends TestCase
                 'App\Dto\Tag|App\Dto\Note',
             ],
             'allOf of constraints and then a reference' => [['allOf' => [['maxLength' => 5], ['$ref' => '#/components/schemas/Email']]], 'string'],
+            'string constrained by anyOf' => [['type' => 'string', 'anyOf' => [['pattern' => 'a'], ['pattern' => 'b']]], 'string'],
             'oneOf with null first' => [['oneOf' => [['type' => 'null'], ['type' => 'string'], ['type' => 'integer']]], 'string|int|null'],
         ];
     }
