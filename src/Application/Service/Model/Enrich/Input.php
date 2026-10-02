@@ -32,10 +32,10 @@ final class Input
 
     /**
      * @param list<BuiltClass> $classes
-     * @param ClassVerifier|null $verifier the consumer's autoloader when verifyClasses is on
      * @param list<BuiltEnum> $enums the enums of this run, which exist for attributes though the autoloader lacks them
+     * @param ClassVerifier|null $verifier the consumer's autoloader when verifyClasses is on
      */
-    public function __construct(array $classes, SchemaGraph $graph, TargetProfile $target, Registry $registry, InstalledPackages $packages, ?ClassVerifier $verifier = null, array $enums = [])
+    public function __construct(array $classes, array $enums, SchemaGraph $graph, TargetProfile $target, Registry $registry, InstalledPackages $packages, ?ClassVerifier $verifier = null)
     {
         $this->verifier = $verifier;
         $this->enums = $enums;

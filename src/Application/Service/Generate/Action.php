@@ -127,7 +127,7 @@ final class Action
     }
 
     /**
-     * verifyClasses (spec §4): "auto" verifies when the consumer's vendor/autoload.php is found and the environment does
+     * verifyClasses (spec §4): "auto" verifies when the consumer's Composer autoloader is found and the environment does
      * not forbid it; true insists on the autoloader.
      */
     private function verifier(GeneratorConfig $config, Diagnostics $diagnostics): ?ClassVerifier
@@ -140,7 +140,7 @@ final class Action
         $verifier = $this->verifiers->locate($config->baseDir());
         if ($setting === true && !$verifier instanceof ClassVerifier) {
             $diagnostics->error(
-                sprintf('"verifyClasses" is true, but no vendor/autoload.php was found from %s upwards.', $config->baseDir()),
+                sprintf('"verifyClasses" is true, but the Composer project at or above %s has no autoload.php in its vendor-dir.', $config->baseDir()),
                 $config->location()->child('verifyClasses'),
             );
         }
@@ -165,7 +165,7 @@ final class Action
         $model = ($this->buildModel)(new BuildInput($config, $target, $schemas->graph(), $formats, $aliases));
         $diagnostics->merge($model->diagnostics());
         // Installed versions are detected in stage 6; until then extensions see none.
-        $enriched = ($this->enrichModel)(new EnrichInput($model->classes(), $schemas->graph(), $target, $registry, new InstalledPackages(), $verifier, $model->enums()));
+        $enriched = ($this->enrichModel)(new EnrichInput($model->classes(), $model->enums(), $schemas->graph(), $target, $registry, new InstalledPackages(), $verifier));
         $diagnostics->merge($enriched->diagnostics());
         if ($diagnostics->hasErrors()) {
             return null;

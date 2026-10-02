@@ -133,24 +133,13 @@ final class AttributeRules
      */
     private static function newInstances(ArgumentValue $value): array
     {
-        switch ($value->kind()) {
-            case ArgumentValue::KIND_NEW_INSTANCE:
-                return [$value];
-            case ArgumentValue::KIND_LIST:
-                $items = $value->listItems();
-
-                break;
-            case ArgumentValue::KIND_MAP:
-                $items = $value->mapItems();
-
-                break;
-            default:
-                return [];
+        if ($value->kind() === ArgumentValue::KIND_NEW_INSTANCE) {
+            return [$value];
         }
 
         $found = [];
-        foreach ($items as $item) {
-            $found = array_merge($found, self::newInstances($item));
+        foreach ($value->children() as $child) {
+            $found = array_merge($found, self::newInstances($child));
         }
 
         return $found;
@@ -181,34 +170,22 @@ final class AttributeRules
 
     private static function hasEscapedString(ArgumentValue $value): bool
     {
-        switch ($value->kind()) {
-            case ArgumentValue::KIND_LITERAL:
-                $literal = $value->literalValue();
+        if ($value->kind() === ArgumentValue::KIND_LITERAL) {
+            $literal = $value->literalValue();
 
-                return is_string($literal) && self::isEscaped($literal);
-            case ArgumentValue::KIND_LIST:
-                $items = $value->listItems();
-
-                break;
-            case ArgumentValue::KIND_MAP:
-                $items = $value->mapItems();
-                foreach (array_keys($items) as $key) {
-                    if (is_string($key) && self::isEscaped($key)) {
-                        return true;
-                    }
-                }
-
-                break;
-            case ArgumentValue::KIND_NEW_INSTANCE:
-                $items = array_map(static fn (AttributeArgument $argument): ArgumentValue => $argument->value(), $value->arguments());
-
-                break;
-            default:
-                return false;
+            return is_string($literal) && self::isEscaped($literal);
         }
 
-        foreach ($items as $item) {
-            if (self::hasEscapedString($item)) {
+        if ($value->kind() === ArgumentValue::KIND_MAP) {
+            foreach (array_keys($value->mapItems()) as $key) {
+                if (is_string($key) && self::isEscaped($key)) {
+                    return true;
+                }
+            }
+        }
+
+        foreach ($value->children() as $child) {
+            if (self::hasEscapedString($child)) {
                 return true;
             }
         }
@@ -273,23 +250,12 @@ final class AttributeRules
 
     private static function containsNew(ArgumentValue $value): bool
     {
-        switch ($value->kind()) {
-            case ArgumentValue::KIND_NEW_INSTANCE:
-                return true;
-            case ArgumentValue::KIND_LIST:
-                $items = $value->listItems();
-
-                break;
-            case ArgumentValue::KIND_MAP:
-                $items = $value->mapItems();
-
-                break;
-            default:
-                return false;
+        if ($value->kind() === ArgumentValue::KIND_NEW_INSTANCE) {
+            return true;
         }
 
-        foreach ($items as $item) {
-            if (self::containsNew($item)) {
+        foreach ($value->children() as $child) {
+            if (self::containsNew($child)) {
                 return true;
             }
         }

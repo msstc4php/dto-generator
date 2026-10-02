@@ -17,7 +17,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
 
 /**
  * verifyClasses for one run: every class and constant a rendered attribute names must exist for the consumer, unless
- * this run generates it. Each missing name is reported once, where it is first met.
+ * this run generates it. Each missing name is reported once, where it is first met, whichever attribute uses it.
  */
 final class AttributeVerification
 {
@@ -71,12 +71,12 @@ final class AttributeVerification
                 $name = $attribute->className();
                 foreach ($attribute->arguments() as $argument) {
                     foreach ($this->missing($argument->value()) as $missing) {
-                        $this->report(sprintf('%s, used by attribute %s, does not exist.', $missing, $name->fqcn()), $at);
+                        $this->report($missing, sprintf('%s, used by attribute %s, does not exist.', $missing, $name->fqcn()), $at);
                     }
                 }
 
                 if (!$this->hasClass($name)) {
-                    $this->report(sprintf('Attribute class %s does not exist.', $name->fqcn()), $at);
+                    $this->report('Class ' . $name->fqcn(), sprintf('Attribute class %s does not exist.', $name->fqcn()), $at);
                 }
             }
         } catch (ClassVerificationFailed $exception) {
@@ -92,36 +92,31 @@ final class AttributeVerification
      */
     private function missing(ArgumentValue $value): array
     {
+        $missing = [];
         switch ($value->kind()) {
-            case ArgumentValue::KIND_LIST:
-                $items = $value->listItems();
-
-                break;
-            case ArgumentValue::KIND_MAP:
-                $items = $value->mapItems();
-
-                break;
             case ArgumentValue::KIND_CONSTANT:
                 $class = $value->constantClass();
-                $name = ($class instanceof ClassName ? $class->fqcn() . '::' : '') . $value->constantName();
-
-                return $this->hasConstant($class, $value->constantName()) ? [] : ['Constant ' . $name];
-            case ArgumentValue::KIND_CLASS_REFERENCE:
-                return $this->hasType($value->className()) ? [] : ['Class ' . $value->className()->fqcn()];
-            case ArgumentValue::KIND_NEW_INSTANCE:
-                $missing = $this->hasClass($value->className()) ? [] : ['Class ' . $value->className()->fqcn()];
-                foreach ($value->arguments() as $argument) {
-                    $missing = array_merge($missing, $this->missing($argument->value()));
+                if (!$this->hasConstant($class, $value->constantName())) {
+                    $missing[] = 'Constant ' . ($class instanceof ClassName ? $class->fqcn() . '::' : '') . $value->constantName();
                 }
 
-                return $missing;
-            default:
-                return [];
+                break;
+            case ArgumentValue::KIND_CLASS_REFERENCE:
+                if (!$this->hasType($value->className())) {
+                    $missing[] = 'Class ' . $value->className()->fqcn();
+                }
+
+                break;
+            case ArgumentValue::KIND_NEW_INSTANCE:
+                if (!$this->hasClass($value->className())) {
+                    $missing[] = 'Class ' . $value->className()->fqcn();
+                }
+
+                break;
         }
 
-        $missing = [];
-        foreach ($items as $item) {
-            $missing = array_merge($missing, $this->missing($item));
+        foreach ($value->children() as $child) {
+            $missing = array_merge($missing, $this->missing($child));
         }
 
         return $missing;
@@ -155,10 +150,13 @@ final class AttributeVerification
         return $this->verifier->hasConstant($class, $name);
     }
 
-    private function report(string $message, SchemaLocation $at): void
+    /**
+     * @param string $missing the name, like "Class App\X", which is reported once whichever attribute uses it
+     */
+    private function report(string $missing, string $message, SchemaLocation $at): void
     {
-        if (!isset($this->reported[$message])) {
-            $this->reported[$message] = true;
+        if (!isset($this->reported[$missing])) {
+            $this->reported[$missing] = true;
             $this->diagnostics->error($message, $at);
         }
     }

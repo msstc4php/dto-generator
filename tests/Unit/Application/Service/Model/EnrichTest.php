@@ -178,7 +178,7 @@ final class EnrichTest extends TestCase
             $strict,
         );
 
-        return (new Action())(new Input($built->classes(), GraphFixture::load($schemas), $target, $registry, new InstalledPackages(), $verifier, $built->enums()));
+        return (new Action())(new Input($built->classes(), $built->enums(), GraphFixture::load($schemas), $target, $registry, new InstalledPackages(), $verifier));
     }
 
     /**
@@ -450,6 +450,36 @@ final class EnrichTest extends TestCase
         self::assertSame(['error ' . self::AT . 'Pet: Attribute class App\\Attr\\Marked does not exist.'], $this->messages($output));
     }
 
+    public function testReportsAMissingNameOnceWhicheverAttributeUsesIt(): void
+    {
+        $at = self::AT;
+        $missing = ArgumentValue::classReference(ClassName::fromFqcn('App\\Gone'));
+        $output = $this->enrich(['Pet' => self::SCHEMAS['Pet']], $this->propertyAttributes(
+            new AttributeModel(ClassName::fromFqcn('App\\Attr\\Rule'), [AttributeArgument::positional($missing)]),
+            new AttributeModel(ClassName::fromFqcn('App\\Attr\\Make'), [AttributeArgument::positional($missing)]),
+        ), '8.2', true, MetadataMode::ATTRIBUTES, new FixedClassVerifier(['App\\Attr\\Rule', 'App\\Attr\\Make']));
+
+        self::assertSame(["error {$at}Pet/properties/name: Class App\\Gone, used by attribute App\\Attr\\Rule, does not exist."], $this->messages($output));
+    }
+
+    public function testSharesOneReportBetweenAMissingAttributeClassAndReferencesToIt(): void
+    {
+        $at = self::AT;
+        $output = $this->enrich(['Pet' => self::SCHEMAS['Pet']], $this->propertyAttributes(
+            new AttributeModel(ClassName::fromFqcn('App\\Attr\\Rule'), [AttributeArgument::positional(ArgumentValue::classReference(ClassName::fromFqcn('App\\Gone')))]),
+            new AttributeModel(ClassName::fromFqcn('App\\Gone')),
+            new AttributeModel(ClassName::fromFqcn('App\\Other')),
+        ), '8.2', true, MetadataMode::ATTRIBUTES, new FixedClassVerifier(['App\\Attr\\Rule']));
+
+        self::assertSame(
+            [
+                "error {$at}Pet/properties/name: Class App\\Gone, used by attribute App\\Attr\\Rule, does not exist.",
+                "error {$at}Pet/properties/name: Attribute class App\\Other does not exist.",
+            ],
+            $this->messages($output),
+        );
+    }
+
     public function testTreatsTheClassesAndEnumsOfThisRunAsExisting(): void
     {
         $at = self::AT;
@@ -482,16 +512,16 @@ final class EnrichTest extends TestCase
                 {
                     return [
                         new AttributeModel(ClassName::fromFqcn('App\\Attr\\Rule'), [AttributeArgument::positional(ArgumentValue::classReference(ClassName::fromFqcn('App\\Contract')))]),
-                        new AttributeModel(ClassName::fromFqcn('App\\Attr\\Make'), [AttributeArgument::positional(ArgumentValue::newInstance(ClassName::fromFqcn('App\\Contract')))]),
+                        new AttributeModel(ClassName::fromFqcn('App\\Attr\\Make'), [AttributeArgument::positional(ArgumentValue::newInstance(ClassName::fromFqcn('App\\Other')))]),
                         new AttributeModel(ClassName::fromFqcn('App\\Contract')),
                     ];
                 }
             });
-        }, '8.2', true, MetadataMode::ATTRIBUTES, new FixedClassVerifier(['App\\Attr\\Rule', 'App\\Attr\\Make'], [], ['App\\Contract']));
+        }, '8.2', true, MetadataMode::ATTRIBUTES, new FixedClassVerifier(['App\\Attr\\Rule', 'App\\Attr\\Make'], [], ['App\\Contract', 'App\\Other']));
 
         self::assertSame(
             [
-                "error {$at}Pet: Class App\\Contract, used by attribute App\\Attr\\Make, does not exist.",
+                "error {$at}Pet: Class App\\Other, used by attribute App\\Attr\\Make, does not exist.",
                 "error {$at}Pet: Attribute class App\\Contract does not exist.",
             ],
             $this->messages($output),

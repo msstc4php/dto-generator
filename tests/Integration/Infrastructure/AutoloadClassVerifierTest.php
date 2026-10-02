@@ -121,6 +121,23 @@ final class AutoloadClassVerifierTest extends TestCase
         }
     }
 
+    public function testReportsAConstantWhoseValueFailsToResolve(): void
+    {
+        $verifier = $this->verifier(sprintf("namespace %s;\nfinal class Config { public const PATH = \\Missing\\Root::DIR . '/x'; }\n", $this->namespace));
+
+        $this->expectException(ClassVerificationFailed::class);
+        $this->expectExceptionMessage('Checking ' . $this->namespace . '\Config::PATH failed: ');
+
+        $verifier->hasConstant(ClassName::fromFqcn($this->namespace . '\Config'), 'PATH');
+    }
+
+    public function testMutesTheDeprecationsOfTheConsumersCode(): void
+    {
+        $verifier = $this->verifier("trigger_error('Implicitly nullable parameter', E_USER_DEPRECATED);\n");
+
+        self::assertFalse($verifier->hasClass(ClassName::fromFqcn('App\Any')));
+    }
+
     public function testRestoresTheErrorHandlerAfterEachQuestion(): void
     {
         $verifier = $this->verifier('');
@@ -148,7 +165,7 @@ final class AutoloadClassVerifierTest extends TestCase
         $this->expectException(ClassVerificationFailed::class);
         $this->expectExceptionMessage('Checking ' . $this->namespace . '\Broken failed: ');
 
-        $verifier->hasConstant(ClassName::fromFqcn($this->namespace . '\Broken'), 'X');
+        $verifier->hasClass(ClassName::fromFqcn($this->namespace . '\Broken'));
     }
 
     public function testPutsTheConsumersComposerLoaderAfterTheLoadersAlreadyRegistered(): void
@@ -201,6 +218,24 @@ final class AutoloadClassVerifierTest extends TestCase
         self::assertTrue($verifier->hasConstant(null, $this->namespace . '\FROM_LIB'));
     }
 
+    public function testTakesADriveLetterVendorDirAsAbsolute(): void
+    {
+        mkdir($this->root . '/C:/deps', 0777, true);
+        file_put_contents($this->root . '/C:/deps/autoload.php', "<?php\n");
+        file_put_contents($this->root . '/composer.json', '{"config": {"vendor-dir": "C:/deps"}}');
+
+        self::assertNull((new AutoloadClassVerifierLocator(static fn (): ?string => null))->locate($this->root));
+    }
+
+    public function testPrefersTheVendorDirOfTheEnvironment(): void
+    {
+        mkdir($this->root . '/from-env');
+        file_put_contents($this->root . '/from-env/autoload.php', "<?php\n");
+        $environment = static fn (string $name): ?string => $name === 'COMPOSER_VENDOR_DIR' ? 'from-env' : null;
+
+        self::assertInstanceOf(ClassVerifier::class, (new AutoloadClassVerifierLocator($environment))->locate($this->root));
+    }
+
     public function testHonoursAnAbsoluteVendorDir(): void
     {
         mkdir($this->root . '/elsewhere');
@@ -233,8 +268,9 @@ final class AutoloadClassVerifierTest extends TestCase
 
     public function testReadsTheSwitchFromTheEnvironment(): void
     {
-        self::assertTrue((new AutoloadClassVerifierLocator(static fn (): string => '0'))->isDisabledByEnvironment());
-        self::assertFalse((new AutoloadClassVerifierLocator(static fn (): string => '1'))->isDisabledByEnvironment());
+        self::assertTrue((new AutoloadClassVerifierLocator(static fn (string $name): ?string => $name === 'DTO_GENERATOR_VERIFY_CLASSES' ? '0' : null))->isDisabledByEnvironment());
+        self::assertFalse((new AutoloadClassVerifierLocator(static fn (string $name): ?string => $name === 'DTO_GENERATOR_VERIFY_CLASSES' ? '1' : null))->isDisabledByEnvironment());
+        self::assertFalse((new AutoloadClassVerifierLocator(static fn (string $name): ?string => $name === 'COMPOSER_VENDOR_DIR' ? '0' : null))->isDisabledByEnvironment());
         self::assertFalse((new AutoloadClassVerifierLocator(static fn (): ?string => null))->isDisabledByEnvironment());
     }
 

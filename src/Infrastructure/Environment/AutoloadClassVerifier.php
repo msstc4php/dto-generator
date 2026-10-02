@@ -14,7 +14,8 @@ use Throwable;
 
 /**
  * Loads the consumer's autoloader into this process on the first question, which runs the consumer's code (spec §9.4).
- * Its Composer loader is moved behind the loaders already registered, so the generator keeps its own dependencies.
+ * Its Composer loader is moved behind the loaders already registered, so the generator keeps its own dependencies; a
+ * package both ship is therefore answered for in the generator's version.
  */
 final class AutoloadClassVerifier implements ClassVerifier
 {
@@ -32,12 +33,12 @@ final class AutoloadClassVerifier implements ClassVerifier
     public function hasClass(ClassName $class): bool
     {
         // Enums are classes to class_exists().
-        return $this->ask($class, static fn (): bool => class_exists($class->fqcn()));
+        return $this->ask($class->fqcn(), static fn (): bool => class_exists($class->fqcn()));
     }
 
     public function hasType(ClassName $class): bool
     {
-        return $this->ask($class, static fn (): bool => class_exists($class->fqcn()) || interface_exists($class->fqcn()) || trait_exists($class->fqcn()));
+        return $this->ask($class->fqcn(), static fn (): bool => class_exists($class->fqcn()) || interface_exists($class->fqcn()) || trait_exists($class->fqcn()));
     }
 
     public function hasConstant(?ClassName $class, string $name): bool
@@ -48,22 +49,26 @@ final class AutoloadClassVerifier implements ClassVerifier
             return defined($name);
         }
 
-        return $this->hasType($class) && defined($class->fqcn() . '::' . $name);
+        // defined() evaluates the constant's expression, which may load more of the consumer's classes or fail.
+        $fqcn = $class->fqcn();
+
+        return $this->ask($fqcn . '::' . $name, static fn (): bool => (class_exists($fqcn) || interface_exists($fqcn) || trait_exists($fqcn)) && defined($fqcn . '::' . $name));
     }
 
     /**
+     * @param string $subject the class or constant asked about, for the message
      * @param Closure(): bool $question
      *
      * @throws ClassVerificationFailed
      */
-    private function ask(ClassName $class, Closure $question): bool
+    private function ask(string $subject, Closure $question): bool
     {
         $this->load();
 
         try {
             return $this->guarded($question);
         } catch (Throwable $exception) {
-            throw new ClassVerificationFailed(sprintf('Checking %s failed: %s', $class->fqcn(), $exception->getMessage()), 0, $exception);
+            throw new ClassVerificationFailed(sprintf('Checking %s failed: %s', $subject, $exception->getMessage()), 0, $exception);
         }
     }
 
@@ -100,7 +105,8 @@ final class AutoloadClassVerifier implements ClassVerifier
     }
 
     /**
-     * Turns E_USER_ERROR, which Composer's platform check raises, into an exception instead of the end of the process.
+     * Turns E_USER_ERROR, which Composer's platform check raises, into an exception instead of the end of the process,
+     * and mutes deprecations, which older consumer code raises on newer PHP and which are no concern of generation.
      *
      * @template T
      *
@@ -111,8 +117,12 @@ final class AutoloadClassVerifier implements ClassVerifier
     private function guarded(Closure $call)
     {
         set_error_handler(static function (int $severity, string $message, string $file, int $line): bool {
-            throw new ErrorException($message, 0, $severity, $file, $line);
-        }, E_USER_ERROR);
+            if ($severity === E_USER_ERROR) {
+                throw new ErrorException($message, 0, $severity, $file, $line);
+            }
+
+            return true;
+        }, E_USER_ERROR | E_DEPRECATED | E_USER_DEPRECATED);
 
         try {
             return $call();

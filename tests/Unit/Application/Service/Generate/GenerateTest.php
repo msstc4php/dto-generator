@@ -131,7 +131,7 @@ final class GenerateTest extends TestCase
         $output = $this->generate($writer, Mode::WRITE, [], ['verifyClasses' => true]);
 
         self::assertSame('config-failed', $output->status()->value());
-        self::assertSame(['error /project/dto-generator.yaml#/verifyClasses: "verifyClasses" is true, but no vendor/autoload.php was found from /project upwards.'], $this->messages($output));
+        self::assertSame(['error /project/dto-generator.yaml#/verifyClasses: "verifyClasses" is true, but the Composer project at or above /project has no autoload.php in its vendor-dir.'], $this->messages($output));
     }
 
     public function testVerifiesTheClassesOfAttributesWhenAnAutoloaderIsFound(): void

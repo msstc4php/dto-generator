@@ -7,7 +7,8 @@ namespace MSSTC4PHP\DtoGenerator\Application\Port;
 interface ClassVerifierLocator
 {
     /**
-     * A verifier over the nearest vendor/autoload.php from the directory upwards; null when there is none.
+     * A verifier over the autoload.php in the vendor-dir of the nearest Composer project at or above the directory; null
+     * when that project has none or there is no project.
      */
     public function locate(string $directory): ?ClassVerifier;
 

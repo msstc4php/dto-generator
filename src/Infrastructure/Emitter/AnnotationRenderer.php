@@ -18,7 +18,8 @@ use MSSTC4PHP\DtoGenerator\Domain\Target\MetadataMode;
  */
 final class AnnotationRenderer
 {
-    private const LINE_LIMIT = 100;
+    // The width of the annotation text itself; the docblock prefix and indentation come on top.
+    private const TEXT_WIDTH = 100;
 
     private TypeRenderer $types;
 
@@ -47,7 +48,7 @@ final class AnnotationRenderer
         $lines = [];
         foreach ($attributes as $attribute) {
             $node = $this->call('@' . $this->names->name($attribute)->toCodeString(), $attribute->arguments());
-            array_push($lines, ...$node->lines(self::LINE_LIMIT));
+            array_push($lines, ...$node->lines(self::TEXT_WIDTH));
         }
 
         return $lines;

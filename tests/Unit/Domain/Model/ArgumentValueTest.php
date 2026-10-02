@@ -216,4 +216,18 @@ final class ArgumentValueTest extends TestCase
 
         ArgumentValue::literal(1)->className();
     }
+
+    public function testListsTheValuesDirectlyInsideAValue(): void
+    {
+        $one = ArgumentValue::literal(1);
+        $two = ArgumentValue::constant('TWO');
+        $three = ArgumentValue::classReference(ClassName::fromFqcn('App\\Three'));
+
+        self::assertSame([$one, $two], ArgumentValue::listOf($one, $two)->children());
+        self::assertSame([$one, $three], ArgumentValue::mapOf(['a' => $one, 5 => $three])->children());
+        self::assertSame([$one, $two], ArgumentValue::newInstance(ClassName::fromFqcn('App\\Created'), AttributeArgument::positional($one), AttributeArgument::named('n', $two))->children());
+        self::assertSame([], $one->children());
+        self::assertSame([], $two->children());
+        self::assertSame([], $three->children());
+    }
 }

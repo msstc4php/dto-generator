@@ -56,7 +56,7 @@ final class AnnotationNode
     }
 
     /**
-     * @param int<0, max> $limit the longest line, indentation included
+     * @param int<0, max> $limit the longest line of annotation text, its own indentation included
      * @param int<0, max> $depth
      *
      * @return non-empty-list<string>
