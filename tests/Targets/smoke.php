@@ -142,6 +142,14 @@ if (PHP_VERSION_ID >= 80000) {
     check($instances[4]->type === 'App\\Dto\\Currency', 'class reference argument');
 }
 
+if (PHP_VERSION_ID < 80000) {
+    // Below 8.0 the same metadata is docblock annotations.
+    $classDoc = (string) (new ReflectionClass(Sample::class))->getDocComment();
+    $idDoc = (string) (new ReflectionProperty(Sample::class, 'id'))->getDocComment();
+    check(strpos($classDoc, '@\\App\\Attr\\Table(name="sample') !== false && strpos($classDoc, '@Assert\\Valid') !== false, 'class annotations');
+    check(strpos($idDoc, '@Assert\\Positive') !== false, 'property annotation');
+}
+
 if (is_file($profile . 'Rules.php.golden')) {
     require $profile . 'Rules.php.golden';
     $guard = (new ReflectionProperty('App\\Dto\\Rules', 'count'))->getAttributes()[0]->newInstance();

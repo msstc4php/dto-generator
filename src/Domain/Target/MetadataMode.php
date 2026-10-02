@@ -30,4 +30,14 @@ final class MetadataMode extends AbstractEnum
     {
         return $this->value() === self::ATTRIBUTES;
     }
+
+    public function isAnnotations(): bool
+    {
+        return $this->value() === self::ANNOTATIONS;
+    }
+
+    public function isNone(): bool
+    {
+        return $this->value() === self::NONE;
+    }
 }

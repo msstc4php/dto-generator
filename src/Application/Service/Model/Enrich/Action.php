@@ -12,7 +12,6 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\ClassModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\PropertyModel;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\ResolvedSchema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
-use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaIndex;
 use MSSTC4PHP\DtoGenerator\Domain\Target\AttributeRules;
 use MSSTC4PHP\DtoGenerator\Domain\Target\MetadataMode;
 
@@ -24,58 +23,53 @@ final class Action
 {
     public function __invoke(Input $input): Output
     {
-        $diagnostics = new Diagnostics();
-        $index = SchemaIndex::of($input->graph());
+        $run = new EnrichmentRun($input, new Diagnostics());
         $classes = [];
         foreach ($input->classes() as $built) {
             $source = $built->model()->source();
             $inline = !$input->graph()->get($source) instanceof ResolvedSchema;
-            $model = $this->enrich($built->model(), $index->require($source), $inline, $index, $input, $diagnostics);
-            $this->checkRendering($model, $input->target()->metadata(), $diagnostics);
+            $model = $this->enrich($built->model(), $run->index()->require($source), $inline, $run);
+            $this->checkRendering($model, $input->target()->metadata(), $run->diagnostics());
             $classes[] = new BuiltClass($model, $built->source());
         }
 
-        return new Output($classes, $diagnostics);
+        return new Output($classes, $run->diagnostics());
     }
 
     /**
-     * Only rendered attributes need one import per alias; annotations render from a later version.
+     * Rendered metadata, attributes or annotations, needs one import per alias.
      */
     private function checkRendering(ClassModel $class, MetadataMode $metadata, Diagnostics $diagnostics): void
     {
-        if ($metadata->isAttributes()) {
+        if (!$metadata->isNone()) {
             AttributeRules::checkImportAliases($class, $diagnostics);
-
-            return;
-        }
-
-        if ($metadata->value() === MetadataMode::ANNOTATIONS && AttributeRules::carries($class)) {
-            $diagnostics->warning(
-                sprintf('%s has attributes, which are rendered as annotations from a later version; they are left out.', $class->name()->fqcn()),
-                $class->source(),
-            );
         }
     }
 
-    private function enrich(ClassModel $class, Schema $schema, bool $inline, SchemaIndex $index, Input $input, Diagnostics $diagnostics): ClassModel
+    private function enrich(ClassModel $class, Schema $schema, bool $inline, EnrichmentRun $run): ClassModel
     {
-        $target = $input->target();
-        $context = new ClassContext($class, $schema, $target, $input->packages(), $diagnostics, $inline);
-        $attributes = AttributeRules::admitted($input->registry()->enrichClass($context), $target, $schema->location(), $diagnostics);
+        $input = $run->input();
+        $diagnostics = $run->diagnostics();
+        $context = new ClassContext($class, $schema, $input->target(), $input->packages(), $diagnostics, $inline);
+        $attributes = AttributeRules::admitted($input->registry()->enrichClass($context), $input->target(), $schema->location(), $diagnostics);
+        $run->verify($attributes, $schema->location());
 
         $properties = [];
         foreach ($class->properties() as $property) {
-            $properties[] = $this->enrichProperty($property, $class, $index->require($property->source()), $input, $diagnostics);
+            $properties[] = $this->enrichProperty($property, $class, $run->index()->require($property->source()), $run);
         }
 
         return $class->withProperties(...$properties)->withAddedAttributes(...$attributes);
     }
 
-    private function enrichProperty(PropertyModel $property, ClassModel $owner, Schema $schema, Input $input, Diagnostics $diagnostics): PropertyModel
+    private function enrichProperty(PropertyModel $property, ClassModel $owner, Schema $schema, EnrichmentRun $run): PropertyModel
     {
+        $input = $run->input();
+        $diagnostics = $run->diagnostics();
         $context = new PropertyContext($property, $owner, $schema, $input->target(), $input->packages(), $diagnostics);
-        $attributes = $input->registry()->enrichProperty($context);
+        $attributes = AttributeRules::admitted($input->registry()->enrichProperty($context), $input->target(), $schema->location(), $diagnostics);
+        $run->verify($attributes, $schema->location());
 
-        return $property->withAddedAttributes(...AttributeRules::admitted($attributes, $input->target(), $schema->location(), $diagnostics));
+        return $property->withAddedAttributes(...$attributes);
     }
 }

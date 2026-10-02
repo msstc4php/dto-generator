@@ -204,6 +204,25 @@ final class ArgumentValue
         return $this->arguments;
     }
 
+    /**
+     * The values directly inside: list items, map values, the arguments of `new`; none for the other kinds.
+     *
+     * @return list<self>
+     */
+    public function children(): array
+    {
+        switch ($this->kind) {
+            case self::KIND_LIST:
+                return $this->list;
+            case self::KIND_MAP:
+                return array_values($this->map);
+            case self::KIND_NEW_INSTANCE:
+                return array_map(static fn (AttributeArgument $argument): self => $argument->value(), $this->arguments);
+            default:
+                return [];
+        }
+    }
+
     private function assertKind(string ...$kinds): void
     {
         if (!in_array($this->kind, $kinds, true)) {

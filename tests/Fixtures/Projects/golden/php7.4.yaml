@@ -1,4 +1,5 @@
 version: 1
+verifyClasses: false
 target:
   php: '7.4'
 sources:

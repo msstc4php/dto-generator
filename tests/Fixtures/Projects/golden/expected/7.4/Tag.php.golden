@@ -6,6 +6,9 @@ declare(strict_types=1);
 
 namespace App\Golden;
 
+/**
+ * @\App\Attr\Audited(level="public")
+ */
 final class Tag
 {
     private string $label;
