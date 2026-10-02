@@ -6,8 +6,10 @@ namespace MSSTC4PHP\DtoGenerator\Domain\Target;
 
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ArgumentValue;
+use MSSTC4PHP\DtoGenerator\Domain\Model\AttributeArgument;
 use MSSTC4PHP\DtoGenerator\Domain\Model\AttributeModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassModel;
+use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\Identifier;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ImportAlias;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
@@ -30,6 +32,10 @@ final class AttributeRules
      */
     public static function admitted(array $attributes, TargetProfile $target, SchemaLocation $at, Diagnostics $diagnostics): array
     {
+        if ($target->metadata()->isAnnotations()) {
+            return self::admittedAsAnnotations($attributes, $target, $at, $diagnostics);
+        }
+
         if (!$target->metadata()->isAttributes() || $target->supports(Capability::from(Capability::NEW_IN_INITIALIZERS))) {
             return $attributes;
         }
@@ -55,6 +61,164 @@ final class AttributeRules
         }
 
         return $admitted;
+    }
+
+    /**
+     * Doctrine annotations have one "value" for all positional arguments and strings without escapes (spec §7.1): an
+     * argument list that has both is refused like `new` below 8.1, the lossy rest is a warning.
+     *
+     * @param list<AttributeModel> $attributes
+     *
+     * @return list<AttributeModel>
+     */
+    private static function admittedAsAnnotations(array $attributes, TargetProfile $target, SchemaLocation $at, Diagnostics $diagnostics): array
+    {
+        $admitted = [];
+        foreach ($attributes as $attribute) {
+            $name = $attribute->className();
+            $lists = self::argumentLists($name, $attribute->arguments());
+            $conflict = self::valueConflict($lists);
+            if ($conflict instanceof ClassName) {
+                $message = $conflict->fqcn() === $name->fqcn()
+                    ? sprintf('Attribute %s has both a positional argument and a named "value", which one annotation cannot hold', $name->fqcn())
+                    : sprintf('Attribute %s passes %s both a positional argument and a named "value", which one annotation cannot hold', $name->fqcn(), $conflict->fqcn());
+                if ($target->isStrict()) {
+                    $diagnostics->error($message . '.', $at);
+                } else {
+                    $diagnostics->warning($message . '; it is left out.', $at);
+                }
+
+                continue;
+            }
+
+            foreach ($lists as [$holder, $arguments]) {
+                $positional = count(array_filter($arguments, static fn (AttributeArgument $argument): bool => !$argument->isNamed()));
+                if ($positional > 1) {
+                    $diagnostics->warning(sprintf('Attribute %s passes %d positional arguments; an annotation collects them into one list under "value".', $holder->fqcn(), $positional), $at);
+                }
+            }
+
+            $values = array_map(static fn (AttributeArgument $argument): ArgumentValue => $argument->value(), $attribute->arguments());
+            if (self::hasEscapedString(ArgumentValue::listOf(...$values))) {
+                $diagnostics->warning(sprintf('Attribute %s has a string with a line break or "*/"; an annotation writes them as the characters "\\n" and "*\\/".', $name->fqcn()), $at);
+            }
+
+            $admitted[] = $attribute;
+        }
+
+        return $admitted;
+    }
+
+    /**
+     * The argument lists of an attribute and of every `new` within it.
+     *
+     * @param list<AttributeArgument> $arguments
+     *
+     * @return list<array{ClassName, list<AttributeArgument>}>
+     */
+    private static function argumentLists(ClassName $holder, array $arguments): array
+    {
+        $lists = [[$holder, $arguments]];
+        foreach ($arguments as $argument) {
+            foreach (self::newInstances($argument->value()) as $new) {
+                $lists = array_merge($lists, self::argumentLists($new->className(), $new->arguments()));
+            }
+        }
+
+        return $lists;
+    }
+
+    /**
+     * @return list<ArgumentValue> the `new` values in a value, not looking into their own arguments
+     */
+    private static function newInstances(ArgumentValue $value): array
+    {
+        switch ($value->kind()) {
+            case ArgumentValue::KIND_NEW_INSTANCE:
+                return [$value];
+            case ArgumentValue::KIND_LIST:
+                $items = $value->listItems();
+
+                break;
+            case ArgumentValue::KIND_MAP:
+                $items = $value->mapItems();
+
+                break;
+            default:
+                return [];
+        }
+
+        $found = [];
+        foreach ($items as $item) {
+            $found = array_merge($found, self::newInstances($item));
+        }
+
+        return $found;
+    }
+
+    /**
+     * @param list<array{ClassName, list<AttributeArgument>}> $lists
+     *
+     * @return ClassName|null the holder of the first list with a positional argument and a named "value"
+     */
+    private static function valueConflict(array $lists): ?ClassName
+    {
+        foreach ($lists as [$holder, $arguments]) {
+            $positional = false;
+            $value = false;
+            foreach ($arguments as $argument) {
+                $positional = $positional || !$argument->isNamed();
+                $value = $value || $argument->name() === 'value';
+            }
+
+            if ($positional && $value) {
+                return $holder;
+            }
+        }
+
+        return null;
+    }
+
+    private static function hasEscapedString(ArgumentValue $value): bool
+    {
+        switch ($value->kind()) {
+            case ArgumentValue::KIND_LITERAL:
+                $literal = $value->literalValue();
+
+                return is_string($literal) && self::isEscaped($literal);
+            case ArgumentValue::KIND_LIST:
+                $items = $value->listItems();
+
+                break;
+            case ArgumentValue::KIND_MAP:
+                $items = $value->mapItems();
+                foreach (array_keys($items) as $key) {
+                    if (is_string($key) && self::isEscaped($key)) {
+                        return true;
+                    }
+                }
+
+                break;
+            case ArgumentValue::KIND_NEW_INSTANCE:
+                $items = array_map(static fn (AttributeArgument $argument): ArgumentValue => $argument->value(), $value->arguments());
+
+                break;
+            default:
+                return false;
+        }
+
+        foreach ($items as $item) {
+            if (self::hasEscapedString($item)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static function isEscaped(string $text): bool
+    {
+        return strpbrk($text, "\r\n") !== false || strpos($text, '*/') !== false;
     }
 
     /**

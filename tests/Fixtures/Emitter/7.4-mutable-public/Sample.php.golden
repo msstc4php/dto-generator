@@ -71,7 +71,7 @@ final class Sample
      * Settlement currency.
      *
      * @var ?Currency::*
-     * @\App\Attr\Meta(Currency::class)
+     * @\App\Attr\Meta(\App\Dto\Currency::class)
      */
     public ?string $currency;
 

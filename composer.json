@@ -19,6 +19,7 @@
         "symfony/yaml": "^5.4 || ^6.4 || ^7.0"
     },
     "require-dev": {
+        "doctrine/annotations": "^1.14 || ^2.0",
         "phpunit/phpunit": "^9.6"
     },
     "bin": [

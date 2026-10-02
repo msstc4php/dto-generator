@@ -10,6 +10,8 @@ use MSSTC4PHP\DtoGenerator\Application\Port\ClassVerifier;
 use MSSTC4PHP\DtoGenerator\Application\Service\Model\Enrich\Action;
 use MSSTC4PHP\DtoGenerator\Application\Service\Model\Enrich\Input;
 use MSSTC4PHP\DtoGenerator\Application\Service\Model\Enrich\Output;
+use MSSTC4PHP\DtoGenerator\Contract\ClassContext;
+use MSSTC4PHP\DtoGenerator\Contract\ClassEnricher;
 use MSSTC4PHP\DtoGenerator\Contract\Extension;
 use MSSTC4PHP\DtoGenerator\Contract\ExtensionRegistry;
 use MSSTC4PHP\DtoGenerator\Contract\InstalledPackages;
@@ -176,7 +178,33 @@ final class EnrichTest extends TestCase
             $strict,
         );
 
-        return (new Action())(new Input($built->classes(), GraphFixture::load($schemas), $target, $registry, new InstalledPackages(), $verifier));
+        return (new Action())(new Input($built->classes(), GraphFixture::load($schemas), $target, $registry, new InstalledPackages(), $verifier, $built->enums()));
+    }
+
+    /**
+     * @return Closure(ExtensionRegistry): void
+     */
+    private function propertyAttributes(AttributeModel ...$attributes): Closure
+    {
+        return static function (ExtensionRegistry $registry) use ($attributes): void {
+            $registry->addPropertyEnricher(new class($attributes) implements PropertyEnricher {
+                /** @var list<AttributeModel> */
+                private array $attributes;
+
+                /**
+                 * @param list<AttributeModel> $attributes
+                 */
+                public function __construct(array $attributes)
+                {
+                    $this->attributes = $attributes;
+                }
+
+                public function enrichProperty(PropertyContext $context): array
+                {
+                    return $this->attributes;
+                }
+            });
+        };
     }
 
     /**
@@ -339,18 +367,145 @@ final class EnrichTest extends TestCase
         self::assertSame([], $this->messages($output));
     }
 
-    public function testVerifiesTheAttributesOfClasses(): void
+    public function testWarnsThatAnAnnotationCollectsSeveralPositionalArgumentsIntoValue(): void
     {
-        $output = $this->enrich(['Pet' => self::SCHEMAS['Pet']], static function (ExtensionRegistry $registry): void {
-            (new MarkingExtension())->register($registry, []);
-        }, '8.2', true, MetadataMode::ATTRIBUTES, new FixedClassVerifier([]));
+        $output = $this->enrich(['Pet' => self::SCHEMAS['Pet']], $this->propertyAttributes(new AttributeModel(ClassName::fromFqcn('App\\Attr\\Pair'), [
+            AttributeArgument::positional(ArgumentValue::literal('a')),
+            AttributeArgument::positional(ArgumentValue::listOf(
+                ArgumentValue::newInstance(ClassName::fromFqcn('App\\Attr\\Inner'), AttributeArgument::positional(ArgumentValue::literal(1)), AttributeArgument::positional(ArgumentValue::literal(2))),
+                ArgumentValue::newInstance(ClassName::fromFqcn('App\\Attr\\Blank')),
+            )),
+        ])), '7.4', true, MetadataMode::ANNOTATIONS);
 
         self::assertSame(
             [
-                'error ' . self::AT . 'Pet/properties/name: Attribute class App\\Attr\\Marked does not exist.',
-                'error ' . self::AT . 'Pet: Attribute class App\\Attr\\Marked does not exist.',
+                'warning ' . self::AT . 'Pet/properties/name: Attribute App\\Attr\\Pair passes 2 positional arguments; an annotation collects them into one list under "value".',
+                'warning ' . self::AT . 'Pet/properties/name: Attribute App\\Attr\\Inner passes 2 positional arguments; an annotation collects them into one list under "value".',
             ],
             $this->messages($output),
         );
+        self::assertSame(['App\\Dto\\Pet' => ['name: App\\Attr\\Pair(a)']], $this->attributes($output));
+    }
+
+    public function testRefusesAnAnnotationWithAPositionalArgumentAndANamedValueWhenStrict(): void
+    {
+        $attribute = new AttributeModel(ClassName::fromFqcn('App\\Attr\\Rule'), [AttributeArgument::named('inner', ArgumentValue::listOf(
+            ArgumentValue::newInstance(ClassName::fromFqcn('App\\Attr\\Blank')),
+            ArgumentValue::newInstance(ClassName::fromFqcn('App\\Attr\\Inner'), AttributeArgument::positional(ArgumentValue::literal('a')), AttributeArgument::named('value', ArgumentValue::literal('b'))),
+        ))]);
+        $kept = new AttributeModel(ClassName::fromFqcn('App\\Attr\\Kept'), [AttributeArgument::named('value', ArgumentValue::literal('only'))]);
+
+        $strict = $this->enrich(['Pet' => self::SCHEMAS['Pet']], $this->propertyAttributes($attribute, $kept), '7.4', true, MetadataMode::ANNOTATIONS);
+        $loose = $this->enrich(['Pet' => self::SCHEMAS['Pet']], $this->propertyAttributes($attribute, $kept), '7.4', false, MetadataMode::ANNOTATIONS);
+
+        self::assertSame(['error ' . self::AT . 'Pet/properties/name: Attribute App\\Attr\\Rule passes App\\Attr\\Inner both a positional argument and a named "value", which one annotation cannot hold.'], $this->messages($strict));
+        self::assertSame(['warning ' . self::AT . 'Pet/properties/name: Attribute App\\Attr\\Rule passes App\\Attr\\Inner both a positional argument and a named "value", which one annotation cannot hold; it is left out.'], $this->messages($loose));
+        self::assertSame(['App\\Dto\\Pet' => ['name: App\\Attr\\Kept(only)']], $this->attributes($loose));
+    }
+
+    public function testRefusesAPositionalArgumentBesideANamedValueAtTheTopToo(): void
+    {
+        $output = $this->enrich(['Pet' => self::SCHEMAS['Pet']], $this->propertyAttributes(new AttributeModel(ClassName::fromFqcn('App\\Attr\\Rule'), [
+            AttributeArgument::positional(ArgumentValue::literal('a')),
+            AttributeArgument::named('value', ArgumentValue::literal('b')),
+        ])), '7.4', true, MetadataMode::ANNOTATIONS);
+
+        self::assertSame(['error ' . self::AT . 'Pet/properties/name: Attribute App\\Attr\\Rule has both a positional argument and a named "value", which one annotation cannot hold.'], $this->messages($output));
+    }
+
+    public function testWarnsThatAnAnnotationEscapesLineBreaksAndCommentEnds(): void
+    {
+        $output = $this->enrich(['Pet' => self::SCHEMAS['Pet']], $this->propertyAttributes(new AttributeModel(ClassName::fromFqcn('App\\Attr\\Note'), [AttributeArgument::named('text', ArgumentValue::mapOf(['k' => ArgumentValue::listOf(ArgumentValue::literal("two\nlines"))]))]), new AttributeModel(ClassName::fromFqcn('App\\Attr\\Key'), [AttributeArgument::positional(ArgumentValue::mapOf(["a\rb" => ArgumentValue::literal(1)]))]), new AttributeModel(ClassName::fromFqcn('App\\Attr\\Comment'), [AttributeArgument::positional(ArgumentValue::newInstance(ClassName::fromFqcn('App\\Attr\\Inner'), AttributeArgument::positional(ArgumentValue::literal('a */ b'))))]), new AttributeModel(ClassName::fromFqcn('App\\Attr\\Plain'), [
+            AttributeArgument::positional(ArgumentValue::literal('C:\\new * / x')),
+            AttributeArgument::named('map', ArgumentValue::mapOf([3 => ArgumentValue::literal('x')])),
+            AttributeArgument::named('mode', ArgumentValue::constant('PHP_EOL')),
+            AttributeArgument::named('type', ArgumentValue::classReference(ClassName::fromFqcn('App\\Dto\\Pet'))),
+        ])), '7.4', true, MetadataMode::ANNOTATIONS);
+
+        self::assertSame(
+            array_map(
+                static fn (string $class): string => 'warning ' . self::AT . 'Pet/properties/name: Attribute App\\Attr\\' . $class . ' has a string with a line break or "*/"; an annotation writes them as the characters "\\n" and "*\\/".',
+                ['Note', 'Key', 'Comment'],
+            ),
+            $this->messages($output),
+        );
+    }
+
+    public function testChecksAnnotationArgumentsOnlyWhenAnnotationsRender(): void
+    {
+        $output = $this->enrich(['Pet' => self::SCHEMAS['Pet']], $this->propertyAttributes(new AttributeModel(ClassName::fromFqcn('App\\Attr\\Pair'), [
+            AttributeArgument::positional(ArgumentValue::literal("a\nb")),
+            AttributeArgument::positional(ArgumentValue::literal('c')),
+        ])), '8.2', true, MetadataMode::ATTRIBUTES);
+
+        self::assertSame([], $this->messages($output));
+    }
+
+    public function testVerifiesClassAttributesBeforePropertyOnesAndReportsEachMissingNameOnce(): void
+    {
+        $output = $this->enrich(self::SCHEMAS, static function (ExtensionRegistry $registry): void {
+            (new MarkingExtension())->register($registry, []);
+        }, '8.2', true, MetadataMode::ATTRIBUTES, new FixedClassVerifier([]));
+
+        self::assertSame(['error ' . self::AT . 'Pet: Attribute class App\\Attr\\Marked does not exist.'], $this->messages($output));
+    }
+
+    public function testTreatsTheClassesAndEnumsOfThisRunAsExisting(): void
+    {
+        $at = self::AT;
+        $verifier = new FixedClassVerifier(['App\\Attr\\Rule']);
+        $schemas = ['Pet' => self::SCHEMAS['Pet'], 'Status' => ['type' => 'string', 'enum' => ['active', 'gone']]];
+        $output = $this->enrich($schemas, static function (ExtensionRegistry $registry): void {
+            $registry->addPropertyEnricher(new class implements PropertyEnricher {
+                public function enrichProperty(PropertyContext $context): array
+                {
+                    return [new AttributeModel(ClassName::fromFqcn('App\\Attr\\Rule'), [
+                        AttributeArgument::named('type', ArgumentValue::classReference(ClassName::fromFqcn('app\\dto\\PET'))),
+                        AttributeArgument::named('status', ArgumentValue::constant('ACTIVE', ClassName::fromFqcn('App\\Dto\\Status'))),
+                        AttributeArgument::named('other', ArgumentValue::constant('NOPE', ClassName::fromFqcn('App\\Dto\\Status'))),
+                        AttributeArgument::named('copy', ArgumentValue::newInstance(ClassName::fromFqcn('App\\Dto\\Pet'))),
+                    ])];
+                }
+            });
+        }, '8.2', true, MetadataMode::ATTRIBUTES, $verifier);
+
+        self::assertSame(["error {$at}Pet/properties/name: Constant App\\Dto\\Status::NOPE, used by attribute App\\Attr\\Rule, does not exist."], $this->messages($output));
+        self::assertSame(['class App\\Attr\\Rule'], $verifier->asked);
+    }
+
+    public function testAcceptsInterfacesAsClassReferencesButNotAsAttributes(): void
+    {
+        $at = self::AT;
+        $output = $this->enrich(['Pet' => self::SCHEMAS['Pet']], static function (ExtensionRegistry $registry): void {
+            $registry->addClassEnricher(new class implements ClassEnricher {
+                public function enrichClass(ClassContext $context): array
+                {
+                    return [
+                        new AttributeModel(ClassName::fromFqcn('App\\Attr\\Rule'), [AttributeArgument::positional(ArgumentValue::classReference(ClassName::fromFqcn('App\\Contract')))]),
+                        new AttributeModel(ClassName::fromFqcn('App\\Attr\\Make'), [AttributeArgument::positional(ArgumentValue::newInstance(ClassName::fromFqcn('App\\Contract')))]),
+                        new AttributeModel(ClassName::fromFqcn('App\\Contract')),
+                    ];
+                }
+            });
+        }, '8.2', true, MetadataMode::ATTRIBUTES, new FixedClassVerifier(['App\\Attr\\Rule', 'App\\Attr\\Make'], [], ['App\\Contract']));
+
+        self::assertSame(
+            [
+                "error {$at}Pet: Class App\\Contract, used by attribute App\\Attr\\Make, does not exist.",
+                "error {$at}Pet: Attribute class App\\Contract does not exist.",
+            ],
+            $this->messages($output),
+        );
+    }
+
+    public function testReportsAFailingAutoloaderOnceAndStopsVerifying(): void
+    {
+        $verifier = new FixedClassVerifier([], [], [], 'Loading /project/vendor/autoload.php failed: boom');
+        $output = $this->enrich(self::SCHEMAS, static function (ExtensionRegistry $registry): void {
+            (new MarkingExtension())->register($registry, []);
+        }, '8.2', true, MetadataMode::ATTRIBUTES, $verifier);
+
+        self::assertSame(['error ' . self::AT . 'Pet: Loading /project/vendor/autoload.php failed: boom'], $this->messages($output));
+        self::assertCount(1, $verifier->asked);
     }
 }

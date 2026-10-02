@@ -31,6 +31,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Target\MetadataMode;
 use MSSTC4PHP\DtoGenerator\Domain\Target\Mutability;
 use MSSTC4PHP\DtoGenerator\Domain\Target\PhpVersion;
 use MSSTC4PHP\DtoGenerator\Domain\Target\TargetProfile;
+use MSSTC4PHP\DtoGenerator\Infrastructure\Emitter\AttributeNames;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Emitter\AttributeRenderer;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Emitter\PhpParserEmitter;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Emitter\TypeRenderer;
@@ -573,11 +574,12 @@ final class Order
     public function testRefusesAnAliasWhateverTheCaseItIsGivenIn(): void
     {
         $types = new TypeRenderer('App\\Dto', $this->attributesTarget('8.2'));
-        $renderer = new AttributeRenderer($types, new BuilderFactory(), MetadataMode::from(MetadataMode::ATTRIBUTES), ['Assert']);
+        $names = new AttributeNames($types, ['Assert']);
+        $renderer = new AttributeRenderer($types, new BuilderFactory(), $names, MetadataMode::from(MetadataMode::ATTRIBUTES));
 
         $renderer->groups([new AttributeModel(ClassName::fromFqcn('Lib\\Constraints\\Valid'), [], new ImportAlias('Lib\\Constraints', 'assert'))]);
 
-        self::assertSame([], $renderer->uses());
+        self::assertSame([], $names->uses());
     }
 
     public function testRendersAnnotationsInTheDocBlocksOfTheClassAndItsProperties(): void
@@ -601,11 +603,12 @@ final class Order
     public function testRendersEveryKindOfAnnotationArgument(): void
     {
         $attribute = new AttributeModel(ClassName::fromFqcn('App\Attr\Rule'), [
-            AttributeArgument::positional(ArgumentValue::listOf(ArgumentValue::literal("say \"hi\"\n*/"), ArgumentValue::literal(1), ArgumentValue::literal(null), ArgumentValue::literal(2.0))),
+            AttributeArgument::positional(ArgumentValue::listOf(ArgumentValue::literal("say \"hi\"\n*/"), ArgumentValue::literal('C:\\dir'), ArgumentValue::literal(1), ArgumentValue::literal(null), ArgumentValue::literal(2.0))),
             AttributeArgument::named('map', ArgumentValue::mapOf(['k' => ArgumentValue::literal(true), 3 => ArgumentValue::literal(false)])),
             AttributeArgument::named('mode', ArgumentValue::constant('STRICT', ClassName::fromFqcn('App\Attr\Level'))),
             AttributeArgument::named('limit', ArgumentValue::constant('PHP_INT_MAX')),
             AttributeArgument::named('target', ArgumentValue::classReference(ClassName::fromFqcn('App\Dto\Tag'))),
+            AttributeArgument::named('status', ArgumentValue::constant('ACTIVE', ClassName::fromFqcn('App\Dto\Status'))),
             AttributeArgument::named('inner', ArgumentValue::listOf(
                 ArgumentValue::newInstance(ClassName::fromFqcn('App\Attr\Inner'), AttributeArgument::named('size', ArgumentValue::literal(2))),
                 ArgumentValue::newInstance(ClassName::fromFqcn('App\Attr\Blank')),
@@ -616,9 +619,55 @@ final class Order
         $code = (new PhpParserEmitter())->emit($class, EmitterFixture::target('7.4', Mutability::IMMUTABLE));
 
         self::assertStringContainsString(
-            "/**\n * @\\App\\Attr\\Rule(\n *     {\"say \"\"hi\"\"\\n*\\/\", 1, null, 2.0},\n *     map={\"k\"=true, 3=false},\n *     mode=\\App\\Attr\\Level::STRICT,\n *     limit=PHP_INT_MAX,\n *     target=Tag::class,\n *     inner={@\\App\\Attr\\Inner(size=2), @\\App\\Attr\\Blank}\n * )\n */\nfinal class Order\n",
+            "/**\n * @\\App\\Attr\\Rule(\n *     {\"say \"\"hi\"\"\\n*\\/\", \"C:\\dir\", 1, null, 2.0},\n *     map={\"k\"=true, 3=false},\n *     mode=\\App\\Attr\\Level::STRICT,\n *     limit=PHP_INT_MAX,\n *     target=\\App\\Dto\\Tag::class,\n *     status=\\App\\Dto\\Status::ACTIVE,\n *     inner={@\\App\\Attr\\Inner(size=2), @\\App\\Attr\\Blank}\n * )\n */\nfinal class Order\n",
             $code,
         );
+    }
+
+    public function testWrapsANestedAnnotationValueThatIsTooLongForItsLine(): void
+    {
+        $length = static fn (AttributeArgument ...$arguments): ArgumentValue => ArgumentValue::newInstance(ClassName::fromFqcn('App\Attr\Length'), ...$arguments);
+        $class = EmitterFixture::model('App\Dto\Order', null, [])->withAddedAttributes(new AttributeModel(ClassName::fromFqcn('App\Attr\Rule'), [
+            AttributeArgument::named('inner', ArgumentValue::listOf(
+                $length(AttributeArgument::named('min', ArgumentValue::literal(1)), AttributeArgument::named('message', ArgumentValue::literal('Far too long for its column.'))),
+                $length(AttributeArgument::named('max', ArgumentValue::literal(2))),
+            )),
+            AttributeArgument::named('strict', ArgumentValue::literal(true)),
+        ]));
+
+        $code = (new PhpParserEmitter())->emit($class, EmitterFixture::target('7.4', Mutability::IMMUTABLE));
+
+        self::assertStringContainsString(
+            "/**\n * @\\App\\Attr\\Rule(\n *     inner={\n *         @\\App\\Attr\\Length(min=1, message=\"Far too long for its column.\"),\n *         @\\App\\Attr\\Length(max=2)\n *     },\n *     strict=true\n * )\n */\n",
+            $code,
+        );
+    }
+
+    public function testKeepsAnAnnotationOfExactlyTheLineLimitOnOneLine(): void
+    {
+        $text = str_repeat('x', 76);
+        $class = EmitterFixture::model('App\Dto\Order', null, [])->withAddedAttributes(new AttributeModel(ClassName::fromFqcn('App\Attr\Note'), [AttributeArgument::named('text', ArgumentValue::literal($text))]));
+
+        $code = (new PhpParserEmitter())->emit($class, EmitterFixture::target('7.4', Mutability::IMMUTABLE));
+
+        self::assertStringContainsString(' * @\App\Attr\Note(text="' . $text . '")' . "\n", $code);
+    }
+
+    public function testPutsTheAnnotationsOfADeprecatedClassAfterItsDeprecation(): void
+    {
+        $class = new ClassModel(
+            ClassName::fromFqcn('App\Dto\Old'),
+            ClassKind::from(ClassKind::FINAL),
+            null,
+            [],
+            Mutability::from(Mutability::IMMUTABLE),
+            new DocModel('Old.', true),
+            new SchemaLocation('/project/api/openapi.yaml', '/components/schemas/Old'),
+        );
+
+        $code = (new PhpParserEmitter())->emit($class->withAddedAttributes(new AttributeModel(ClassName::fromFqcn('App\Attr\Id'))), EmitterFixture::target('7.4', Mutability::IMMUTABLE));
+
+        self::assertStringContainsString("/**\n * Old.\n *\n * @deprecated\n * @\\App\\Attr\\Id\n */\nfinal class Old\n", $code);
     }
 
     public function testCollectsSeveralPositionalAnnotationArgumentsIntoValue(): void

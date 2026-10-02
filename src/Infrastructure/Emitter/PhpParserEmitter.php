@@ -75,39 +75,41 @@ final class PhpParserEmitter implements CodeEmitter
     public function emit(ClassModel $class, TargetProfile $target, array $inherited = []): string
     {
         $this->assertSupported($class, $inherited);
-        [$node, $attributes] = $this->declare($class, $target, $inherited, []);
+        [$node, $names] = $this->declare($class, $target, $inherited, []);
         // Only once the class is written are all its short names known; an alias that takes one is written in full.
-        $collisions = $attributes->collisions($class->name()->shortName());
+        $collisions = $names->collisions($class->name()->shortName());
         if ($collisions !== []) {
-            [$node, $attributes] = $this->declare($class, $target, $inherited, $collisions);
+            [$node, $names] = $this->declare($class, $target, $inherited, $collisions);
         }
 
-        return $this->file($node, $class->name(), $target, $attributes->uses());
+        return $this->file($node, $class->name(), $target, $names->uses());
     }
 
     /**
      * @param list<PropertyModel> $inherited
      * @param list<string> $refused lower-cased import aliases to write in full
      *
-     * @return array{Class_, AttributeRenderer}
+     * @return array{Class_, AttributeNames}
      */
     private function declare(ClassModel $class, TargetProfile $target, array $inherited, array $refused): array
     {
         $shape = new ClassShape($class, $inherited, $target->classFormFor($class->mutability()), $target);
         $form = $shape->form();
         $types = new TypeRenderer($class->name()->namespace(), $target);
-        $attributes = new AttributeRenderer($types, $this->factory, $target->metadata(), $refused);
+        $names = new AttributeNames($types, $refused);
+        $attributes = new AttributeRenderer($types, $this->factory, $names, $target->metadata());
+        $annotations = new AnnotationRenderer($types, $names, $target->metadata());
 
         $members = [];
         if (!$form->isPromoted()) {
             // Declared in constructor order, like promoted properties, so the object layout is the same on every target.
             foreach ($this->constructorOrder($class->properties()) as $property) {
-                $members[] = $this->declaration($property, $shape, $types, $attributes);
+                $members[] = $this->declaration($property, $shape, $types, $attributes, $annotations);
             }
         }
 
         if ($shape->all() !== []) {
-            $members[] = $this->constructor($shape, $types, $attributes);
+            $members[] = $this->constructor($shape, $types, $attributes, $annotations);
         }
 
         foreach ($inherited as $property) {
@@ -129,9 +131,9 @@ final class PhpParserEmitter implements CodeEmitter
         $node = $builder->getNode();
         $node->flags = $this->modifiers($class->kind(), $form);
         $node->attrGroups = $attributes->groups($class->attributes());
-        $this->document($node, DocBlock::render($class->doc()->description(), array_merge($this->deprecation($class->doc()), $attributes->annotations($class->attributes()))));
+        $this->document($node, DocBlock::render($class->doc()->description(), array_merge($this->deprecation($class->doc()), $annotations->annotations($class->attributes()))));
 
-        return [$node, $attributes];
+        return [$node, $names];
     }
 
     public function emitEnum(EnumModel $enum, TargetProfile $target): string
@@ -204,7 +206,7 @@ final class PhpParserEmitter implements CodeEmitter
         return $kind->equals(ClassKind::from(ClassKind::FINAL)) ? $flags | Modifiers::FINAL : $flags;
     }
 
-    private function declaration(PropertyModel $property, ClassShape $shape, TypeRenderer $types, AttributeRenderer $attributes): Property
+    private function declaration(PropertyModel $property, ClassShape $shape, TypeRenderer $types, AttributeRenderer $attributes, AnnotationRenderer $annotations): Property
     {
         $builder = $this->factory->property($property->name());
         // The builder declares a property public unless told otherwise; declared (unpromoted) properties exist
@@ -220,7 +222,7 @@ final class PhpParserEmitter implements CodeEmitter
 
         $node = $builder->getNode();
         $node->attrGroups = $attributes->groups($property->attributes());
-        $this->document($node, $this->propertyDoc($property, $types, $attributes));
+        $this->document($node, $this->propertyDoc($property, $types, $annotations));
 
         return $node;
     }
@@ -228,7 +230,7 @@ final class PhpParserEmitter implements CodeEmitter
     /**
      * Inherited parameters are plain and go to the parent constructor; the class's own are promoted or assigned.
      */
-    private function constructor(ClassShape $shape, TypeRenderer $types, AttributeRenderer $attributes): ClassMethod
+    private function constructor(ClassShape $shape, TypeRenderer $types, AttributeRenderer $attributes, AnnotationRenderer $annotations): ClassMethod
     {
         $form = $shape->form();
         $params = [];
@@ -247,7 +249,7 @@ final class PhpParserEmitter implements CodeEmitter
                 $param->attrGroups = $attributes->groups($property->attributes());
                 $param->flags = ($form->hasPublicProperties() ? Modifiers::PUBLIC : $shape->visibility())
                     | ($form->hasReadonlyProperties() ? Modifiers::READONLY : 0);
-                $this->document($param, $this->propertyDoc($property, $types, $attributes));
+                $this->document($param, $this->propertyDoc($property, $types, $annotations));
             } else {
                 $tags = array_merge($tags, $this->paramTag($property, $types));
                 $body[] = new Expression(new Assign($this->fetch($property->name()), new Variable($property->name())));
@@ -377,11 +379,11 @@ final class PhpParserEmitter implements CodeEmitter
         return $types->needsDoc($property->type()) ? ['@param ' . $types->doc($property->type()) . ' $' . $property->name()] : [];
     }
 
-    private function propertyDoc(PropertyModel $property, TypeRenderer $types, AttributeRenderer $attributes): ?string
+    private function propertyDoc(PropertyModel $property, TypeRenderer $types, AnnotationRenderer $annotations): ?string
     {
         $var = $types->needsDoc($property->type()) ? ['@var ' . $types->doc($property->type())] : [];
 
-        return DocBlock::render($property->doc()->description(), array_merge($var, $this->deprecation($property->doc()), $attributes->annotations($property->attributes())));
+        return DocBlock::render($property->doc()->description(), array_merge($var, $this->deprecation($property->doc()), $annotations->annotations($property->attributes())));
     }
 
     /**

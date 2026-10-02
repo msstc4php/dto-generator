@@ -165,7 +165,7 @@ final class Action
         $model = ($this->buildModel)(new BuildInput($config, $target, $schemas->graph(), $formats, $aliases));
         $diagnostics->merge($model->diagnostics());
         // Installed versions are detected in stage 6; until then extensions see none.
-        $enriched = ($this->enrichModel)(new EnrichInput($model->classes(), $schemas->graph(), $target, $registry, new InstalledPackages(), $verifier));
+        $enriched = ($this->enrichModel)(new EnrichInput($model->classes(), $schemas->graph(), $target, $registry, new InstalledPackages(), $verifier, $model->enums()));
         $diagnostics->merge($enriched->diagnostics());
         if ($diagnostics->hasErrors()) {
             return null;
