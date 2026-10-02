@@ -40,7 +40,7 @@ deptrac:
     - name: TypeAlias
       collectors:
         - type: classNameRegex
-          value: '#^MSSTC4PHP\\DtoGenerator\\.*\\(Json(Value|Scalar)|ReportShape|ChangeShape|DiagnosticShape)$#'
+          value: '#^MSSTC4PHP\\DtoGenerator\\.*\\(Json(Value|Scalar)|ReportShape|ChangeShape|DiagnosticShape|AttributeDeclaration)$#'
     - name: Symfony
       collectors:
         - type: classNameRegex

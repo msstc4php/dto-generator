@@ -76,6 +76,18 @@ final class EmitterFixture
     }
 
     /**
+     * `new` in attribute arguments, which only PHP 8.1 and later allow.
+     */
+    public static function rules(string $mutability = Mutability::IMMUTABLE): ClassModel
+    {
+        $limit = ArgumentValue::newInstance(ClassName::fromFqcn('App\\Attr\\Limit'), AttributeArgument::named('max', ArgumentValue::literal(3)));
+
+        return self::model('App\\Dto\\Rules', null, [
+            self::property('count', ScalarType::int(), true)->withAddedAttributes(new AttributeModel(ClassName::fromFqcn('App\\Attr\\Guard'), [AttributeArgument::positional($limit)])),
+        ], $mutability);
+    }
+
+    /**
      * The properties a fixture class inherits, root first.
      *
      * @return list<PropertyModel>

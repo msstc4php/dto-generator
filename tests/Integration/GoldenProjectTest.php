@@ -27,7 +27,12 @@ final class GoldenProjectTest extends TestCase
     {
         $output = $this->generate($php);
         self::assertSame('ok', $output->status()->value(), implode("\n", array_map(static fn (Diagnostic $d): string => $d->toString(), $output->diagnostics()->all())));
-        self::assertSame([], $output->diagnostics()->all());
+        // Annotations render from stage 5b; until then 7.4 reports the attributes it leaves out.
+        $expected = $php === '7.4' ? [
+            'App\\Golden\\User has attributes, which are rendered as annotations from a later version; they are left out.',
+            'App\\Golden\\Tag has attributes, which are rendered as annotations from a later version; they are left out.',
+        ] : [];
+        self::assertSame($expected, array_map(static fn (Diagnostic $d): string => $d->message(), $output->diagnostics()->all()));
 
         $expectedDir = self::PROJECT . '/expected/' . $php . '/';
         $generated = [];

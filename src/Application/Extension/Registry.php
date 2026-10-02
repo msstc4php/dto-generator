@@ -139,12 +139,23 @@ final class Registry implements ExtensionRegistry
         $attributes = [];
         foreach ($this->propertyEnrichers as $enricher) {
             try {
-                array_push($attributes, ...$enricher->enrichProperty($context));
+                $returned = $this->attributes($enricher->enrichProperty($context));
             } catch (Throwable $exception) {
                 $context->diagnostics()->error(
                     sprintf('Extension "%s" failed on property "%s": %s', $this->owners[spl_object_hash($enricher)], $context->property()->wireName(), $exception->getMessage()),
                     $context->schema()->location(),
                 );
+
+                continue;
+            }
+
+            if ($returned === null) {
+                $context->diagnostics()->error(
+                    sprintf('Extension "%s" returned something other than a list of attributes for property "%s".', $this->owners[spl_object_hash($enricher)], $context->property()->wireName()),
+                    $context->schema()->location(),
+                );
+            } else {
+                array_push($attributes, ...$returned);
             }
         }
 
@@ -159,13 +170,45 @@ final class Registry implements ExtensionRegistry
         $attributes = [];
         foreach ($this->classEnrichers as $enricher) {
             try {
-                array_push($attributes, ...$enricher->enrichClass($context));
+                $returned = $this->attributes($enricher->enrichClass($context));
             } catch (Throwable $exception) {
                 $context->diagnostics()->error(
                     sprintf('Extension "%s" failed on class %s: %s', $this->owners[spl_object_hash($enricher)], $context->class()->name()->fqcn(), $exception->getMessage()),
                     $context->schema()->location(),
                 );
+
+                continue;
             }
+
+            if ($returned === null) {
+                $context->diagnostics()->error(
+                    sprintf('Extension "%s" returned something other than a list of attributes for class %s.', $this->owners[spl_object_hash($enricher)], $context->class()->name()->fqcn()),
+                    $context->schema()->location(),
+                );
+            } else {
+                array_push($attributes, ...$returned);
+            }
+        }
+
+        return $attributes;
+    }
+
+    /**
+     * PHP does not check the declared list<AttributeModel> of an enricher; null when it returned anything else.
+     *
+     * @param array<array-key, mixed> $returned
+     *
+     * @return list<AttributeModel>|null
+     */
+    private function attributes(array $returned): ?array
+    {
+        $attributes = [];
+        foreach ($returned as $attribute) {
+            if (!$attribute instanceof AttributeModel) {
+                return null;
+            }
+
+            $attributes[] = $attribute;
         }
 
         return $attributes;
@@ -177,9 +220,17 @@ final class Registry implements ExtensionRegistry
             return 'extension keys start with "x-"';
         }
 
-        // A claim must leave every core key, and every x-php-*/x-dto-* key the core rejects as a typo, to the core.
-        foreach (array_merge(ExtensionVocabulary::KNOWN, ['x-php-', 'x-dto-']) as $core) {
-            if ($this->matches($glob, $core) || strncmp($glob, $core, strlen($core)) === 0) {
+        foreach (ExtensionVocabulary::KNOWN as $core) {
+            if ($this->matches($glob, $core)) {
+                return 'it covers keys of the core vocabulary';
+            }
+        }
+
+        // Every x-php-*/x-dto-* key belongs to the core, which reports unknown ones as typos: the text before the first
+        // wildcard must already tell the claim apart from those prefixes.
+        $literal = substr($glob, 0, strcspn($glob, '*?'));
+        foreach (['x-php-', 'x-dto-'] as $prefix) {
+            if (strncmp($literal, $prefix, min(strlen($literal), strlen($prefix))) === 0 && ($literal !== $glob || strlen($literal) >= strlen($prefix))) {
                 return 'it covers keys of the core vocabulary';
             }
         }

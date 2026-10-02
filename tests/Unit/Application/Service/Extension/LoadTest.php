@@ -19,6 +19,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ScalarType;
 use MSSTC4PHP\DtoGenerator\Tests\Support\ConfigMother;
 use MSSTC4PHP\DtoGenerator\Tests\Support\Extensions\MarkingExtension;
+use MSSTC4PHP\DtoGenerator\Tests\Support\Extensions\MoneyFormatExtension;
 use MSSTC4PHP\DtoGenerator\Tests\Support\GraphFixture;
 use PHPUnit\Framework\TestCase;
 
@@ -168,5 +169,23 @@ final class LoadTest extends TestCase
         )));
 
         self::assertSame(['error ' . self::CONFIG . '/extensionConfig/marking: The config of extension "marking" must be an object or a list.'], $this->messages($output));
+    }
+
+    public function testReportsTwoExtensionsWithOneNameAndConfigWithoutExtension(): void
+    {
+        $output = (new Action($this->loader(['App\A' => new MarkingExtension(), 'App\B' => new MarkingExtension(), 'App\C' => new MoneyFormatExtension()]), static fn (): array => []))(new Input(ConfigMother::configWithExtensions(
+            new ExtensionSettings([ClassName::fromFqcn('App\A'), ClassName::fromFqcn('App\B'), ClassName::fromFqcn('App\C')], true, ['typo-ext' => ['x' => 1], '7' => []], [], null),
+            ConfigMother::source(GraphFixture::SPEC),
+        )));
+
+        self::assertSame(
+            [
+                'error ' . self::CONFIG . '/extensions/1: Extension App\\B is named "marking" like an extension before it; it is not used.',
+                'warning ' . self::CONFIG . '/extensionConfig/typo-ext: No extension is named "typo-ext", so this config is not used.',
+                'warning ' . self::CONFIG . '/extensionConfig/7: No extension is named "7", so this config is not used.',
+            ],
+            $this->messages($output),
+        );
+        self::assertSame(['money'], array_keys($output->registry()->formats([])));
     }
 }

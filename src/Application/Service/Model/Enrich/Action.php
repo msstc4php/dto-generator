@@ -7,12 +7,14 @@ namespace MSSTC4PHP\DtoGenerator\Application\Service\Model\Enrich;
 use MSSTC4PHP\DtoGenerator\Application\Service\Model\Build\BuiltClass;
 use MSSTC4PHP\DtoGenerator\Contract\ClassContext;
 use MSSTC4PHP\DtoGenerator\Contract\PropertyContext;
-use MSSTC4PHP\DtoGenerator\Domain\Builder\AttributeCheck;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\PropertyModel;
+use MSSTC4PHP\DtoGenerator\Domain\Schema\ResolvedSchema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaIndex;
+use MSSTC4PHP\DtoGenerator\Domain\Target\AttributeRules;
+use MSSTC4PHP\DtoGenerator\Domain\Target\MetadataMode;
 
 /**
  * Hands every class and each of its own properties to the enrichers (spec §8) and keeps the attributes the target
@@ -26,20 +28,40 @@ final class Action
         $index = SchemaIndex::of($input->graph());
         $classes = [];
         foreach ($input->classes() as $built) {
-            $model = $this->enrich($built->model(), $index->require($built->model()->source()), $index, $input, $diagnostics);
-
-            AttributeCheck::checkImportAliases($model, $diagnostics);
+            $source = $built->model()->source();
+            $inline = !$input->graph()->get($source) instanceof ResolvedSchema;
+            $model = $this->enrich($built->model(), $index->require($source), $inline, $index, $input, $diagnostics);
+            $this->checkRendering($model, $input->target()->metadata(), $diagnostics);
             $classes[] = new BuiltClass($model, $built->source());
         }
 
         return new Output($classes, $diagnostics);
     }
 
-    private function enrich(ClassModel $class, Schema $schema, SchemaIndex $index, Input $input, Diagnostics $diagnostics): ClassModel
+    /**
+     * Only rendered attributes need one import per alias; annotations render from a later version.
+     */
+    private function checkRendering(ClassModel $class, MetadataMode $metadata, Diagnostics $diagnostics): void
+    {
+        if ($metadata->isAttributes()) {
+            AttributeRules::checkImportAliases($class, $diagnostics);
+
+            return;
+        }
+
+        if ($metadata->value() === MetadataMode::ANNOTATIONS && AttributeRules::carries($class)) {
+            $diagnostics->warning(
+                sprintf('%s has attributes, which are rendered as annotations from a later version; they are left out.', $class->name()->fqcn()),
+                $class->source(),
+            );
+        }
+    }
+
+    private function enrich(ClassModel $class, Schema $schema, bool $inline, SchemaIndex $index, Input $input, Diagnostics $diagnostics): ClassModel
     {
         $target = $input->target();
-        $context = new ClassContext($class, $schema, $target, $input->packages(), $diagnostics);
-        $attributes = AttributeCheck::admitted($input->registry()->enrichClass($context), $target, $schema->location(), $diagnostics);
+        $context = new ClassContext($class, $schema, $target, $input->packages(), $diagnostics, $inline);
+        $attributes = AttributeRules::admitted($input->registry()->enrichClass($context), $target, $schema->location(), $diagnostics);
 
         $properties = [];
         foreach ($class->properties() as $property) {
@@ -54,6 +76,6 @@ final class Action
         $context = new PropertyContext($property, $owner, $schema, $input->target(), $input->packages(), $diagnostics);
         $attributes = $input->registry()->enrichProperty($context);
 
-        return $property->withAddedAttributes(...AttributeCheck::admitted($attributes, $input->target(), $schema->location(), $diagnostics));
+        return $property->withAddedAttributes(...AttributeRules::admitted($attributes, $input->target(), $schema->location(), $diagnostics));
     }
 }

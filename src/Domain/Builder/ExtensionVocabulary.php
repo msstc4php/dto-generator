@@ -23,6 +23,9 @@ final class ExtensionVocabulary
         'x-php-class-name', 'x-php-type', 'x-dto-mutable', 'x-php-all-of', 'x-php-skip', 'x-php-attributes', 'x-enum-descriptions',
     ];
 
+    /** An enum is no class, so it carries no attributes. */
+    private const ENUM_SCHEMA = ['x-php-class-name', 'x-php-type', 'x-dto-mutable', 'x-php-all-of', 'x-php-skip', 'x-enum-descriptions'];
+
     private const ALIAS_SCHEMA = ['x-php-type', 'x-php-skip'];
 
     private const PROPERTY = ['x-php-name', 'x-php-type', 'x-php-skip', 'x-php-attributes'];
@@ -37,20 +40,29 @@ final class ExtensionVocabulary
     }
 
     /**
-     * An object schema, or an enum or composition, which becomes a class in a later stage.
-     */
-    /**
+     * A schema that becomes a class; the inline members of its `allOf` only contribute properties.
+     *
      * @param list<string> $aliases keys of `attributeAliases`, which a class takes like x-php-attributes
      */
     public static function checkClass(Schema $schema, Diagnostics $diagnostics, array $aliases = []): void
     {
         self::check($schema, array_merge(self::CLASS_SCHEMA, $aliases), $diagnostics, $aliases);
+        self::checkMembers($schema, $diagnostics, $aliases);
+    }
+
+    /**
+     * A schema that becomes an enum, which carries no attributes.
+     *
+     * @param list<string> $aliases
+     */
+    public static function checkEnum(Schema $schema, Diagnostics $diagnostics, array $aliases = []): void
+    {
+        self::check($schema, self::ENUM_SCHEMA, $diagnostics, $aliases);
     }
 
     /**
      * A named non-object schema, inlined wherever it is referenced.
-     */
-    /**
+     *
      * @param list<string> $aliases
      */
     public static function checkAlias(Schema $schema, Diagnostics $diagnostics, array $aliases = []): void
@@ -64,6 +76,20 @@ final class ExtensionVocabulary
     public static function checkProperty(Schema $schema, Diagnostics $diagnostics, array $aliases = []): void
     {
         self::check($schema, array_merge(self::PROPERTY, $aliases), $diagnostics, $aliases);
+    }
+
+    /**
+     * @param list<string> $aliases
+     */
+    private static function checkMembers(Schema $schema, Diagnostics $diagnostics, array $aliases): void
+    {
+        foreach ($schema->allOf() as $member) {
+            if ($member->ref() === null) {
+                self::checkKeys($member, [], $diagnostics, $aliases);
+                self::checkValues($member, $diagnostics, $aliases);
+                self::checkMembers($member, $diagnostics, $aliases);
+            }
+        }
     }
 
     /**

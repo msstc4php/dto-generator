@@ -52,8 +52,10 @@ final class Action
             $schema = $resolved->schema();
             $isClass = SchemaShape::isClass($schema);
             $isEnum = SchemaShape::isEnum($schema);
-            if ($isClass || $isEnum) {
+            if ($isClass) {
                 ExtensionVocabulary::checkClass($schema, $diagnostics, $input->aliases());
+            } elseif ($isEnum) {
+                ExtensionVocabulary::checkEnum($schema, $diagnostics, $input->aliases());
             } else {
                 ExtensionVocabulary::checkAlias($schema, $diagnostics, $input->aliases());
             }

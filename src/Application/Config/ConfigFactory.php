@@ -161,7 +161,7 @@ final class ConfigFactory
                 continue;
             }
 
-            $aliases[$name] = $value;
+            $aliases[$name] = array_key_exists('args', $value) ? ['class' => $value['class'], 'args' => Json::value($value['args'])] : ['class' => $value['class']];
         }
 
         $verify = $root->raw('verifyClasses') ?? 'auto';

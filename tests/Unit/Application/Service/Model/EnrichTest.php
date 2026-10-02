@@ -28,6 +28,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Target\MetadataMode;
 use MSSTC4PHP\DtoGenerator\Domain\Target\Mutability;
 use MSSTC4PHP\DtoGenerator\Domain\Target\PhpVersion;
 use MSSTC4PHP\DtoGenerator\Domain\Target\TargetProfile;
+use MSSTC4PHP\DtoGenerator\Extension\CustomAttributes\CustomAttributes;
 use MSSTC4PHP\DtoGenerator\Tests\Support\Extensions\MarkingExtension;
 use MSSTC4PHP\DtoGenerator\Tests\Support\GraphFixture;
 use MSSTC4PHP\DtoGenerator\Tests\Support\ModelFixture;
@@ -67,7 +68,7 @@ final class EnrichTest extends TestCase
 
         self::assertContains("error {$at}Pet/properties/name: Attribute App\\Attr\\Rule uses \"new\" in its arguments, which PHP 8.0 does not allow (from 8.1).", $messages);
         self::assertContains("error {$at}Cat/allOf/1/properties/lives: Attribute App\\Attr\\Rule uses \"new\" in its arguments, which PHP 8.0 does not allow (from 8.1).", $messages);
-        self::assertContains('name: App\Attr\Rule(App\Attr\Inner)', $this->attributes($output)['App\Dto\Pet']);
+        self::assertNotContains('name: App\Attr\Rule(App\Attr\Inner)', $this->attributes($output)['App\Dto\Pet']);
     }
 
     public function testDropsAttributesWithNewBelowPhp81WhenNotStrict(): void
@@ -137,7 +138,7 @@ final class EnrichTest extends TestCase
      * @param array<string, array<array-key, mixed>> $schemas
      * @param Closure(ExtensionRegistry):void $register
      */
-    private function enrich(array $schemas, Closure $register, string $php = '8.2', bool $strict = true): Output
+    private function enrich(array $schemas, Closure $register, string $php = '8.2', bool $strict = true, string $metadata = MetadataMode::ATTRIBUTES): Output
     {
         $built = ModelFixture::build($schemas);
         $diagnostics = new Diagnostics();
@@ -166,7 +167,7 @@ final class EnrichTest extends TestCase
         }, []);
         $target = new TargetProfile(
             PhpVersion::fromString($php),
-            MetadataMode::from(MetadataMode::ATTRIBUTES),
+            MetadataMode::from($metadata),
             Mutability::from(Mutability::IMMUTABLE),
             AccessorStyle::from(AccessorStyle::AUTO),
             DateTimeClass::from(DateTimeClass::IMMUTABLE),
@@ -225,5 +226,69 @@ final class EnrichTest extends TestCase
     private function messages(Output $output): array
     {
         return array_map(static fn (Diagnostic $diagnostic): string => $diagnostic->toString(), $output->diagnostics()->all());
+    }
+
+    public function testPutsTheAttributesOfAnInlineObjectOnItsPropertyOnly(): void
+    {
+        $output = $this->enrich(
+            ['Order' => ['type' => 'object', 'properties' => [
+                'inline' => ['type' => 'object', 'x-php-attributes' => [['class' => 'App\Attr\OnInline']], 'properties' => ['z' => ['type' => 'string']]],
+                'lines' => ['type' => 'array', 'items' => ['type' => 'object', 'properties' => ['n' => ['type' => 'integer']]]],
+            ]]],
+            static function (ExtensionRegistry $registry): void {
+                (new CustomAttributes([]))->register($registry, []);
+            },
+        );
+
+        self::assertSame(['App\Dto\Order' => ['inline: App\Attr\OnInline'], 'App\Dto\OrderInline' => [], 'App\Dto\OrderLinesItem' => []], $this->attributes($output));
+    }
+
+    public function testWarnsThatAnnotationsDoNotRenderYet(): void
+    {
+        $output = $this->enrich(['Pet' => self::SCHEMAS['Pet']], static function (ExtensionRegistry $registry): void {
+            (new MarkingExtension())->register($registry, []);
+        }, '7.4', true, MetadataMode::ANNOTATIONS);
+
+        self::assertSame(['warning ' . self::AT . 'Pet: App\\Dto\\Pet has attributes, which are rendered as annotations from a later version; they are left out.'], $this->messages($output));
+    }
+
+    public function testChecksImportAliasesOnlyWhenAttributesRender(): void
+    {
+        $output = $this->enrich(['Pet' => self::SCHEMAS['Pet']], $this->conflictingAliases(), '8.2', true, MetadataMode::NONE);
+
+        self::assertSame([], $this->messages($output));
+    }
+
+    public function testComparesImportAliasesWithoutCase(): void
+    {
+        $output = $this->enrich(['Pet' => self::SCHEMAS['Pet']], static function (ExtensionRegistry $registry): void {
+            $registry->addPropertyEnricher(new class implements PropertyEnricher {
+                public function enrichProperty(PropertyContext $context): array
+                {
+                    return [
+                        new AttributeModel(ClassName::fromFqcn('App\One\A'), [], new ImportAlias('App\One', 'Assert')),
+                        new AttributeModel(ClassName::fromFqcn('App\One\B'), [], new ImportAlias('App\One', 'assert')),
+                        new AttributeModel(ClassName::fromFqcn('App\Two\C'), [], new ImportAlias('App\Two', 'ASSERT')),
+                    ];
+                }
+            });
+        });
+
+        self::assertSame(['error ' . self::AT . 'Pet: Import alias "ASSERT" stands for both App\\One and App\\Two in App\\Dto\\Pet.'], $this->messages($output));
+    }
+
+    private function conflictingAliases(): Closure
+    {
+        return static function (ExtensionRegistry $registry): void {
+            $registry->addPropertyEnricher(new class implements PropertyEnricher {
+                public function enrichProperty(PropertyContext $context): array
+                {
+                    return [
+                        new AttributeModel(ClassName::fromFqcn('App\One\A'), [], new ImportAlias('App\One', 'Assert')),
+                        new AttributeModel(ClassName::fromFqcn('App\Two\B'), [], new ImportAlias('App\Two', 'Assert')),
+                    ];
+                }
+            });
+        };
     }
 }

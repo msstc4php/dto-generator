@@ -2,28 +2,27 @@
 
 declare(strict_types=1);
 
-namespace MSSTC4PHP\DtoGenerator\Domain\Builder;
+namespace MSSTC4PHP\DtoGenerator\Domain\Target;
 
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ArgumentValue;
 use MSSTC4PHP\DtoGenerator\Domain\Model\AttributeModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassModel;
+use MSSTC4PHP\DtoGenerator\Domain\Model\Identifier;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ImportAlias;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
-use MSSTC4PHP\DtoGenerator\Domain\Target\Capability;
-use MSSTC4PHP\DtoGenerator\Domain\Target\TargetProfile;
 
 /**
  * What the target's PHP version allows in attributes (spec §6.1, §7.1): the emitter has no channel for diagnostics.
  */
-final class AttributeCheck
+final class AttributeRules
 {
     private function __construct()
     {
     }
 
     /**
-     * The attributes the target can render; with strict off the others are left out with a warning (spec §6.1).
+     * The attributes the target can render; the others are reported, as errors when strict (spec §6.1), and left out.
      *
      * @param list<AttributeModel> $attributes
      *
@@ -50,7 +49,6 @@ final class AttributeCheck
             );
             if ($target->isStrict()) {
                 $diagnostics->error($message . '.', $at);
-                $admitted[] = $attribute;
             } else {
                 $diagnostics->warning($message . '; it is left out.', $at);
             }
@@ -64,29 +62,43 @@ final class AttributeCheck
      */
     public static function checkImportAliases(ClassModel $class, Diagnostics $diagnostics): void
     {
-        $attributes = $class->attributes();
-        foreach ($class->properties() as $property) {
-            $attributes = array_merge($attributes, $property->attributes());
-        }
-
+        // PHP compares namespaces and aliases without case, so "Assert" and "assert" are one alias.
         $namespaces = [];
-        foreach ($attributes as $attribute) {
+        foreach (self::all($class) as $attribute) {
             $alias = $attribute->importAlias();
             if (!$alias instanceof ImportAlias) {
                 continue;
             }
 
-            $known = $namespaces[$alias->alias()] ?? null;
-            if ($known === null) {
-                $namespaces[$alias->alias()] = $alias->namespace();
-            } elseif ($known !== $alias->namespace()) {
+            $key = Identifier::asciiLower($alias->alias());
+            $known = $namespaces[$key] ?? null;
+            if ($known !== null && Identifier::asciiLower($known) !== Identifier::asciiLower($alias->namespace())) {
                 $diagnostics->error(
                     sprintf('Import alias "%s" stands for both %s and %s in %s.', $alias->alias(), $known, $alias->namespace(), $class->name()->fqcn()),
                     $class->source(),
                 );
-                $namespaces[$alias->alias()] = $alias->namespace();
             }
+
+            $namespaces[$key] = $alias->namespace();
         }
+    }
+
+    public static function carries(ClassModel $class): bool
+    {
+        return self::all($class) !== [];
+    }
+
+    /**
+     * @return list<AttributeModel>
+     */
+    private static function all(ClassModel $class): array
+    {
+        $attributes = $class->attributes();
+        foreach ($class->properties() as $property) {
+            $attributes = array_merge($attributes, $property->attributes());
+        }
+
+        return $attributes;
     }
 
     private static function usesNew(AttributeModel $attribute): bool

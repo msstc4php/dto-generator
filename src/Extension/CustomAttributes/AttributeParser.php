@@ -31,7 +31,11 @@ final class AttributeParser
     {
         [$class, $arguments] = $this->call($declaration, $at, 'An attribute must be an object with "class" and optional "args".');
 
-        return new AttributeModel($class, $arguments);
+        try {
+            return new AttributeModel($class, $arguments);
+        } catch (InvalidModel $exception) {
+            throw new GrammarError($exception->getMessage(), $at->child('args'));
+        }
     }
 
     /**
@@ -125,8 +129,11 @@ final class AttributeParser
                 return ArgumentValue::classReference($this->className($value, $at));
             case 'new':
                 [$class, $arguments] = $this->call($value, $at, '"new" must be an object with "class" and optional "args".');
-
-                return ArgumentValue::newInstance($class, ...$arguments);
+                try {
+                    return ArgumentValue::newInstance($class, ...$arguments);
+                } catch (InvalidModel $exception) {
+                    throw new GrammarError($exception->getMessage(), $at->child('args'));
+                }
             default:
                 if (!is_array($value) || ($value !== [] && Json::isList($value))) {
                     throw new GrammarError('"literal" must be an object.', $at);
@@ -159,10 +166,19 @@ final class AttributeParser
         }
 
         $separator = strrpos($value, '::');
+        $name = $separator === false ? $value : substr($value, $separator + 2);
+        if ($name === '') {
+            throw new GrammarError('"const" must be a constant name like "App\Mask::TAIL".', $at);
+        }
+
+        if ($separator !== false && strcasecmp($name, 'class') === 0) {
+            $class = substr($value, 0, $separator);
+
+            throw new GrammarError(sprintf('"const" names a constant; for the name of class %s use {class: %s}.', $class, $class), $at);
+        }
+
         try {
-            return $separator === false
-                ? ArgumentValue::constant($value)
-                : ArgumentValue::constant(substr($value, $separator + 2), ClassName::fromFqcn(substr($value, 0, $separator)));
+            return ArgumentValue::constant($name, $separator === false ? null : ClassName::fromFqcn(substr($value, 0, $separator)));
         } catch (InvalidModel $exception) {
             throw new GrammarError($exception->getMessage(), $at);
         }

@@ -46,6 +46,7 @@ use PhpParser\Node\Param;
 use PhpParser\Node\Scalar\Int_;
 use PhpParser\Node\Scalar\String_;
 use PhpParser\Node\Stmt;
+use PhpParser\Node\Stmt\Class_;
 use PhpParser\Node\Stmt\ClassMethod;
 use PhpParser\Node\Stmt\Declare_;
 use PhpParser\Node\Stmt\Expression;
@@ -74,11 +75,29 @@ final class PhpParserEmitter implements CodeEmitter
     public function emit(ClassModel $class, TargetProfile $target, array $inherited = []): string
     {
         $this->assertSupported($class, $inherited);
+        [$node, $attributes] = $this->declare($class, $target, $inherited, []);
+        // Only once the class is written are all its short names known; an alias that takes one is written in full.
+        $collisions = $attributes->collisions($class->name()->shortName());
+        if ($collisions !== []) {
+            [$node, $attributes] = $this->declare($class, $target, $inherited, $collisions);
+        }
+
+        return $this->file($node, $class->name(), $target, $attributes->uses());
+    }
+
+    /**
+     * @param list<PropertyModel> $inherited
+     * @param list<string> $refused lower-cased import aliases to write in full
+     *
+     * @return array{Class_, AttributeRenderer}
+     */
+    private function declare(ClassModel $class, TargetProfile $target, array $inherited, array $refused): array
+    {
         $shape = new ClassShape($class, $inherited, $target->classFormFor($class->mutability()), $target);
         $form = $shape->form();
         $types = new TypeRenderer($class->name()->namespace(), $target);
         // Annotations render from stage 5b; until then they, like metadata "none", leave attributes out.
-        $attributes = new AttributeRenderer($types, $this->factory, $target->metadata()->isAttributes());
+        $attributes = new AttributeRenderer($types, $this->factory, $target->metadata()->isAttributes(), $refused);
 
         $members = [];
         if (!$form->isPromoted()) {
@@ -113,7 +132,7 @@ final class PhpParserEmitter implements CodeEmitter
         $node->attrGroups = $attributes->groups($class->attributes());
         $this->document($node, DocBlock::render($class->doc()->description(), $this->deprecation($class->doc())));
 
-        return $this->file($node, $class->name(), $target, $attributes->uses());
+        return [$node, $attributes];
     }
 
     public function emitEnum(EnumModel $enum, TargetProfile $target): string

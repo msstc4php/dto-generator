@@ -75,6 +75,27 @@ final class Sensitive
     }
 }
 
+#[\Attribute(\Attribute::TARGET_PROPERTY | \Attribute::TARGET_PARAMETER)]
+final class Guard
+{
+    public Limit $limit;
+
+    public function __construct(Limit $limit)
+    {
+        $this->limit = $limit;
+    }
+}
+
+final class Limit
+{
+    public int $max;
+
+    public function __construct(int $max)
+    {
+        $this->max = $max;
+    }
+}
+
 final class Mode
 {
     public const STRICT = 'strict';

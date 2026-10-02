@@ -8,6 +8,7 @@ use LogicException;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumType;
+use MSSTC4PHP\DtoGenerator\Domain\Model\Identifier as ModelIdentifier;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ListType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\MapType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\MixedType;
@@ -33,6 +34,9 @@ final class TypeRenderer
     private TargetProfile $target;
 
     private GeneratedCodePrinter $printer;
+
+    /** @var array<string, string> */
+    private array $shortNames = [];
 
     public function __construct(string $namespace, TargetProfile $target)
     {
@@ -195,9 +199,25 @@ final class TypeRenderer
         return $this->className($name);
     }
 
+    /**
+     * Every short name this renderer wrote, which an import alias of the same file must not take.
+     *
+     * @return array<string, string> lower-cased name → name
+     */
+    public function shortNames(): array
+    {
+        return $this->shortNames;
+    }
+
     private function className(ClassName $name): Name
     {
-        return $name->namespace() === $this->namespace ? new Name($name->shortName()) : new FullyQualified($name->fqcn());
+        if ($name->namespace() !== $this->namespace) {
+            return new FullyQualified($name->fqcn());
+        }
+
+        $this->shortNames[ModelIdentifier::asciiLower($name->shortName())] = $name->shortName();
+
+        return new Name($name->shortName());
     }
 
     private function unsupported(TypeModel $type): LogicException

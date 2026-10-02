@@ -17,6 +17,8 @@ final class AliasExpander
 {
     private const PLACEHOLDER = '/\{value(?:\.([^{}]+))?\}/';
 
+    private const WHOLE_PLACEHOLDER = '/\A\{value(?:\.([^{}]+))?\}\z/';
+
     /**
      * @param JsonValue $template
      * @param JsonValue $value
@@ -40,7 +42,7 @@ final class AliasExpander
             return $template;
         }
 
-        if (preg_match('/\A' . trim(self::PLACEHOLDER, '/') . '\z/', $template, $match) === 1) {
+        if (preg_match(self::WHOLE_PLACEHOLDER, $template, $match) === 1) {
             return $this->field($value, $match[1] ?? null);
         }
 

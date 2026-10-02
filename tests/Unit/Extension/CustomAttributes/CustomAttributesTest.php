@@ -12,13 +12,21 @@ use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostic;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
 use MSSTC4PHP\DtoGenerator\Domain\Model\AttributeModel;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
+use MSSTC4PHP\DtoGenerator\Domain\Target\AccessorStyle;
+use MSSTC4PHP\DtoGenerator\Domain\Target\DateTimeClass;
+use MSSTC4PHP\DtoGenerator\Domain\Target\MetadataMode;
 use MSSTC4PHP\DtoGenerator\Domain\Target\Mutability;
+use MSSTC4PHP\DtoGenerator\Domain\Target\PhpVersion;
+use MSSTC4PHP\DtoGenerator\Domain\Target\TargetProfile;
 use MSSTC4PHP\DtoGenerator\Extension\CustomAttributes\CustomAttributes;
 use MSSTC4PHP\DtoGenerator\Tests\Support\AttributeFixture;
 use MSSTC4PHP\DtoGenerator\Tests\Support\EmitterFixture;
 use MSSTC4PHP\DtoGenerator\Tests\Support\GraphFixture;
 use PHPUnit\Framework\TestCase;
 
+/**
+ * @phpstan-import-type AttributeDeclaration from AttributeModel
+ */
 final class CustomAttributesTest extends TestCase
 {
     private const AT = '/project/api/openapi.yaml#/components/schemas/Tag/properties/label';
@@ -104,7 +112,12 @@ final class CustomAttributesTest extends TestCase
             'args not a container' => [[['class' => 'App\Broken', 'args' => 'x']], ["error {$at}/0/args: \"args\" must be a list or an object."]],
             'invalid argument name' => [[['class' => 'App\Broken', 'args' => ['not valid' => 1]]], ["error {$at}/0/args/not valid: Argument name \"not valid\" is not a PHP identifier."]],
             'constant not a string' => [[['class' => 'App\Broken', 'args' => [['const' => 1]]]], ["error {$at}/0/args/0/const: \"const\" must be a constant name like \"App\\Mask::TAIL\"."]],
-            'class constant of ::class' => [[['class' => 'App\Broken', 'args' => [['const' => 'App\A::class']]]], ["error {$at}/0/args/0/const: \"class\" is not a valid constant name; use classReference() for ::class."]],
+            'class constant of ::class' => [[['class' => 'App\Broken', 'args' => [['const' => 'App\A::class']]]], ["error {$at}/0/args/0/const: \"const\" names a constant; for the name of class App\\A use {class: App\\A}."]],
+            'global constant named class' => [[['class' => 'App\Broken', 'args' => [['const' => 'class']]]], ["error {$at}/0/args/0/const: \"class\" is not a valid constant name; use classReference() for ::class."]],
+            'constant of an invalid class' => [[['class' => 'App\Broken', 'args' => [['const' => 'Not A::X']]]], ["error {$at}/0/args/0/const: \"Not A\" is not a valid class name: segment \"Not A\" is not a PHP identifier."]],
+            'constant without a name' => [[['class' => 'App\Broken', 'args' => [['const' => 'App\A::']]]], ["error {$at}/0/args/0/const: \"const\" must be a constant name like \"App\\Mask::TAIL\"."]],
+            'positional after named' => [[['class' => 'App\Broken', 'args' => ['name' => 1, '0' => 2]], ['class' => 'App\Good']], ["error {$at}/0/args: Positional argument after named arguments."]],
+            'positional after named in new' => [[['class' => 'App\Broken', 'args' => [['new' => ['class' => 'App\X', 'args' => ['a' => 1, '0' => 2]]]]]], ["error {$at}/0/args/0/new/args: Positional argument after named arguments."]],
             'class reference not a string' => [[['class' => 'App\Broken', 'args' => [['class' => []]]]], ["error {$at}/0/args/0/class: \"class\" must be a class name."]],
             'new without class' => [[['class' => 'App\Broken', 'args' => [['new' => ['args' => [1]]]]]], ["error {$at}/0/args/0/new: \"new\" must be an object with \"class\" and optional \"args\"."]],
             'literal list' => [[['class' => 'App\Broken', 'args' => [['literal' => [1, 2]]]]], ["error {$at}/0/args/0/literal: \"literal\" must be an object."]],
@@ -141,7 +154,7 @@ final class CustomAttributesTest extends TestCase
     /**
      * @dataProvider aliasProblems
      *
-     * @param array<array-key, mixed> $alias
+     * @param AttributeDeclaration $alias
      * @param mixed $value
      */
     public function testReportsAliasesThatCannotExpand(array $alias, $value, string $expected): void
@@ -153,7 +166,7 @@ final class CustomAttributesTest extends TestCase
     }
 
     /**
-     * @return array<string, array{array<array-key, mixed>, mixed, string}>
+     * @return array<string, array{AttributeDeclaration, mixed, string}>
      */
     public static function aliasProblems(): array
     {
@@ -165,6 +178,30 @@ final class CustomAttributesTest extends TestCase
             'object inside text' => [['class' => 'App\A', 'args' => ['note' => 'by {value}']], ['user' => 'ann'], "error {$at}: Alias \"x-audit\" puts {value} inside text, so the value must be a string, a number or a boolean."],
             'invalid class' => [['class' => 'Not A Class'], true, "error {$at}: Alias \"x-audit\": \"Not A Class\" is not a valid class name: segment \"Not A Class\" is not a PHP identifier."],
         ];
+    }
+
+    public function testLeavesTheAttributesOfAnInlineObjectToItsProperty(): void
+    {
+        $graph = GraphFixture::load(['Tag' => ['type' => 'object', 'x-php-attributes' => [['class' => 'App\Attr\Entity']], 'properties' => ['label' => ['type' => 'string']]]]);
+        $diagnostics = new Diagnostics();
+        $context = new ClassContext(EmitterFixture::tag(), $graph->all()[0]->schema(), EmitterFixture::target('8.2', Mutability::IMMUTABLE), new InstalledPackages(), $diagnostics, true);
+
+        self::assertTrue($context->isInline());
+        self::assertSame([], $this->extension([])->enrichClass($context));
+    }
+
+    public function testRefusesNewInArgumentsAtTheAttributeBelowPhp81(): void
+    {
+        $declared = [['class' => 'App\Ok'], ['class' => 'App\Rule', 'args' => [['new' => ['class' => 'App\Inner']]]]];
+
+        [$strict, $strictMessages] = $this->property(['type' => 'string', 'x-php-attributes' => $declared], [], '8.0', true);
+        [$lenient, $lenientMessages] = $this->property(['type' => 'string', 'x-php-attributes' => $declared], [], '8.0', false);
+
+        $at = self::AT . '/x-php-attributes/1';
+        self::assertSame(['App\Ok()'], $strict);
+        self::assertSame(["error {$at}: Attribute App\\Rule uses \"new\" in its arguments, which PHP 8.0 does not allow (from 8.1)."], $strictMessages);
+        self::assertSame(['App\Ok()'], $lenient);
+        self::assertSame(["warning {$at}: Attribute App\\Rule uses \"new\" in its arguments, which PHP 8.0 does not allow (from 8.1); it is left out."], $lenientMessages);
     }
 
     public function testReadsTheAttributesOfAClass(): void
@@ -200,11 +237,11 @@ final class CustomAttributesTest extends TestCase
 
     /**
      * @param array<array-key, mixed> $schema
-     * @param array<string, array<array-key, mixed>> $aliases
+     * @param array<string, AttributeDeclaration> $aliases
      *
      * @return array{list<string>, list<string>}
      */
-    private function property(array $schema, array $aliases = []): array
+    private function property(array $schema, array $aliases = [], string $php = '8.2', bool $strict = true): array
     {
         $graph = GraphFixture::load(['Tag' => ['type' => 'object', 'properties' => ['label' => $schema]]]);
         $diagnostics = new Diagnostics();
@@ -213,7 +250,14 @@ final class CustomAttributesTest extends TestCase
             $tag->properties()[0],
             $tag,
             $graph->all()[0]->schema()->requireProperty('label'),
-            EmitterFixture::target('8.2', Mutability::IMMUTABLE),
+            new TargetProfile(
+                PhpVersion::fromString($php),
+                MetadataMode::from(MetadataMode::ATTRIBUTES),
+                Mutability::from(Mutability::IMMUTABLE),
+                AccessorStyle::from(AccessorStyle::AUTO),
+                DateTimeClass::from(DateTimeClass::IMMUTABLE),
+                $strict,
+            ),
             new InstalledPackages(),
             $diagnostics,
         );
@@ -225,7 +269,7 @@ final class CustomAttributesTest extends TestCase
     }
 
     /**
-     * @param array<string, array<array-key, mixed>> $aliases
+     * @param array<string, AttributeDeclaration> $aliases
      */
     private function extension(array $aliases): CustomAttributes
     {

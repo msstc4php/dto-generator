@@ -85,12 +85,13 @@ final class RegistryTest extends TestCase
                     throw new RuntimeException('no class');
                 }
             });
+            $registry->addClassEnricher(self::classEnricher('App\AfterClass'));
             $registry->addPropertyEnricher(self::propertyEnricher('App\After'));
         }), []);
 
         $property = $this->propertyContext($diagnostics);
         self::assertSame(['App\After'], $this->names($registry->enrichProperty($property)));
-        self::assertSame([], $registry->enrichClass($this->classContext($diagnostics)));
+        self::assertSame(['App\AfterClass'], $this->names($registry->enrichClass($this->classContext($diagnostics))));
         self::assertSame(
             [
                 'error ' . $property->schema()->location()->toString() . ': Extension "broken" failed on property "label": no luck',
@@ -148,7 +149,7 @@ final class RegistryTest extends TestCase
     {
         $registry = $this->registry($diagnostics);
         $registry->register($this->extension('greedy', static function (ExtensionRegistry $registry): void {
-            $registry->claimExtensionKeys('x-*', 'x-php-type', 'name', 'x-enum-*', 'x-ok', 'xy-*', 'x-php-own', 'x-dto-own');
+            $registry->claimExtensionKeys('x-*', 'x-php-type', 'name', 'x-enum-*', 'x-ok', 'xy-*', 'x-php-own', 'x-dto-own', 'x-?hp-oops', 'x-*-typo', 'x-p*', 'x-pa*', 'x-php-', 'x-p');
         }), []);
 
         self::assertSame(
@@ -160,10 +161,16 @@ final class RegistryTest extends TestCase
                 'error ' . self::CONFIG . '#: Extension "greedy" cannot claim "xy-*": extension keys start with "x-".',
                 'error ' . self::CONFIG . '#: Extension "greedy" cannot claim "x-php-own": it covers keys of the core vocabulary.',
                 'error ' . self::CONFIG . '#: Extension "greedy" cannot claim "x-dto-own": it covers keys of the core vocabulary.',
+                'error ' . self::CONFIG . '#: Extension "greedy" cannot claim "x-?hp-oops": it covers keys of the core vocabulary.',
+                'error ' . self::CONFIG . '#: Extension "greedy" cannot claim "x-*-typo": it covers keys of the core vocabulary.',
+                'error ' . self::CONFIG . '#: Extension "greedy" cannot claim "x-p*": it covers keys of the core vocabulary.',
+                'error ' . self::CONFIG . '#: Extension "greedy" cannot claim "x-php-": it covers keys of the core vocabulary.',
             ],
             $this->messages($diagnostics),
         );
         self::assertTrue($registry->isClaimed('x-ok'));
+        self::assertTrue($registry->isClaimed('x-pal'));
+        self::assertTrue($registry->isClaimed('x-p'));
         self::assertFalse($registry->isClaimed('x-anything'));
     }
 
@@ -279,5 +286,48 @@ final class RegistryTest extends TestCase
         self::assertNotNull($diagnostics);
 
         return array_map(static fn (Diagnostic $diagnostic): string => $diagnostic->toString(), $diagnostics->all());
+    }
+
+    public function testReportsAnEnricherThatReturnsSomethingElseThanAttributes(): void
+    {
+        $registry = $this->registry($diagnostics);
+        $registry->register($this->extension('garbage', static function (ExtensionRegistry $registry): void {
+            $registry->addPropertyEnricher(new class implements PropertyEnricher {
+                public function enrichProperty(PropertyContext $context): array
+                {
+                    // Reason: the test breaks the declared list<AttributeModel> on purpose, as a careless extension would.
+                    // @phpstan-ignore-next-line return.type
+                    return [new AttributeModel(ClassName::fromFqcn('App\Fine')), 'not an attribute'];
+                }
+            });
+            $registry->addClassEnricher(new class implements ClassEnricher {
+                public function enrichClass(ClassContext $context): array
+                {
+                    // Reason: a keyed array still passes, as PHP cannot enforce list<AttributeModel>.
+                    // @phpstan-ignore-next-line return.type
+                    return ['a' => new AttributeModel(ClassName::fromFqcn('App\Keyed'))];
+                }
+            });
+            $registry->addClassEnricher(new class implements ClassEnricher {
+                public function enrichClass(ClassContext $context): array
+                {
+                    // Reason: the test breaks the declared list<AttributeModel> on purpose.
+                    // @phpstan-ignore-next-line return.type
+                    return [5];
+                }
+            });
+            $registry->addPropertyEnricher(self::propertyEnricher('App\After'));
+        }), []);
+
+        $property = $this->propertyContext($diagnostics);
+        self::assertSame(['App\After'], $this->names($registry->enrichProperty($property)));
+        self::assertSame(['App\Keyed'], $this->names($registry->enrichClass($this->classContext($diagnostics))));
+        self::assertSame(
+            [
+                'error ' . $property->schema()->location()->toString() . ': Extension "garbage" returned something other than a list of attributes for property "label".',
+                'error /project/api/openapi.yaml#/components/schemas/Tag: Extension "garbage" returned something other than a list of attributes for class App\Dto\Tag.',
+            ],
+            $this->messages($diagnostics),
+        );
     }
 }

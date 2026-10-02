@@ -492,7 +492,7 @@ final class BuildTest extends TestCase
     {
         $output = ModelFixture::build([
             'User' => ['type' => 'object', 'x-dto-mutable' => true, 'x-php-all-of' => 'extends', 'properties' => ['id' => []]],
-            'Level' => ['enum' => ['low'], 'x-php-class-name' => 'Grade', 'x-enum-descriptions' => ['low' => 'Low.'], 'x-php-attributes' => [['class' => 'App\\Attr\\Audited']]],
+            'Level' => ['enum' => ['low'], 'x-php-class-name' => 'Grade', 'x-enum-descriptions' => ['low' => 'Low.']],
         ]);
 
         self::assertSame([], ModelFixture::messages($output));
@@ -574,5 +574,36 @@ final class BuildTest extends TestCase
         $output = (new Action(new NameResolver()))($input);
 
         self::assertSame(["warning {$at}User/properties/tags/items/x-audit: \"x-audit\" has no effect here."], ModelFixture::messages($output));
+    }
+
+    public function testWarnsAboutAttributesWhereNothingCarriesThem(): void
+    {
+        $at = self::AT;
+        $graph = GraphFixture::load([
+            'Status' => ['type' => 'string', 'enum' => ['a'], 'x-php-attributes' => [['class' => 'App\A']], 'x-audit' => 1],
+            'Pet' => ['type' => 'object', 'properties' => ['name' => ['type' => 'string']]],
+            'Cat' => ['allOf' => [['$ref' => '#/components/schemas/Pet'], [
+                'x-php-attributes' => [['class' => 'App\Feline']],
+                'x-php-bogus' => 1,
+                'properties' => ['lives' => ['type' => 'integer']],
+                'additionalProperties' => ['type' => 'string', 'x-php-odd' => 1],
+                'allOf' => [['x-dto-mutable' => true]],
+            ]]],
+        ]);
+        $input = new Input(ConfigMother::config(ConfigMother::source(GraphFixture::SPEC)), EmitterFixture::target('8.2', Mutability::IMMUTABLE), $graph, [], ['x-audit']);
+
+        $output = (new Action(new NameResolver()))($input);
+
+        self::assertSame(
+            [
+                "warning {$at}Status/x-php-attributes: \"x-php-attributes\" has no effect here.",
+                "warning {$at}Status/x-audit: \"x-audit\" has no effect here.",
+                "warning {$at}Cat/allOf/1/x-php-attributes: \"x-php-attributes\" has no effect here.",
+                "error {$at}Cat/allOf/1/x-php-bogus: Unknown extension \"x-php-bogus\"; known: x-php-class-name, x-php-name, x-php-type, x-dto-mutable, x-php-all-of, x-php-skip, x-php-attributes, x-enum-descriptions.",
+                "error {$at}Cat/allOf/1/additionalProperties/x-php-odd: Unknown extension \"x-php-odd\"; known: x-php-class-name, x-php-name, x-php-type, x-dto-mutable, x-php-all-of, x-php-skip, x-php-attributes, x-enum-descriptions.",
+                "warning {$at}Cat/allOf/1/allOf/0/x-dto-mutable: \"x-dto-mutable\" has no effect here.",
+            ],
+            ModelFixture::messages($output),
+        );
     }
 }

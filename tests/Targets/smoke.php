@@ -142,4 +142,10 @@ if (PHP_VERSION_ID >= 80000) {
     check($instances[4]->type === 'App\\Dto\\Currency', 'class reference argument');
 }
 
+if (is_file($profile . 'Rules.php.golden')) {
+    require $profile . 'Rules.php.golden';
+    $guard = (new ReflectionProperty('App\\Dto\\Rules', 'count'))->getAttributes()[0]->newInstance();
+    check($guard->limit->max === 3, 'new in attribute arguments');
+}
+
 echo 'ok ' . basename($profile) . "\n";

@@ -11,6 +11,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\AttributeModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassKind;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
+use MSSTC4PHP\DtoGenerator\Domain\Model\ClassType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\DocModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumBacking;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumCase;
@@ -523,5 +524,32 @@ final class Order
             DateTimeClass::from(DateTimeClass::IMMUTABLE),
             true,
         );
+    }
+
+    public function testWritesAnAttributeInFullWhenItsAliasMatchesANameOfTheFile(): void
+    {
+        $alias = new ImportAlias('Symfony\Component\Validator\Constraints', 'Assert');
+        $assert = EmitterFixture::model('App\Dto\Assert', null, [])
+            ->withAddedAttributes(new AttributeModel(ClassName::fromFqcn('Symfony\Component\Validator\Constraints\Valid'), [], $alias))
+        ;
+        $form = EmitterFixture::model('App\Dto\Form', null, [
+            EmitterFixture::property('rule', new ClassType(ClassName::fromFqcn('App\Dto\ASSERT')), true)
+                ->withAddedAttributes(new AttributeModel(ClassName::fromFqcn('Symfony\Component\Validator\Constraints\Valid'), [], $alias)),
+            EmitterFixture::property('other', ScalarType::int(), true)
+                ->withAddedAttributes(new AttributeModel(ClassName::fromFqcn('App\Attr\Sub\Mark'), [], new ImportAlias('App\Attr\Sub', 'Sub'))),
+            EmitterFixture::property('check', new ClassType(ClassName::fromFqcn('App\Dto\Check')), true)
+                ->withAddedAttributes(new AttributeModel(ClassName::fromFqcn('App\Checks\Strict'), [], new ImportAlias('App\Checks', 'Check'))),
+        ]);
+
+        $assertCode = (new PhpParserEmitter())->emit($assert, $this->attributesTarget('8.2'));
+        $formCode = (new PhpParserEmitter())->emit($form, $this->attributesTarget('8.2'));
+
+        self::assertStringNotContainsString('use ', $assertCode);
+        self::assertStringContainsString("#[\\Symfony\\Component\\Validator\\Constraints\\Valid]\nfinal readonly class Assert\n", $assertCode);
+        self::assertStringContainsString('#[\\Symfony\\Component\\Validator\\Constraints\\Valid] public ASSERT $rule', $formCode);
+        self::assertStringContainsString("use App\\Attr\\Sub as Sub;\n", $formCode);
+        self::assertStringContainsString('#[Sub\\Mark] public int $other', $formCode);
+        self::assertStringContainsString('#[\\App\\Checks\\Strict] public Check $check', $formCode);
+        self::assertStringNotContainsString('as Check;', $formCode);
     }
 }
