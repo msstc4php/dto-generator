@@ -45,6 +45,23 @@ final class SchemaReferencesTest extends TestCase
         self::assertSame('email', $resolved->format());
     }
 
+    public function testListsEverySchemaOnTheWayWithItsOwnKeywords(): void
+    {
+        $graph = GraphFixture::load([
+            'Pet' => ['type' => 'object', 'properties' => ['code' => ['$ref' => '#/components/schemas/Short', 'maxLength' => 5]]],
+            'Short' => ['$ref' => '#/components/schemas/Code', 'minLength' => 2],
+            'Code' => ['type' => 'string', 'maxLength' => 8],
+            'Loop' => ['$ref' => '#/components/schemas/Back'],
+            'Back' => ['$ref' => '#/components/schemas/Loop'],
+        ], [], null, false);
+        $references = new SchemaReferences($graph);
+        $code = $this->schema($graph, 'Pet')->requireProperty('code');
+
+        self::assertSame([$code, $this->schema($graph, 'Short'), $this->schema($graph, 'Code')], $references->chain($code));
+        self::assertSame([$this->schema($graph, 'Loop'), $this->schema($graph, 'Back')], $references->chain($this->schema($graph, 'Loop')));
+        self::assertSame([$code], SchemaReferences::none()->chain($code));
+    }
+
     public function testKeepsAReferenceItCannotFollow(): void
     {
         $graph = GraphFixture::load([
