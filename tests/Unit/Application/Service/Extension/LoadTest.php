@@ -94,7 +94,8 @@ final class LoadTest extends TestCase
     {
         $discovery = new FixedExtensionDiscovery(['acme/pkg' => [MarkingExtension::class]]);
 
-        $output = (new Action($this->loader([MarkingExtension::class => new MarkingExtension()]), static fn (): array => [new MarkingExtension()], $discovery))(new Input($this->config([], true)));
+        // The loader knows no class, so an attempt to load the discovered one would be reported.
+        $output = (new Action($this->loader([]), static fn (): array => [new MarkingExtension()], $discovery))(new Input($this->config([], true)));
 
         self::assertSame([], $this->messages($output));
     }

@@ -26,6 +26,14 @@ final class InstalledJsonExtensionDiscovery implements ExtensionDiscovery
         $this->file = $file ?? dirname((string) (new ReflectionClass(InstalledVersions::class))->getFileName()) . '/installed.json';
     }
 
+    /**
+     * The installed.json this discovery reads.
+     */
+    public function file(): string
+    {
+        return $this->file;
+    }
+
     public function discover(): DiscoveredExtensions
     {
         if (!is_file($this->file)) {
@@ -80,7 +88,7 @@ final class InstalledJsonExtensionDiscovery implements ExtensionDiscovery
         }
 
         $section = $extra['dto-generator'];
-        if (!is_array($section)) {
+        if (!is_array($section) || ($section !== [] && array_values($section) === $section)) {
             $problems[] = sprintf('Package "%s" declares extra.dto-generator that is no object.', $name);
 
             return;

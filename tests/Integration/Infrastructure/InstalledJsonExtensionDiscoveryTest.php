@@ -53,6 +53,8 @@ final class InstalledJsonExtensionDiscoveryTest extends TestCase
             ['name' => 'acme/string', 'extra' => ['dto-generator' => ['extensions' => 'Acme\One']]],
             ['name' => 'acme/mixed', 'extra' => ['dto-generator' => ['extensions' => ['Acme\Good', 'not a class', 3]]]],
             ['name' => 'acme/section', 'extra' => ['dto-generator' => 'Acme\One']],
+            ['name' => 'acme/section-list', 'extra' => ['dto-generator' => ['Acme\One']]],
+            ['name' => 'acme/section-empty', 'extra' => ['dto-generator' => []]],
             ['name' => 'acme/map', 'extra' => ['dto-generator' => ['extensions' => ['a' => 'Acme\One']]]],
             ['extra' => ['dto-generator' => ['extensions' => ['Acme\Nameless']]]],
             ['name' => '', 'extra' => ['dto-generator' => ['extensions' => ['Acme\Empty']]]],
@@ -67,6 +69,7 @@ final class InstalledJsonExtensionDiscoveryTest extends TestCase
                 'Package "acme/mixed" declares "not a class" in extra.dto-generator.extensions, which is no class name.',
                 'Package "acme/mixed" declares 3 in extra.dto-generator.extensions, which is no class name.',
                 'Package "acme/section" declares extra.dto-generator that is no object.',
+                'Package "acme/section-list" declares extra.dto-generator that is no object.',
                 'Package "acme/map" declares extra.dto-generator.extensions that is no list of class names.',
                 'A package without a name in ' . $this->file . ' is skipped.',
                 'A package without a name in ' . $this->file . ' is skipped.',
@@ -120,8 +123,12 @@ final class InstalledJsonExtensionDiscoveryTest extends TestCase
 
     public function testReadsTheInstallationTheGeneratorRunsFrom(): void
     {
+        $discovery = new InstalledJsonExtensionDiscovery();
+
+        self::assertSame(dirname(__DIR__, 3) . '/vendor/composer/installed.json', $discovery->file());
+        self::assertFileExists($discovery->file());
         // This repository's own vendor; its packages may declare extensions some day, but never wrongly.
-        self::assertSame([], (new InstalledJsonExtensionDiscovery())->discover()->problems());
+        self::assertSame([], $discovery->discover()->problems());
     }
 
     /**
