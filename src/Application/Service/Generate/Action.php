@@ -132,7 +132,7 @@ final class Action
         $schemas = ($this->loadSchemas)(new SchemasInput($config));
         $diagnostics->merge($schemas->diagnostics());
         $formats = $registry->formats(array_map(static fn (ClassName $class): TypeModel => new ClassType($class), $config->formats()));
-        $aliases = array_map('strval', array_keys($config->extensions()->aliases()));
+        $aliases = array_keys($config->extensions()->aliases());
         $model = ($this->buildModel)(new BuildInput($config, $target, $schemas->graph(), $formats, $aliases));
         $diagnostics->merge($model->diagnostics());
         // Installed versions are detected in stage 6; until then extensions see none.

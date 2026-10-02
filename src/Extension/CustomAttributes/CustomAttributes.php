@@ -75,7 +75,7 @@ final class CustomAttributes implements Extension, PropertyEnricher, ClassEnrich
 
         foreach ($this->aliases as $key => $template) {
             if ($extensions->has($key)) {
-                $attribute = $this->aliased($key, array_map([Json::class, 'value'], $template), $extensions->get($key), $schema, $diagnostics);
+                $attribute = $this->aliased($key, $template, $extensions->get($key), $schema, $diagnostics);
                 if ($attribute instanceof AttributeModel) {
                     $attributes[] = $attribute;
                 }
@@ -112,7 +112,7 @@ final class CustomAttributes implements Extension, PropertyEnricher, ClassEnrich
     }
 
     /**
-     * @param array<array-key, JsonValue> $template
+     * @param array<array-key, mixed> $template
      * @param JsonValue $value
      */
     private function aliased(string $key, array $template, $value, Schema $schema, Diagnostics $diagnostics): ?AttributeModel

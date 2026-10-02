@@ -22,6 +22,7 @@ use MSSTC4PHP\DtoGenerator\Application\Service\Schemas\Load\Action as LoadSchema
 use MSSTC4PHP\DtoGenerator\Domain\Builder\NameResolver;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\SchemaParser;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostic;
+use MSSTC4PHP\DtoGenerator\Extension\CustomAttributes\CustomAttributes;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Emitter\PhpParserEmitter;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Extension\ClassExtensionLoader;
 use MSSTC4PHP\DtoGenerator\Tests\Support\Extensions\MoneyFormatExtension;
@@ -86,6 +87,40 @@ final class GenerateTest extends TestCase
 
         self::assertSame('ok', $output->status()->value());
         self::assertStringContainsString('@param numeric-string $amount', $output->files()[2]->contents());
+    }
+
+    public function testMapsFormatsOfTheConfig(): void
+    {
+        $output = $this->generate(
+            new RecordingWriter(new WritePlan([], [], [])),
+            Mode::WRITE,
+            ['Item' => ['type' => 'object', 'required' => ['id'], 'properties' => ['id' => ['type' => 'string', 'format' => 'uuid']]]],
+            ['formats' => ['uuid' => ['type' => 'App\Uuid']]],
+        );
+
+        self::assertSame('ok', $output->status()->value());
+        self::assertStringContainsString('public \App\Uuid $id', $output->files()[2]->contents());
+    }
+
+    public function testFailsOnAMistakeInTheAttributesOfASchema(): void
+    {
+        $writer = new RecordingWriter(new WritePlan([], [], []));
+        $output = $this->generate($writer, Mode::WRITE, ['Item' => ['type' => 'object', 'x-php-attributes' => 'App\Attr', 'properties' => ['id' => ['type' => 'string']]]]);
+
+        self::assertSame('generation-failed', $output->status()->value());
+        self::assertSame(['error /project/api/openapi.yaml#/components/schemas/Item/x-php-attributes: "x-php-attributes" must be a list of attributes.'], $this->messages($output));
+    }
+
+    public function testAppliesAttributeAliasesAndChecksWhereTheyApply(): void
+    {
+        $output = $this->generate(
+            new RecordingWriter(new WritePlan([], [], [])),
+            Mode::WRITE,
+            ['Item' => ['type' => 'object', 'properties' => ['tags' => ['type' => 'array', 'items' => ['type' => 'string', 'x-audit' => 'x']]]]],
+            ['attributeAliases' => ['x-audit' => ['class' => 'App\\Attr\\Audited']]],
+        );
+
+        self::assertSame(['warning /project/api/openapi.yaml#/components/schemas/Item/properties/tags/items/x-audit: "x-audit" has no effect here.'], $this->messages($output));
     }
 
     public function testFailsOnAnExtensionThatCannotBeLoaded(): void
@@ -202,7 +237,7 @@ final class GenerateTest extends TestCase
 
     /**
      * @param array<string, array<array-key, mixed>> $extraSchemas
-     * @param array<string, list<string>> $extraConfig
+     * @param array<string, array<array-key, mixed>> $extraConfig
      */
     private function generate(RecordingWriter $writer, string $mode, array $extraSchemas = [], array $extraConfig = []): Output
     {
@@ -232,7 +267,7 @@ final class GenerateTest extends TestCase
     {
         return new Action(
             new LoadConfig($loader, new ConfigFactory(), new TargetResolver(new FixedPhpConstraint(null))),
-            new LoadExtensions(new ClassExtensionLoader(), static fn (): array => []),
+            new LoadExtensions(new ClassExtensionLoader(), static fn (array $aliases): array => [new CustomAttributes($aliases)]),
             new LoadSchemas($loader, new SchemaParser()),
             new BuildModel(new NameResolver()),
             new EnrichModel(),

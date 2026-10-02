@@ -11,6 +11,16 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\ScalarType;
 
 final class MoneyFormatExtension implements Extension
 {
+    private string $type;
+
+    /**
+     * An optional argument still lets the loader create the extension.
+     */
+    public function __construct(string $type = 'numeric-string')
+    {
+        $this->type = $type;
+    }
+
     public function name(): string
     {
         return 'money';
@@ -18,6 +28,6 @@ final class MoneyFormatExtension implements Extension
 
     public function register(ExtensionRegistry $registry, array $config): void
     {
-        $registry->addFormat('money', new FormatMapping(ScalarType::string('numeric-string')));
+        $registry->addFormat('money', new FormatMapping(ScalarType::string($this->type)));
     }
 }

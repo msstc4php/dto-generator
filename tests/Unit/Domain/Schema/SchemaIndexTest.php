@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Tests\Unit\Domain\Schema;
 
+use MSSTC4PHP\DtoGenerator\Domain\Exception\InvalidModel;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaIndex;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
@@ -46,5 +47,17 @@ final class SchemaIndexTest extends TestCase
         self::assertNotNull($schema);
 
         return $schema->nonNullTypes()[0]->value();
+    }
+
+    public function testRequiresASchemaToExist(): void
+    {
+        $index = SchemaIndex::of(GraphFixture::load(['User' => ['type' => 'object', 'properties' => ['id' => []]]]));
+
+        self::assertSame('User', basename($index->require($this->location('User'))->location()->pointer()));
+
+        $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('No schema at /project/api/openapi.yaml#/components/schemas/Nowhere.');
+
+        $index->require($this->location('Nowhere'));
     }
 }

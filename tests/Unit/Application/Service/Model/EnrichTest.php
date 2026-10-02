@@ -63,11 +63,11 @@ final class EnrichTest extends TestCase
     {
         $at = self::AT;
         $output = $this->enrich(self::SCHEMAS, $this->newInArguments(), '8.0', true);
+        $messages = $this->messages($output);
 
-        self::assertSame(
-            ["error {$at}Pet/properties/name: Attribute App\\Attr\\Rule uses \"new\" in its arguments, which PHP 8.0 does not allow (from 8.1).", "error {$at}Cat/allOf/1/properties/lives: Attribute App\\Attr\\Rule uses \"new\" in its arguments, which PHP 8.0 does not allow (from 8.1)."],
-            array_slice($this->messages($output), 0, 2),
-        );
+        self::assertContains("error {$at}Pet/properties/name: Attribute App\\Attr\\Rule uses \"new\" in its arguments, which PHP 8.0 does not allow (from 8.1).", $messages);
+        self::assertContains("error {$at}Cat/allOf/1/properties/lives: Attribute App\\Attr\\Rule uses \"new\" in its arguments, which PHP 8.0 does not allow (from 8.1).", $messages);
+        self::assertContains('name: App\Attr\Rule(App\Attr\Inner)', $this->attributes($output)['App\Dto\Pet']);
     }
 
     public function testDropsAttributesWithNewBelowPhp81WhenNotStrict(): void
@@ -75,8 +75,14 @@ final class EnrichTest extends TestCase
         $at = self::AT;
         $output = $this->enrich(['Pet' => self::SCHEMAS['Pet']], $this->newInArguments(), '8.0', false);
 
-        self::assertSame(["warning {$at}Pet/properties/name: Attribute App\\Attr\\Rule uses \"new\" in its arguments, which PHP 8.0 does not allow (from 8.1); it is left out."], $this->messages($output));
-        self::assertSame(['App\Dto\Pet' => ['name: App\Attr\Plain']], $this->attributes($output));
+        self::assertSame(
+            [
+                "warning {$at}Pet/properties/name: Attribute App\\Attr\\Rule uses \"new\" in its arguments, which PHP 8.0 does not allow (from 8.1); it is left out.",
+                "warning {$at}Pet/properties/name: Attribute App\\Attr\\Deep uses \"new\" in its arguments, which PHP 8.0 does not allow (from 8.1); it is left out.",
+            ],
+            $this->messages($output),
+        );
+        self::assertSame(['App\Dto\Pet' => ['name: App\Attr\Plain', 'name: App\Attr\Flat({"k":1})']], $this->attributes($output));
     }
 
     public function testAcceptsNewInAttributeArgumentsFromPhp81(): void
@@ -84,20 +90,23 @@ final class EnrichTest extends TestCase
         $output = $this->enrich(['Pet' => self::SCHEMAS['Pet']], $this->newInArguments(), '8.1', true);
 
         self::assertSame([], $this->messages($output));
-        self::assertSame(['App\Dto\Pet' => ['name: App\Attr\Rule(App\Attr\Inner)', 'name: App\Attr\Plain']], $this->attributes($output));
+        self::assertSame(['App\Dto\Pet' => ['name: App\Attr\Rule(App\Attr\Inner)', 'name: App\Attr\Plain', 'name: App\Attr\Deep({"k":?})', 'name: App\Attr\Flat({"k":1})']], $this->attributes($output));
     }
 
     public function testReportsOneAliasForTwoNamespacesInOneFile(): void
     {
         $at = self::AT;
-        $output = $this->enrich(['Pet' => self::SCHEMAS['Pet']], static function (ExtensionRegistry $registry): void {
+        $pet = ['type' => 'object', 'properties' => ['name' => ['type' => 'string'], 'lives' => ['type' => 'integer']]];
+        $output = $this->enrich(['Pet' => $pet], static function (ExtensionRegistry $registry): void {
             $registry->addPropertyEnricher(new class implements PropertyEnricher {
                 public function enrichProperty(PropertyContext $context): array
                 {
-                    return [
-                        new AttributeModel(ClassName::fromFqcn('Symfony\Component\Validator\Constraints\NotBlank'), [], new ImportAlias('Symfony\Component\Validator\Constraints', 'Assert')),
-                        new AttributeModel(ClassName::fromFqcn('App\Assert\Rule'), [], new ImportAlias('App\Assert', 'Assert')),
-                    ];
+                    return $context->property()->wireName() === 'name'
+                        ? [
+                            new AttributeModel(ClassName::fromFqcn('App\Plain')),
+                            new AttributeModel(ClassName::fromFqcn('Symfony\Component\Validator\Constraints\NotBlank'), [], new ImportAlias('Symfony\Component\Validator\Constraints', 'Assert')),
+                        ]
+                        : [new AttributeModel(ClassName::fromFqcn('App\Assert\Rule'), [], new ImportAlias('App\Assert', 'Assert'))];
                 }
             });
         });
@@ -116,6 +125,8 @@ final class EnrichTest extends TestCase
                     return [
                         new AttributeModel(ClassName::fromFqcn('App\Attr\Rule'), [AttributeArgument::positional(ArgumentValue::listOf($inner))]),
                         new AttributeModel(ClassName::fromFqcn('App\Attr\Plain')),
+                        new AttributeModel(ClassName::fromFqcn('App\Attr\Deep'), [AttributeArgument::positional(ArgumentValue::mapOf(['k' => ArgumentValue::listOf(ArgumentValue::literal(1), $inner)]))]),
+                        new AttributeModel(ClassName::fromFqcn('App\Attr\Flat'), [AttributeArgument::positional(ArgumentValue::mapOf(['k' => ArgumentValue::literal(1)]))]),
                     ];
                 }
             });
@@ -198,7 +209,12 @@ final class EnrichTest extends TestCase
         }
 
         $value = $arguments[0]->value();
-        $first = $value->kind() === ArgumentValue::KIND_LIST ? $value->listItems()[0]->className()->fqcn() : (string) json_encode($value->literalValue());
+        if ($value->kind() === ArgumentValue::KIND_MAP) {
+            $item = $value->mapItems()['k'];
+            $first = $item->kind() === ArgumentValue::KIND_LITERAL ? '{"k":1}' : '{"k":?}';
+        } else {
+            $first = $value->kind() === ArgumentValue::KIND_LIST ? $value->listItems()[0]->className()->fqcn() : (string) json_encode($value->literalValue());
+        }
 
         return $attribute->className()->fqcn() . '(' . trim($first, '"') . ')';
     }

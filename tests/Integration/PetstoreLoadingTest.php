@@ -56,7 +56,7 @@ final class PetstoreLoadingTest extends TestCase
         self::assertNotNull($money);
         self::assertStringEndsWith('api/shared/common.json#/definitions/Money', $money->location()->toString());
 
-        $model = (new BuildModel(new NameResolver()))(new BuildInput($config, $target, $schemas->graph()));
+        $model = (new BuildModel(new NameResolver()))(new BuildInput($config, $target, $schemas->graph(), []));
 
         self::assertSame([], array_map(static fn (Diagnostic $d): string => $d->toString(), $model->diagnostics()->all()));
         self::assertSame(['App\Dto\Currency'], array_map(static fn (BuiltEnum $enum): string => $enum->model()->name()->fqcn(), $model->enums()));

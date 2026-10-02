@@ -97,10 +97,13 @@ final class AttributeRenderer
      */
     private function arguments(array $arguments): array
     {
-        return array_map(
-            fn (AttributeArgument $argument): Arg => new Arg($this->value($argument->value()), false, false, [], $argument->isNamed() ? new Identifier((string) $argument->name()) : null),
-            $arguments,
-        );
+        $args = [];
+        foreach ($arguments as $argument) {
+            $name = $argument->name();
+            $args[] = new Arg($this->value($argument->value()), false, false, [], $name === null ? null : new Identifier($name));
+        }
+
+        return $args;
     }
 
     private function value(ArgumentValue $value): Expr

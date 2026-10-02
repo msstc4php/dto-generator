@@ -40,10 +40,11 @@ final class RegistryTest extends TestCase
         }), []);
         $registry->register($this->extension('second', static function (ExtensionRegistry $registry): void {
             $registry->addPropertyEnricher(self::propertyEnricher('App\Second'));
+            $registry->addClassEnricher(self::classEnricher('App\SecondClass'));
         }), []);
 
         self::assertSame(['App\First', 'App\Second'], $this->names($registry->enrichProperty($this->propertyContext($diagnostics))));
-        self::assertSame(['App\FirstClass'], $this->names($registry->enrichClass($this->classContext($diagnostics))));
+        self::assertSame(['App\FirstClass', 'App\SecondClass'], $this->names($registry->enrichClass($this->classContext($diagnostics))));
         self::assertSame([], $this->messages($diagnostics));
     }
 
@@ -147,7 +148,7 @@ final class RegistryTest extends TestCase
     {
         $registry = $this->registry($diagnostics);
         $registry->register($this->extension('greedy', static function (ExtensionRegistry $registry): void {
-            $registry->claimExtensionKeys('x-*', 'x-php-type', 'name', 'x-enum-*', 'x-ok');
+            $registry->claimExtensionKeys('x-*', 'x-php-type', 'name', 'x-enum-*', 'x-ok', 'xy-*', 'x-php-own', 'x-dto-own');
         }), []);
 
         self::assertSame(
@@ -156,6 +157,9 @@ final class RegistryTest extends TestCase
                 'error ' . self::CONFIG . '#: Extension "greedy" cannot claim "x-php-type": it covers keys of the core vocabulary.',
                 'error ' . self::CONFIG . '#: Extension "greedy" cannot claim "name": extension keys start with "x-".',
                 'error ' . self::CONFIG . '#: Extension "greedy" cannot claim "x-enum-*": it covers keys of the core vocabulary.',
+                'error ' . self::CONFIG . '#: Extension "greedy" cannot claim "xy-*": extension keys start with "x-".',
+                'error ' . self::CONFIG . '#: Extension "greedy" cannot claim "x-php-own": it covers keys of the core vocabulary.',
+                'error ' . self::CONFIG . '#: Extension "greedy" cannot claim "x-dto-own": it covers keys of the core vocabulary.',
             ],
             $this->messages($diagnostics),
         );

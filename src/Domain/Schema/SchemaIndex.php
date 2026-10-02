@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Domain\Schema;
 
+use MSSTC4PHP\DtoGenerator\Domain\Exception\InvalidModel;
+
 /**
  * Every schema of a graph by location, subschemas included, so a model node finds the schema it was built from.
  */
@@ -29,6 +31,19 @@ final class SchemaIndex
     public function get(SchemaLocation $location): ?Schema
     {
         return $this->schemas[$location->toString()] ?? null;
+    }
+
+    /**
+     * A schema a model node was built from, which the graph holds by construction.
+     */
+    public function require(SchemaLocation $location): Schema
+    {
+        $schema = $this->get($location);
+        if (!$schema instanceof Schema) {
+            throw new InvalidModel(sprintf('No schema at %s.', $location->toString()));
+        }
+
+        return $schema;
     }
 
     private function add(Schema $schema): void

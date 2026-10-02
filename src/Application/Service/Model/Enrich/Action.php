@@ -26,11 +26,7 @@ final class Action
         $index = SchemaIndex::of($input->graph());
         $classes = [];
         foreach ($input->classes() as $built) {
-            $model = $built->model();
-            $schema = $index->get($model->source());
-            if ($schema instanceof Schema) {
-                $model = $this->enrich($model, $schema, $index, $input, $diagnostics);
-            }
+            $model = $this->enrich($built->model(), $index->require($built->model()->source()), $index, $input, $diagnostics);
 
             AttributeCheck::checkImportAliases($model, $diagnostics);
             $classes[] = new BuiltClass($model, $built->source());
@@ -47,8 +43,7 @@ final class Action
 
         $properties = [];
         foreach ($class->properties() as $property) {
-            $propertySchema = $index->get($property->source());
-            $properties[] = $propertySchema instanceof Schema ? $this->enrichProperty($property, $class, $propertySchema, $input, $diagnostics) : $property;
+            $properties[] = $this->enrichProperty($property, $class, $index->require($property->source()), $input, $diagnostics);
         }
 
         return $class->withProperties(...$properties)->withAddedAttributes(...$attributes);

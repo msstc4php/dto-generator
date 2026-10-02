@@ -204,7 +204,7 @@ final class BuildTest extends TestCase
             DateTimeClass::from(DateTimeClass::IMMUTABLE),
             true,
         );
-        $output = (new Action(new NameResolver()))(new Input($config, $target, $graph));
+        $output = (new Action(new NameResolver()))(new Input($config, $target, $graph, []));
 
         self::assertSame(
             ['App\Dto\User' => ['m: mixed'], 'App\Other\Pet' => ['m: mixed', 't: App\Other\Tag|null'], 'App\Other\Tag' => ['label: string|null']],

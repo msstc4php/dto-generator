@@ -78,7 +78,7 @@ final class GeneratedCodePrinter extends Standard
      */
     protected function pAttribute(Attribute $node): string
     {
-        return $this->p($node->name) . ($node->args !== [] ? '(' . $this->pMaybeMultiline($node->args, true) . ')' : '');
+        return $this->p($node->name) . ($node->args !== [] ? '(' . $this->pMaybeMultiline($node->args) . ')' : '');
     }
 
     protected function pParams(array $params): string

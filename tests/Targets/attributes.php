@@ -50,6 +50,31 @@ final class Meta
     }
 }
 
+#[\Attribute(\Attribute::TARGET_ALL)]
+final class Audited
+{
+    public string $level;
+
+    public function __construct(string $level)
+    {
+        $this->level = $level;
+    }
+}
+
+#[\Attribute(\Attribute::TARGET_PROPERTY | \Attribute::TARGET_PARAMETER)]
+final class Sensitive
+{
+    public string $mask;
+
+    public int $keep;
+
+    public function __construct(string $mask, int $keep)
+    {
+        $this->mask = $mask;
+        $this->keep = $keep;
+    }
+}
+
 final class Mode
 {
     public const STRICT = 'strict';

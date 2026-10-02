@@ -66,6 +66,8 @@ final class CustomAttributesTest extends TestCase
             ],
             'empty args' => [[['class' => 'App\A', 'args' => []]], ['App\A()']],
             'several attributes in order' => [[['class' => 'App\A'], ['class' => 'App\B']], ['App\A()', 'App\B()']],
+            'map with a numeric key' => [[['class' => 'App\A', 'args' => [['1' => 'one', 'k' => 2]]]], ["App\\A([1 => 'one', 'k' => 2])"]],
+            'empty literal' => [[['class' => 'App\A', 'args' => [['literal' => []]]]], ['App\A([])']],
             'map with more keys than a marker' => [[['class' => 'App\A', 'args' => [['class' => 'x', 'other' => 1]]]], ["App\\A(['class' => 'x', 'other' => 1])"]],
         ];
     }
@@ -105,6 +107,8 @@ final class CustomAttributesTest extends TestCase
             'class constant of ::class' => [[['class' => 'App\Broken', 'args' => [['const' => 'App\A::class']]]], ["error {$at}/0/args/0/const: \"class\" is not a valid constant name; use classReference() for ::class."]],
             'class reference not a string' => [[['class' => 'App\Broken', 'args' => [['class' => []]]]], ["error {$at}/0/args/0/class: \"class\" must be a class name."]],
             'new without class' => [[['class' => 'App\Broken', 'args' => [['new' => ['args' => [1]]]]]], ["error {$at}/0/args/0/new: \"new\" must be an object with \"class\" and optional \"args\"."]],
+            'literal list' => [[['class' => 'App\Broken', 'args' => [['literal' => [1, 2]]]]], ["error {$at}/0/args/0/literal: \"literal\" must be an object."]],
+            'unknown numeric key' => [[['class' => 'App\Broken', '0' => 'x']], ["error {$at}/0/0: Unknown key \"0\"; an attribute takes \"class\" and \"args\"."]],
             'literal not a map' => [[['class' => 'App\Broken', 'args' => [['literal' => 5]]]], ["error {$at}/0/args/0/literal: \"literal\" must be an object."]],
             'one broken among good' => [[['class' => 'App\Good'], ['class' => 5]], ["error {$at}/1/class: \"class\" must be a class name."]],
         ];
@@ -114,11 +118,11 @@ final class CustomAttributesTest extends TestCase
     {
         $aliases = [
             'x-audit' => ['class' => 'App\Attr\Audited', 'args' => ['level' => '{value}']],
-            'x-owner' => ['class' => 'App\Attr\Owner', 'args' => ['by' => '{value.user}', 'note' => 'set by {value.user} at {value.level}', 'all' => '{value}']],
+            'x-owner' => ['class' => 'App\Attr\Owner', 'args' => ['by' => '{value.user}', 'note' => 'set by {value.user} at {value.level}, {value.on}/{value.off}', 'all' => '{value}']],
             'x-plain' => ['class' => 'App\Attr\Plain'],
         ];
         [$attributes, $messages] = $this->property(
-            ['type' => 'string', 'x-plain' => true, 'x-owner' => ['user' => 'ann', 'level' => 3], 'x-audit' => 2, 'x-php-attributes' => [['class' => 'App\Attr\First']]],
+            ['type' => 'string', 'x-plain' => true, 'x-owner' => ['user' => 'ann', 'level' => 3, 'on' => true, 'off' => false], 'x-audit' => 2, 'x-php-attributes' => [['class' => 'App\Attr\First']]],
             $aliases,
         );
 
@@ -127,7 +131,7 @@ final class CustomAttributesTest extends TestCase
             [
                 'App\Attr\First()',
                 'App\Attr\Audited(level: 2)',
-                "App\\Attr\\Owner(by: 'ann', note: 'set by ann at 3', all: ['user' => 'ann', 'level' => 3])",
+                "App\\Attr\\Owner(by: 'ann', note: 'set by ann at 3, true/false', all: ['user' => 'ann', 'level' => 3, 'on' => true, 'off' => false])",
                 'App\Attr\Plain()',
             ],
             $attributes,

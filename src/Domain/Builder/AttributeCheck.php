@@ -110,7 +110,7 @@ final class AttributeCheck
 
                 break;
             case ArgumentValue::KIND_MAP:
-                $items = array_values($value->mapItems());
+                $items = $value->mapItems();
 
                 break;
             default:

@@ -104,8 +104,8 @@ final class AttributeParser
             return ArgumentValue::listOf(...$items);
         }
 
-        $marker = count($value) === 1 ? (string) array_key_first($value) : '';
-        if (!in_array($marker, self::MARKERS, true)) {
+        $marker = array_key_first($value);
+        if (count($value) !== 1 || !in_array($marker, self::MARKERS, true)) {
             return $this->map($value, $at);
         }
 

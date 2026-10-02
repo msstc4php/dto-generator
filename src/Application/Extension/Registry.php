@@ -70,8 +70,6 @@ final class Registry implements ExtensionRegistry
             $extension->register($this, $config);
         } catch (Throwable $exception) {
             $this->diagnostics->error(sprintf('Extension "%s" failed to register: %s', $this->current, $exception->getMessage()), $this->location);
-        } finally {
-            $this->current = '';
         }
     }
 

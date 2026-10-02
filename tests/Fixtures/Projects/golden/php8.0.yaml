@@ -5,3 +5,7 @@ sources:
   - spec: api/openapi.yaml
     namespace: App\Golden
     outputDir: generated/8.0
+attributeAliases:
+  x-audit:
+    class: App\Attr\Audited
+    args: { level: '{value}' }

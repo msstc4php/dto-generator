@@ -9,6 +9,7 @@ use MSSTC4PHP\DtoGenerator\Contract\Extension;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Extension\ClassExtensionLoader;
 use MSSTC4PHP\DtoGenerator\Tests\Support\Extensions\MarkingExtension;
+use MSSTC4PHP\DtoGenerator\Tests\Support\Extensions\MoneyFormatExtension;
 use MSSTC4PHP\DtoGenerator\Tests\Support\Extensions\NeedsArgumentsExtension;
 use PHPUnit\Framework\TestCase;
 
@@ -17,6 +18,7 @@ final class ClassExtensionLoaderTest extends TestCase
     public function testCreatesTheExtensionClass(): void
     {
         self::assertInstanceOf(MarkingExtension::class, (new ClassExtensionLoader())->load(ClassName::fromFqcn(MarkingExtension::class)));
+        self::assertInstanceOf(MoneyFormatExtension::class, (new ClassExtensionLoader())->load(ClassName::fromFqcn(MoneyFormatExtension::class)));
     }
 
     /**

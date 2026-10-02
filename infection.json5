@@ -42,6 +42,8 @@
         "CastString": {
             "ignore": [
                 "MSSTC4PHP\\DtoGenerator\\Domain\\Model\\ClassName::fromFqcn",
+                // Equivalent: preg_replace_callback() on a valid pattern and UTF-8 subject returns a string.
+                "MSSTC4PHP\\DtoGenerator\\Extension\\CustomAttributes\\AliasExpander::expand",
                 // Equivalent: json_encode() with JSON_INVALID_UTF8_SUBSTITUTE never returns false for a JSON value.
                 "MSSTC4PHP\\DtoGenerator\\Domain\\Shared\\DefaultValue::toJson",
                 "MSSTC4PHP\\DtoGenerator\\Domain\\Model\\Identifier::normalizeQualifiedName",
@@ -88,7 +90,8 @@
         // Equivalent: every default passed to stringList() has at most one item.
         "ArrayOneItem": { "ignoreSourceCodeByRegex": [".*return \\$default;.*"] },
         // Equivalent: enum items are already JSON values; the map only narrows the type for PHPStan.
-        "UnwrapArrayMap": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Domain\\Builder\\SchemaParser::applyStructural"] },
+        // Equivalent in Load\Action: the extension config is already JSON; the map only narrows its type.
+        "UnwrapArrayMap": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Domain\\Builder\\SchemaParser::applyStructural", "MSSTC4PHP\\DtoGenerator\\Application\\Service\\Extension\\Load\\Action::__invoke"] },
         // Equivalent: the result is only iterated.
         "UnwrapArrayValues": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Domain\\Schema\\Schema::subschemas"] },
         // Equivalent: preg_split() only returns false on a regex error, ini_set() cannot fail for serialize_precision, and
