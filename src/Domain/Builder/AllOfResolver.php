@@ -61,10 +61,16 @@ final class AllOfResolver
         }
 
         $index = $this->parentIndex($schema, $parents, $diagnostics);
+        $itself = null;
+        if ($index !== null && $parents[$index]->schema()->location()->equals($schema->location())) {
+            $diagnostics->error(sprintf('Class %s extends itself.', $parents[$index]->name()->fqcn()), $members[$index]->location());
+            [$itself, $index] = [$index, null];
+        }
+
         $key = $schema->location()->toString();
         $parts = new CompositionParts();
         foreach ($members as $at => $member) {
-            if ($at !== $index) {
+            if ($at !== $index && $at !== $itself) {
                 $this->flatten($member, true, [$key => $key], $parts, $diagnostics);
             }
         }

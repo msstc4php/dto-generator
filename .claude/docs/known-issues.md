@@ -92,3 +92,5 @@
 - **`name()` расширения** вызывается под защитой и в `Load`, и в `Registry::register`; сбой → ошибка с FQCN класса.
 
 - `SchemaReferences::walk()` keeps `$seen` as a list with `in_array`, not a `[$key => true]` map: with the map, the mutant `= false` survives (`isset` is still true), so infection reports it as escaped. Chains are short, so the O(n) lookup does not matter.
+
+- `{X: {type: object, allOf: [{$ref: X}]}}` used to crash the generator: `AllOfResolver` chose the schema itself as the parent, and `ClassModel` threw `InvalidModel` ("cannot extend itself") instead of reporting it. Now `AllOfResolver::resolve()` reports "Class X extends itself." on the member and leaves that member out. Under `x-php-all-of: merge` the member is flattened as before, and `flatten()` reports the merge loop. Found through the Symfony bridge's `allOf` cycle test.

@@ -201,6 +201,14 @@ final class CompositionTest extends TestCase
                 ],
                 ["error {$at}A: Class App\\Dto\\A extends itself through App\\Dto\\B."],
             ],
+            'class extending itself' => [
+                ['A' => ['type' => 'object', 'properties' => ['a' => []], 'allOf' => [['$ref' => '#/components/schemas/A']]]],
+                ["error {$at}A/allOf/0: Class App\\Dto\\A extends itself."],
+            ],
+            'class merging itself' => [
+                ['A' => ['type' => 'object', 'properties' => ['a' => []], 'allOf' => [['$ref' => '#/components/schemas/A']], 'x-php-all-of' => 'merge']],
+                ["error {$at}A/allOf/0: The allOf chain loops back to a schema it is already merging."],
+            ],
             'class extending into a loop' => [
                 [
                     'C' => ['allOf' => [['$ref' => '#/components/schemas/A'], ['properties' => ['c' => []]]]],
