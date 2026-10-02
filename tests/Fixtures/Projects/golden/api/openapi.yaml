@@ -1,0 +1,65 @@
+openapi: 3.1.0
+info:
+  title: Golden project
+  version: '1'
+paths: {}
+components:
+  schemas:
+    User:
+      type: object
+      description: |
+        A registered user.
+        Created on sign-up.
+      required: [id, email, createdAt]
+      properties:
+        id:
+          type: integer
+          minimum: 1
+          description: Identifier.
+        email:
+          type: string
+          format: email
+        name:
+          type: [string, 'null']
+          minLength: 1
+        createdAt:
+          type: string
+          format: date-time
+        externalId:
+          type: string
+          format: uuid
+        age:
+          type: integer
+          minimum: 0
+          maximum: 150
+        score:
+          type: number
+          default: 0.5
+        tags:
+          type: array
+          items:
+            $ref: '#/components/schemas/Tag'
+        address:
+          $ref: 'shared/common.yaml#/Address'
+        nick_name:
+          type: string
+          x-php-name: nickname
+        legacy:
+          type: string
+          deprecated: true
+        timeZone:
+          type: string
+          x-php-type: DateTimeZone
+    Tag:
+      type: object
+      required: [label]
+      properties:
+        label:
+          type: string
+    Settings:
+      type: object
+      x-dto-mutable: true
+      properties:
+        theme:
+          type: string
+          default: dark

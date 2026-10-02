@@ -1,0 +1,8 @@
+Address:
+  type: object
+  description: A postal address.
+  properties:
+    street:
+      type: string
+    city:
+      type: string

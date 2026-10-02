@@ -1,0 +1,7 @@
+version: 1
+target:
+  php: '7.4'
+sources:
+  - spec: api/openapi.yaml
+    namespace: App\Golden
+    outputDir: generated/7.4
