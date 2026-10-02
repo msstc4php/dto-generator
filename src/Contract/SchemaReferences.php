@@ -37,23 +37,44 @@ final class SchemaReferences
      */
     public function resolve(Schema $schema): Schema
     {
+        return $this->walk($schema)[1];
+    }
+
+    /**
+     * The schema and every schema its `$ref` chain passes through, until a reference does not resolve or leads back to
+     * a schema already listed (no schema repeats). Each may carry keywords beside its `$ref`, and a value must satisfy
+     * all of them.
+     *
+     * @return non-empty-list<Schema>
+     */
+    public function chain(Schema $schema): array
+    {
+        return $this->walk($schema)[0];
+    }
+
+    /**
+     * @return array{non-empty-list<Schema>, Schema} the chain, and the schema resolve() returns
+     */
+    private function walk(Schema $schema): array
+    {
+        $chain = [$schema];
         $seen = [];
         $current = $schema;
         while ($this->graph instanceof SchemaGraph && $current->ref() !== null) {
-            $key = $current->location()->toString();
-            if (isset($seen[$key])) {
-                return $current;
-            }
-
-            $seen[$key] = true;
+            $seen[] = $current->location()->toString();
             $target = $this->graph->resolve(new ReferenceUse($current->ref(), $current->location()));
             if (!$target instanceof ResolvedSchema) {
-                return $current;
+                break;
+            }
+
+            if (in_array($target->schema()->location()->toString(), $seen, true)) {
+                return [$chain, $target->schema()];
             }
 
             $current = $target->schema();
+            $chain[] = $current;
         }
 
-        return $current;
+        return [$chain, $current];
     }
 }

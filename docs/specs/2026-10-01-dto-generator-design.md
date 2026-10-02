@@ -356,7 +356,7 @@ interface ClassEnricher
   - `TargetProfile`;
   - `InstalledPackages` (версии из `composer.lock` потребителя);
   - `Diagnostics` (warning/error с `SchemaLocation`);
-  - `SchemaReferences` (`references()->resolve($schema)`) — схема в конце цепочки `$ref`: ключевые слова свойства `{$ref: Email}` лежат в `Email`; ключевые слова рядом с `$ref` (`{$ref: Email, maxLength: 64}`) остаются на исходной схеме — расширение читает сначала её, потом разрешённую.
+  - `SchemaReferences` (`references()->resolve($schema)`) — схема в конце цепочки `$ref`: ключевые слова свойства `{$ref: Email}` лежат в `Email`; ключевые слова рядом с `$ref` (`{$ref: Email, maxLength: 64}`) остаются на исходной схеме — расширение читает сначала её, потом разрешённую. `references()->chain($schema)` — все схемы цепочки по порядку (исходная, промежуточные, конечная): значение должно удовлетворять ключевым словам каждой. При цикле цепочка обрывается перед повтором, при неразрешимой ссылке последней идёт схема с этой ссылкой.
 - Enricher не мутирует IR, а только возвращает атрибуты.
 - `AttributeModel`:
   - FQCN класса и аргументы (`ArgumentValue`);
