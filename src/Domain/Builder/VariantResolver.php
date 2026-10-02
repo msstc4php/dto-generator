@@ -36,7 +36,7 @@ final class VariantResolver
     public function listed(Schema $schema, Discriminator $discriminator, Diagnostics $diagnostics): Variants
     {
         if ($schema->oneOf() !== [] && $schema->anyOf() !== []) {
-            $diagnostics->warning('"oneOf" and "anyOf" together become one union, which admits more than the schema does.', $schema->location());
+            $diagnostics->warning(TypeMapper::ONE_OF_AND_ANY_OF, $schema->location());
         }
 
         $candidates = [];
@@ -69,13 +69,13 @@ final class VariantResolver
     /**
      * The classes that extend a discriminated schema through `allOf`, the way OpenAPI shows polymorphism.
      *
-     * @param list<array{ResolvedSchema, ClassName}> $subclasses
+     * @param list<NamedClass> $subclasses
      */
     public function subclasses(Schema $schema, Discriminator $discriminator, array $subclasses, Diagnostics $diagnostics): Variants
     {
         $candidates = [];
-        foreach ($subclasses as [$target, $class]) {
-            $candidates[] = [$target, $class, $target->location()];
+        foreach ($subclasses as $subclass) {
+            $candidates[] = [$subclass->schema(), $subclass->name(), $subclass->schema()->location()];
         }
 
         return $this->variants($schema, $discriminator, $candidates, false, $diagnostics);
@@ -84,7 +84,7 @@ final class VariantResolver
     /**
      * @param list<array{ResolvedSchema, ClassName, SchemaLocation}> $candidates
      */
-    private function variants(Schema $schema, Discriminator $discriminator, array $candidates, bool $sharesProperties, Diagnostics $diagnostics): Variants
+    private function variants(Schema $schema, Discriminator $discriminator, array $candidates, bool $listed, Diagnostics $diagnostics): Variants
     {
         $classes = [];
         $names = [];
@@ -139,6 +139,6 @@ final class VariantResolver
             $mapping[$name] = $class;
         }
 
-        return new Variants($classes, $mapping === [] ? null : new DiscriminatorModel($discriminator->propertyName(), $mapping), $sharesProperties);
+        return new Variants($classes, $mapping === [] ? null : new DiscriminatorModel($discriminator->propertyName(), $mapping), $listed);
     }
 }

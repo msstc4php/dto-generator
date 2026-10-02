@@ -52,7 +52,7 @@ final class Hierarchy
         $hierarchy->adoptVariants($unions);
         $hierarchy->breakCycles();
         foreach (self::leavesFirst($unions) as $base) {
-            if ($unions[$base]->sharesProperties()) {
+            if ($unions[$base]->isListed()) {
                 $hierarchy->shareCommonProperties($base, $unions[$base]);
             }
         }
@@ -101,28 +101,48 @@ final class Hierarchy
      */
     private function adoptVariants(array $unions): void
     {
+        // Subclasses found through allOf already have their parent, so only listed variants are adopted.
         foreach ($unions as $base => $variants) {
-            $baseName = $this->models[$base]->name();
-            // Subclasses found through allOf already descend from the base.
-            if (!$variants->sharesProperties()) {
-                continue;
-            }
-
             foreach ($variants->classes() as $variant) {
                 $fqcn = $variant->fqcn();
-                $current = $this->parents[$fqcn] ?? null;
                 if ($fqcn === $base) {
                     $this->diagnostics->error(sprintf('%s lists itself among its variants.', $base), $this->models[$base]->source());
-                } elseif ($current === null) {
-                    $this->parents[$fqcn] = $baseName;
-                } elseif (!$current->equals($baseName)) {
+                } elseif (($this->parents[$fqcn] ?? null) === null) {
+                    $this->parents[$fqcn] = $this->models[$base]->name();
+                }
+            }
+        }
+
+        // Only now are all variants adopted, so one may descend from the base through another.
+        foreach ($unions as $base => $variants) {
+            foreach ($variants->classes() as $variant) {
+                $fqcn = $variant->fqcn();
+                $foreign = $this->foreignParent($fqcn, $base);
+                if ($fqcn !== $base && $foreign instanceof ClassName) {
                     $this->diagnostics->error(
-                        sprintf('%s already extends %s, so it cannot also be a variant of %s.', $fqcn, $current->fqcn(), $base),
+                        sprintf('%s already extends %s, so it cannot also be a variant of %s.', $fqcn, $foreign->fqcn(), $base),
                         $this->models[$fqcn]->source(),
                     );
                 }
             }
         }
+    }
+
+    /**
+     * The parent of a class unless its chain of parents reaches the ancestor.
+     */
+    private function foreignParent(string $fqcn, string $ancestor): ?ClassName
+    {
+        $seen = [];
+        for ($parent = $this->parents[$fqcn] ?? null; $parent instanceof ClassName && !isset($seen[$parent->fqcn()]); $parent = $this->parents[$parent->fqcn()] ?? null) {
+            if ($parent->fqcn() === $ancestor) {
+                return null;
+            }
+
+            $seen[$parent->fqcn()] = $parent;
+        }
+
+        return $this->parents[$fqcn] ?? null;
     }
 
     /**
@@ -229,6 +249,19 @@ final class Hierarchy
         foreach ($unions as $base => $variants) {
             $discriminator = $variants->discriminator();
             if ($discriminator === null) {
+                continue;
+            }
+
+            // A base its subclasses extend through allOf declares the discriminator property for all of them.
+            if (!$variants->isListed()) {
+                $model = $this->models[$base];
+                if (!in_array($discriminator->propertyName(), $this->lineage($model)[1], true)) {
+                    $this->diagnostics->warning(
+                        sprintf('%s has no property "%s", which its discriminator reads.', $base, $discriminator->propertyName()),
+                        $model->source(),
+                    );
+                }
+
                 continue;
             }
 
@@ -363,6 +396,6 @@ final class Hierarchy
     {
         $default = $property->default();
 
-        return $default instanceof DefaultValue ? (string) json_encode($default->value(), JSON_INVALID_UTF8_SUBSTITUTE) : '';
+        return $default instanceof DefaultValue ? $default->toJson() : '';
     }
 }

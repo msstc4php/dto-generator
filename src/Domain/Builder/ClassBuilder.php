@@ -200,7 +200,7 @@ final class ClassBuilder
     {
         $default = $property->default();
 
-        return $default instanceof DefaultValue ? (string) json_encode($default->value(), JSON_INVALID_UTF8_SUBSTITUTE) : '';
+        return $default instanceof DefaultValue ? $default->toJson() : '';
     }
 
     /**

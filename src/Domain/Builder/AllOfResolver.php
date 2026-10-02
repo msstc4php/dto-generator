@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace MSSTC4PHP\DtoGenerator\Domain\Builder;
 
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
-use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\ResolvedSchema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaType;
@@ -21,6 +20,9 @@ final class AllOfResolver
 
     private AllOfStrategy $strategy;
 
+    /** @var array<string, array{Composition, NamedClass|null}> ancestors resolved while checking requirements */
+    private array $ancestors = [];
+
     public function __construct(ClassLookup $classes, AllOfStrategy $strategy)
     {
         $this->classes = $classes;
@@ -30,8 +32,8 @@ final class AllOfResolver
     public function compose(Schema $schema, Diagnostics $diagnostics): Composition
     {
         [$composition, $parent] = $this->resolve($schema, $diagnostics);
-        if ($parent !== null) {
-            $this->warnAboutInheritedRequirements($schema, $composition, $parent[0], $parent[1], $diagnostics);
+        if ($parent instanceof NamedClass) {
+            $this->warnAboutInheritedRequirements($schema, $composition, $parent, $diagnostics);
         }
 
         return $composition;
@@ -40,7 +42,7 @@ final class AllOfResolver
     /**
      * The composition and the schema and class it extends.
      *
-     * @return array{Composition, array{ResolvedSchema, ClassName}|null}
+     * @return array{Composition, NamedClass|null}
      */
     private function resolve(Schema $schema, Diagnostics $diagnostics): array
     {
@@ -53,7 +55,7 @@ final class AllOfResolver
         foreach ($members as $index => $member) {
             $target = $this->classes->target($member);
             $behind = $target instanceof ResolvedSchema ? $this->classes->behind($target) : null;
-            if ($behind !== null) {
+            if ($behind instanceof NamedClass) {
                 $parents[$index] = $behind;
             }
         }
@@ -69,13 +71,13 @@ final class AllOfResolver
 
         $parent = $index === null ? null : $parents[$index];
 
-        return [$parts->finish($schema, $parent === null ? null : $parent[1]), $parent];
+        return [$parts->finish($schema, $parent instanceof NamedClass ? $parent->name() : null), $parent];
     }
 
     /**
      * The member the class extends, if any.
      *
-     * @param array<int, array{ResolvedSchema, ClassName}> $parents the members that reference a generated class, by index
+     * @param array<int, NamedClass> $parents the members that reference a generated class, by index
      */
     private function parentIndex(Schema $schema, array $parents, Diagnostics $diagnostics): ?int
     {
@@ -99,16 +101,15 @@ final class AllOfResolver
     /**
      * A subclass cannot make an inherited property required, so a requirement on one is lost under extends.
      */
-    private function warnAboutInheritedRequirements(Schema $schema, Composition $composition, ResolvedSchema $parent, ClassName $class, Diagnostics $diagnostics): void
+    private function warnAboutInheritedRequirements(Schema $schema, Composition $composition, NamedClass $parent, Diagnostics $diagnostics): void
     {
         $own = $this->propertyNames($composition);
         $inherited = [];
         $alreadyRequired = [];
         $seen = [];
-        for ($ancestor = $parent; $ancestor instanceof ResolvedSchema && !isset($seen[$ancestor->location()->toString()]); $ancestor = $next) {
-            $seen[$ancestor->location()->toString()] = $ancestor;
-            [$ancestry, $grandparent] = $this->resolve($ancestor->schema(), new Diagnostics());
-            $next = $grandparent === null ? null : $grandparent[0];
+        for ($ancestor = $parent; $ancestor instanceof NamedClass && !isset($seen[$ancestor->name()->fqcn()]); $ancestor = $next) {
+            $seen[$ancestor->name()->fqcn()] = $ancestor;
+            [$ancestry, $next] = $this->ancestor($ancestor->schema());
             $inherited += $this->propertyNames($ancestry);
             $alreadyRequired += $ancestry->required();
         }
@@ -119,12 +120,25 @@ final class AllOfResolver
                     sprintf(
                         'Required property "%s" belongs to the parent %s, where extending cannot make it required; use "x-php-all-of: merge" to require it.',
                         $wireName,
-                        $class->fqcn(),
+                        $parent->name()->fqcn(),
                     ),
                     $schema->location(),
                 );
             }
         }
+    }
+
+    /**
+     * The composition of an ancestor, whose own problems are reported when its class is built.
+     *
+     * @return array{Composition, NamedClass|null}
+     */
+    private function ancestor(ResolvedSchema $schema): array
+    {
+        $key = $schema->location()->toString();
+        $this->ancestors[$key] ??= $this->resolve($schema->schema(), new Diagnostics());
+
+        return $this->ancestors[$key];
     }
 
     /**

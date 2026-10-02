@@ -106,6 +106,7 @@ final class TypeMapperTest extends TestCase
                 'App\Dto\Tag|App\Dto\Note',
             ],
             'allOf of constraints and then a reference' => [['allOf' => [['maxLength' => 5], ['$ref' => '#/components/schemas/Email']]], 'string'],
+            'string anyOf with a typed and a constraining member' => [['type' => 'string', 'anyOf' => [['pattern' => 'a'], ['type' => 'integer']]], 'string|int'],
             'string constrained by anyOf' => [['type' => 'string', 'anyOf' => [['pattern' => 'a'], ['pattern' => 'b']]], 'string'],
             'oneOf with null first' => [['oneOf' => [['type' => 'null'], ['type' => 'string'], ['type' => 'integer']]], 'string|int|null'],
         ];
@@ -152,6 +153,19 @@ final class TypeMapperTest extends TestCase
             'undeclared allOf object' => [['allOf' => [['$ref' => '#/components/schemas/Tag'], ['properties' => ['x' => []]]]], 'mixed', ["error {$at}: This inline object is not generated (only properties of generated classes get one); move it to components/schemas and use \$ref."]],
             'oneOf and anyOf together' => [['oneOf' => [['type' => 'string']], 'anyOf' => [['type' => 'boolean']]], 'string|bool', ["warning {$at}: \"oneOf\" and \"anyOf\" together become one union, which admits more than the schema does."]],
             'properties beside oneOf' => [['properties' => ['a' => []], 'oneOf' => [['type' => 'string']]], 'mixed', ["error {$at}: This inline object is not generated (only properties of generated classes get one); move it to components/schemas and use \$ref."]],
+            'oneOf of untyped inline objects' => [
+                ['oneOf' => [['properties' => ['a' => []]], ['type' => 'null'], ['properties' => ['b' => []]]]],
+                'mixed',
+                [
+                    "error {$at}/oneOf/0: This inline object is not generated (only properties of generated classes get one); move it to components/schemas and use \$ref.",
+                    "error {$at}/oneOf/2: This inline object is not generated (only properties of generated classes get one); move it to components/schemas and use \$ref.",
+                ],
+            ],
+            'string with allOf and a typed oneOf' => [
+                ['type' => 'string', 'allOf' => [['minLength' => 1]], 'oneOf' => [['type' => 'string'], ['type' => 'integer']]],
+                'string|int',
+                ["warning {$at}: \"allOf\" beside a typed \"oneOf\" or \"anyOf\" is not represented; the union alone gives the type."],
+            ],
             'oneOf with an inline object' => [['oneOf' => [['type' => 'object', 'properties' => ['a' => []]], ['type' => 'string']]], 'mixed', ["error {$at}/oneOf/0: This inline object is not generated (only properties of generated classes get one); move it to components/schemas and use \$ref."]],
             'boolean enum' => [['type' => 'boolean', 'enum' => [true]], 'bool', ["warning {$at}: This enum has no string or integer value, so it is not generated and the property keeps its plain type."]],
             'nullable class by reference' => [['$ref' => '#/components/schemas/MaybeTag'], 'App\Dto\Tag|null', []],

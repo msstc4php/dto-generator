@@ -11,6 +11,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Builder\Composition;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\EnumBuilder;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\ExtensionVocabulary;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\Hierarchy;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\NamedClass;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\NameResolver;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\RequiredCycles;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\SchemaShape;
@@ -110,7 +111,7 @@ final class Action
             $parent = $compositions[$index]->parent();
             $resolved = $input->graph()->get($schema->location());
             if ($parent instanceof ClassName && $resolved instanceof ResolvedSchema) {
-                $children[$parent->fqcn()][] = [$resolved, $name];
+                $children[$parent->fqcn()][] = new NamedClass($resolved, $name);
             }
         }
 
@@ -119,7 +120,7 @@ final class Action
             $subclasses[$parent] = $this->descendants($parent, $children);
         }
 
-        $unions = $this->unions($input, $registry, $subclasses, $diagnostics);
+        $unions = $this->unions($input, $registry, $children, $subclasses, $diagnostics);
         $built = [];
         foreach (Hierarchy::link($models, $unions, $diagnostics) as $index => $model) {
             $built[] = new BuiltClass($model, $registry->planned()[$index][2]);
@@ -141,11 +142,12 @@ final class Action
     /**
      * The discriminated bases: a `oneOf`/`anyOf` lists its variants, a plain class is extended by them through `allOf`.
      *
-     * @param array<string, list<array{ResolvedSchema, ClassName}>> $subclasses parent FQCN → named classes extending it
+     * @param array<string, list<NamedClass>> $children parent FQCN → named classes extending it directly
+     * @param array<string, list<NamedClass>> $subclasses parent FQCN → every named class below it
      *
      * @return array<string, Variants>
      */
-    private function unions(Input $input, Registry $registry, array $subclasses, Diagnostics $diagnostics): array
+    private function unions(Input $input, Registry $registry, array $children, array $subclasses, Diagnostics $diagnostics): array
     {
         $variants = new VariantResolver($input->graph(), new ClassLookup($input->graph(), $registry->declarations()));
         $unions = [];
@@ -154,7 +156,8 @@ final class Action
             $discriminator = $schema->discriminator();
             if ($listed instanceof Discriminator) {
                 $unions[$name->fqcn()] = $variants->listed($schema, $listed, $diagnostics);
-                $this->warnAboutUnlistedSubclasses($name, $unions[$name->fqcn()], $subclasses[$name->fqcn()] ?? [], $diagnostics);
+                // A deeper subclass descends from one of these children, listed or reported.
+                $this->warnAboutUnlistedSubclasses($name, $unions[$name->fqcn()], $children[$name->fqcn()] ?? [], $diagnostics);
             } elseif ($discriminator instanceof Discriminator && isset($subclasses[$name->fqcn()])) {
                 $unions[$name->fqcn()] = $variants->subclasses($schema, $discriminator, $subclasses[$name->fqcn()], $diagnostics);
             } elseif ($discriminator instanceof Discriminator) {
@@ -171,9 +174,9 @@ final class Action
     /**
      * Every named class below a parent, nearest first, so a whole Swagger-2 hierarchy shares one discriminator.
      *
-     * @param array<string, list<array{ResolvedSchema, ClassName}>> $children parent FQCN → named classes extending it
+     * @param array<string, list<NamedClass>> $children parent FQCN → named classes extending it directly
      *
-     * @return list<array{ResolvedSchema, ClassName}>
+     * @return list<NamedClass>
      */
     private function descendants(string $parent, array $children): array
     {
@@ -182,7 +185,7 @@ final class Action
         for ($pending = $children[$parent]; $pending !== []; $pending = $next) {
             $next = [];
             foreach ($pending as $child) {
-                $fqcn = $child[1]->fqcn();
+                $fqcn = $child->name()->fqcn();
                 if (!isset($seen[$fqcn])) {
                     $seen[$fqcn] = $fqcn;
                     $found[] = $child;
@@ -195,7 +198,7 @@ final class Action
     }
 
     /**
-     * @param list<array{ResolvedSchema, ClassName}> $subclasses
+     * @param list<NamedClass> $subclasses
      */
     private function warnAboutUnlistedSubclasses(ClassName $base, Variants $variants, array $subclasses, Diagnostics $diagnostics): void
     {
@@ -204,11 +207,16 @@ final class Action
             $listed[$variant->fqcn()] = $variant;
         }
 
-        foreach ($subclasses as [$resolved, $class]) {
-            if (!isset($listed[$class->fqcn()])) {
+        foreach ($subclasses as $subclass) {
+            $fqcn = $subclass->name()->fqcn();
+            if (!isset($listed[$fqcn])) {
                 $diagnostics->warning(
-                    sprintf('%s extends the discriminated base %s but is not one of its variants, so it gets no discriminator value.', $class->fqcn(), $base->fqcn()),
-                    $resolved->location(),
+                    sprintf(
+                        '%s extends the discriminated base %s but is not one of its variants, so it gets no discriminator value.',
+                        $fqcn,
+                        $base->fqcn(),
+                    ),
+                    $subclass->schema()->location(),
                 );
             }
         }

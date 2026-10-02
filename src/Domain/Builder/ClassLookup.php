@@ -39,15 +39,13 @@ final class ClassLookup
     {
         $behind = $this->behind($named);
 
-        return $behind === null ? null : $behind[1];
+        return $behind instanceof NamedClass ? $behind->name() : null;
     }
 
     /**
-     * The schema the class behind a `$ref` is generated from, and that class.
-     *
-     * @return array{ResolvedSchema, ClassName}|null
+     * The class behind a `$ref` and the schema it is generated from.
      */
-    public function behind(ResolvedSchema $named): ?array
+    public function behind(ResolvedSchema $named): ?NamedClass
     {
         $seen = [];
         for ($target = $named; $target instanceof ResolvedSchema && !isset($seen[$target->location()->toString()]); $target = $this->unwrap($target->schema())) {
@@ -55,7 +53,7 @@ final class ClassLookup
             $seen[$key] = $key;
             $class = $this->declarations->classAt($key);
             if ($class instanceof ClassName) {
-                return [$target, $class];
+                return new NamedClass($target, $class);
             }
         }
 

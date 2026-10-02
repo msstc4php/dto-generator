@@ -34,6 +34,8 @@ final class TypeMapper
         'relative-json-pointer',
     ];
 
+    public const ONE_OF_AND_ANY_OF = '"oneOf" and "anyOf" together become one union, which admits more than the schema does.';
+
     private const DATE_FORMATS = ['date-time', 'date'];
 
     private const INTEGER_FORMATS = ['int32', 'int64'];
@@ -114,6 +116,10 @@ final class TypeMapper
         // Members without a type of their own only constrain the schema's type (`anyOf` of patterns).
         $union = array_merge($schema->oneOf(), $schema->anyOf());
         if ($this->typed($union) !== [] && ($schema->propertyNames() === [] || SchemaShape::isDiscriminated($schema))) {
+            if ($schema->allOf() !== []) {
+                $diagnostics->warning('"allOf" beside a typed "oneOf" or "anyOf" is not represented; the union alone gives the type.', $schema->location());
+            }
+
             return $this->union($schema, $diagnostics, $aliases);
         }
 
@@ -177,7 +183,7 @@ final class TypeMapper
     private function union(Schema $schema, Diagnostics $diagnostics, array $aliases): TypeModel
     {
         if ($schema->oneOf() !== [] && $schema->anyOf() !== []) {
-            $diagnostics->warning('"oneOf" and "anyOf" together become one union, which admits more than the schema does.', $schema->location());
+            $diagnostics->warning(self::ONE_OF_AND_ANY_OF, $schema->location());
         }
 
         $members = [];
@@ -186,6 +192,15 @@ final class TypeMapper
         foreach (array_merge($schema->oneOf(), $schema->anyOf()) as $member) {
             if ($member->ref() === null && $member->isNullable() && $member->nonNullTypes() === [] && !SchemaShape::isComposed($member)) {
                 $nullable = true;
+
+                continue;
+            }
+
+            // A member that only constrains (a pattern) admits the schema's own type.
+            if ($this->typed([$member]) === [] && $schema->nonNullTypes() !== []) {
+                foreach ($schema->nonNullTypes() as $own) {
+                    $members[] = $this->single($own, $schema, $diagnostics, $aliases);
+                }
 
                 continue;
             }
@@ -224,6 +239,7 @@ final class TypeMapper
                 || $member->nonNullTypes() !== []
                 || $member->enum() !== null
                 || SchemaShape::isComposed($member)
+                || $member->propertyNames() !== []
                 || $member->extensions()->has('x-php-type'),
         ));
     }

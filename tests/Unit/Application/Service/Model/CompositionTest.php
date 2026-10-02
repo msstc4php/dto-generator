@@ -888,4 +888,76 @@ final class CompositionTest extends TestCase
             ModelFixture::messages($output),
         );
     }
+
+    public function testWarnsOnlyAboutDirectSubclassesOutsideTheVariants(): void
+    {
+        $at = self::AT;
+        $output = ModelFixture::build([
+            'Pet' => ['properties' => ['kind' => ['type' => 'string']], 'oneOf' => [['$ref' => '#/components/schemas/Cat']], 'discriminator' => ['propertyName' => 'kind']],
+            'Cat' => ['allOf' => [self::PET, ['properties' => ['lives' => []]]]],
+            'Kitten' => ['allOf' => [['$ref' => '#/components/schemas/Cat'], ['properties' => ['age' => []]]]],
+            'Dog' => ['allOf' => [self::PET, ['properties' => ['bark' => []]]]],
+            'Puppy' => ['allOf' => [['$ref' => '#/components/schemas/Dog'], ['properties' => ['age' => []]]]],
+        ]);
+
+        self::assertSame(
+            ["warning {$at}Dog: App\\Dto\\Dog extends the discriminated base App\\Dto\\Pet but is not one of its variants, so it gets no discriminator value."],
+            ModelFixture::messages($output),
+        );
+    }
+
+    public function testAcceptsAVariantThatDescendsFromAnotherVariant(): void
+    {
+        $output = ModelFixture::build([
+            'Pet' => ['oneOf' => [['$ref' => '#/components/schemas/Cat'], ['$ref' => '#/components/schemas/Dog']], 'discriminator' => ['propertyName' => 'kind']],
+            'Cat' => ['type' => 'object', 'properties' => ['kind' => ['type' => 'string']]],
+            'Dog' => ['allOf' => [['$ref' => '#/components/schemas/Cat'], ['properties' => ['bark' => []]]]],
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(
+            [
+                'App\Dto\Pet' => 'abstract by kind {Cat: App\Dto\Cat, Dog: App\Dto\Dog}',
+                'App\Dto\Cat' => 'open extends App\Dto\Pet',
+                'App\Dto\Dog' => 'final extends App\Dto\Cat',
+            ],
+            ModelFixture::hierarchy($output),
+        );
+    }
+
+    public function testReportsAMissingDiscriminatorPropertyOnceOnAnAllOfBase(): void
+    {
+        $at = self::AT;
+        $output = ModelFixture::build([
+            'Pet' => ['type' => 'object', 'properties' => ['a' => []], 'discriminator' => ['propertyName' => 'petType']],
+            'Cat' => ['allOf' => [self::PET, ['properties' => ['c' => []]]]],
+            'Dog' => ['allOf' => [self::PET, ['properties' => ['d' => []]]]],
+        ]);
+
+        self::assertSame(["warning {$at}Pet: App\\Dto\\Pet has no property \"petType\", which its discriminator reads."], ModelFixture::messages($output));
+    }
+
+    public function testReportsADiscriminatorPropertyExcludedBySkip(): void
+    {
+        $at = self::AT;
+        $output = ModelFixture::build([
+            'Pet' => ['oneOf' => [['$ref' => '#/components/schemas/Cat']], 'discriminator' => ['propertyName' => 'kind']],
+            'Cat' => ['type' => 'object', 'properties' => ['kind' => ['type' => 'string', 'x-php-skip' => true], 'lives' => []]],
+        ]);
+
+        self::assertSame(["warning {$at}Cat: Variant App\\Dto\\Cat has no property \"kind\", which the discriminator reads."], ModelFixture::messages($output));
+    }
+
+    public function testChecksAListedBaseAfterAnAllOfBase(): void
+    {
+        $at = self::AT;
+        $output = ModelFixture::build([
+            'Vehicle' => ['type' => 'object', 'properties' => ['kind' => ['type' => 'string']], 'discriminator' => ['propertyName' => 'kind']],
+            'Car' => ['allOf' => [['$ref' => '#/components/schemas/Vehicle'], ['properties' => ['doors' => ['type' => 'integer']]]]],
+            'Pet' => ['oneOf' => [['$ref' => '#/components/schemas/Cat']], 'discriminator' => ['propertyName' => 'kind']],
+            'Cat' => ['type' => 'object', 'properties' => ['lives' => []]],
+        ]);
+
+        self::assertSame(["warning {$at}Cat: Variant App\\Dto\\Cat has no property \"kind\", which the discriminator reads."], ModelFixture::messages($output));
+    }
 }
