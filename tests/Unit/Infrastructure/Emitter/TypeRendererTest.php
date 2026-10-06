@@ -33,13 +33,13 @@ final class TypeRendererTest extends TestCase
     /**
      * @dataProvider types
      */
-    public function testRendersNativeAndDocTypes(TypeModel $type, string $php, ?string $native, string $doc, bool $needsDoc): void
+    public function testRendersNativeAndDocTypes(TypeModel $type, string $php, ?string $native, string $doc, bool $tagged): void
     {
         $renderer = new TypeRenderer('App\Dto', EmitterFixture::target($php, 'mutable', 'getters'));
 
         self::assertSame($native, $renderer->native($type));
         self::assertSame($doc, $renderer->doc($type));
-        self::assertSame($needsDoc, $renderer->tags($type, 'var') !== []);
+        self::assertSame($tagged, $renderer->tags($type, 'var') !== []);
         $node = $renderer->nativeNode($type);
         self::assertSame($native, $node instanceof Node ? $this->print($node) : null);
     }
@@ -78,6 +78,7 @@ final class TypeRendererTest extends TestCase
             'list of enums without PHP enums' => [new ListType($currency), '7.4', ['@param list<string> $value', '@phpstan-param list<Currency::*> $value']],
             'enum with PHP enums' => [new NullableType($currency), '8.2', []],
             'union without native unions' => [new UnionType(ScalarType::int(), $name), '7.4', ['@param int|string $value', '@phpstan-param int|non-empty-string $value']],
+            'nullable union collapsing to one kind' => [new NullableType(new UnionType(ScalarType::string('non-empty-string'), ScalarType::string('numeric-string'))), '8.2', ['@phpstan-param non-empty-string|numeric-string|null $value']],
             'union of refinements of one kind' => [new UnionType(ScalarType::string('non-empty-string'), ScalarType::string('numeric-string')), '8.2', ['@phpstan-param non-empty-string|numeric-string $value']],
         ];
     }
