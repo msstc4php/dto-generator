@@ -5,8 +5,9 @@ declare(strict_types=1);
 namespace MSSTC4PHP\DtoGenerator\Tests\Functional\Cli;
 
 use MSSTC4PHP\DtoGenerator\DtoGenerator;
+use MSSTC4PHP\DtoGenerator\Tests\Support\SplitOutput;
 use PHPUnit\Framework\TestCase;
-use Symfony\Component\Console\Tester\CommandTester;
+use Symfony\Component\Console\Input\ArrayInput;
 
 final class GenerateCommandTest extends TestCase
 {
@@ -249,10 +250,10 @@ final class GenerateCommandTest extends TestCase
      */
     private function execute(array $options): array
     {
-        $tester = new CommandTester(DtoGenerator::console($this->dir)->find('generate'));
-        $code = $tester->execute($options, ['capture_stderr_separately' => true]);
+        $output = new SplitOutput();
+        $code = DtoGenerator::console($this->dir)->find('generate')->run(new ArrayInput($options), $output);
 
-        return [$code, $tester->getDisplay(), $tester->getErrorOutput()];
+        return [$code, $output->fetch(), $output->errors->fetch()];
     }
 
     private static function remove(string $path): void

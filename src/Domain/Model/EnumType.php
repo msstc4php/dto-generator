@@ -71,12 +71,11 @@ final class EnumType implements TypeModel
      */
     public function caseFor($value): ?string
     {
-        $isInt = $this->backing->value() === EnumBacking::INT;
-        if ($isInt ? !is_int($value) : !is_string($value)) {
-            return null;
+        if ($this->backing->value() === EnumBacking::INT) {
+            return is_int($value) ? $this->cases[$value] ?? null : null;
         }
 
-        return $this->cases[$value] ?? null;
+        return is_string($value) ? $this->cases[$value] ?? null : null;
     }
 
     public function describe(): string

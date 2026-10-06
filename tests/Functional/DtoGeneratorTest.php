@@ -5,16 +5,16 @@ declare(strict_types=1);
 namespace MSSTC4PHP\DtoGenerator\Tests\Functional;
 
 use MSSTC4PHP\DtoGenerator\DtoGenerator;
+use MSSTC4PHP\DtoGenerator\Tests\Support\SplitOutput;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\CommandLoader\FactoryCommandLoader;
 use Symfony\Component\Console\Exception\InvalidOptionException;
 use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\BufferedOutput;
-use Symfony\Component\Console\Output\ConsoleOutputInterface;
-use Symfony\Component\Console\Output\ConsoleSectionOutput;
 use Symfony\Component\Console\Output\OutputInterface;
 
 final class DtoGeneratorTest extends TestCase
@@ -34,18 +34,7 @@ final class DtoGeneratorTest extends TestCase
 
     public function testMapsAnUnexpectedFailureToTheGenerationExitCode(): void
     {
-        $application = new Application();
-        $application->add(new class extends Command {
-            protected function configure(): void
-            {
-                $this->setName('boom');
-            }
-
-            protected function execute(InputInterface $input, OutputInterface $output): int
-            {
-                throw new RuntimeException('Disk on fire.');
-            }
-        });
+        $application = $this->failingApplication();
         $output = new BufferedOutput();
 
         self::assertSame(2, DtoGenerator::run(new ArrayInput(['command' => 'boom']), $output, $application));
@@ -64,29 +53,7 @@ final class DtoGeneratorTest extends TestCase
 
     public function testWritesErrorsToStderrOfAConsoleOutput(): void
     {
-        $output = new class extends BufferedOutput implements ConsoleOutputInterface {
-            public BufferedOutput $errors;
-
-            public function __construct()
-            {
-                parent::__construct();
-                $this->errors = new BufferedOutput();
-            }
-
-            public function getErrorOutput(): OutputInterface
-            {
-                return $this->errors;
-            }
-
-            public function setErrorOutput(OutputInterface $error): void
-            {
-            }
-
-            public function section(): ConsoleSectionOutput
-            {
-                throw new RuntimeException('No sections here.');
-            }
-        };
+        $output = new SplitOutput();
 
         self::assertSame(3, DtoGenerator::run(new ArrayInput(['command' => 'nope']), $output));
         self::assertSame('', $output->fetch());
@@ -114,18 +81,7 @@ final class DtoGeneratorTest extends TestCase
 
     public function testShowsTheExceptionClassWhenVerbose(): void
     {
-        $application = new Application();
-        $application->add(new class extends Command {
-            protected function configure(): void
-            {
-                $this->setName('boom');
-            }
-
-            protected function execute(InputInterface $input, OutputInterface $output): int
-            {
-                throw new RuntimeException('Disk on fire.');
-            }
-        });
+        $application = $this->failingApplication();
         $verbose = new BufferedOutput(OutputInterface::VERBOSITY_VERBOSE);
         $veryVerbose = new BufferedOutput(OutputInterface::VERBOSITY_VERY_VERBOSE);
 
@@ -171,5 +127,24 @@ final class DtoGeneratorTest extends TestCase
         self::assertStringContainsString('error: The "--chek" option does not exist.', $usage->fetch());
         self::assertStringContainsString('"status": "config-failed"', $json->fetch());
         self::assertStringContainsString('error: boom', $crash->fetch());
+    }
+
+    /**
+     * An application whose only command, "boom", throws; a command loader works on symfony/console 5.4 to 8, where
+     * add() is gone.
+     */
+    private function failingApplication(): Application
+    {
+        $application = new Application();
+        $application->setCommandLoader(new FactoryCommandLoader([
+            'boom' => static fn (): Command => new class('boom') extends Command {
+                protected function execute(InputInterface $input, OutputInterface $output): int
+                {
+                    throw new RuntimeException('Disk on fire.');
+                }
+            },
+        ]));
+
+        return $application;
     }
 }
