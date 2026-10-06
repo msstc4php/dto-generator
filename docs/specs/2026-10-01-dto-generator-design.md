@@ -428,7 +428,8 @@ vendor/bin/dto-generator generate [--config=dto-generator.yaml] [--check] [--dry
 ### 9.4 Docker
 
 - `docker/Dockerfile`, multi-stage.
-  - Stage 1: `composer install --no-dev` — ядро, и мост, когда он выйдет.
+  - Stage 1: `composer install --no-dev` — ядро и мост `msstc4symfony/dto-generator-bridge` (из его репозитория;
+    локально — `git archive` соседнего checkout'а через `--build-context bridge=…`, `docker/build.sh`).
   - Stage 2: `php:8.4-cli-alpine`, non-root пользователь, `WORKDIR /app`,
     `ENTRYPOINT ["dto-generator", "generate"]`.
 - Запуск:

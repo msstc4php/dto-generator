@@ -37,4 +37,13 @@ printf 'openapi: 3.1.0\ncomponents:\n  schemas:\n    Pet: {type: object, require
 run auto dto-generator.yaml
 grep -q 'public readonly string $name' "$work/auto/out/Pet.php"
 
+# The image ships the Symfony bridge: a project locking symfony/validator gets constraints.
+mkdir -p "$work/bridge/api"
+printf '{"require": {"php": ">=8.2"}}\n' > "$work/bridge/composer.json"
+printf '{"packages": [{"name": "symfony/validator", "version": "v7.4.0"}], "packages-dev": []}\n' > "$work/bridge/composer.lock"
+printf 'version: 1\nsources:\n  - {spec: api/openapi.yaml, namespace: App\\Dto, outputDir: out}\n' > "$work/bridge/dto-generator.yaml"
+printf 'openapi: 3.1.0\ncomponents:\n  schemas:\n    Pet: {type: object, required: [name], properties: {name: {type: string, minLength: 1}}}\n' > "$work/bridge/api/openapi.yaml"
+run bridge dto-generator.yaml
+grep -q 'Assert\\Length(min: 1)' "$work/bridge/out/Pet.php"
+
 echo "docker smoke: ok"
