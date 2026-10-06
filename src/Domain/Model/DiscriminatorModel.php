@@ -49,8 +49,6 @@ final class DiscriminatorModel
     }
 
     /**
-     * Discriminator value → concrete class; PHP turns numeric values into int keys.
-     *
      * @return non-empty-array<int|string, ClassName>
      */
     public function mapping(): array

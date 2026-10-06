@@ -71,15 +71,18 @@ final class TypeRenderer
         return $inner instanceof Node ? new Node\NullableType($inner) : null;
     }
 
+    /**
+     * The refined PHPDoc type, as `@phpstan-` tags carry it.
+     */
     public function doc(TypeModel $type): string
     {
         return $this->render($type, false);
     }
 
     /**
-     * The doc tags a declaration needs: `@<tag>` with a type every PHPDoc reader understands, when the native type says
-     * less, and `@phpstan-<tag>` with the refined type, when it says more than that. Symfony 5.4's PhpDocExtractor
-     * takes non-empty-string or int<0, 30> for class names.
+     * The doc tags a declaration needs: `@<tag>` with a type every PHPDoc reader understands, when it differs from the
+     * native type, and `@phpstan-<tag>` with the refined type, when it differs from the portable one. Symfony 5.4's
+     * PhpDocExtractor takes non-empty-string or int<0, 30> for class names.
      *
      * @param 'var'|'param'|'return' $tag
      *
@@ -148,8 +151,9 @@ final class TypeRenderer
             $inner = $type->inner();
             $doc = $this->render($inner, $portable);
 
-            // Symfony's PhpDocExtractor (7.4) fails on "?Currency::*"; "Currency::*|null" reads the same everywhere.
-            return $inner instanceof UnionType || strpos($doc, '::') !== false ? $doc . '|null' : '?' . $doc;
+            // "?" binds to one type only: a union, even nested ("?list<A::*>" read as "?list"), needs "|null". A union
+            // whose members became one after erasure is one type again.
+            return strpos($doc, '|') !== false || strpos($doc, '::') !== false ? $doc . '|null' : '?' . $doc;
         }
 
         throw $this->unsupported($type);
