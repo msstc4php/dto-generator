@@ -91,7 +91,7 @@ final class GenerateTest extends TestCase
         );
 
         self::assertSame('ok', $output->status()->value());
-        self::assertStringContainsString('@param numeric-string $amount', $output->files()[2]->contents());
+        self::assertStringContainsString('@phpstan-param numeric-string $amount', $output->files()[2]->contents());
     }
 
     public function testMapsFormatsOfTheConfig(): void

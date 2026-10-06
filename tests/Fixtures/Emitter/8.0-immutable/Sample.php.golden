@@ -19,7 +19,7 @@ final class Sample
         /**
          * Identifier.
          *
-         * @var positive-int
+         * @phpstan-var positive-int
          */
         #[Assert\Positive] private int $id,
         /**
@@ -32,7 +32,7 @@ final class Sample
         private array $tags,
         #[\App\Attr\Choice(choices: [1, 'A'], mode: \App\Attr\Mode::STRICT)] private int|string $code,
         /**
-         * @var ?non-empty-string
+         * @phpstan-var ?non-empty-string
          */
         private ?string $name = 'anonymous',
         /**
@@ -55,14 +55,14 @@ final class Sample
         /**
          * Settlement currency.
          *
-         * @var Currency::*|null
+         * @phpstan-var Currency::*|null
          */
         #[\App\Attr\Meta(Currency::class)] private ?string $currency = Currency::EUR,
     ) {
     }
 
     /**
-     * @return positive-int
+     * @phpstan-return positive-int
      */
     public function getId(): int
     {
@@ -70,7 +70,7 @@ final class Sample
     }
 
     /**
-     * @param positive-int $id
+     * @phpstan-param positive-int $id
      */
     public function withId(int $id): self
     {
@@ -81,7 +81,7 @@ final class Sample
     }
 
     /**
-     * @return ?non-empty-string
+     * @phpstan-return ?non-empty-string
      */
     public function getName(): ?string
     {
@@ -89,7 +89,7 @@ final class Sample
     }
 
     /**
-     * @param ?non-empty-string $name
+     * @phpstan-param ?non-empty-string $name
      */
     public function withName(?string $name): self
     {
@@ -215,7 +215,7 @@ final class Sample
     }
 
     /**
-     * @return Currency::*|null
+     * @phpstan-return Currency::*|null
      */
     public function getCurrency(): ?string
     {
@@ -223,7 +223,7 @@ final class Sample
     }
 
     /**
-     * @param Currency::*|null $currency
+     * @phpstan-param Currency::*|null $currency
      */
     public function withCurrency(?string $currency): self
     {

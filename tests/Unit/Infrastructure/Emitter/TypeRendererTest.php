@@ -39,9 +39,47 @@ final class TypeRendererTest extends TestCase
 
         self::assertSame($native, $renderer->native($type));
         self::assertSame($doc, $renderer->doc($type));
-        self::assertSame($needsDoc, $renderer->needsDoc($type));
+        self::assertSame($needsDoc, $renderer->tags($type, 'var') !== []);
         $node = $renderer->nativeNode($type);
         self::assertSame($native, $node instanceof Node ? $this->print($node) : null);
+    }
+
+    /**
+     * @dataProvider tags
+     *
+     * @param list<string> $expected
+     */
+    public function testWritesPortableTagsAndRefinesThemForPhpstan(TypeModel $type, string $php, array $expected): void
+    {
+        $renderer = new TypeRenderer('App\Dto', EmitterFixture::target($php, 'mutable', 'getters'));
+
+        self::assertSame($expected, $renderer->tags($type, 'param', ' $value'));
+    }
+
+    /**
+     * @return array<string, array{TypeModel, string, list<string>}>
+     */
+    public static function tags(): array
+    {
+        $tag = new ClassType(ClassName::fromFqcn('App\Dto\Tag'));
+        $currency = new EnumType(ClassName::fromFqcn('App\Dto\Currency'), EnumBacking::from(EnumBacking::STRING), ['EUR' => 'EUR']);
+        $level = new EnumType(ClassName::fromFqcn('App\Dto\Level'), EnumBacking::from(EnumBacking::INT), [1 => 'VALUE_1']);
+        $name = ScalarType::string('non-empty-string');
+
+        return [
+            'plain' => [ScalarType::string(), '8.2', []],
+            'refined scalar' => [new NullableType($name), '8.2', ['@phpstan-param ?non-empty-string $value']],
+            'refined int' => [ScalarType::int('int<0, 30>'), '8.2', ['@phpstan-param int<0, 30> $value']],
+            'list of classes' => [new NullableType(new ListType($tag)), '8.2', ['@param ?list<Tag> $value']],
+            'list of refined scalars' => [new ListType($name), '8.2', ['@param list<string> $value', '@phpstan-param list<non-empty-string> $value']],
+            'map of refined scalars' => [new MapType(ScalarType::int('non-negative-int')), '8.2', ['@param array<array-key, int> $value', '@phpstan-param array<array-key, non-negative-int> $value']],
+            'string enum without PHP enums' => [new NullableType($currency), '7.4', ['@phpstan-param Currency::*|null $value']],
+            'int enum without PHP enums' => [$level, '8.0', ['@phpstan-param Level::* $value']],
+            'list of enums without PHP enums' => [new ListType($currency), '7.4', ['@param list<string> $value', '@phpstan-param list<Currency::*> $value']],
+            'enum with PHP enums' => [new NullableType($currency), '8.2', []],
+            'union without native unions' => [new UnionType(ScalarType::int(), $name), '7.4', ['@param int|string $value', '@phpstan-param int|non-empty-string $value']],
+            'union of refinements of one kind' => [new UnionType(ScalarType::string('non-empty-string'), ScalarType::string('numeric-string')), '8.2', ['@phpstan-param non-empty-string|numeric-string $value']],
+        ];
     }
 
     /**

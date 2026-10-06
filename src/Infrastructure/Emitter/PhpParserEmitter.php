@@ -286,7 +286,7 @@ final class PhpParserEmitter implements CodeEmitter
             }
 
             $node = $getter->getNode();
-            $returnTag = $types->needsDoc($property->type()) ? ['@return ' . $types->doc($property->type())] : [];
+            $returnTag = $types->tags($property->type(), 'return');
             $this->document($node, DocBlock::render(null, array_merge($returnTag, $deprecation)));
             $methods[] = $node;
         }
@@ -376,12 +376,12 @@ final class PhpParserEmitter implements CodeEmitter
      */
     private function paramTag(PropertyModel $property, TypeRenderer $types): array
     {
-        return $types->needsDoc($property->type()) ? ['@param ' . $types->doc($property->type()) . ' $' . $property->name()] : [];
+        return $types->tags($property->type(), 'param', ' $' . $property->name());
     }
 
     private function propertyDoc(PropertyModel $property, TypeRenderer $types, AnnotationRenderer $annotations): ?string
     {
-        $var = $types->needsDoc($property->type()) ? ['@var ' . $types->doc($property->type())] : [];
+        $var = $types->tags($property->type(), 'var');
 
         return DocBlock::render($property->doc()->description(), array_merge($var, $this->deprecation($property->doc()), $annotations->annotations($property->attributes())));
     }
