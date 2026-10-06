@@ -19,7 +19,7 @@ final class Sample
         /**
          * Identifier.
          *
-         * @var positive-int
+         * @phpstan-var positive-int
          */
         #[Assert\Positive] public int $id,
         /**
@@ -32,7 +32,7 @@ final class Sample
         public array $tags,
         #[\App\Attr\Choice(choices: [1, 'A'], mode: \App\Attr\Mode::STRICT)] public int|string $code,
         /**
-         * @var ?non-empty-string
+         * @phpstan-var ?non-empty-string
          */
         public ?string $name = 'anonymous',
         /**
@@ -55,7 +55,7 @@ final class Sample
         /**
          * Settlement currency.
          *
-         * @var Currency::*|null
+         * @phpstan-var Currency::*|null
          */
         #[\App\Attr\Meta(Currency::class)] public ?string $currency = Currency::EUR,
     ) {

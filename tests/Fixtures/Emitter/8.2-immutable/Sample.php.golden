@@ -19,7 +19,7 @@ final readonly class Sample
         /**
          * Identifier.
          *
-         * @var positive-int
+         * @phpstan-var positive-int
          */
         #[Assert\Positive] public int $id,
         /**
@@ -32,7 +32,7 @@ final readonly class Sample
         public array $tags,
         #[\App\Attr\Choice(choices: [1, 'A'], mode: \App\Attr\Mode::STRICT)] public int|string $code,
         /**
-         * @var ?non-empty-string
+         * @phpstan-var ?non-empty-string
          */
         public ?string $name = 'anonymous',
         /**
@@ -60,7 +60,7 @@ final readonly class Sample
     }
 
     /**
-     * @param positive-int $id
+     * @phpstan-param positive-int $id
      */
     public function withId(int $id): self
     {
@@ -79,7 +79,7 @@ final readonly class Sample
     }
 
     /**
-     * @param ?non-empty-string $name
+     * @phpstan-param ?non-empty-string $name
      */
     public function withName(?string $name): self
     {

@@ -16,18 +16,18 @@ final class User
         /**
          * Identifier.
          *
-         * @var positive-int
+         * @phpstan-var positive-int
          */
         public readonly int $id,
         #[\App\Attr\Sensitive(mask: '*', keep: 4)] #[\App\Attr\Audited(level: 'personal')] public readonly string $email,
         public readonly \DateTimeImmutable $createdAt,
         /**
-         * @var ?non-empty-string
+         * @phpstan-var ?non-empty-string
          */
         public readonly ?string $name = null,
         public readonly ?string $externalId = null,
         /**
-         * @var ?int<0, 150>
+         * @phpstan-var ?int<0, 150>
          */
         public readonly ?int $age = null,
         public readonly ?float $score = 0.5,
@@ -53,7 +53,7 @@ final class User
     }
 
     /**
-     * @param positive-int $id
+     * @phpstan-param positive-int $id
      */
     public function withId(int $id): self
     {
@@ -100,7 +100,7 @@ final class User
     }
 
     /**
-     * @param ?non-empty-string $name
+     * @phpstan-param ?non-empty-string $name
      */
     public function withName(?string $name): self
     {
@@ -169,7 +169,7 @@ final class User
     }
 
     /**
-     * @param ?int<0, 150> $age
+     * @phpstan-param ?int<0, 150> $age
      */
     public function withAge(?int $age): self
     {

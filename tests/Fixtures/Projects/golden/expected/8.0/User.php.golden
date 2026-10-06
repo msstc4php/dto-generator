@@ -16,18 +16,18 @@ final class User
         /**
          * Identifier.
          *
-         * @var positive-int
+         * @phpstan-var positive-int
          */
         private int $id,
         #[\App\Attr\Sensitive(mask: '*', keep: 4)] #[\App\Attr\Audited(level: 'personal')] private string $email,
         private \DateTimeImmutable $createdAt,
         /**
-         * @var ?non-empty-string
+         * @phpstan-var ?non-empty-string
          */
         private ?string $name = null,
         private ?string $externalId = null,
         /**
-         * @var ?int<0, 150>
+         * @phpstan-var ?int<0, 150>
          */
         private ?int $age = null,
         private ?float $score = 0.5,
@@ -43,11 +43,11 @@ final class User
         private ?string $legacy = null,
         private ?\DateTimeZone $timeZone = null,
         /**
-         * @var UserStatus::*|null
+         * @phpstan-var UserStatus::*|null
          */
         private ?string $status = UserStatus::ACTIVE,
         /**
-         * @var Role::*|null
+         * @phpstan-var Role::*|null
          */
         private ?int $role = null,
         private ?UserPreferences $preferences = null,
@@ -59,7 +59,7 @@ final class User
     }
 
     /**
-     * @return positive-int
+     * @phpstan-return positive-int
      */
     public function getId(): int
     {
@@ -67,7 +67,7 @@ final class User
     }
 
     /**
-     * @param positive-int $id
+     * @phpstan-param positive-int $id
      */
     public function withId(int $id): self
     {
@@ -91,7 +91,7 @@ final class User
     }
 
     /**
-     * @return ?non-empty-string
+     * @phpstan-return ?non-empty-string
      */
     public function getName(): ?string
     {
@@ -99,7 +99,7 @@ final class User
     }
 
     /**
-     * @param ?non-empty-string $name
+     * @phpstan-param ?non-empty-string $name
      */
     public function withName(?string $name): self
     {
@@ -136,7 +136,7 @@ final class User
     }
 
     /**
-     * @return ?int<0, 150>
+     * @phpstan-return ?int<0, 150>
      */
     public function getAge(): ?int
     {
@@ -144,7 +144,7 @@ final class User
     }
 
     /**
-     * @param ?int<0, 150> $age
+     * @phpstan-param ?int<0, 150> $age
      */
     public function withAge(?int $age): self
     {
@@ -245,7 +245,7 @@ final class User
     }
 
     /**
-     * @return UserStatus::*|null
+     * @phpstan-return UserStatus::*|null
      */
     public function getStatus(): ?string
     {
@@ -253,7 +253,7 @@ final class User
     }
 
     /**
-     * @param UserStatus::*|null $status
+     * @phpstan-param UserStatus::*|null $status
      */
     public function withStatus(?string $status): self
     {
@@ -264,7 +264,7 @@ final class User
     }
 
     /**
-     * @return Role::*|null
+     * @phpstan-return Role::*|null
      */
     public function getRole(): ?int
     {
@@ -272,7 +272,7 @@ final class User
     }
 
     /**
-     * @param Role::*|null $role
+     * @phpstan-param Role::*|null $role
      */
     public function withRole(?int $role): self
     {

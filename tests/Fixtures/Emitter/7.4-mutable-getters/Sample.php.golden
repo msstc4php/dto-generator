@@ -19,7 +19,7 @@ final class Sample
     /**
      * Identifier.
      *
-     * @var positive-int
+     * @phpstan-var positive-int
      * @Assert\Positive
      */
     private int $id;
@@ -40,7 +40,7 @@ final class Sample
     private $code;
 
     /**
-     * @var ?non-empty-string
+     * @phpstan-var ?non-empty-string
      */
     private ?string $name;
 
@@ -70,20 +70,20 @@ final class Sample
     /**
      * Settlement currency.
      *
-     * @var Currency::*|null
+     * @phpstan-var Currency::*|null
      * @\App\Attr\Meta(\App\Dto\Currency::class)
      */
     private ?string $currency;
 
     /**
-     * @param positive-int $id
+     * @phpstan-param positive-int $id
      * @param list<Tag> $tags
      * @param int|string $code
-     * @param ?non-empty-string $name
+     * @phpstan-param ?non-empty-string $name
      * @param ?array<array-key, int> $meta
      * @param ?list<bool> $flags
      * @param mixed $extra
-     * @param Currency::*|null $currency
+     * @phpstan-param Currency::*|null $currency
      */
     public function __construct(
         int $id,
@@ -110,7 +110,7 @@ final class Sample
     }
 
     /**
-     * @return positive-int
+     * @phpstan-return positive-int
      */
     public function getId(): int
     {
@@ -118,7 +118,7 @@ final class Sample
     }
 
     /**
-     * @param positive-int $id
+     * @phpstan-param positive-int $id
      */
     public function setId(int $id): self
     {
@@ -128,7 +128,7 @@ final class Sample
     }
 
     /**
-     * @return ?non-empty-string
+     * @phpstan-return ?non-empty-string
      */
     public function getName(): ?string
     {
@@ -136,7 +136,7 @@ final class Sample
     }
 
     /**
-     * @param ?non-empty-string $name
+     * @phpstan-param ?non-empty-string $name
      */
     public function setName(?string $name): self
     {
@@ -262,7 +262,7 @@ final class Sample
     }
 
     /**
-     * @return Currency::*|null
+     * @phpstan-return Currency::*|null
      */
     public function getCurrency(): ?string
     {
@@ -270,7 +270,7 @@ final class Sample
     }
 
     /**
-     * @param Currency::*|null $currency
+     * @phpstan-param Currency::*|null $currency
      */
     public function setCurrency(?string $currency): self
     {

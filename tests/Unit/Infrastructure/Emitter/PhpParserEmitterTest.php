@@ -304,7 +304,8 @@ final class PhpParserEmitterTest extends TestCase
 
         self::assertStringContainsString('public readonly ?Currency $currency = Currency::IN_PROGRESS,', $modern);
         self::assertStringContainsString('public readonly ?array $accepted = [Currency::EUR],', $modern);
-        self::assertStringContainsString("     * @var Currency::*|null\n     */\n    private ?string \$currency;", $legacy);
+        self::assertStringContainsString("     * @phpstan-var Currency::*|null\n     */\n    private ?string \$currency;", $legacy);
+        self::assertStringContainsString("     * @var ?list<string>\n     * @phpstan-var list<Currency::*>|null\n", $legacy);
         self::assertStringContainsString('?string $currency = Currency::IN_PROGRESS, ?array $accepted = [Currency::EUR]', $legacy);
     }
 
@@ -399,7 +400,7 @@ final class PhpParserEmitterTest extends TestCase
         ;
         $code = (new PhpParserEmitter())->emit($child, EmitterFixture::target('7.4', Mutability::IMMUTABLE), $base->properties());
 
-        self::assertStringContainsString("    /**\n     * @param int|string \$code\n     * @param non-empty-string \$name\n     * @param non-empty-string \$label\n     */\n    public function __construct(", $code);
+        self::assertStringContainsString("    /**\n     * @param int|string \$code\n     * @phpstan-param non-empty-string \$name\n     * @phpstan-param non-empty-string \$label\n     */\n    public function __construct(", $code);
     }
 
     public function testProtectsTheConstructorOfAnAbstractBase(): void
@@ -595,7 +596,7 @@ final class Order
         $code = (new PhpParserEmitter())->emit($class, EmitterFixture::target('7.4', Mutability::IMMUTABLE));
 
         self::assertStringContainsString("namespace App\\Dto;\n\nuse App\\Attr\\Constraints as Assert;\n\n/**\n * An order.\n *\n * @\\App\\Attr\\Table(name=\"orders\")\n */\nfinal class Order\n", $code);
-        self::assertStringContainsString("    /**\n     * @var positive-int\n     * @Assert\\Positive\n     * @Marker\n     */\n    private int \$id;\n", $code);
+        self::assertStringContainsString("    /**\n     * @phpstan-var positive-int\n     * @Assert\\Positive\n     * @Marker\n     */\n    private int \$id;\n", $code);
         self::assertStringContainsString("    private ?string \$note;\n", $code);
         self::assertStringNotContainsString('#[', $code);
     }

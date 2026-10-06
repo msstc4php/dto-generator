@@ -73,8 +73,42 @@ final class TypeRenderer
 
     public function doc(TypeModel $type): string
     {
+        return $this->render($type, false);
+    }
+
+    /**
+     * The doc tags a declaration needs: `@<tag>` with a type every PHPDoc reader understands, when the native type says
+     * less, and `@phpstan-<tag>` with the refined type, when it says more than that. Symfony 5.4's PhpDocExtractor
+     * takes non-empty-string or int<0, 30> for class names.
+     *
+     * @param 'var'|'param'|'return' $tag
+     *
+     * @return list<string>
+     */
+    public function tags(TypeModel $type, string $tag, string $suffix = ''): array
+    {
+        $refined = $this->render($type, false);
+        $portable = $this->render($type, true);
+        $native = $this->native($type);
+        $tags = [];
+        if ($native === null || $native !== $portable) {
+            $tags[] = '@' . $tag . ' ' . $portable . $suffix;
+        }
+
+        if ($refined !== $portable) {
+            $tags[] = '@phpstan-' . $tag . ' ' . $refined . $suffix;
+        }
+
+        return $tags;
+    }
+
+    /**
+     * @param bool $portable whether to leave out the refinements only PHPStan and Psalm read
+     */
+    private function render(TypeModel $type, bool $portable): string
+    {
         if ($type instanceof ScalarType) {
-            return $type->phpDoc() ?? $type->kind();
+            return $portable ? $type->kind() : $type->phpDoc() ?? $type->kind();
         }
 
         if ($type instanceof ClassType) {
@@ -82,17 +116,19 @@ final class TypeRenderer
         }
 
         if ($type instanceof EnumType) {
-            $name = $this->printer->type($this->className($type->className()));
+            if ($this->enums()) {
+                return $this->printer->type($this->className($type->className()));
+            }
 
-            return $this->enums() ? $name : $name . '::*';
+            return $portable ? $type->backing()->value() : $this->printer->type($this->className($type->className())) . '::*';
         }
 
         if ($type instanceof ListType) {
-            return 'list<' . $this->doc($type->item()) . '>';
+            return 'list<' . $this->render($type->item(), $portable) . '>';
         }
 
         if ($type instanceof MapType) {
-            return 'array<array-key, ' . $this->doc($type->value()) . '>';
+            return 'array<array-key, ' . $this->render($type->value(), $portable) . '>';
         }
 
         if ($type instanceof MixedType) {
@@ -100,25 +136,23 @@ final class TypeRenderer
         }
 
         if ($type instanceof UnionType) {
-            return implode('|', array_map([$this, 'doc'], $type->members()));
+            $members = [];
+            foreach ($type->members() as $member) {
+                $members[] = $this->render($member, $portable);
+            }
+
+            return implode('|', array_unique($members));
         }
 
         if ($type instanceof NullableType) {
             $inner = $type->inner();
-            $doc = $this->doc($inner);
+            $doc = $this->render($inner, $portable);
 
             // Symfony's PhpDocExtractor (7.4) fails on "?Currency::*"; "Currency::*|null" reads the same everywhere.
             return $inner instanceof UnionType || strpos($doc, '::') !== false ? $doc . '|null' : '?' . $doc;
         }
 
         throw $this->unsupported($type);
-    }
-
-    public function needsDoc(TypeModel $type): bool
-    {
-        $native = $this->native($type);
-
-        return $native === null || $native !== $this->doc($type);
     }
 
     /**
