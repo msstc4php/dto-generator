@@ -105,8 +105,10 @@ final class TypeRenderer
 
         if ($type instanceof NullableType) {
             $inner = $type->inner();
+            $doc = $this->doc($inner);
 
-            return $inner instanceof UnionType ? $this->doc($inner) . '|null' : '?' . $this->doc($inner);
+            // Symfony's PhpDocExtractor (7.4) fails on "?Currency::*"; "Currency::*|null" reads the same everywhere.
+            return $inner instanceof UnionType || strpos($doc, '::') !== false ? $doc . '|null' : '?' . $doc;
         }
 
         throw $this->unsupported($type);

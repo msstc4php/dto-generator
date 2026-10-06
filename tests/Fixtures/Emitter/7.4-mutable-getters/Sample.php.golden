@@ -70,7 +70,7 @@ final class Sample
     /**
      * Settlement currency.
      *
-     * @var ?Currency::*
+     * @var Currency::*|null
      * @\App\Attr\Meta(\App\Dto\Currency::class)
      */
     private ?string $currency;
@@ -83,7 +83,7 @@ final class Sample
      * @param ?array<array-key, int> $meta
      * @param ?list<bool> $flags
      * @param mixed $extra
-     * @param ?Currency::* $currency
+     * @param Currency::*|null $currency
      */
     public function __construct(
         int $id,
@@ -262,7 +262,7 @@ final class Sample
     }
 
     /**
-     * @return ?Currency::*
+     * @return Currency::*|null
      */
     public function getCurrency(): ?string
     {
@@ -270,7 +270,7 @@ final class Sample
     }
 
     /**
-     * @param ?Currency::* $currency
+     * @param Currency::*|null $currency
      */
     public function setCurrency(?string $currency): self
     {

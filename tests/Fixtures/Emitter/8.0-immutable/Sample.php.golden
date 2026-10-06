@@ -55,7 +55,7 @@ final class Sample
         /**
          * Settlement currency.
          *
-         * @var ?Currency::*
+         * @var Currency::*|null
          */
         #[\App\Attr\Meta(Currency::class)] private ?string $currency = Currency::EUR,
     ) {
@@ -215,7 +215,7 @@ final class Sample
     }
 
     /**
-     * @return ?Currency::*
+     * @return Currency::*|null
      */
     public function getCurrency(): ?string
     {
@@ -223,7 +223,7 @@ final class Sample
     }
 
     /**
-     * @param ?Currency::* $currency
+     * @param Currency::*|null $currency
      */
     public function withCurrency(?string $currency): self
     {
