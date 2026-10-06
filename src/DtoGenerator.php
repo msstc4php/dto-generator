@@ -90,8 +90,19 @@ final class DtoGenerator
         $application = self::withoutAutoExit($application ?? self::console());
         $application->setCatchExceptions(false);
 
+        return self::guard($input, $output, static fn (): int => $application->run($input, $output));
+    }
+
+    /**
+     * Runs a console call with the generator's exit codes for its failures: 3 for a usage error (as JSON with
+     * --format=json), 2 for anything else. An application that wraps the generate command keeps the CLI's contract.
+     *
+     * @param callable(): int $run
+     */
+    public static function guard(InputInterface $input, OutputInterface $output, callable $run): int
+    {
         try {
-            return $application->run($input, $output);
+            return $run();
         } catch (ExceptionInterface $exception) {
             // getParameterOption() is documented as "mixed", which PHPStan reads as a class on phpVersion 70400;
             // json_encode() takes any value and gives a plain string to compare.
