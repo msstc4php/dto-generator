@@ -304,7 +304,7 @@ final class PhpParserEmitterTest extends TestCase
 
         self::assertStringContainsString('public readonly ?Currency $currency = Currency::IN_PROGRESS,', $modern);
         self::assertStringContainsString('public readonly ?array $accepted = [Currency::EUR],', $modern);
-        self::assertStringContainsString("     * @var ?Currency::*\n     */\n    private ?string \$currency;", $legacy);
+        self::assertStringContainsString("     * @var Currency::*|null\n     */\n    private ?string \$currency;", $legacy);
         self::assertStringContainsString('?string $currency = Currency::IN_PROGRESS, ?array $accepted = [Currency::EUR]', $legacy);
     }
 

@@ -43,11 +43,11 @@ final class User
         private ?string $legacy = null,
         private ?\DateTimeZone $timeZone = null,
         /**
-         * @var ?UserStatus::*
+         * @var UserStatus::*|null
          */
         private ?string $status = UserStatus::ACTIVE,
         /**
-         * @var ?Role::*
+         * @var Role::*|null
          */
         private ?int $role = null,
         private ?UserPreferences $preferences = null,
@@ -245,7 +245,7 @@ final class User
     }
 
     /**
-     * @return ?UserStatus::*
+     * @return UserStatus::*|null
      */
     public function getStatus(): ?string
     {
@@ -253,7 +253,7 @@ final class User
     }
 
     /**
-     * @param ?UserStatus::* $status
+     * @param UserStatus::*|null $status
      */
     public function withStatus(?string $status): self
     {
@@ -264,7 +264,7 @@ final class User
     }
 
     /**
-     * @return ?Role::*
+     * @return Role::*|null
      */
     public function getRole(): ?int
     {
@@ -272,7 +272,7 @@ final class User
     }
 
     /**
-     * @param ?Role::* $role
+     * @param Role::*|null $role
      */
     public function withRole(?int $role): self
     {
