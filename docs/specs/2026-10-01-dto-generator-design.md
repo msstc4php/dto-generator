@@ -49,7 +49,7 @@
 | Рантайм генератора — PHP ≥ 7.4 | Исходники ядра без enum, readonly, атрибутов, `match`, union-типов, promoted-свойств. Строгость — через PHPDoc + PHPStan max с `phpVersion: 70400`. |
 | Целевой код — PHP 7.4 … 8.5 | Вся версия-зависимость сосредоточена в `TargetProfile` (§6). |
 | Метаданные на 7.4 — только docblock-аннотации | Одна модель атрибутов, два рендерера: атрибуты и аннотации. |
-| Рантайм-зависимости | `nikic/php-parser ^5`, `symfony/yaml ^5.4\|^6.4\|^7`, `symfony/console ^5.4\|^6.4\|^7`, `composer-plugin-api ^2`. Все совместимы с 7.4. |
+| Рантайм-зависимости | `nikic/php-parser ^5`, `symfony/yaml ^5.4\|^6.4\|^7\|^8`, `symfony/console ^5.4\|^6.4\|^7\|^8`, `composer-plugin-api ^2`. Все, кроме Symfony 8 (PHP 8.4+), совместимы с 7.4. |
 
 Выбор `nikic/php-parser`: библиотека сама запускается на 7.4, но строит и
 печатает AST с синтаксисом любой версии (readonly class, enum, `clone` with).
