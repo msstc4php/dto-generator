@@ -8,7 +8,8 @@
 > (spec §6.2), запись с манифестом и CLI, расширения (SPI), `x-php-attributes` и `attributeAliases` с выводом
 > атрибутов PHP 8 (этап 5a), аннотации Doctrine для PHP 7.4 и `verifyClasses` (этап 5b), версии пакетов из
 > `composer.lock` и обнаружение расширений через `extra.dto-generator.extensions` (этап 6a), Composer-плагин и
-> Docker-образ (этап 6b). Ядро готово; впереди мост `dto-generator-bridge-symfony`.
+> Docker-образ (этап 6b). Мост `msstc4symfony/dto-generator-bridge` (атрибуты Symfony Validator и Serializer)
+> готов и входит в Docker-образ; впереди публикация.
 
 Дизайн: [`docs/specs/2026-10-01-dto-generator-design.md`](docs/specs/2026-10-01-dto-generator-design.md).
 
@@ -84,13 +85,16 @@ $output->diagnostics()->all();
 ### Docker
 
 ```bash
-docker build -f docker/Dockerfile -t dto-generator .
+docker build -f docker/Dockerfile -t dto-generator .   # --build-arg VERSION=1.2.3 — версия образа
 docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/app" dto-generator --config=dto-generator.yaml [--check]
 ```
 
 `target.php: auto` берётся из `composer.json` смонтированного проекта. Код проекта контейнер не выполняет:
 `verifyClasses: auto` в нём выключен (`DTO_GENERATOR_VERIFY_CLASSES=0`), явное `verifyClasses: true` подключит
-автозагрузчик проекта. Расширения — только установленные в образ.
+автозагрузчик проекта. Расширения — только установленные в образ; в нём есть мост
+`msstc4symfony/dto-generator-bridge`: ограничения Validator и атрибуты Serializer пишутся по версиям Symfony из
+`composer.lock` проекта. Мост ставится из его репозитория (`--build-arg BRIDGE_REPOSITORY=…`, `BRIDGE_VERSION=^1.0`);
+`make docker-build` подставляет закоммиченный `HEAD` соседнего checkout'а моста (`BRIDGE=<путь>`).
 
 ## Требования
 
