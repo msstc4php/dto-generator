@@ -9,6 +9,7 @@ use PHPUnit\Framework\TestCase;
 use RuntimeException;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Exception\InvalidOptionException;
 use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\BufferedOutput;
@@ -148,5 +149,27 @@ final class DtoGeneratorTest extends TestCase
         self::assertIsArray($report['diagnostics'][0]);
         self::assertIsString($report['diagnostics'][0]['message']);
         self::assertStringContainsString('no\\<pe<comment>x</comment>', $report['diagnostics'][0]['message']);
+    }
+
+    public function testMapsTheFailuresOfAnyRunToTheGeneratorsExitCodes(): void
+    {
+        $usage = new BufferedOutput();
+        $json = new BufferedOutput();
+        $crash = new BufferedOutput();
+
+        self::assertSame(3, DtoGenerator::guard(new ArrayInput([]), $usage, static function (): int {
+            throw new InvalidOptionException('The "--chek" option does not exist.');
+        }));
+        self::assertSame(3, DtoGenerator::guard(new ArrayInput(['--format' => 'json']), $json, static function (): int {
+            throw new InvalidOptionException('The "--chek" option does not exist.');
+        }));
+        self::assertSame(2, DtoGenerator::guard(new ArrayInput([]), $crash, static function (): int {
+            throw new RuntimeException('boom');
+        }));
+        self::assertSame(1, DtoGenerator::guard(new ArrayInput([]), new BufferedOutput(), static fn (): int => 1));
+
+        self::assertStringContainsString('error: The "--chek" option does not exist.', $usage->fetch());
+        self::assertStringContainsString('"status": "config-failed"', $json->fetch());
+        self::assertStringContainsString('error: boom', $crash->fetch());
     }
 }
