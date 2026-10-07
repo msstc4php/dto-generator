@@ -92,7 +92,7 @@ final class ComposerPlugin implements PluginInterface, EventSubscriberInterface
         $bin = (is_string($binDir) ? $binDir : 'vendor/bin') . '/dto-generator';
         // composer install --no-dev removes a require-dev generator after Composer has loaded this plugin.
         if (!file_exists($bin)) {
-            $io->writeError(self::PREFIX . 'skipped, the generator is no longer installed.', true, IOInterface::VERBOSE);
+            $io->writeError(self::PREFIX . 'skipped, the generator is no longer installed.', true, $failOnError ? IOInterface::NORMAL : IOInterface::VERBOSE);
 
             return;
         }

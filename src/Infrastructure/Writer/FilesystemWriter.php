@@ -243,7 +243,7 @@ final class FilesystemWriter implements FileWriter
         }
 
         if (!$this->isGenerated($current)) {
-            return 'The file is no longer generated, but its "@generated" header was removed, so it is kept; delete it by hand.';
+            return 'The file is no longer generated and has no "@generated" header at the top, so it is kept; delete it by hand.';
         }
 
         return hash('sha256', str_replace("\r\n", "\n", $current)) === $hash

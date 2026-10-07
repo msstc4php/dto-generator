@@ -32,6 +32,8 @@ final class DtoGeneratorTest extends TestCase
         foreach ($this->settings as $name => $value) {
             ini_set($name, (string) $value);
         }
+
+        putenv('DTO_GENERATOR_MEMORY_LIMIT');
     }
 
     /**
@@ -64,13 +66,40 @@ final class DtoGeneratorTest extends TestCase
         ];
     }
 
-    public function testShowsPhpErrorsOnStderr(): void
+    public function testTakesTheMemoryLimitFromTheEnvironment(): void
     {
-        ini_set('display_errors', '1');
+        ini_set('memory_limit', '2G');
+        putenv('DTO_GENERATOR_MEMORY_LIMIT=768M');
 
         DtoGenerator::run(new ArrayInput(['command' => 'nope']), new BufferedOutput());
 
-        self::assertSame('stderr', ini_get('display_errors'));
+        self::assertSame('768M', ini_get('memory_limit'));
+    }
+
+    /**
+     * @dataProvider displays
+     */
+    public function testMovesShownPhpErrorsToStderr(string $before, string $after): void
+    {
+        ini_set('display_errors', $before);
+
+        DtoGenerator::run(new ArrayInput(['command' => 'nope']), new BufferedOutput());
+
+        self::assertSame($after, ini_get('display_errors'));
+    }
+
+    /**
+     * @return array<string, array{string, string}>
+     */
+    public static function displays(): array
+    {
+        return [
+            'on' => ['1', 'stderr'],
+            'on in words' => ['On', 'stderr'],
+            'stdout' => ['stdout', 'stderr'],
+            'off' => ['0', '0'],
+            'already stderr' => ['stderr', 'stderr'],
+        ];
     }
 
     public function testExitsWithTheGenerationCodeOnAFatalError(): void

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator;
 
+use Closure;
 use Composer\InstalledVersions;
 use MSSTC4PHP\DtoGenerator\Application\Config\ConfigFactory;
 use MSSTC4PHP\DtoGenerator\Application\Config\TargetResolver;
@@ -27,6 +28,7 @@ use MSSTC4PHP\DtoGenerator\Infrastructure\Writer\FilesystemWriter;
 use MSSTC4PHP\DtoGenerator\Presentation\Cli\ErrorOutput;
 use MSSTC4PHP\DtoGenerator\Presentation\Cli\GenerateCommand;
 use MSSTC4PHP\DtoGenerator\Presentation\Cli\JsonReport;
+use MSSTC4PHP\DtoGenerator\Presentation\Cli\MemoryLimit;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\CommandLoader\FactoryCommandLoader;
 use Symfony\Component\Console\Exception\ExceptionInterface;
@@ -42,6 +44,8 @@ use Throwable;
 final class DtoGenerator
 {
     private const MEMORY_LIMIT = '1G';
+
+    private static bool $exitsOnFatalErrors = false;
 
     private const PACKAGE = 'msstc4php/dto-generator';
 
@@ -127,44 +131,39 @@ final class DtoGenerator
     }
 
     /**
-     * PHP's default 128M does not hold the model of a large spec. A fatal error, out of memory included, still ends
-     * with exit code 2 rather than PHP's 255 (PHP 7.4 ignores the exit of a shutdown function after a fatal error
-     * raised inside a function, so 255 stays there), and its message goes to stderr, so stdout stays a valid JSON
-     * report.
+     * The CLI's runtime, so run() changes the process: PHP's default 128M does not hold the model of a large spec
+     * (DTO_GENERATOR_MEMORY_LIMIT sets any other limit); shown errors go to stderr, so stdout stays a valid JSON
+     * report; and a fatal error, out of memory included, ends with exit code 2 rather than PHP's 255.
      */
     private static function prepareRuntime(): void
     {
-        if (self::bytes(ini_get('memory_limit')) < self::bytes(self::MEMORY_LIMIT)) {
+        $configured = getenv('DTO_GENERATOR_MEMORY_LIMIT');
+        if (is_string($configured) && $configured !== '') {
+            ini_set('memory_limit', $configured);
+        } elseif (MemoryLimit::isBelow(ini_get('memory_limit'), self::MEMORY_LIMIT)) {
             ini_set('memory_limit', self::MEMORY_LIMIT);
         }
 
-        ini_set('display_errors', 'stderr');
-        register_shutdown_function([self::class, 'exitOnFatalError']);
+        $display = ini_get('display_errors');
+        if ($display === 'stdout' || filter_var($display, FILTER_VALIDATE_BOOLEAN)) {
+            ini_set('display_errors', 'stderr');
+        }
+
+        if (!self::$exitsOnFatalErrors) {
+            self::$exitsOnFatalErrors = true;
+            register_shutdown_function(Closure::fromCallable([self::class, 'exitOnFatalError']));
+        }
     }
 
     /**
-     * @internal the shutdown function of a run
+     * PHP 7.4 ignores this exit after a fatal error raised inside a function, so 255 stays there.
      */
-    public static function exitOnFatalError(): void
+    private static function exitOnFatalError(): void
     {
         $error = error_get_last();
-        if ($error !== null && in_array($error['type'], [E_ERROR, E_CORE_ERROR, E_COMPILE_ERROR], true)) {
+        if ($error !== null && in_array($error['type'], [E_ERROR, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR, E_RECOVERABLE_ERROR], true)) {
             exit(2);
         }
-    }
-
-    /**
-     * @return int PHP_INT_MAX for no limit
-     */
-    private static function bytes(string $limit): int
-    {
-        if ($limit === '-1') {
-            return PHP_INT_MAX;
-        }
-
-        $units = ['k' => 1024, 'm' => 1024 ** 2, 'g' => 1024 ** 3];
-
-        return (int) $limit * ($units[strtolower(substr($limit, -1))] ?? 1);
     }
 
     private static function version(): string

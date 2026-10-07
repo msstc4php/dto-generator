@@ -127,12 +127,15 @@ final class ComposerPluginTest extends TestCase
     public function testSkipsAGeneratorRemovedByTheSameCommand(): void
     {
         // composer install --no-dev removes a require-dev generator after Composer loaded its plugin.
-        $extra = ['dto-generator' => ['config' => 'gen/dto-generator.yaml', 'failOnError' => true]];
+        $extra = ['dto-generator' => ['config' => 'gen/dto-generator.yaml']];
+        $skipped = "dto-generator: skipped, the generator is no longer installed.\n";
 
         self::assertSame('', $this->dump($extra, $this->root . '/gone-bin'));
         $verbose = new BufferIO('', OutputInterface::VERBOSITY_VERBOSE);
         $this->runPlugin($extra, $verbose, $this->root . '/gone-bin');
-        self::assertSame("dto-generator: skipped, the generator is no longer installed.\n", $verbose->getOutput());
+        self::assertSame($skipped, $verbose->getOutput());
+        // A project that wants generation to fail loudly also hears when it did not run.
+        self::assertSame($skipped, $this->dump(['dto-generator' => ['config' => 'gen/dto-generator.yaml', 'failOnError' => true]], $this->root . '/gone-bin'));
         self::assertDirectoryDoesNotExist($this->root . '/gen/out');
     }
 
