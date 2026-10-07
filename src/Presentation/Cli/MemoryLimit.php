@@ -32,7 +32,7 @@ final class MemoryLimit
             return PHP_INT_MAX;
         }
 
-        if (preg_match('~^(?<count>\d+)(?<unit>[kmg]?)$~i', $quantity, $matches) !== 1) {
+        if (preg_match('~^(?<count>\d+)(?<unit>[kmg]?)$~iD', $quantity, $matches) !== 1) {
             return null;
         }
 

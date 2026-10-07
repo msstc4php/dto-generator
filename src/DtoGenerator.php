@@ -45,9 +45,9 @@ final class DtoGenerator
 {
     private const MEMORY_LIMIT = '1G';
 
-    private static bool $exitsOnFatalErrors = false;
-
     private const PACKAGE = 'msstc4php/dto-generator';
+
+    private static bool $exitsOnFatalErrors = false;
 
     private function __construct()
     {
@@ -91,9 +91,9 @@ final class DtoGenerator
      */
     public static function run(?InputInterface $input = null, ?OutputInterface $output = null, ?Application $application = null): int
     {
-        self::prepareRuntime();
         $input ??= new ArgvInput();
         $output ??= new ConsoleOutput();
+        self::prepareRuntime($output);
         $application = self::withoutAutoExit($application ?? self::console());
         $application->setCatchExceptions(false);
 
@@ -135,18 +135,25 @@ final class DtoGenerator
      * (DTO_GENERATOR_MEMORY_LIMIT sets any other limit); shown errors go to stderr, so stdout stays a valid JSON
      * report; and a fatal error, out of memory included, ends with exit code 2 rather than PHP's 255.
      */
-    private static function prepareRuntime(): void
+    private static function prepareRuntime(OutputInterface $output): void
     {
-        $configured = getenv('DTO_GENERATOR_MEMORY_LIMIT');
-        if (is_string($configured) && $configured !== '') {
-            ini_set('memory_limit', $configured);
-        } elseif (MemoryLimit::isBelow(ini_get('memory_limit'), self::MEMORY_LIMIT)) {
-            ini_set('memory_limit', self::MEMORY_LIMIT);
-        }
-
+        // First, so that a warning of ini_set() below reaches stderr too.
         $display = ini_get('display_errors');
         if ($display === 'stdout' || filter_var($display, FILTER_VALIDATE_BOOLEAN)) {
             ini_set('display_errors', 'stderr');
+        }
+
+        $configured = (string) getenv('DTO_GENERATOR_MEMORY_LIMIT');
+        if (MemoryLimit::bytes($configured) !== null) {
+            ini_set('memory_limit', $configured);
+        } else {
+            if ($configured !== '') {
+                ErrorOutput::of($output)->writeln(sprintf('warning: DTO_GENERATOR_MEMORY_LIMIT "%s" is not a memory limit like 512M; %s is used.', $configured, self::MEMORY_LIMIT), OutputInterface::OUTPUT_RAW);
+            }
+
+            if (MemoryLimit::isBelow(ini_get('memory_limit'), self::MEMORY_LIMIT)) {
+                ini_set('memory_limit', self::MEMORY_LIMIT);
+            }
         }
 
         if (!self::$exitsOnFatalErrors) {

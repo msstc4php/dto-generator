@@ -34,6 +34,7 @@ final class MemoryLimitTest extends TestCase
             'hexadecimal' => ['0x80000000', null],
             'two units' => ['512MB', null],
             'spaces' => [' 1G', null],
+            'trailing newline' => ["512M\n", null],
             'empty' => ['', null],
         ];
     }

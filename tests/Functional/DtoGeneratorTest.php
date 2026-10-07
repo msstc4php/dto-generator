@@ -77,6 +77,29 @@ final class DtoGeneratorTest extends TestCase
     }
 
     /**
+     * @dataProvider invalidMemoryLimits
+     */
+    public function testWarnsAboutAnInvalidMemoryLimitFromTheEnvironment(string $configured): void
+    {
+        ini_set('memory_limit', '128M');
+        putenv('DTO_GENERATOR_MEMORY_LIMIT=' . $configured);
+        $output = new BufferedOutput();
+
+        DtoGenerator::run(new ArrayInput(['command' => 'nope']), $output);
+
+        self::assertSame('1G', ini_get('memory_limit'));
+        self::assertStringStartsWith(sprintf("warning: DTO_GENERATOR_MEMORY_LIMIT \"%s\" is not a memory limit like 512M; 1G is used.\n", $configured), $output->fetch());
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function invalidMemoryLimits(): array
+    {
+        return ['two units' => ['1GB'], 'words' => ['lots'], 'trailing newline' => ["512M\n"]];
+    }
+
+    /**
      * @dataProvider displays
      */
     public function testMovesShownPhpErrorsToStderr(string $before, string $after): void
