@@ -13,6 +13,15 @@
     },
     "mutators": {
         "@default": true,
+        // Only a separate PHP process can watch a fatal error end in exit code 2, and Infection mutates in-process.
+        "global-ignore": [
+            "MSSTC4PHP\\DtoGenerator\\DtoGenerator::exitOnFatalError",
+        ],
+        "FunctionCallRemoval": {
+            "ignore": [
+                "MSSTC4PHP\\DtoGenerator\\DtoGenerator::prepareRuntime",
+            ],
+        },
         // Equivalent: a cache of ancestor compositions; recomputing gives the same result.
         "AssignCoalesce": {
             "ignore": [

@@ -19,6 +19,94 @@ use Symfony\Component\Console\Output\OutputInterface;
 
 final class DtoGeneratorTest extends TestCase
 {
+    /** @var array<string, string|false> */
+    private array $settings = [];
+
+    protected function setUp(): void
+    {
+        $this->settings = ['memory_limit' => ini_get('memory_limit'), 'display_errors' => ini_get('display_errors')];
+    }
+
+    protected function tearDown(): void
+    {
+        foreach ($this->settings as $name => $value) {
+            ini_set($name, (string) $value);
+        }
+    }
+
+    /**
+     * @dataProvider memoryLimits
+     */
+    public function testRaisesALowMemoryLimitForTheRun(string $before, string $after): void
+    {
+        ini_set('memory_limit', $before);
+
+        DtoGenerator::run(new ArrayInput(['command' => 'nope']), new BufferedOutput());
+
+        self::assertSame($after, ini_get('memory_limit'));
+    }
+
+    /**
+     * @return array<string, array{string, string}>
+     */
+    public static function memoryLimits(): array
+    {
+        return [
+            'megabytes below' => ['128M', '1G'],
+            'just below in bytes' => ['1073741823', '1G'],
+            'exactly in bytes' => ['1073741824', '1073741824'],
+            'just below in kilobytes' => ['1048575K', '1G'],
+            'exactly in kilobytes' => ['1048576K', '1048576K'],
+            'just below in megabytes' => ['1023m', '1G'],
+            'exactly in megabytes' => ['1024M', '1024M'],
+            'gigabytes above' => ['2G', '2G'],
+            'unlimited' => ['-1', '-1'],
+        ];
+    }
+
+    public function testShowsPhpErrorsOnStderr(): void
+    {
+        ini_set('display_errors', '1');
+
+        DtoGenerator::run(new ArrayInput(['command' => 'nope']), new BufferedOutput());
+
+        self::assertSame('stderr', ini_get('display_errors'));
+    }
+
+    public function testExitsWithTheGenerationCodeOnAFatalError(): void
+    {
+        // A request beyond the limit fails at once, without allocating anything.
+        $script = sprintf(<<<'PHP_WRAP'
+            <?php
+            require %s;
+            $application = new Symfony\Component\Console\Application();
+            $application->setCommandLoader(new Symfony\Component\Console\CommandLoader\FactoryCommandLoader([
+                'boom' => static fn () => new class('boom') extends Symfony\Component\Console\Command\Command {
+                    protected function execute(Symfony\Component\Console\Input\InputInterface $input, Symfony\Component\Console\Output\OutputInterface $output): int
+                    {
+                        return strlen(str_repeat('x', 4 * 1024 * 1024 * 1024));
+                    }
+                },
+            ]));
+            exit(MSSTC4PHP\DtoGenerator\DtoGenerator::run(new Symfony\Component\Console\Input\ArrayInput(['command' => 'boom']), null, $application));
+            PHP_WRAP, var_export(dirname(__DIR__, 2) . '/vendor/autoload.php', true));
+        $file = tempnam(sys_get_temp_dir(), 'dto-generator-fatal-');
+        self::assertIsString($file);
+        file_put_contents($file, $script);
+
+        $process = proc_open([PHP_BINARY, '-d', 'memory_limit=2G', '-d', 'display_errors=1', '-d', 'log_errors=0', $file], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+        self::assertIsResource($process);
+        $stdout = stream_get_contents($pipes[1]);
+        $stderr = stream_get_contents($pipes[2]);
+        $code = proc_close($process);
+        unlink($file);
+
+        // PHP 7.4 ignores the exit of a shutdown function after a fatal error raised inside a function.
+        self::assertSame(PHP_VERSION_ID >= 80000 ? 2 : 255, $code, (string) $stderr);
+        self::assertSame('', $stdout);
+        self::assertStringContainsString('Allowed memory size of 2147483648 bytes exhausted', (string) $stderr);
+    }
+
     public function testMapsAnInputErrorToTheConfigExitCode(): void
     {
         $output = new BufferedOutput();

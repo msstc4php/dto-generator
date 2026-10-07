@@ -41,6 +41,8 @@ use Throwable;
  */
 final class DtoGenerator
 {
+    private const MEMORY_LIMIT = '1G';
+
     private const PACKAGE = 'msstc4php/dto-generator';
 
     private function __construct()
@@ -85,6 +87,7 @@ final class DtoGenerator
      */
     public static function run(?InputInterface $input = null, ?OutputInterface $output = null, ?Application $application = null): int
     {
+        self::prepareRuntime();
         $input ??= new ArgvInput();
         $output ??= new ConsoleOutput();
         $application = self::withoutAutoExit($application ?? self::console());
@@ -121,6 +124,47 @@ final class DtoGenerator
 
             return 2;
         }
+    }
+
+    /**
+     * PHP's default 128M does not hold the model of a large spec. A fatal error, out of memory included, still ends
+     * with exit code 2 rather than PHP's 255 (PHP 7.4 ignores the exit of a shutdown function after a fatal error
+     * raised inside a function, so 255 stays there), and its message goes to stderr, so stdout stays a valid JSON
+     * report.
+     */
+    private static function prepareRuntime(): void
+    {
+        if (self::bytes(ini_get('memory_limit')) < self::bytes(self::MEMORY_LIMIT)) {
+            ini_set('memory_limit', self::MEMORY_LIMIT);
+        }
+
+        ini_set('display_errors', 'stderr');
+        register_shutdown_function([self::class, 'exitOnFatalError']);
+    }
+
+    /**
+     * @internal the shutdown function of a run
+     */
+    public static function exitOnFatalError(): void
+    {
+        $error = error_get_last();
+        if ($error !== null && in_array($error['type'], [E_ERROR, E_CORE_ERROR, E_COMPILE_ERROR], true)) {
+            exit(2);
+        }
+    }
+
+    /**
+     * @return int PHP_INT_MAX for no limit
+     */
+    private static function bytes(string $limit): int
+    {
+        if ($limit === '-1') {
+            return PHP_INT_MAX;
+        }
+
+        $units = ['k' => 1024, 'm' => 1024 ** 2, 'g' => 1024 ** 3];
+
+        return (int) $limit * ($units[strtolower(substr($limit, -1))] ?? 1);
     }
 
     private static function version(): string

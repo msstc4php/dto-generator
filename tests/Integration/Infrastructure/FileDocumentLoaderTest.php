@@ -157,6 +157,77 @@ final class FileDocumentLoaderTest extends TestCase
         }
     }
 
+    public function testRejectsYamlAliasesThatExpandBeyondTheLimit(): void
+    {
+        // Each level aliases the previous one six times: 6^8 values from under a kilobyte.
+        $yaml = "openapi: 3.1.0\nl0: &l0 [1, 2, 3, 4, 5, 6]\n";
+        for ($level = 1; $level <= 8; $level++) {
+            $yaml .= sprintf("l%d: &l%1\$d [%s]\n", $level, implode(', ', array_fill(0, 6, '*l' . ($level - 1))));
+        }
+
+        $this->expectException(DocumentLoadFailed::class);
+        $this->expectExceptionMessage(sprintf('its YAML aliases expand to more than %d values', 10 * strlen($yaml)));
+
+        (new FileDocumentLoader())->load($this->file('bomb.yaml', $yaml));
+    }
+
+    public function testAcceptsAliasesThatExpandUpToTheLimit(): void
+    {
+        [$yaml, $values] = $this->aliasedTo(10);
+
+        self::assertSame($values, self::values((new FileDocumentLoader())->load($this->file('aliases.yaml', $yaml))->root()));
+    }
+
+    public function testRejectsAliasesOneByteShortOfTheLimit(): void
+    {
+        [$yaml] = $this->aliasedTo(10);
+
+        $this->expectException(DocumentLoadFailed::class);
+        $this->expectExceptionMessage('its YAML aliases expand to more than');
+
+        (new FileDocumentLoader())->load($this->file('aliases.yaml', substr($yaml, 0, -2) . "\n"));
+    }
+
+    /**
+     * A YAML document whose values number exactly $ratio times its length.
+     *
+     * @return array{string, int} the document and its number of values
+     */
+    private function aliasedTo(int $ratio): array
+    {
+        $base = implode(', ', range(1, 100));
+        for ($copies = 1;; $copies++) {
+            $yaml = "base: &b [{$base}]\ncopies: [" . implode(', ', array_fill(0, $copies, '*b')) . "]\n#";
+            $values = 2 + 100 + 101 * $copies;
+            $length = intdiv($values, $ratio);
+            if ($values % $ratio === 0 && $length > strlen($yaml)) {
+                return [$yaml . str_repeat('x', $length - strlen($yaml) - 1) . "\n", $values];
+            }
+        }
+    }
+
+    /**
+     * @param array<array-key, mixed> $value
+     */
+    private static function values(array $value): int
+    {
+        $count = 0;
+        foreach ($value as $item) {
+            $count += 1 + (is_array($item) ? self::values($item) : 0);
+        }
+
+        return $count;
+    }
+
+    private function file(string $name, string $content): string
+    {
+        $file = $this->temporaryDirectory() . '/' . $name;
+        file_put_contents($file, $content);
+        $this->temporary[] = $file;
+
+        return $file;
+    }
+
     private function temporaryDirectory(): string
     {
         $directory = sys_get_temp_dir() . '/dto-generator-' . bin2hex(random_bytes(4));
