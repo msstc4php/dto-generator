@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Tests\Integration\Infrastructure;
 
+use LogicException;
 use MSSTC4PHP\DtoGenerator\Application\Port\DocumentLoadFailed;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Document\FileDocumentLoader;
 use PHPUnit\Framework\TestCase;
@@ -155,6 +156,111 @@ final class FileDocumentLoaderTest extends TestCase
         } catch (DocumentLoadFailed $exception) {
             self::assertStringEndsWith('tests/Fixtures/Documents/broken.json', $exception->path());
         }
+    }
+
+    public function testRejectsYamlAliasesThatExpandBeyondTheLimit(): void
+    {
+        // Each level aliases the previous one six times: 6^8 values from under a kilobyte.
+        $yaml = "openapi: 3.1.0\nl0: &l0 [1, 2, 3, 4, 5, 6]\n";
+        for ($level = 1; $level <= 8; $level++) {
+            $yaml .= sprintf("l%d: &l%1\$d [%s]\n", $level, implode(', ', array_fill(0, 6, '*l' . ($level - 1))));
+        }
+
+        $this->expectException(DocumentLoadFailed::class);
+        $this->expectExceptionMessage('its YAML aliases expand to more than 1000000 values');
+
+        (new FileDocumentLoader())->load($this->file('bomb.yaml', $yaml));
+    }
+
+    public function testAcceptsASmallSpecThatReusesItsAnchorsOften(): void
+    {
+        // 100 values aliased 100 times from about 700 bytes: far beyond ten per byte, far below a million.
+        $yaml = $this->aliases(100, 100, '');
+
+        self::assertSame(10202, self::values((new FileDocumentLoader())->load($this->file('reuse.yaml', $yaml))->root()));
+    }
+
+    public function testAcceptsAMillionValuesFromAnySize(): void
+    {
+        // 2 + 27026 + 27027 * 36 values from about 54 KB.
+        $yaml = $this->aliases(27026, 36, '');
+
+        self::assertSame(1000000, self::values((new FileDocumentLoader())->load($this->file('million.yaml', $yaml))->root()));
+    }
+
+    public function testRejectsOneValueBeyondAMillion(): void
+    {
+        $this->expectException(DocumentLoadFailed::class);
+        $this->expectExceptionMessage('its YAML aliases expand to more than 1000000 values');
+
+        (new FileDocumentLoader())->load($this->file('million.yaml', $this->aliases(27026, 36, '') . "one: 1\n"));
+    }
+
+    public function testAcceptsTenValuesPerByteOfALargeFile(): void
+    {
+        [$yaml, $values] = $this->tenValuesPerByte();
+
+        self::assertSame($values, self::values((new FileDocumentLoader())->load($this->file('large.yaml', $yaml))->root()));
+    }
+
+    public function testRejectsALargeFileOneByteShortOfTenValuesPerByte(): void
+    {
+        [$yaml, $values] = $this->tenValuesPerByte();
+
+        $this->expectException(DocumentLoadFailed::class);
+        $this->expectExceptionMessage(sprintf('its YAML aliases expand to more than %d values', $values - 10));
+
+        (new FileDocumentLoader())->load($this->file('large.yaml', substr($yaml, 0, -2) . "\n"));
+    }
+
+    /**
+     * A list of $base zeros, aliased $copies times: 2 + $base + ($base + 1) * $copies values.
+     */
+    private function aliases(int $base, int $copies, string $padding): string
+    {
+        return 'base: &b [' . rtrim(str_repeat('0,', $base), ',') . "]\ncopies: ["
+            . rtrim(str_repeat('*b,', $copies), ',') . "]\n" . ($padding === '' ? '' : '#' . $padding . "\n");
+    }
+
+    /**
+     * Above a million values, a document whose values number exactly ten times its length.
+     *
+     * @return array{string, int} the document and its number of values
+     */
+    private function tenValuesPerByte(): array
+    {
+        // symfony/yaml refuses more than 128 aliases of collections.
+        for ($copies = 37; $copies <= 128; $copies++) {
+            $values = 2 + 27026 + 27027 * $copies;
+            $bare = strlen($this->aliases(27026, $copies, ''));
+            if ($values % 10 === 0 && intdiv($values, 10) >= $bare + 3) {
+                return [$this->aliases(27026, $copies, str_repeat('x', intdiv($values, 10) - $bare - 2)), $values];
+            }
+        }
+
+        throw new LogicException('No such document.');
+    }
+
+    /**
+     * @param array<array-key, mixed> $value
+     */
+    private static function values(array $value): int
+    {
+        $count = 0;
+        foreach ($value as $item) {
+            $count += 1 + (is_array($item) ? self::values($item) : 0);
+        }
+
+        return $count;
+    }
+
+    private function file(string $name, string $content): string
+    {
+        $file = $this->temporaryDirectory() . '/' . $name;
+        file_put_contents($file, $content);
+        $this->temporary[] = $file;
+
+        return $file;
     }
 
     private function temporaryDirectory(): string

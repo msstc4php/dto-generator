@@ -7,8 +7,8 @@ namespace MSSTC4PHP\DtoGenerator\Infrastructure\Writer;
 use MSSTC4PHP\DtoGenerator\Application\Service\Generate\GeneratedFile;
 
 /**
- * The manifest format: `{"generator": …, "files": {"<relative path>": "<sha256>"}}`, keys sorted. The hashes are
- * informational; ownership is decided by the "@generated" header.
+ * The manifest format: `{"generator": …, "files": {"<relative path>": "<sha256>"}}`, keys sorted. A file is
+ * overwritten when it has the "@generated" header, and deleted as stale only when its hash still matches too.
  */
 final class ManifestCodec
 {

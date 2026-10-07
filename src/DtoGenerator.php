@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator;
 
+use Closure;
 use Composer\InstalledVersions;
 use MSSTC4PHP\DtoGenerator\Application\Config\ConfigFactory;
 use MSSTC4PHP\DtoGenerator\Application\Config\TargetResolver;
@@ -27,6 +28,7 @@ use MSSTC4PHP\DtoGenerator\Infrastructure\Writer\FilesystemWriter;
 use MSSTC4PHP\DtoGenerator\Presentation\Cli\ErrorOutput;
 use MSSTC4PHP\DtoGenerator\Presentation\Cli\GenerateCommand;
 use MSSTC4PHP\DtoGenerator\Presentation\Cli\JsonReport;
+use MSSTC4PHP\DtoGenerator\Presentation\Cli\MemoryLimit;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\CommandLoader\FactoryCommandLoader;
 use Symfony\Component\Console\Exception\ExceptionInterface;
@@ -41,7 +43,11 @@ use Throwable;
  */
 final class DtoGenerator
 {
+    private const MEMORY_LIMIT = '1G';
+
     private const PACKAGE = 'msstc4php/dto-generator';
+
+    private static bool $exitsOnFatalErrors = false;
 
     private function __construct()
     {
@@ -87,6 +93,7 @@ final class DtoGenerator
     {
         $input ??= new ArgvInput();
         $output ??= new ConsoleOutput();
+        self::prepareRuntime($output);
         $application = self::withoutAutoExit($application ?? self::console());
         $application->setCatchExceptions(false);
 
@@ -120,6 +127,49 @@ final class DtoGenerator
             $errors->writeln($exception->getTraceAsString(), OutputInterface::VERBOSITY_VERY_VERBOSE);
 
             return 2;
+        }
+    }
+
+    /**
+     * The CLI's runtime, so run() changes the process: PHP's default 128M does not hold the model of a large spec
+     * (DTO_GENERATOR_MEMORY_LIMIT sets any other limit); shown errors go to stderr, so stdout stays a valid JSON
+     * report; and a fatal error, out of memory included, ends with exit code 2 rather than PHP's 255.
+     */
+    private static function prepareRuntime(OutputInterface $output): void
+    {
+        // First, so that a warning of ini_set() below reaches stderr too.
+        $display = ini_get('display_errors');
+        if ($display === 'stdout' || filter_var($display, FILTER_VALIDATE_BOOLEAN)) {
+            ini_set('display_errors', 'stderr');
+        }
+
+        $configured = (string) getenv('DTO_GENERATOR_MEMORY_LIMIT');
+        if (MemoryLimit::bytes($configured) !== null) {
+            ini_set('memory_limit', $configured);
+        } else {
+            if ($configured !== '') {
+                ErrorOutput::of($output)->writeln(sprintf('warning: DTO_GENERATOR_MEMORY_LIMIT "%s" is not a memory limit like 512M; %s is used.', $configured, self::MEMORY_LIMIT), OutputInterface::OUTPUT_RAW);
+            }
+
+            if (MemoryLimit::isBelow(ini_get('memory_limit'), self::MEMORY_LIMIT)) {
+                ini_set('memory_limit', self::MEMORY_LIMIT);
+            }
+        }
+
+        if (!self::$exitsOnFatalErrors) {
+            self::$exitsOnFatalErrors = true;
+            register_shutdown_function(Closure::fromCallable([self::class, 'exitOnFatalError']));
+        }
+    }
+
+    /**
+     * PHP 7.4 ignores this exit after a fatal error raised inside a function, so 255 stays there.
+     */
+    private static function exitOnFatalError(): void
+    {
+        $error = error_get_last();
+        if ($error !== null && in_array($error['type'], [E_ERROR, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR, E_RECOVERABLE_ERROR], true)) {
+            exit(2);
         }
     }
 

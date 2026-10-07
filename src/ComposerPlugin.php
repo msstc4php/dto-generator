@@ -90,6 +90,13 @@ final class ComposerPlugin implements PluginInterface, EventSubscriberInterface
     {
         $binDir = $composer->getConfig()->get('bin-dir');
         $bin = (is_string($binDir) ? $binDir : 'vendor/bin') . '/dto-generator';
+        // composer install --no-dev removes a require-dev generator after Composer has loaded this plugin.
+        if (!file_exists($bin)) {
+            $io->writeError(self::PREFIX . 'skipped, the generator is no longer installed.', true, $failOnError ? IOInterface::NORMAL : IOInterface::VERBOSE);
+
+            return;
+        }
+
         // PHP_BINARY: the PHP Composer runs on, and Windows does not read the script's shebang.
         $command = implode(' ', array_map([ProcessExecutor::class, 'escape'], [PHP_BINARY, $bin, 'generate', '--config=' . $config, '--no-ansi']));
         $process = new ProcessExecutor($io);

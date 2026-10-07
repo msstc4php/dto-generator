@@ -145,13 +145,12 @@ final class FilesystemWriter implements FileWriter
             }
 
             $current = $this->read($path);
-            if ($current !== null && $this->isGenerated($current)) {
+            $kept = $this->whyKept($current, $hash);
+            if ($kept === null) {
                 $changes[] = FileChange::delete($path);
                 $deleted[$relativePath] = $hash;
             } else {
-                $conflicts[$path] = $current === null
-                    ? 'The file cannot be read, so it is not deleted.'
-                    : 'The file is no longer generated, but its "@generated" header was removed, so it is kept; delete it by hand.';
+                $conflicts[$path] = $kept;
                 $owned[$relativePath] = $hash;
             }
         }
@@ -233,9 +232,31 @@ final class FilesystemWriter implements FileWriter
         return is_string($contents) ? $contents : null;
     }
 
+    /**
+     * A stale file is deleted only as it was written: the manifest is committed and can be edited in a pull request,
+     * so its hash alone proves nothing, and the header alone would let an edit be lost.
+     */
+    private function whyKept(?string $current, string $hash): ?string
+    {
+        if ($current === null) {
+            return 'The file cannot be read, so it is not deleted.';
+        }
+
+        if (!$this->isGenerated($current)) {
+            return 'The file is no longer generated and has no "@generated" header at the top, so it is kept; delete it by hand.';
+        }
+
+        return hash('sha256', str_replace("\r\n", "\n", $current)) === $hash
+            ? null
+            : 'The file is no longer generated, but it was edited after it was generated, so it is kept; delete it by hand.';
+    }
+
+    /**
+     * The marker counts only where the emitter writes it: on a comment line right after the opening tag.
+     */
     private function isGenerated(string $contents): bool
     {
-        return strpos($contents, self::MARKER) !== false;
+        return preg_match('~\A<\?php\r?\n(?:\r?\n)?// ' . preg_quote(self::MARKER, '~') . '~', $contents) === 1;
     }
 
     private function writeAtomically(string $path, string $contents): void

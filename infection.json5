@@ -13,6 +13,14 @@
     },
     "mutators": {
         "@default": true,
+        // Only a separate PHP process can watch a fatal error end in exit code 2, and Infection mutates in-process.
+        "global-ignore": [
+            "MSSTC4PHP\\DtoGenerator\\DtoGenerator::exitOnFatalError",
+        ],
+        "global-ignoreSourceCodeByRegex": [
+            ".*register_shutdown_function.*",
+            ".*exitsOnFatalErrors.*",
+        ],
         // Equivalent: a cache of ancestor compositions; recomputing gives the same result.
         "AssignCoalesce": {
             "ignore": [
@@ -91,7 +99,7 @@
         },
         // Equivalent for real constraints (and for DefaultFit's numeric bounds): numeric strings compare numerically (only a leading-zero version,
         // which Composer never emits, would differ), and an equal candidate changes nothing.
-        "CastInt": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Application\\Config\\PhpConstraint::lowerBound", "MSSTC4PHP\\DtoGenerator\\Domain\\Builder\\DefaultFit::inRange"] },
+        "CastInt": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Application\\Config\\PhpConstraint::lowerBound", "MSSTC4PHP\\DtoGenerator\\Domain\\Builder\\DefaultFit::inRange", "MSSTC4PHP\\DtoGenerator\\Presentation\\Cli\\MemoryLimit::bytes"] },
         "GreaterThan": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Application\\Config\\PhpConstraint::lowerBound"] },
         // Equivalent: the key only has to be unique, and "Item" suffixes are all alike, so the order of the parts is irrelevant.
         // AttributeVerification::missing: its keys only have to be unique, whatever the order of their parts.

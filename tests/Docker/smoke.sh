@@ -46,4 +46,22 @@ printf 'openapi: 3.1.0\ncomponents:\n  schemas:\n    Pet: {type: object, require
 run bridge dto-generator.yaml
 grep -q 'Assert\\Length(min: 1)' "$work/bridge/out/Pet.php"
 
+# A large spec needs more than the 128M a php image allows by default; the generator raises its own limit.
+mkdir -p "$work/large/api"
+printf 'version: 1\nsources:\n  - {spec: api/openapi.json, namespace: App\\Dto, outputDir: out}\n' > "$work/large/dto-generator.yaml"
+printf '{"require": {"php": ">=8.2"}}\n' > "$work/large/composer.json"
+docker run --rm -u "$(id -u):$(id -g)" -v "$work/large:/app:z" --entrypoint php "$image" -r '
+    $schemas = [];
+    for ($s = 0; $s < 1500; ++$s) {
+        $properties = [];
+        for ($p = 0; $p < 30; ++$p) {
+            $properties["field$p"] = ["type" => "string", "maxLength" => 255];
+        }
+        $schemas["Model$s"] = ["type" => "object", "required" => ["field0"], "properties" => $properties];
+    }
+    file_put_contents("api/openapi.json", json_encode(["openapi" => "3.1.0", "components" => ["schemas" => $schemas]]));'
+[ "$(docker run --rm --entrypoint php "$image" -r 'echo ini_get("memory_limit");')" = 128M ]
+run large dto-generator.yaml > /dev/null
+[ "$(ls "$work/large/out" | wc -l)" -eq 1500 ]
+
 echo "docker smoke: ok"

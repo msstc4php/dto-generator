@@ -16,6 +16,12 @@ use Symfony\Component\Yaml\Yaml;
 
 final class FileDocumentLoader implements DocumentLoader
 {
+    // Without aliases a document holds fewer values than bytes. Anchors reused across a spec stay below ten values per
+    // byte or a million values, which later stages walk in seconds; a kilobyte of nested aliases expands to millions.
+    private const MAX_VALUES_PER_BYTE = 10;
+
+    private const MAX_VALUES_OF_ANY_SIZE = 1000000;
+
     /** @var array<string, array<array-key, mixed>> decoded content by real path */
     private array $decoded = [];
 
@@ -71,6 +77,30 @@ final class FileDocumentLoader implements DocumentLoader
             throw DocumentLoadFailed::notAnObject($path);
         }
 
+        $limit = max(self::MAX_VALUES_PER_BYTE * strlen($content), self::MAX_VALUES_OF_ANY_SIZE);
+        $budget = $limit;
+        if ($extension !== 'json' && self::exceeds($decoded, $budget)) {
+            throw DocumentLoadFailed::malformed($path, sprintf('its YAML aliases expand to more than %d values.', $limit));
+        }
+
         return $decoded;
+    }
+
+    /**
+     * Counts down the values it visits and stops as soon as the budget runs out, so an alias bomb costs no more than
+     * the budget.
+     *
+     * @param array<array-key, mixed> $value
+     */
+    private static function exceeds(array $value, int &$budget): bool
+    {
+        foreach ($value as $item) {
+            $budget--;
+            if ($budget < 0 || (is_array($item) && self::exceeds($item, $budget))) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
