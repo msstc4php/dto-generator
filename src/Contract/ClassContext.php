@@ -27,16 +27,16 @@ final class ClassContext
 
     private SchemaReferences $references;
 
-    private ?DiscriminatorModel $parentDiscriminator;
+    private ?DiscriminatorModel $selectingDiscriminator;
 
     private bool $inline;
 
     /**
      * @param bool $inline whether the class comes from an object written inside a property, whose schema is the property's
      * @param SchemaReferences|null $references how `$ref`s resolve; none when omitted
-     * @param DiscriminatorModel|null $parentDiscriminator the discriminator of the parent class, if any
+     * @param DiscriminatorModel|null $selectingDiscriminator the discriminator whose mapping selects this class, if any
      */
-    public function __construct(ClassModel $class, Schema $schema, TargetProfile $target, InstalledPackages $packages, Diagnostics $diagnostics, bool $inline = false, ?SchemaReferences $references = null, ?DiscriminatorModel $parentDiscriminator = null)
+    public function __construct(ClassModel $class, Schema $schema, TargetProfile $target, InstalledPackages $packages, Diagnostics $diagnostics, bool $inline = false, ?SchemaReferences $references = null, ?DiscriminatorModel $selectingDiscriminator = null)
     {
         $this->class = $class;
         $this->schema = $schema;
@@ -45,7 +45,7 @@ final class ClassContext
         $this->diagnostics = $diagnostics;
         $this->inline = $inline;
         $this->references = $references ?? SchemaReferences::none();
-        $this->parentDiscriminator = $parentDiscriminator;
+        $this->selectingDiscriminator = $selectingDiscriminator;
     }
 
     /**
@@ -93,11 +93,12 @@ final class ClassContext
     }
 
     /**
-     * The discriminator of the class this one extends, whose mapping names the values that select it; null without a
-     * parent or when the parent has none.
+     * The discriminator of the nearest ancestor whose mapping lists this class, so its values that name the class
+     * select it; null for a class no discriminator selects. Instances of an intermediate class may also carry the
+     * values of its descendants.
      */
-    public function parentDiscriminator(): ?DiscriminatorModel
+    public function selectingDiscriminator(): ?DiscriminatorModel
     {
-        return $this->parentDiscriminator;
+        return $this->selectingDiscriminator;
     }
 }

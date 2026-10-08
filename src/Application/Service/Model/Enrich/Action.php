@@ -9,6 +9,7 @@ use MSSTC4PHP\DtoGenerator\Contract\ClassContext;
 use MSSTC4PHP\DtoGenerator\Contract\PropertyContext;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassModel;
+use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\DiscriminatorModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\PropertyModel;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\ResolvedSchema;
@@ -25,18 +26,16 @@ final class Action
     public function __invoke(Input $input): Output
     {
         $run = new EnrichmentRun($input, new Diagnostics());
-        $discriminators = [];
+        $models = [];
         foreach ($input->classes() as $built) {
-            $discriminators[$built->model()->name()->fqcn()] = $built->model()->discriminator();
+            $models[$built->model()->name()->fqcn()] = $built->model();
         }
 
         $classes = [];
         foreach ($input->classes() as $built) {
             $source = $built->model()->source();
             $inline = !$input->graph()->get($source) instanceof ResolvedSchema;
-            $parent = $built->model()->parent();
-            $parentDiscriminator = $parent === null ? null : $discriminators[$parent->fqcn()] ?? null;
-            $model = $this->enrich($built->model(), $run->index()->require($source), $inline, $parentDiscriminator, $run);
+            $model = $this->enrich($built->model(), $run->index()->require($source), $inline, $this->selectingDiscriminator($built->model(), $models), $run);
             $this->checkRendering($model, $input->target()->metadata(), $run->diagnostics());
             $classes[] = new BuiltClass($model, $built->source());
         }
@@ -54,27 +53,48 @@ final class Action
         }
     }
 
-    private function enrich(ClassModel $class, Schema $schema, bool $inline, ?DiscriminatorModel $parentDiscriminator, EnrichmentRun $run): ClassModel
+    /**
+     * A deep hierarchy shares the discriminator of its base, which may select a grandchild directly.
+     *
+     * @param array<string, ClassModel> $models by FQCN
+     */
+    private function selectingDiscriminator(ClassModel $class, array $models): ?DiscriminatorModel
+    {
+        $ancestor = $class->parent();
+        while ($ancestor !== null && isset($models[$ancestor->fqcn()])) {
+            $model = $models[$ancestor->fqcn()];
+            $discriminator = $model->discriminator();
+            if ($discriminator !== null && in_array($class->name()->fqcn(), array_map(static fn (ClassName $name): string => $name->fqcn(), $discriminator->mapping()), true)) {
+                return $discriminator;
+            }
+
+            $ancestor = $model->parent();
+        }
+
+        return null;
+    }
+
+    private function enrich(ClassModel $class, Schema $schema, bool $inline, ?DiscriminatorModel $selectingDiscriminator, EnrichmentRun $run): ClassModel
     {
         $input = $run->input();
         $diagnostics = $run->diagnostics();
-        $context = new ClassContext($class, $schema, $input->target(), $input->packages(), $diagnostics, $inline, $run->references(), $parentDiscriminator);
+        $context = new ClassContext($class, $schema, $input->target(), $input->packages(), $diagnostics, $inline, $run->references(), $selectingDiscriminator);
         $attributes = AttributeRules::admitted($input->registry()->enrichClass($context), $input->target(), $schema->location(), $diagnostics);
         $run->verify($attributes, $schema->location());
 
         $properties = [];
         foreach ($class->properties() as $property) {
-            $properties[] = $this->enrichProperty($property, $class, $run->index()->require($property->source()), $parentDiscriminator, $run);
+            $properties[] = $this->enrichProperty($property, $class, $run->index()->require($property->source()), $run);
         }
 
         return $class->withProperties(...$properties)->withAddedAttributes(...$attributes);
     }
 
-    private function enrichProperty(PropertyModel $property, ClassModel $owner, Schema $schema, ?DiscriminatorModel $parentDiscriminator, EnrichmentRun $run): PropertyModel
+    private function enrichProperty(PropertyModel $property, ClassModel $owner, Schema $schema, EnrichmentRun $run): PropertyModel
     {
         $input = $run->input();
         $diagnostics = $run->diagnostics();
-        $context = new PropertyContext($property, $owner, $schema, $input->target(), $input->packages(), $diagnostics, $run->references(), $parentDiscriminator);
+        $context = new PropertyContext($property, $owner, $schema, $input->target(), $input->packages(), $diagnostics, $run->references());
         $attributes = AttributeRules::admitted($input->registry()->enrichProperty($context), $input->target(), $schema->location(), $diagnostics);
         $run->verify($attributes, $schema->location());
 

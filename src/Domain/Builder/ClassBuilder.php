@@ -177,6 +177,8 @@ final class ClassBuilder
             new DefaultValue([]),
             new DocModel('Properties the schema does not declare.'),
             $additional->location(),
+            [],
+            true,
         );
     }
 

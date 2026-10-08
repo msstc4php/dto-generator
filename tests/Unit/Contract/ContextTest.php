@@ -35,17 +35,15 @@ final class ContextTest extends TestCase
         );
     }
 
-    public function testNamesTheDiscriminatorOfTheParentClass(): void
+    public function testNamesTheDiscriminatorThatSelectsTheClass(): void
     {
         $tag = EmitterFixture::tag();
         $schema = GraphFixture::load(['Tag' => ['type' => 'object', 'properties' => ['label' => ['type' => 'string']]]])->all()[0]->schema();
         $target = EmitterFixture::target('8.2', Mutability::IMMUTABLE);
         $discriminator = new DiscriminatorModel('kind', ['tag' => $tag->name()]);
 
-        self::assertNull((new ClassContext($tag, $schema, $target, new InstalledPackages(), new Diagnostics()))->parentDiscriminator());
-        self::assertNull((new PropertyContext($tag->properties()[0], $tag, $schema, $target, new InstalledPackages(), new Diagnostics()))->parentDiscriminator());
-        self::assertSame($discriminator, (new ClassContext($tag, $schema, $target, new InstalledPackages(), new Diagnostics(), false, null, $discriminator))->parentDiscriminator());
-        self::assertSame($discriminator, (new PropertyContext($tag->properties()[0], $tag, $schema, $target, new InstalledPackages(), new Diagnostics(), null, $discriminator))->parentDiscriminator());
+        self::assertNull((new ClassContext($tag, $schema, $target, new InstalledPackages(), new Diagnostics()))->selectingDiscriminator());
+        self::assertSame($discriminator, (new ClassContext($tag, $schema, $target, new InstalledPackages(), new Diagnostics(), false, null, $discriminator))->selectingDiscriminator());
     }
 
     public function testLetsAnEnricherFollowReferences(): void

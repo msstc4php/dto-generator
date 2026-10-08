@@ -27,6 +27,16 @@ final class ClassBuilderTest extends TestCase
 {
     private const AT = '/project/api/openapi.yaml#/components/schemas/User';
 
+    public function testMarksOnlyThePropertyThatCollectsUndeclaredOnes(): void
+    {
+        [$collecting] = $this->build(['type' => 'object', 'properties' => ['id' => ['type' => 'string']], 'additionalProperties' => ['type' => 'integer']]);
+        [$declared] = $this->build(['type' => 'object', 'properties' => ['additionalProperties' => ['type' => 'string']]]);
+
+        self::assertTrue($this->property($collecting, 'additionalProperties')->isAdditionalProperties());
+        self::assertFalse($this->property($collecting, 'id')->isAdditionalProperties());
+        self::assertFalse($this->property($declared, 'additionalProperties')->isAdditionalProperties());
+    }
+
     public function testBuildsPropertiesWithRequiredAndDefaults(): void
     {
         [$class, $messages] = $this->build([
