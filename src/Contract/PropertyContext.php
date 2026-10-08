@@ -6,6 +6,7 @@ namespace MSSTC4PHP\DtoGenerator\Contract;
 
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassModel;
+use MSSTC4PHP\DtoGenerator\Domain\Model\DiscriminatorModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\PropertyModel;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
 use MSSTC4PHP\DtoGenerator\Domain\Target\TargetProfile;
@@ -29,10 +30,13 @@ final class PropertyContext
 
     private SchemaReferences $references;
 
+    private ?DiscriminatorModel $parentDiscriminator;
+
     /**
      * @param SchemaReferences|null $references how `$ref`s resolve; none when omitted
+     * @param DiscriminatorModel|null $parentDiscriminator the discriminator of the parent class, if any
      */
-    public function __construct(PropertyModel $property, ClassModel $owner, Schema $schema, TargetProfile $target, InstalledPackages $packages, Diagnostics $diagnostics, ?SchemaReferences $references = null)
+    public function __construct(PropertyModel $property, ClassModel $owner, Schema $schema, TargetProfile $target, InstalledPackages $packages, Diagnostics $diagnostics, ?SchemaReferences $references = null, ?DiscriminatorModel $parentDiscriminator = null)
     {
         $this->property = $property;
         $this->owner = $owner;
@@ -41,6 +45,7 @@ final class PropertyContext
         $this->packages = $packages;
         $this->diagnostics = $diagnostics;
         $this->references = $references ?? SchemaReferences::none();
+        $this->parentDiscriminator = $parentDiscriminator;
     }
 
     public function property(): PropertyModel
@@ -79,5 +84,14 @@ final class PropertyContext
     public function references(): SchemaReferences
     {
         return $this->references;
+    }
+
+    /**
+     * The discriminator of the class this one extends, whose mapping names the values that select it; null without a
+     * parent or when the parent has none.
+     */
+    public function parentDiscriminator(): ?DiscriminatorModel
+    {
+        return $this->parentDiscriminator;
     }
 }

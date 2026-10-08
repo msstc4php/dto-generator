@@ -23,6 +23,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\ArgumentValue;
 use MSSTC4PHP\DtoGenerator\Domain\Model\AttributeArgument;
 use MSSTC4PHP\DtoGenerator\Domain\Model\AttributeModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
+use MSSTC4PHP\DtoGenerator\Domain\Model\DiscriminatorModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ImportAlias;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
 use MSSTC4PHP\DtoGenerator\Domain\Target\AccessorStyle;
@@ -82,6 +83,72 @@ final class EnrichTest extends TestCase
         });
 
         self::assertSame(['App\\Dto\\Pet' => ['email: App\\Attr\\Format(email)']], $this->attributes($output));
+    }
+
+    public function testTellsTheVariantsOfADiscriminatedBaseItsDiscriminatorWhateverTheOrder(): void
+    {
+        // Variants first: the parent's discriminator must not depend on which class is enriched first.
+        $schemas = [
+            'Cat' => ['allOf' => [['$ref' => '#/components/schemas/Pet'], ['properties' => ['lives' => ['type' => 'integer']]]]],
+            'Dog' => ['allOf' => [['$ref' => '#/components/schemas/Pet'], ['properties' => ['bark' => ['type' => 'string']]]]],
+            'Pet' => [
+                'type' => 'object',
+                'required' => ['petType'],
+                'properties' => ['petType' => ['type' => 'string']],
+                'discriminator' => ['propertyName' => 'petType', 'mapping' => ['cat' => '#/components/schemas/Cat', 'dog' => '#/components/schemas/Dog']],
+            ],
+        ];
+        $describe = static function (?DiscriminatorModel $discriminator): AttributeModel {
+            $described = $discriminator instanceof DiscriminatorModel ? $discriminator->propertyName() . ':' . implode(',', $discriminator->values()) : 'none';
+
+            return new AttributeModel(ClassName::fromFqcn('App\\Attr\\Variant'), [AttributeArgument::positional(ArgumentValue::literal($described))]);
+        };
+        $output = $this->enrich($schemas, static function (ExtensionRegistry $registry) use ($describe): void {
+            $registry->addClassEnricher(new class($describe) implements ClassEnricher {
+                /** @var Closure(?DiscriminatorModel): AttributeModel */
+                private Closure $describe;
+
+                /**
+                 * @param Closure(?DiscriminatorModel): AttributeModel $describe
+                 */
+                public function __construct(Closure $describe)
+                {
+                    $this->describe = $describe;
+                }
+
+                public function enrichClass(ClassContext $context): array
+                {
+                    return [($this->describe)($context->parentDiscriminator())];
+                }
+            });
+            $registry->addPropertyEnricher(new class($describe) implements PropertyEnricher {
+                /** @var Closure(?DiscriminatorModel): AttributeModel */
+                private Closure $describe;
+
+                /**
+                 * @param Closure(?DiscriminatorModel): AttributeModel $describe
+                 */
+                public function __construct(Closure $describe)
+                {
+                    $this->describe = $describe;
+                }
+
+                public function enrichProperty(PropertyContext $context): array
+                {
+                    return [($this->describe)($context->parentDiscriminator())];
+                }
+            });
+        });
+
+        self::assertSame([], $this->messages($output));
+        self::assertSame(
+            [
+                'App\\Dto\\Cat' => ['class: App\\Attr\\Variant(petType:cat,dog)', 'lives: App\\Attr\\Variant(petType:cat,dog)'],
+                'App\\Dto\\Dog' => ['class: App\\Attr\\Variant(petType:cat,dog)', 'bark: App\\Attr\\Variant(petType:cat,dog)'],
+                'App\\Dto\\Pet' => ['class: App\\Attr\\Variant(none)', 'petType: App\\Attr\\Variant(none)'],
+            ],
+            $this->attributes($output),
+        );
     }
 
     public function testRefusesNewInAttributeArgumentsBelowPhp81WhenStrict(): void
