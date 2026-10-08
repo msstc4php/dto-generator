@@ -9,6 +9,7 @@ use MSSTC4PHP\DtoGenerator\Contract\InstalledPackages;
 use MSSTC4PHP\DtoGenerator\Contract\PropertyContext;
 use MSSTC4PHP\DtoGenerator\Contract\SchemaReferences;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
+use MSSTC4PHP\DtoGenerator\Domain\Model\DiscriminatorModel;
 use MSSTC4PHP\DtoGenerator\Domain\Target\Mutability;
 use MSSTC4PHP\DtoGenerator\Tests\Support\EmitterFixture;
 use MSSTC4PHP\DtoGenerator\Tests\Support\GraphFixture;
@@ -32,6 +33,17 @@ final class ContextTest extends TestCase
             [$tag->properties()[0], $tag, $schema->requireProperty('label'), $target, $packages, $diagnostics],
             [$property->property(), $property->owner(), $property->schema(), $property->target(), $property->packages(), $property->diagnostics()],
         );
+    }
+
+    public function testNamesTheDiscriminatorThatSelectsTheClass(): void
+    {
+        $tag = EmitterFixture::tag();
+        $schema = GraphFixture::load(['Tag' => ['type' => 'object', 'properties' => ['label' => ['type' => 'string']]]])->all()[0]->schema();
+        $target = EmitterFixture::target('8.2', Mutability::IMMUTABLE);
+        $discriminator = new DiscriminatorModel('kind', ['tag' => $tag->name()]);
+
+        self::assertNull((new ClassContext($tag, $schema, $target, new InstalledPackages(), new Diagnostics()))->selectingDiscriminator());
+        self::assertSame($discriminator, (new ClassContext($tag, $schema, $target, new InstalledPackages(), new Diagnostics(), false, null, $discriminator))->selectingDiscriminator());
     }
 
     public function testLetsAnEnricherFollowReferences(): void

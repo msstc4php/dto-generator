@@ -33,6 +33,7 @@
                 // Closure::bind() of a static closure to a class that exists never returns null.
                 "MSSTC4PHP\\DtoGenerator\\ComposerPlugin::runsScripts",
                 "MSSTC4PHP\\DtoGenerator\\Domain\\Model\\ClassModel::__construct",
+                "MSSTC4PHP\\DtoGenerator\\Application\\Service\\Model\\Enrich\\Action::selectingDiscriminator",
                 "MSSTC4PHP\\DtoGenerator\\Application\\Service\\Model\\Build\\Registry::abandon",
                 "MSSTC4PHP\\DtoGenerator\\Application\\Service\\Model\\Build\\Registry::skip",
                 "MSSTC4PHP\\DtoGenerator\\Domain\\Model\\EnumModel::__construct",

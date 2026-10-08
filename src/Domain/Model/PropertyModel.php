@@ -27,9 +27,12 @@ final class PropertyModel
     /** @var list<AttributeModel> */
     private array $attributes;
 
+    private bool $additionalProperties;
+
     /**
      * @param string $wireName the name in the schema, kept for serialization
      * @param list<AttributeModel> $attributes
+     * @param bool $additionalProperties whether it collects the properties the schema does not declare
      */
     public function __construct(
         string $name,
@@ -39,7 +42,8 @@ final class PropertyModel
         ?DefaultValue $default,
         DocModel $doc,
         SchemaLocation $source,
-        array $attributes = []
+        array $attributes = [],
+        bool $additionalProperties = false
     ) {
         if (!Identifier::isValid($name) || $name === 'this' || Identifier::isSuperglobal($name)) {
             throw new InvalidModel(sprintf('"%s" is not a usable PHP property name (%s).', $name, $source->toString()));
@@ -66,6 +70,7 @@ final class PropertyModel
         $this->doc = $doc;
         $this->source = $source;
         $this->attributes = $attributes;
+        $this->additionalProperties = $additionalProperties;
     }
 
     public function name(): string
@@ -116,6 +121,15 @@ final class PropertyModel
         return $this->type instanceof NullableType;
     }
 
+    /**
+     * Whether it collects the properties the schema does not declare (`properties` beside an `additionalProperties`
+     * schema), rather than a declared property that may share its name.
+     */
+    public function isAdditionalProperties(): bool
+    {
+        return $this->additionalProperties;
+    }
+
     public function withAddedAttributes(AttributeModel ...$attributes): self
     {
         return new self(
@@ -127,6 +141,7 @@ final class PropertyModel
             $this->doc,
             $this->source,
             array_merge($this->attributes, $attributes),
+            $this->additionalProperties,
         );
     }
 }

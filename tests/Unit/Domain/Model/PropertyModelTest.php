@@ -34,6 +34,15 @@ final class PropertyModelTest extends TestCase
         self::assertSame($source, $property->source());
         self::assertSame([], $property->attributes());
         self::assertFalse($property->isNullable());
+        self::assertFalse($property->isAdditionalProperties());
+    }
+
+    public function testKeepsMarkingTheUndeclaredPropertiesWithMoreAttributes(): void
+    {
+        $property = new PropertyModel('additionalProperties', 'additionalProperties', ScalarType::string(), false, new DefaultValue([]), new DocModel(''), new SchemaLocation('a.json'), [], true);
+
+        self::assertTrue($property->isAdditionalProperties());
+        self::assertTrue($property->withAddedAttributes(new AttributeModel(ClassName::fromFqcn('App\First')))->isAdditionalProperties());
     }
 
     public function testKnowsWhenItIsNullable(): void

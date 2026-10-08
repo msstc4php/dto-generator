@@ -7,6 +7,7 @@ namespace MSSTC4PHP\DtoGenerator\Tests\Unit\Application\Service\Model;
 use Closure;
 use MSSTC4PHP\DtoGenerator\Application\Extension\Registry;
 use MSSTC4PHP\DtoGenerator\Application\Port\ClassVerifier;
+use MSSTC4PHP\DtoGenerator\Application\Service\Model\Build\BuiltClass;
 use MSSTC4PHP\DtoGenerator\Application\Service\Model\Enrich\Action;
 use MSSTC4PHP\DtoGenerator\Application\Service\Model\Enrich\Input;
 use MSSTC4PHP\DtoGenerator\Application\Service\Model\Enrich\Output;
@@ -23,6 +24,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\ArgumentValue;
 use MSSTC4PHP\DtoGenerator\Domain\Model\AttributeArgument;
 use MSSTC4PHP\DtoGenerator\Domain\Model\AttributeModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
+use MSSTC4PHP\DtoGenerator\Domain\Model\DiscriminatorModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ImportAlias;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
 use MSSTC4PHP\DtoGenerator\Domain\Target\AccessorStyle;
@@ -82,6 +84,99 @@ final class EnrichTest extends TestCase
         });
 
         self::assertSame(['App\\Dto\\Pet' => ['email: App\\Attr\\Format(email)']], $this->attributes($output));
+    }
+
+    public function testTellsAVariantTheDiscriminatorThatSelectsItWhateverTheOrder(): void
+    {
+        // Variants first: the base's discriminator must not depend on which class is enriched first.
+        $output = $this->enrich([
+            'Cat' => ['allOf' => [['$ref' => '#/components/schemas/Pet'], ['properties' => ['lives' => ['type' => 'integer']]]]],
+            'Dog' => ['allOf' => [['$ref' => '#/components/schemas/Pet'], ['properties' => ['bark' => ['type' => 'string']]]]],
+            'Pet' => $this->pet(['cat' => 'Cat', 'dog' => 'Dog']),
+        ], $this->selecting());
+
+        self::assertSame([], $this->messages($output));
+        self::assertSame(
+            ['App\\Dto\\Cat' => ['class: App\\Attr\\Selected(petType:cat,dog)'], 'App\\Dto\\Dog' => ['class: App\\Attr\\Selected(petType:cat,dog)'], 'App\\Dto\\Pet' => ['class: App\\Attr\\Selected(none)']],
+            $this->attributes($output),
+        );
+    }
+
+    public function testTellsAGrandchildTheDiscriminatorOfTheBaseThatSelectsIt(): void
+    {
+        $output = $this->enrich([
+            'Pet' => $this->pet(['cat' => 'Cat', 'mammal' => 'Mammal']),
+            'Mammal' => ['allOf' => [['$ref' => '#/components/schemas/Pet'], ['properties' => ['fur' => ['type' => 'string']]]]],
+            'Cat' => ['allOf' => [['$ref' => '#/components/schemas/Mammal'], ['properties' => ['lives' => ['type' => 'integer']]]]],
+        ], $this->selecting());
+
+        self::assertSame([], $this->messages($output));
+        self::assertSame(
+            ['App\\Dto\\Pet' => ['class: App\\Attr\\Selected(none)'], 'App\\Dto\\Mammal' => ['class: App\\Attr\\Selected(petType:cat,mammal)'], 'App\\Dto\\Cat' => ['class: App\\Attr\\Selected(petType:cat,mammal)']],
+            $this->attributes($output),
+        );
+    }
+
+    public function testFindsNoDiscriminatorBeyondAParentOutsideTheRun(): void
+    {
+        $output = $this->enrich([
+            'Pet' => $this->pet(['cat' => 'Cat']),
+            'Cat' => ['allOf' => [['$ref' => '#/components/schemas/Pet'], ['properties' => ['lives' => ['type' => 'integer']]]]],
+        ], $this->selecting(), '8.2', true, MetadataMode::ATTRIBUTES, null, static fn (array $classes): array => array_values(array_filter(
+            $classes,
+            static fn (BuiltClass $class): bool => $class->model()->name()->fqcn() !== 'App\\Dto\\Pet',
+        )));
+
+        self::assertSame(['App\\Dto\\Cat' => ['class: App\\Attr\\Selected(none)']], $this->attributes($output));
+    }
+
+    public function testStopsAtACycleOfParents(): void
+    {
+        // The builder breaks cycles; a hand-made input may still close one.
+        $output = $this->enrich([
+            'Pet' => ['type' => 'object', 'properties' => ['name' => ['type' => 'string']]],
+            'Cat' => ['allOf' => [['$ref' => '#/components/schemas/Pet'], ['properties' => ['lives' => ['type' => 'integer']]]]],
+        ], $this->selecting(), '8.2', true, MetadataMode::ATTRIBUTES, null, static fn (array $classes): array => array_map(
+            static fn (BuiltClass $class): BuiltClass => $class->model()->name()->fqcn() === 'App\\Dto\\Pet'
+                ? new BuiltClass($class->model()->withHierarchy($class->model()->kind(), ClassName::fromFqcn('App\\Dto\\Cat'), null), $class->source())
+                : $class,
+            $classes,
+        ));
+
+        self::assertSame(['App\\Dto\\Pet' => ['class: App\\Attr\\Selected(none)'], 'App\\Dto\\Cat' => ['class: App\\Attr\\Selected(none)']], $this->attributes($output));
+    }
+
+    /**
+     * @param array<string, string> $mapping value => schema name
+     *
+     * @return array<string, mixed>
+     */
+    private function pet(array $mapping): array
+    {
+        return [
+            'type' => 'object',
+            'required' => ['petType'],
+            'properties' => ['petType' => ['type' => 'string']],
+            'discriminator' => ['propertyName' => 'petType', 'mapping' => array_map(static fn (string $name): string => '#/components/schemas/' . $name, $mapping)],
+        ];
+    }
+
+    /**
+     * Marks every class with the discriminator that selects it.
+     */
+    private function selecting(): Closure
+    {
+        return static function (ExtensionRegistry $registry): void {
+            $registry->addClassEnricher(new class implements ClassEnricher {
+                public function enrichClass(ClassContext $context): array
+                {
+                    $discriminator = $context->selectingDiscriminator();
+                    $described = $discriminator instanceof DiscriminatorModel ? $discriminator->propertyName() . ':' . implode(',', $discriminator->values()) : 'none';
+
+                    return [new AttributeModel(ClassName::fromFqcn('App\\Attr\\Selected'), [AttributeArgument::positional(ArgumentValue::literal($described))])];
+                }
+            });
+        };
     }
 
     public function testRefusesNewInAttributeArgumentsBelowPhp81WhenStrict(): void
@@ -161,8 +256,9 @@ final class EnrichTest extends TestCase
     /**
      * @param array<string, array<array-key, mixed>> $schemas
      * @param Closure(ExtensionRegistry):void $register
+     * @param (Closure(list<BuiltClass>): list<BuiltClass>)|null $adjust changes the built classes before enriching
      */
-    private function enrich(array $schemas, Closure $register, string $php = '8.2', bool $strict = true, string $metadata = MetadataMode::ATTRIBUTES, ?ClassVerifier $verifier = null): Output
+    private function enrich(array $schemas, Closure $register, string $php = '8.2', bool $strict = true, string $metadata = MetadataMode::ATTRIBUTES, ?ClassVerifier $verifier = null, ?Closure $adjust = null): Output
     {
         $built = ModelFixture::build($schemas);
         $diagnostics = new Diagnostics();
@@ -198,7 +294,9 @@ final class EnrichTest extends TestCase
             $strict,
         );
 
-        return (new Action())(new Input($built->classes(), $built->enums(), GraphFixture::load($schemas), $target, $registry, new InstalledPackages(), $verifier));
+        $classes = $adjust instanceof Closure ? $adjust($built->classes()) : $built->classes();
+
+        return (new Action())(new Input($classes, $built->enums(), GraphFixture::load($schemas), $target, $registry, new InstalledPackages(), $verifier));
     }
 
     /**
