@@ -61,7 +61,9 @@ final class Action
     private function selectingDiscriminator(ClassModel $class, array $models): ?DiscriminatorModel
     {
         $ancestor = $class->parent();
-        while ($ancestor !== null && isset($models[$ancestor->fqcn()])) {
+        $seen = [];
+        while ($ancestor !== null && isset($models[$ancestor->fqcn()]) && !isset($seen[$ancestor->fqcn()])) {
+            $seen[$ancestor->fqcn()] = true;
             $model = $models[$ancestor->fqcn()];
             $discriminator = $model->discriminator();
             if ($discriminator !== null && in_array($class->name()->fqcn(), array_map(static fn (ClassName $name): string => $name->fqcn(), $discriminator->mapping()), true)) {

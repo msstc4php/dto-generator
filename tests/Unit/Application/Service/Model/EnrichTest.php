@@ -122,9 +122,28 @@ final class EnrichTest extends TestCase
         $output = $this->enrich([
             'Pet' => $this->pet(['cat' => 'Cat']),
             'Cat' => ['allOf' => [['$ref' => '#/components/schemas/Pet'], ['properties' => ['lives' => ['type' => 'integer']]]]],
-        ], $this->selecting(), '8.2', true, MetadataMode::ATTRIBUTES, null, ['App\\Dto\\Pet']);
+        ], $this->selecting(), '8.2', true, MetadataMode::ATTRIBUTES, null, static fn (array $classes): array => array_values(array_filter(
+            $classes,
+            static fn (BuiltClass $class): bool => $class->model()->name()->fqcn() !== 'App\\Dto\\Pet',
+        )));
 
         self::assertSame(['App\\Dto\\Cat' => ['class: App\\Attr\\Selected(none)']], $this->attributes($output));
+    }
+
+    public function testStopsAtACycleOfParents(): void
+    {
+        // The builder breaks cycles; a hand-made input may still close one.
+        $output = $this->enrich([
+            'Pet' => ['type' => 'object', 'properties' => ['name' => ['type' => 'string']]],
+            'Cat' => ['allOf' => [['$ref' => '#/components/schemas/Pet'], ['properties' => ['lives' => ['type' => 'integer']]]]],
+        ], $this->selecting(), '8.2', true, MetadataMode::ATTRIBUTES, null, static fn (array $classes): array => array_map(
+            static fn (BuiltClass $class): BuiltClass => $class->model()->name()->fqcn() === 'App\\Dto\\Pet'
+                ? new BuiltClass($class->model()->withHierarchy($class->model()->kind(), ClassName::fromFqcn('App\\Dto\\Cat'), null), $class->source())
+                : $class,
+            $classes,
+        ));
+
+        self::assertSame(['App\\Dto\\Pet' => ['class: App\\Attr\\Selected(none)'], 'App\\Dto\\Cat' => ['class: App\\Attr\\Selected(none)']], $this->attributes($output));
     }
 
     /**
@@ -237,9 +256,9 @@ final class EnrichTest extends TestCase
     /**
      * @param array<string, array<array-key, mixed>> $schemas
      * @param Closure(ExtensionRegistry):void $register
-     * @param list<string> $omitted FQCNs of classes left out of the run, as if another run generated them
+     * @param (Closure(list<BuiltClass>): list<BuiltClass>)|null $adjust changes the built classes before enriching
      */
-    private function enrich(array $schemas, Closure $register, string $php = '8.2', bool $strict = true, string $metadata = MetadataMode::ATTRIBUTES, ?ClassVerifier $verifier = null, array $omitted = []): Output
+    private function enrich(array $schemas, Closure $register, string $php = '8.2', bool $strict = true, string $metadata = MetadataMode::ATTRIBUTES, ?ClassVerifier $verifier = null, ?Closure $adjust = null): Output
     {
         $built = ModelFixture::build($schemas);
         $diagnostics = new Diagnostics();
@@ -275,7 +294,7 @@ final class EnrichTest extends TestCase
             $strict,
         );
 
-        $classes = array_values(array_filter($built->classes(), static fn (BuiltClass $class): bool => !in_array($class->model()->name()->fqcn(), $omitted, true)));
+        $classes = $adjust instanceof Closure ? $adjust($built->classes()) : $built->classes();
 
         return (new Action())(new Input($classes, $built->enums(), GraphFixture::load($schemas), $target, $registry, new InstalledPackages(), $verifier));
     }
