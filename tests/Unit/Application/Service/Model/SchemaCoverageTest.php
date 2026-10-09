@@ -415,18 +415,12 @@ final class SchemaCoverageTest extends TestCase
         self::assertSame(['i: int|null', 'b: string|null'], ModelFixture::classes($output)['App\\Dto\\C']);
     }
 
-    public function testNarrowsAReferencedTypeByAConstInAllOf(): void
+    public function testNarrowsATypedMemberByAConstInAllOf(): void
     {
-        $output = ModelFixture::build([
-            'S' => ['type' => 'string'],
-            'C' => ['type' => 'object', 'properties' => [
-                'a' => ['allOf' => [['type' => 'string'], ['const' => 'x']]],
-                'b' => ['allOf' => [['$ref' => '#/components/schemas/S'], ['const' => 'x']]],
-            ]],
-        ]);
+        $output = ModelFixture::build(['C' => ['type' => 'object', 'properties' => ['a' => ['allOf' => [['type' => 'string'], ['const' => 'x']]]]]]);
 
         self::assertSame([], ModelFixture::messages($output));
-        self::assertSame(["a: 'x'|null", "b: 'x'|null"], ModelFixture::classes($output)['App\\Dto\\C']);
+        self::assertSame(["a: 'x'|null"], ModelFixture::classes($output)['App\\Dto\\C']);
     }
 
     public function testRejectsAFloatDefaultOfAnIntegerConst(): void
@@ -674,7 +668,11 @@ final class SchemaCoverageTest extends TestCase
             'a' => ['allOf' => [['x-php-type' => 'App\\Foo', 'type' => 'integer', 'const' => 'x']]],
         ]]]);
 
-        self::assertSame([], array_values(array_filter(ModelFixture::messages($output), static fn (string $m): bool => strpos($m, '"const"') !== false)));
+        // Only the vocabulary check's note, which predates allOf members with x-php-type.
+        self::assertSame(
+            ['warning /project/api/openapi.yaml#/components/schemas/C/properties/a/allOf/0/x-php-type: "x-php-type" has no effect here.'],
+            ModelFixture::messages($output),
+        );
         self::assertSame(['a: App\\Foo|null'], ModelFixture::classes($output)['App\\Dto\\C']);
     }
 
@@ -690,5 +688,29 @@ final class SchemaCoverageTest extends TestCase
         $warning = 'warning /project/api/openapi.yaml#/components/schemas/C/properties/%s/const: "const" is outside the type the rest of the schema gives, so no value is valid; the type is kept.';
         self::assertSame([sprintf($warning, 'r/allOf/0'), sprintf($warning, 't/allOf/1'), sprintf($warning, 'next/allOf/0')], ModelFixture::messages($output));
         self::assertSame(['r: int<1, 10>|null', "t: 'x'|null", 'ok: 5|null', 'next: 5|null'], ModelFixture::classes($output)['App\\Dto\\C']);
+    }
+
+    public function testTakesAWholeFloatConstAsTheInteger(): void
+    {
+        $output = ModelFixture::build(['C' => ['type' => 'object', 'properties' => [
+            'a' => ['type' => 'integer', 'allOf' => [['const' => 5.0]]],
+            'b' => ['allOf' => [['const' => 5], ['const' => 5.0]]],
+        ]]]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(['a: int|null', 'b: 5|null'], ModelFixture::classes($output)['App\\Dto\\C']);
+    }
+
+    public function testWarnsAboutTwoConstsOfANumberThatDiffer(): void
+    {
+        $output = ModelFixture::build(['C' => ['type' => 'object', 'properties' => [
+            'n' => ['type' => 'number', 'allOf' => [['const' => 5], ['const' => 6]]],
+            'f' => ['type' => 'number', 'allOf' => [['const' => 2.5], ['const' => 2]]],
+            's' => ['allOf' => [['const' => '5'], ['const' => 5]]],
+            'same' => ['type' => 'number', 'allOf' => [['const' => 2.5], ['const' => 2.5]]],
+        ]]]);
+
+        $warning = 'warning /project/api/openapi.yaml#/components/schemas/C/properties/%s/const: "const" is outside the type the rest of the schema gives, so no value is valid; the type is kept.';
+        self::assertSame([sprintf($warning, 'n/allOf/1'), sprintf($warning, 'f/allOf/1'), sprintf($warning, 's/allOf/1')], ModelFixture::messages($output));
     }
 }

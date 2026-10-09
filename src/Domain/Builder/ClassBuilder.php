@@ -238,7 +238,7 @@ final class ClassBuilder
         $required = $required && !$type instanceof NullableType;
         $default = null;
         if (!$required) {
-            $type = TypeMapper::nullable($type);
+            $type = NullableType::of($type);
             $default = $this->defaultFor($schema, $type, $diagnostics) ?? new DefaultValue(null);
         }
 

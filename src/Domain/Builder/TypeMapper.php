@@ -58,11 +58,6 @@ final class TypeMapper
         return $this->mapWithin($schema, $diagnostics, []);
     }
 
-    public static function nullable(TypeModel $type): TypeModel
-    {
-        return $type instanceof MixedType || $type instanceof NullableType ? $type : new NullableType($type);
-    }
-
     /**
      * @param array<string, true> $aliases alias schemas being inlined, to stop $ref loops
      */
@@ -70,7 +65,7 @@ final class TypeMapper
     {
         $type = $this->bareType($schema, $diagnostics, $aliases);
 
-        return $this->admitsNull($schema) ? self::nullable($type) : $type;
+        return $this->admitsNull($schema) ? NullableType::of($type) : $type;
     }
 
     /**
@@ -223,7 +218,7 @@ final class TypeMapper
 
         $type = $this->subsume(UnionType::of(...$members));
 
-        return $nullable ? self::nullable($type) : $type;
+        return $nullable ? NullableType::of($type) : $type;
     }
 
     /**
@@ -397,7 +392,7 @@ final class TypeMapper
         $key = $target->location()->toString();
         $declared = $this->declared($key);
         if ($declared instanceof TypeModel) {
-            return $this->admitsNull($target->schema()) ? self::nullable($declared) : $declared;
+            return $this->admitsNull($target->schema()) ? NullableType::of($declared) : $declared;
         }
 
         if ($this->declarations->isSkipped($key)) {

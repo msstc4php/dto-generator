@@ -12,18 +12,21 @@ use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
  */
 final class FormatCheck
 {
+    /** @var list<non-empty-string> */
     public const DATE = ['date-time', 'date'];
 
+    /** @var list<non-empty-string> */
     private const STRING = [
         'email', 'idn-email', 'uri', 'uri-reference', 'iri', 'iri-reference', 'uri-template', 'uuid', 'hostname',
         'idn-hostname', 'ipv4', 'ipv6', 'time', 'duration', 'byte', 'binary', 'password', 'regex', 'json-pointer',
         'relative-json-pointer', 'date-time', 'date',
     ];
 
+    /** @var array<'string'|'int'|'float', array{formats: list<non-empty-string>, type: non-empty-string, result: non-empty-string}> */
     private const KNOWN = [
-        'string' => [self::STRING, 'string', 'a string'],
-        'int' => [['int32', 'int64'], 'integer', 'an int'],
-        'float' => [['float', 'double'], 'number', 'a float'],
+        'string' => ['formats' => self::STRING, 'type' => 'string', 'result' => 'a string'],
+        'int' => ['formats' => ['int32', 'int64'], 'type' => 'integer', 'result' => 'an int'],
+        'float' => ['formats' => ['float', 'double'], 'type' => 'number', 'result' => 'a float'],
     ];
 
     private function __construct()
@@ -36,12 +39,13 @@ final class FormatCheck
     public static function check(Schema $schema, string $kind, Diagnostics $diagnostics): void
     {
         $format = $schema->format();
-        if ($format === null || !isset(self::KNOWN[$kind]) || in_array($format, self::KNOWN[$kind][0], true)) {
+        $known = self::KNOWN[$kind] ?? null;
+        if ($format === null || $known === null || in_array($format, $known['formats'], true)) {
             return;
         }
 
         $diagnostics->warning(
-            sprintf('Unknown %s format "%s"; the property stays %s.', self::KNOWN[$kind][1], $format, self::KNOWN[$kind][2]),
+            sprintf('Unknown %s format "%s"; the property stays %s.', $known['type'], $format, $known['result']),
             $schema->location()->child('format'),
         );
     }

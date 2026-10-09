@@ -15,6 +15,8 @@ use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
 
 /**
  * The types `const` gives: a scalar with its PHPDoc literal, alone or narrowing the type of the rest of an `allOf`.
+ *
+ * @phpstan-import-type JsonValue from Json
  */
 final class ConstMapper
 {
@@ -81,18 +83,23 @@ final class ConstMapper
 
     /**
      * Each bare `const` member of `allOf` narrows the type the rest gives to its literal. A constant no value of that
-     * type matches leaves the schema with no valid value; the type is kept and the constant reported.
+     * type matches, or one other than an earlier constant, leaves the schema with no valid value; the type is kept and
+     * the constant reported.
      */
     public function narrow(Schema $schema, TypeModel $base, Diagnostics $diagnostics): TypeModel
     {
         $type = $base instanceof NullableType ? $base->inner() : $base;
+        /** @var list<JsonValue> $fixed the value an earlier constant fixed, if any */
+        $fixed = [];
         foreach ($schema->allOf() as $member) {
-            $literal = $this->isBare($member) ? $this->type($member, $diagnostics) : null;
+            $literal = self::isBare($member) ? $this->type($member, $diagnostics) : null;
             if (!$literal instanceof ScalarType || !$type instanceof MixedType && !$type instanceof ScalarType) {
                 continue;
             }
 
-            if ($type instanceof ScalarType && !DefaultFit::fits(Json::value($member->keyword('const')), $type)) {
+            $value = $this->whole(Json::value($member->keyword('const')));
+            $other = $fixed !== [] && $fixed[0] !== $value;
+            if ($other || ($type instanceof ScalarType && !DefaultFit::fits($value, $type))) {
                 $diagnostics->warning(
                     '"const" is outside the type the rest of the schema gives, so no value is valid; the type is kept.',
                     $member->location()->child('const'),
@@ -101,13 +108,34 @@ final class ConstMapper
                 continue;
             }
 
+            $fixed = [$value];
             // A float keeps its type for an integer constant: the property holds 5.0 as well.
             if ($type instanceof MixedType || $type->kind() === $literal->kind()) {
                 $type = $literal;
             }
         }
 
-        return $base instanceof NullableType ? TypeMapper::nullable($type) : $type;
+        return $base instanceof NullableType ? NullableType::of($type) : $type;
+    }
+
+    /**
+     * JSON Schema counts 5.0 as the integer 5, so a whole float compares as one.
+     *
+     * @param JsonValue $value
+     *
+     * @return JsonValue
+     */
+    private function whole($value)
+    {
+        return is_float($value) ? $this->wholeFloat($value) : $value;
+    }
+
+    /**
+     * @return int|float
+     */
+    private function wholeFloat(float $value)
+    {
+        return $value === (float) (int) $value ? (int) $value : $value;
     }
 
     /**

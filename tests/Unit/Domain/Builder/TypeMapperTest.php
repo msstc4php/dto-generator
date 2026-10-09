@@ -195,9 +195,9 @@ final class TypeMapperTest extends TestCase
     {
         $nullable = new NullableType(ScalarType::string());
 
-        self::assertInstanceOf(MixedType::class, TypeMapper::nullable(new MixedType()));
-        self::assertSame($nullable, TypeMapper::nullable($nullable));
-        self::assertSame('int|null', TypeMapper::nullable(ScalarType::int())->describe());
+        self::assertInstanceOf(MixedType::class, NullableType::of(new MixedType()));
+        self::assertSame($nullable, NullableType::of($nullable));
+        self::assertSame('int|null', NullableType::of(ScalarType::int())->describe());
     }
 
     public function testRecognisesEnumSchemas(): void
