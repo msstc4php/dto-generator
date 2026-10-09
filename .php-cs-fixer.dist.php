@@ -30,5 +30,6 @@ return (new PhpCsFixer\Config())
         'blank_line_before_statement' => ['statements' => ['declare', 'return']],
     ])
     ->setFinder($finder)
+    ->setParallelConfig(PhpCsFixer\Runner\Parallel\ParallelConfigFactory::detect())
     ->setRiskyAllowed(true)
 ;

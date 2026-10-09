@@ -121,11 +121,12 @@ final class RegistryTest extends TestCase
     public function testReportsTwoExtensionsRegisteringOneFormat(): void
     {
         $registry = $this->registry($diagnostics);
-        $add = static function (ExtensionRegistry $registry): void {
+        $registry->register($this->extension('one', static function (ExtensionRegistry $registry): void {
             $registry->addFormat('money', new FormatMapping(ScalarType::string()));
-        };
-        $registry->register($this->extension('one', $add), []);
-        $registry->register($this->extension('two', $add), []);
+        }), []);
+        $registry->register($this->extension('two', static function (ExtensionRegistry $registry): void {
+            $registry->addFormat('money', new FormatMapping(ScalarType::int()));
+        }), []);
 
         self::assertSame(['error ' . self::CONFIG . '#: Extensions "one" and "two" both register format "money".'], $this->messages($diagnostics));
         self::assertSame('string', $registry->formats([])['money']->describe());

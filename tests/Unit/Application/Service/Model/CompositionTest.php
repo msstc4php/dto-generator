@@ -802,6 +802,31 @@ final class CompositionTest extends TestCase
         ], ModelFixture::messages($output));
     }
 
+    public function testTakesNothingFromAMemberThatIsNotAnObject(): void
+    {
+        $output = ModelFixture::build([
+            'Cat' => ['allOf' => [
+                ['type' => 'string', 'required' => ['lives'], 'allOf' => [['properties' => ['name' => ['type' => 'string']]]]],
+                ['properties' => ['lives' => ['type' => 'integer']]],
+            ]],
+        ], [], ['*'], AllOfStrategy::MERGE);
+
+        self::assertSame(['error /project/api/openapi.yaml#/components/schemas/Cat/allOf/0: An allOf member of a class must be an object schema.'], ModelFixture::messages($output));
+        self::assertSame(['lives: int|null'], ModelFixture::classes($output)['App\Dto\Cat']);
+    }
+
+    public function testMergesOnlyWhatAnAliasNames(): void
+    {
+        $output = ModelFixture::build([
+            'Pet' => ['type' => 'object', 'properties' => ['name' => ['type' => 'string']]],
+            'Alias' => ['$ref' => '#/components/schemas/Pet', 'allOf' => [['properties' => ['tag' => ['type' => 'string']]]]],
+            'Cat' => ['allOf' => [['$ref' => '#/components/schemas/Alias'], ['properties' => ['lives' => ['type' => 'integer']]]]],
+        ], [], ['*'], AllOfStrategy::MERGE);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(['name: string|null', 'lives: int|null'], ModelFixture::classes($output)['App\Dto\Cat']);
+    }
+
     public function testTakesAVariantThroughAnAlias(): void
     {
         $cat = ['type' => 'object', 'properties' => ['petType' => ['type' => 'string'], 'lives' => ['type' => 'integer']]];

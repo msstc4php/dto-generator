@@ -234,7 +234,7 @@ final class LoadTest extends TestCase
 
     public function testRejectsSchemasThatAreNotAnObject(): void
     {
-        $output = $this->load([self::SPEC => ['openapi' => '3.1.0', 'components' => ['schemas' => [['type' => 'object']]]]]);
+        $output = $this->load([self::SPEC => ['openapi' => '3.1.0', 'components' => ['schemas' => [['type' => 'object'], 'not a schema']]]]);
 
         self::assertSame(['error /project/api/openapi.yaml#/components/schemas: "schemas" must be an object.'], $this->messages($output));
     }

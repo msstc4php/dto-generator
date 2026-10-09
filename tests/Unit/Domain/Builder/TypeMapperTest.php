@@ -111,6 +111,7 @@ final class TypeMapperTest extends TestCase
             'string anyOf with a typed and a constraining member' => [['type' => 'string', 'anyOf' => [['pattern' => 'a'], ['type' => 'integer']]], 'string|int'],
             'string constrained by anyOf' => [['type' => 'string', 'anyOf' => [['pattern' => 'a'], ['pattern' => 'b']]], 'string'],
             'oneOf with null first' => [['oneOf' => [['type' => 'null'], ['type' => 'string'], ['type' => 'integer']]], 'string|int|null'],
+            'allOf wrapping a union' => [['allOf' => [['oneOf' => [['type' => 'string'], ['type' => 'integer']]]]], 'string|int'],
         ];
     }
 
@@ -169,6 +170,11 @@ final class TypeMapperTest extends TestCase
                 ["warning {$at}: \"allOf\" beside a typed \"oneOf\" or \"anyOf\" is not represented; the union alone gives the type."],
             ],
             'oneOf with an inline object' => [['oneOf' => [['type' => 'object', 'properties' => ['a' => []]], ['type' => 'string']]], 'mixed', ["error {$at}/oneOf/0: This inline object is not generated (only properties of generated classes get one); move it to components/schemas and use \$ref."]],
+            'string anyOf with an untyped enum member' => [
+                ['type' => 'string', 'anyOf' => [['pattern' => 'a'], ['enum' => ['b']]]],
+                'mixed',
+                ["warning {$at}/anyOf/1: This inline enum is not generated (only properties of generated classes get one), so the property keeps its plain type."],
+            ],
             'boolean enum' => [['type' => 'boolean', 'enum' => [true]], 'bool', ["warning {$at}: This enum has no string or integer value, so it is not generated and the property keeps its plain type."]],
             'nullable class by reference' => [['$ref' => '#/components/schemas/MaybeTag'], 'App\Dto\Tag|null', []],
             'map schema' => [['type' => 'object', 'additionalProperties' => ['type' => 'string']], 'array<array-key, string>', []],

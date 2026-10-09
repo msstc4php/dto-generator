@@ -171,8 +171,6 @@ final class SchemaParser
         $names = is_string($value) ? [$value] : (is_array($value) && Json::isList($value) ? $value : []);
         if ($names === []) {
             $diagnostics->error('"type" must be a type name or a non-empty list of type names.', $at);
-
-            return [];
         }
 
         $types = [];

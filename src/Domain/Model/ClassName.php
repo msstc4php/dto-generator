@@ -60,10 +60,6 @@ final class ClassName
      */
     public function reservedNamespaceSegments(): array
     {
-        if ($this->namespace === '') {
-            return [];
-        }
-
         return array_values(array_filter(
             explode('\\', $this->namespace),
             static fn (string $segment): bool => Identifier::isPhp74Keyword($segment),

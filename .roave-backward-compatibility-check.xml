@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<!-- Only what an extension or a caller of the generator may use is public API: the SPI (Contract and the Domain types
+     it hands out, as the Symfony bridge's deptrac layer CoreSpi names them) and the entry points. -->
+<roave-bc-check
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="tools/vendor/roave/backward-compatibility-check/Resources/schema.xsd">
+    <baseline>
+        <ignored-regex>#^(?!.*MSSTC4PHP\\DtoGenerator\\(Contract\\|Domain\\(Model|Schema|Diagnostic|Target|Shared)\\|DtoGenerator\b|Application\\Service\\Generate\\(Input|Mode|Output|Status)\b)).*$#</ignored-regex>
+    </baseline>
+</roave-bc-check>

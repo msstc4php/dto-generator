@@ -188,6 +188,36 @@ final class SchemaParserTest extends TestCase
         ];
     }
 
+    /**
+     * @dataProvider malformedMembers
+     *
+     * @param array<string, JsonValue> $node
+     */
+    public function testKeepsNoMembersFromAMalformedKeyword(array $node, string $message): void
+    {
+        $diagnostics = new Diagnostics();
+        $schema = (new SchemaParser())->parse($node, $this->root(), $diagnostics);
+
+        self::assertSame([$message], array_map(static fn (Diagnostic $d): string => $d->toString(), $diagnostics->all()));
+        self::assertSame([], $schema->propertyNames());
+        self::assertSame([], $schema->required());
+    }
+
+    /**
+     * @return array<string, array{array<string, JsonValue>, string}>
+     */
+    public static function malformedMembers(): array
+    {
+        $at = 'error a.yaml#/components/schemas/User';
+
+        return [
+            'properties string' => [['properties' => 'id'], "{$at}/properties: \"properties\" must be an object."],
+            'properties list' => [['properties' => [['type' => 'string']]], "{$at}/properties: \"properties\" must be an object."],
+            'required string' => [['required' => 'id'], "{$at}/required: \"required\" must be a list of property names."],
+            'required map' => [['required' => ['a' => 'id']], "{$at}/required: \"required\" must be a list of property names."],
+        ];
+    }
+
     private function root(): SchemaLocation
     {
         return new SchemaLocation('a.yaml', '/components/schemas/User');
