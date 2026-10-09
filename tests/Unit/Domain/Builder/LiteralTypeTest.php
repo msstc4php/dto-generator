@@ -30,6 +30,7 @@ final class LiteralTypeTest extends TestCase
     {
         self::assertSame("'a'|'b'|1", LiteralType::union(['a', 'b', 1]));
         self::assertNull(LiteralType::union(['a', "it's"]));
+        self::assertNull(LiteralType::union([]));
     }
 
     public function testTellsWhetherALiteralRefinementAdmitsAValue(): void

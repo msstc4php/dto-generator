@@ -36,10 +36,16 @@ final class LiteralType
     }
 
     /**
-     * @param non-empty-list<int|string|bool> $values
+     * Null when a value is unsafe or there is none.
+     *
+     * @param list<int|string|bool> $values
      */
     public static function union(array $values): ?string
     {
+        if ($values === []) {
+            return null;
+        }
+
         $literals = [];
         foreach ($values as $value) {
             $literal = self::of($value);
