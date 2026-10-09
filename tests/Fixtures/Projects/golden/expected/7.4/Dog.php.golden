@@ -10,8 +10,12 @@ final class Dog extends Pet
 {
     private ?bool $bark;
 
-    public function __construct(string $petType, string $name, ?bool $bark = null)
+    public function __construct(string $name, string $petType = 'Dog', ?bool $bark = null)
     {
+        if ($petType !== 'Dog') {
+            throw new \InvalidArgumentException(sprintf('"%s" does not select Dog by "petType".', $petType));
+        }
+
         parent::__construct($petType, $name);
         $this->bark = $bark;
     }

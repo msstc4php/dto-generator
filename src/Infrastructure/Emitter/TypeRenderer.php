@@ -119,7 +119,7 @@ final class TypeRenderer
         }
 
         if ($type instanceof EnumType) {
-            if ($this->enums()) {
+            if ($this->nativeEnums()) {
                 return $this->printer->type($this->className($type->className()));
             }
 
@@ -208,7 +208,7 @@ final class TypeRenderer
     {
         if ($type instanceof EnumType) {
             // Before 8.1 an enum is a class of constants, so the property holds the backing value.
-            return $this->enums() ? $this->className($type->className()) : new Identifier($type->backing()->value());
+            return $this->nativeEnums() ? $this->className($type->className()) : new Identifier($type->backing()->value());
         }
 
         if ($type instanceof ScalarType) {
@@ -226,7 +226,7 @@ final class TypeRenderer
         throw $this->unsupported($type);
     }
 
-    private function enums(): bool
+    public function nativeEnums(): bool
     {
         return $this->target->supports(Capability::from(Capability::ENUMS));
     }

@@ -8,14 +8,13 @@ namespace App\Golden;
 
 final readonly class Car extends Vehicle
 {
-    public function __construct(string $kind, public ?int $doors = null)
+    public function __construct(string $kind = 'Car', public ?int $doors = null)
     {
-        parent::__construct($kind);
-    }
+        if ($kind !== 'Car') {
+            throw new \InvalidArgumentException(sprintf('"%s" does not select Car by "kind".', $kind));
+        }
 
-    public function withKind(string $kind): self
-    {
-        return new self($kind, $this->doors);
+        parent::__construct($kind);
     }
 
     public function withDoors(?int $doors): self

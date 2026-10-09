@@ -8,8 +8,12 @@ namespace App\Golden;
 
 final readonly class Cat extends Pet
 {
-    public function __construct(string $petType, string $name, public ?int $lives = 9)
+    public function __construct(string $name, string $petType = 'cat', public ?int $lives = 9)
     {
+        if ($petType !== 'cat') {
+            throw new \InvalidArgumentException(sprintf('"%s" does not select Cat by "petType".', $petType));
+        }
+
         parent::__construct($petType, $name);
     }
 

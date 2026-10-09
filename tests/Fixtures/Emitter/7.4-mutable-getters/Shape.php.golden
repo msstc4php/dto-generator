@@ -19,14 +19,4 @@ abstract class Shape
     {
         return $this->kind;
     }
-
-    /**
-     * @return static
-     */
-    public function setKind(string $kind): self
-    {
-        $this->kind = $kind;
-
-        return $this;
-    }
 }

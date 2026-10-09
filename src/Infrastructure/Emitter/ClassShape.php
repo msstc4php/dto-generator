@@ -6,7 +6,11 @@ namespace MSSTC4PHP\DtoGenerator\Infrastructure\Emitter;
 
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassKind;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassModel;
+use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
+use MSSTC4PHP\DtoGenerator\Domain\Model\DiscriminatorModel;
+use MSSTC4PHP\DtoGenerator\Domain\Model\DiscriminatorValues;
 use MSSTC4PHP\DtoGenerator\Domain\Model\PropertyModel;
+use MSSTC4PHP\DtoGenerator\Domain\Shared\DefaultValue;
 use MSSTC4PHP\DtoGenerator\Domain\Target\Capability;
 use MSSTC4PHP\DtoGenerator\Domain\Target\ClassForm;
 use MSSTC4PHP\DtoGenerator\Domain\Target\TargetProfile;
@@ -42,6 +46,64 @@ final class ClassShape
     public function form(): ClassForm
     {
         return $this->form;
+    }
+
+    public function className(): ClassName
+    {
+        return $this->class->name();
+    }
+
+    public function selection(PropertyModel $property): ?DiscriminatorValues
+    {
+        return $this->class->discriminatorValuesOf($property->name());
+    }
+
+    /**
+     * A discriminator selected by one value defaults to it; selected by several, it keeps its own default only when
+     * that is one of them.
+     */
+    public function defaultOf(PropertyModel $property): ?DefaultValue
+    {
+        $selection = $this->selection($property);
+        $default = $property->default();
+        if (!$selection instanceof DiscriminatorValues) {
+            return $default;
+        }
+
+        $values = $selection->values();
+        if (count($values) === 1) {
+            return new DefaultValue($values[0]);
+        }
+
+        return $default instanceof DefaultValue && in_array($default->value(), $values, true) ? $default : null;
+    }
+
+    /**
+     * A copy with another discriminator would skip the constructor's check, or select another class when read back.
+     */
+    public function hasMutators(PropertyModel $property): bool
+    {
+        $discriminator = $this->class->discriminator();
+
+        return !$this->selection($property) instanceof DiscriminatorValues
+            && (!$discriminator instanceof DiscriminatorModel || $discriminator->propertyName() !== $property->wireName());
+    }
+
+    /**
+     * @return list<array{PropertyModel, DiscriminatorValues}> root discriminator first
+     */
+    public function checks(): array
+    {
+        $checks = [];
+        foreach ($this->class->discriminatorValues() as $values) {
+            foreach ($this->all() as $property) {
+                if ($values->isChecked() && $property->name() === $values->property()) {
+                    $checks[] = [$property, $values];
+                }
+            }
+        }
+
+        return $checks;
     }
 
     /**

@@ -12,6 +12,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\ClassModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\DiscriminatorModel;
+use MSSTC4PHP\DtoGenerator\Domain\Model\DiscriminatorValues;
 use MSSTC4PHP\DtoGenerator\Domain\Model\DocModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumBacking;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumCase;
@@ -72,6 +73,9 @@ final class EmitterFixture
             self::dog($mutability),
             self::shape($mutability),
             self::circle($mutability),
+            self::square($mutability),
+            self::wallet($mutability),
+            self::euroWallet($mutability),
         ];
     }
 
@@ -134,14 +138,53 @@ final class EmitterFixture
         return self::model('App\Dto\Shape', null, [self::property('kind', ScalarType::string(), true)], $mutability)->withHierarchy(
             ClassKind::from(ClassKind::ABSTRACT),
             null,
-            new DiscriminatorModel('kind', ['circle' => ClassName::fromFqcn('App\Dto\Circle')]),
+            new DiscriminatorModel('kind', [
+                'circle' => ClassName::fromFqcn('App\Dto\Circle'),
+                'round' => ClassName::fromFqcn('App\Dto\Circle'),
+                'square' => ClassName::fromFqcn('App\Dto\Square'),
+            ]),
         );
     }
 
+    /**
+     * Selected by two values, so the discriminator stays a required parameter.
+     */
     public static function circle(string $mutability = Mutability::IMMUTABLE): ClassModel
     {
         return self::model('App\Dto\Circle', null, [self::property('radius', ScalarType::float(), true)], $mutability)
             ->withHierarchy(ClassKind::from(ClassKind::FINAL), ClassName::fromFqcn('App\Dto\Shape'), null)
+            ->withDiscriminatorValues(new DiscriminatorValues('kind', ['circle', 'round']))
+        ;
+    }
+
+    /**
+     * Selected by one value, its default, so the discriminator moves behind the required parameters.
+     */
+    public static function square(string $mutability = Mutability::IMMUTABLE): ClassModel
+    {
+        return self::model('App\Dto\Square', null, [self::property('side', ScalarType::float(), true)], $mutability)
+            ->withHierarchy(ClassKind::from(ClassKind::FINAL), ClassName::fromFqcn('App\Dto\Shape'), null)
+            ->withDiscriminatorValues(new DiscriminatorValues('kind', ['square']))
+        ;
+    }
+
+    /**
+     * A base discriminated by an enum.
+     */
+    public static function wallet(string $mutability = Mutability::IMMUTABLE): ClassModel
+    {
+        return self::model('App\Dto\Wallet', null, [self::property('currency', EnumType::of(self::currency()), true)], $mutability)->withHierarchy(
+            ClassKind::from(ClassKind::ABSTRACT),
+            null,
+            new DiscriminatorModel('currency', ['EUR' => ClassName::fromFqcn('App\Dto\EuroWallet')]),
+        );
+    }
+
+    public static function euroWallet(string $mutability = Mutability::IMMUTABLE): ClassModel
+    {
+        return self::model('App\Dto\EuroWallet', null, [self::property('balance', ScalarType::int(), true)], $mutability)
+            ->withHierarchy(ClassKind::from(ClassKind::FINAL), ClassName::fromFqcn('App\Dto\Wallet'), null)
+            ->withDiscriminatorValues(new DiscriminatorValues('currency', ['EUR']))
         ;
     }
 

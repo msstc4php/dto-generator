@@ -12,6 +12,8 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\ClassKind;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassType;
+use MSSTC4PHP\DtoGenerator\Domain\Model\DiscriminatorModel;
+use MSSTC4PHP\DtoGenerator\Domain\Model\DiscriminatorValues;
 use MSSTC4PHP\DtoGenerator\Domain\Model\DocModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumBacking;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumCase;
@@ -21,6 +23,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\ImportAlias;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ListType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\MixedType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\NullableType;
+use MSSTC4PHP\DtoGenerator\Domain\Model\PropertyModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ScalarType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\UnionType;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
@@ -706,5 +709,142 @@ final class Order
 
         self::assertStringNotContainsString('use ', $code);
         self::assertStringContainsString(' * @\Lib\Constraints\Valid' . "\n", $code);
+    }
+
+    public function testChecksTheDiscriminatorBeforeCallingTheParent(): void
+    {
+        $code = (new PhpParserEmitter())->emit(EmitterFixture::circle(), EmitterFixture::target('8.2', Mutability::IMMUTABLE), EmitterFixture::shape()->properties());
+
+        self::assertStringContainsString(
+            "    public function __construct(string \$kind, public float \$radius)\n    {\n"
+            . "        if (\$kind !== 'circle' && \$kind !== 'round') {\n"
+            . "            throw new \\InvalidArgumentException(sprintf('\"%s\" does not select Circle by \"kind\".', \$kind));\n"
+            . "        }\n\n"
+            . "        parent::__construct(\$kind);\n    }",
+            $code,
+        );
+        self::assertStringContainsString('return new self($this->kind, $radius);', $code);
+        self::assertStringNotContainsString('withKind', $code);
+    }
+
+    public function testMovesADefaultedDiscriminatorBehindTheRequiredParameters(): void
+    {
+        $code = (new PhpParserEmitter())->emit(EmitterFixture::square(), EmitterFixture::target('8.1', Mutability::IMMUTABLE), EmitterFixture::shape()->properties());
+
+        self::assertStringContainsString("    public function __construct(public readonly float \$side, string \$kind = 'square')\n", $code);
+        self::assertStringContainsString("        if (\$kind !== 'square') {\n", $code);
+        self::assertStringContainsString("        parent::__construct(\$kind);\n", $code);
+        self::assertStringContainsString("    public function withSide(float \$side): self\n    {\n        return new self(\$side, \$this->kind);\n    }", $code);
+        self::assertStringNotContainsString('withKind', $code);
+    }
+
+    public function testComparesAnEnumDiscriminatorWithItsCases(): void
+    {
+        $inherited = EmitterFixture::wallet()->properties();
+        $modern = (new PhpParserEmitter())->emit(EmitterFixture::euroWallet(), EmitterFixture::target('8.1', Mutability::IMMUTABLE), $inherited);
+        $legacy = (new PhpParserEmitter())->emit(EmitterFixture::euroWallet(), EmitterFixture::target('7.4', Mutability::IMMUTABLE), $inherited);
+
+        self::assertStringContainsString('public function __construct(public readonly int $balance, Currency $currency = Currency::EUR)', $modern);
+        self::assertStringContainsString('if ($currency !== Currency::EUR) {', $modern);
+        self::assertStringContainsString("does not select EuroWallet by \"currency\".', \$currency->value)", $modern);
+        self::assertStringContainsString('public function __construct(int $balance, string $currency = Currency::EUR)', $legacy);
+        self::assertStringContainsString('if ($currency !== Currency::EUR) {', $legacy);
+        self::assertStringContainsString("does not select EuroWallet by \"currency\".', \$currency)", $legacy);
+    }
+
+    public function testReadsTheValueOfANullableEnumSafely(): void
+    {
+        $currency = EnumType::of(EmitterFixture::currency());
+        $purse = EmitterFixture::model('App\Dto\Purse', null, [EmitterFixture::property('currency', new NullableType($currency), false, new DefaultValue(null))])
+            ->withHierarchy(ClassKind::from(ClassKind::ABSTRACT), null, new DiscriminatorModel('currency', ['EUR' => ClassName::fromFqcn('App\Dto\Coin')]))
+        ;
+        $coin = EmitterFixture::model('App\Dto\Coin', null, [])
+            ->withHierarchy(ClassKind::from(ClassKind::FINAL), $purse->name(), null)
+            ->withDiscriminatorValues(new DiscriminatorValues('currency', ['EUR', 'in-progress']))
+        ;
+
+        $code = (new PhpParserEmitter())->emit($coin, EmitterFixture::target('8.1', Mutability::IMMUTABLE), $purse->properties());
+
+        self::assertStringContainsString('public function __construct(?Currency $currency)', $code);
+        self::assertStringContainsString('if ($currency !== Currency::EUR && $currency !== Currency::IN_PROGRESS) {', $code);
+        self::assertStringContainsString('$currency?->value', $code);
+    }
+
+    public function testEscapesTheWireNameInTheMessageFormat(): void
+    {
+        $wire = "pet%type's";
+        $petType = new PropertyModel('petType', $wire, ScalarType::string(), true, null, DocModel::none(), new SchemaLocation('/project/api/openapi.yaml', '/components/schemas/Pet'));
+        $pet = EmitterFixture::model('App\Dto\Pet', null, [$petType])
+            ->withHierarchy(ClassKind::from(ClassKind::ABSTRACT), null, new DiscriminatorModel($wire, ['cat' => ClassName::fromFqcn('App\Dto\Cat')]))
+        ;
+        $cat = EmitterFixture::model('App\Dto\Cat', null, [])
+            ->withHierarchy(ClassKind::from(ClassKind::FINAL), $pet->name(), null)
+            ->withDiscriminatorValues(new DiscriminatorValues('petType', ['cat']))
+        ;
+
+        $code = (new PhpParserEmitter())->emit($cat, EmitterFixture::target('8.2', Mutability::IMMUTABLE), $pet->properties());
+
+        self::assertStringContainsString("sprintf('\"%s\" does not select Cat by \"pet%%type\\'s\".', \$petType)", $code);
+    }
+
+    public function testLeavesOutACheckTheTypeAlreadyMakes(): void
+    {
+        $square = EmitterFixture::model('App\Dto\Square', null, [])
+            ->withHierarchy(ClassKind::from(ClassKind::FINAL), ClassName::fromFqcn('App\Dto\Shape'), null)
+            ->withDiscriminatorValues(new DiscriminatorValues('kind', ['square'], false))
+        ;
+
+        $code = (new PhpParserEmitter())->emit($square, EmitterFixture::target('8.2', Mutability::IMMUTABLE), EmitterFixture::shape()->properties());
+
+        self::assertStringContainsString("    public function __construct(string \$kind = 'square')\n    {\n        parent::__construct(\$kind);\n    }", $code);
+        self::assertStringNotContainsString('InvalidArgumentException', $code);
+    }
+
+    public function testKeepsAPropertyDefaultOnlyWhenItSelectsTheClass(): void
+    {
+        $choice = EmitterFixture::model('App\Dto\Choice', null, [
+            EmitterFixture::property('mode', new NullableType(ScalarType::string()), false, new DefaultValue('a')),
+            EmitterFixture::property('size', new NullableType(ScalarType::int()), false, new DefaultValue(null)),
+        ])->withHierarchy(ClassKind::from(ClassKind::ABSTRACT), null, new DiscriminatorModel('mode', ['a' => ClassName::fromFqcn('App\Dto\Pick')]));
+        $pick = static fn (string ...$values): ClassModel => EmitterFixture::model('App\Dto\Pick', null, [EmitterFixture::property('label', ScalarType::string(), true)])
+            ->withHierarchy(ClassKind::from(ClassKind::FINAL), $choice->name(), null)
+            ->withDiscriminatorValues(new DiscriminatorValues('mode', $values))
+        ;
+        $target = EmitterFixture::target('8.2', Mutability::IMMUTABLE);
+
+        $kept = (new PhpParserEmitter())->emit($pick('a', 'b'), $target, $choice->properties());
+        $dropped = (new PhpParserEmitter())->emit($pick('b', 'c'), $target, $choice->properties());
+
+        self::assertStringContainsString("public function __construct(public string \$label, ?string \$mode = 'a', ?int \$size = null)", $kept);
+        self::assertStringContainsString('public function __construct(public string $label, ?string $mode, ?int $size = null)', $dropped);
+        self::assertStringContainsString('parent::__construct($mode, $size);', $dropped);
+    }
+
+    public function testGivesTheDiscriminatorNoSetterOrWither(): void
+    {
+        $emitter = new PhpParserEmitter();
+        foreach (['7.4', '8.0', '8.5'] as $php) {
+            self::assertStringNotContainsString('withKind', $emitter->emit(EmitterFixture::shape(), EmitterFixture::target($php, Mutability::IMMUTABLE)), $php);
+        }
+
+        $mutable = $emitter->emit(EmitterFixture::shape(Mutability::MUTABLE), EmitterFixture::target('8.2', Mutability::MUTABLE, AccessorStyle::GETTERS));
+        self::assertStringNotContainsString('setKind', $mutable);
+        self::assertStringContainsString('public function getKind(): string', $mutable);
+
+        // The only variant of a base keeps the discriminator as its own property.
+        $solo = EmitterFixture::model('App\Dto\Solo', null, [EmitterFixture::property('kind', ScalarType::string(), true)])
+            ->withDiscriminatorValues(new DiscriminatorValues('kind', ['solo']))
+        ;
+        $code = $emitter->emit($solo, EmitterFixture::target('8.5', Mutability::IMMUTABLE));
+        self::assertStringContainsString("public function __construct(public string \$kind = 'solo')", $code);
+        self::assertStringNotContainsString('withKind', $code);
+    }
+
+    public function testRejectsDiscriminatorValuesOfAnUndeclaredProperty(): void
+    {
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessage('App\Dto\Tag checks the discriminator $kind, which it neither declares nor inherits.');
+
+        (new PhpParserEmitter())->emit(EmitterFixture::tag()->withDiscriminatorValues(new DiscriminatorValues('kind', ['tag'])), EmitterFixture::target('8.2', Mutability::IMMUTABLE));
     }
 }
