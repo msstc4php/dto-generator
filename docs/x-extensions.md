@@ -15,6 +15,7 @@ them; the [Symfony bridge](https://github.com/msstc4symfony/dto-generator-bridge
 | `x-php-all-of` | schema | `extends` / `merge` | Overrides `dto.allOfStrategy` for this `allOf` |
 | `x-php-attributes` | schema, property | list | Attributes to write |
 | `x-enum-descriptions` | schema with `enum` | map | PHPDoc per enum case |
+| `x-enum-varnames` | schema with `enum` | list | Names of the enum cases |
 | an alias from `attributeAliases` | schema, property | any | An attribute built from a template |
 
 ## Names
@@ -83,6 +84,19 @@ state:
 Each description becomes the PHPDoc of its enum case, or of its constant before PHP 8.1. A key that is not an enum
 value is an error.
 
+## `x-enum-varnames`
+
+```yaml
+code:
+  type: integer
+  enum: [1, 2]
+  x-enum-varnames: [Active, Blocked]     # case ACTIVE = 1; case BLOCKED = 2 (instead of VALUE_1, VALUE_2)
+```
+
+The list holds one name per non-null enum value, by position, as in openapi-generator (a value listed twice keeps
+its first name). Names are normalised like the values (`Active` → `ACTIVE`); a wrong length, a name with no usable
+characters or two names giving one case is an error.
+
 ## `x-php-attributes`
 
 A list of attributes for the class (on a schema) or the property:
@@ -140,5 +154,5 @@ properties:
 - `{value}` is the whole value of the key; when the placeholder is the entire string, the value keeps its type
   (number, list, map).
 - `{value.<key>}` is a field of a map value; a value without that field is an error.
-- An alias must start with `x-` and stay outside `x-php-`, `x-dto-`, `x-enum-descriptions` and the keys extensions
+- An alias must start with `x-` and stay outside `x-php-`, `x-dto-`, `x-enum-descriptions`, `x-enum-varnames` and the keys extensions
   claim.

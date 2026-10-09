@@ -6,6 +6,20 @@ All notable changes to this package are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Inline objects and enums in a `oneOf`/`anyOf` become classes: named after the member's `title`, else
+  `<Parent><Property>Option<N>`. Those in the `items`, `additionalProperties` or union members of a named alias
+  become `<Alias>Item`, `<Alias>Value`, `<Alias>Option<N>`. Both used to be errors.
+- `const` gives the property its type with a PHPDoc literal (`@phpstan-var 'card'`) instead of `mixed`.
+- `x-enum-varnames` names the enum cases.
+- A warning for keywords no generated type expresses (`prefixItems`, `patternProperties`, `if`/`then`/`else`,
+  `not`…) and for OpenAPI 3.0 `nullable: true`.
+
+### Changed
+
+- An `enum` mixing strings and integers gives a union of its literals (`'low'|1`) with a warning instead of an error.
+
 ## [1.1.1] - 2026-10-09
 
 ### Fixed
