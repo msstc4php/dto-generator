@@ -306,7 +306,7 @@ final class SelectingValuesTest extends TestCase
                 'discriminator' => ['propertyName' => 'kind', 'mapping' => ['cat' => '#/components/schemas/Cat']],
             ],
             'Cat' => ['allOf' => [['$ref' => '#/components/schemas/Pet'], ['type' => 'object', 'properties' => ['meow' => ['type' => 'string']]]]],
-            'Product' => ['allOf' => [['$ref' => '#/components/schemas/Named'], ['type' => 'object', 'properties' => ['price' => ['type' => 'integer'], 'species' => ['type' => 'string']]]]],
+            'Product' => ['allOf' => [['$ref' => '#/components/schemas/Named'], ['type' => 'object', 'properties' => ['price' => ['type' => 'integer']]]]],
         ]);
 
         $restored = [];
@@ -352,7 +352,7 @@ final class SelectingValuesTest extends TestCase
                 'discriminator' => ['propertyName' => 'species', 'mapping' => ['cat' => '#/components/schemas/Cat']],
             ],
             'Cat' => ['allOf' => [['$ref' => '#/components/schemas/Pet'], ['type' => 'object', 'properties' => ['meow' => ['type' => 'string']]]]],
-            'Product' => ['allOf' => [['$ref' => '#/components/schemas/Named'], ['type' => 'object', 'properties' => ['price' => ['type' => 'integer']]]]],
+            'Product' => ['allOf' => [['$ref' => '#/components/schemas/Named'], ['type' => 'object', 'properties' => ['price' => ['type' => 'integer'], 'species' => ['type' => 'string']]]]],
         ]);
 
         $restored = [];
