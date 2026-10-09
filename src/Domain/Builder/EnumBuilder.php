@@ -80,7 +80,8 @@ final class EnumBuilder
             if (isset($taken[$case])) {
                 $diagnostics->error(
                     sprintf('Enum values %s and %s both become case %s.', $this->show($taken[$case]), $this->show($value), $case),
-                    $at->child((string) $index),
+                    // The name the user wrote is where to fix it.
+                    $varname === null ? $at->child((string) $index) : $schema->location()->child('x-enum-varnames', (string) $varname[1]),
                 );
                 $failed = true;
 

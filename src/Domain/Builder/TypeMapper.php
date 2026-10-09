@@ -231,9 +231,36 @@ final class TypeMapper
             return new MixedType();
         }
 
-        $type = UnionType::of(...$members);
+        $type = $this->subsume(UnionType::of(...$members));
 
         return $nullable ? self::nullable($type) : $type;
+    }
+
+    /**
+     * A plain `string` already admits `'a'` and `non-empty-string`: the refined member of a kind is dropped beside the
+     * plain one.
+     */
+    private function subsume(TypeModel $type): TypeModel
+    {
+        if (!$type instanceof UnionType) {
+            return $type;
+        }
+
+        $plain = [];
+        foreach ($type->members() as $member) {
+            if ($member instanceof ScalarType && $member->phpDoc() === null) {
+                $plain[] = $member->kind();
+            }
+        }
+
+        $kept = [];
+        foreach ($type->members() as $member) {
+            if (!$member instanceof ScalarType || $member->phpDoc() === null || !in_array($member->kind(), $plain, true)) {
+                $kept[] = $member;
+            }
+        }
+
+        return UnionType::of(...$kept);
     }
 
     /**
@@ -250,6 +277,7 @@ final class TypeMapper
             static fn (Schema $member): bool => $member->ref() !== null
                 || $member->nonNullTypes() !== []
                 || $member->enum() !== null
+                || $member->hasKeyword('const')
                 || SchemaShape::isComposed($member)
                 || $member->propertyNames() !== []
                 || $member->extensions()->has('x-php-type'),
@@ -278,34 +306,42 @@ final class TypeMapper
     }
 
     /**
-     * The type of the one allowed value; null leaves the schema's own type (a null, array or object constant).
+     * The type of the one allowed value, as the property holds it; null leaves the schema's own type: a format mapped to
+     * a class or a date wins, as do null, array and object constants, and a declared type the constant contradicts.
      */
     private function constType(Schema $schema, Diagnostics $diagnostics): ?TypeModel
     {
+        $format = $schema->format();
+        if ($format !== null && (isset($this->formats[$format]) || in_array($format, self::DATE_FORMATS, true))) {
+            return null;
+        }
+
         $value = Json::value($schema->keyword('const'));
-        if (is_string($value)) {
-            $type = ScalarType::string(LiteralType::of($value));
-            $kind = SchemaType::STRING;
-        } elseif (is_int($value)) {
-            $type = ScalarType::int(LiteralType::of($value));
-            $kind = SchemaType::INTEGER;
+        $declared = array_map(static fn (SchemaType $type): string => $type->value(), $schema->nonNullTypes());
+        $allows = static fn (string $type): bool => $declared === [] || in_array($type, $declared, true);
+        // JSON Schema counts 2.0 as an integer and every integer as a number.
+        // The round trip leaves out fractions and floats beyond the range of int.
+        $whole = is_int($value) || (is_float($value) && $value === (float) (int) $value) ? (int) $value : null;
+        if ($whole !== null && in_array(SchemaType::INTEGER, $declared, true)) {
+            return ScalarType::int(LiteralType::of($whole));
+        }
+
+        if (is_int($value) && $declared === []) {
+            return ScalarType::int(LiteralType::of($value));
+        }
+
+        if (is_int($value) || is_float($value)) {
+            $type = in_array(SchemaType::NUMBER, $declared, true) || $declared === [] ? ScalarType::float() : null;
+        } elseif (is_string($value)) {
+            $type = $allows(SchemaType::STRING) ? ScalarType::string(LiteralType::of($value)) : null;
         } elseif (is_bool($value)) {
-            $type = ScalarType::bool(LiteralType::of($value));
-            $kind = SchemaType::BOOLEAN;
-        } elseif (is_float($value)) {
-            $type = ScalarType::float();
-            $kind = SchemaType::NUMBER;
+            $type = $allows(SchemaType::BOOLEAN) ? ScalarType::bool(LiteralType::of($value)) : null;
         } else {
             return null;
         }
 
-        $declared = array_map(static fn (SchemaType $type): string => $type->value(), $schema->nonNullTypes());
-        // JSON Schema counts integers as numbers too.
-        $fits = in_array($kind, $declared, true) || ($kind === SchemaType::INTEGER && in_array(SchemaType::NUMBER, $declared, true));
-        if ($declared !== [] && !$fits) {
-            $diagnostics->error('"const" is not of the declared type.', $schema->location()->child('const'));
-
-            return new MixedType();
+        if (!$type instanceof ScalarType) {
+            $diagnostics->warning('"const" is not of the declared type; the property keeps its declared type.', $schema->location()->child('const'));
         }
 
         return $type;

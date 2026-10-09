@@ -12,16 +12,24 @@ final class UnsupportedKeywords
 {
     private const NO_EFFECT = [
         'prefixItems', 'patternProperties', 'if', 'then', 'else', 'not', 'dependentSchemas', 'dependentRequired',
-        'unevaluatedProperties', 'unevaluatedItems', 'contains', 'propertyNames',
+        'unevaluatedProperties', 'unevaluatedItems', 'contains', 'minContains', 'maxContains', 'propertyNames',
+        'additionalItems', 'dependencies', '$dynamicRef',
     ];
 
     private function __construct()
     {
     }
 
-    public static function warning(string $keyword): ?string
+    /**
+     * @param mixed $value
+     */
+    public static function warning(string $keyword, $value): ?string
     {
         if ($keyword === 'nullable') {
+            if ($value !== true) {
+                return null;
+            }
+
             return '"nullable" is OpenAPI 3.0 and has no effect in 3.1; write type: [T, \'null\'].';
         }
 

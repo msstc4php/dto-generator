@@ -21,7 +21,7 @@ final class LiteralTypeTest extends TestCase
 
     public function testLeavesUnsafeStringsUnrefined(): void
     {
-        foreach (["it's", 'a|b', 'x*/', "two\nlines", 'back\\slash', 'é'] as $value) {
+        foreach (["it's", 'a|b', 'x*/', "two\nlines", 'back\\slash', 'é', '{@link x}'] as $value) {
             self::assertNull(LiteralType::of($value), $value);
         }
     }

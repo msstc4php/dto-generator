@@ -26,6 +26,8 @@ The generator reads OpenAPI 3.1 documents in YAML or JSON and generates a class 
 | `$ref` | the referenced class or enum | |
 | `x-php-type` | that class | |
 | `const: 'card'`, `const: 5`, `const: true` | `string`, `int`, `bool` | `'card'`, `5`, `true` |
+| `type: number` with `const: 2`; `const: 1.5` | `float` | |
+| a `oneOf`/`anyOf` of `const` members | the union of their literals (`'a'\|'b'`) | |
 | `enum` mixing strings and integers (`[low, 1]`) | `string\|int` (PHP 8.0+); no native type on 7.4 | `'low'\|1`, with a warning |
 
 Map keys are `array-key`, not `string`: PHP turns a JSON key such as `"200"` into the integer `200`.
@@ -105,12 +107,19 @@ Classes are `final`, except the bases of `allOf` and of discriminated unions. At
   error asks to move them to `components/schemas`.
 - **A missing key and `null` are the same.** An optional property is `null` either way.
 - **Not interpreted:** `prefixItems`, `patternProperties`, `if`/`then`/`else`, `not`, `dependentSchemas`,
-  `dependentRequired`, `unevaluatedProperties`, `unevaluatedItems`, `contains`, `propertyNames`. Each gives a warning;
+  `dependentRequired`, `unevaluatedProperties`, `unevaluatedItems`, `contains`, `minContains`, `maxContains`,
+  `propertyNames`, `additionalItems`, `dependencies`, `$dynamicRef`. Each gives a warning, except in a schema with
+  `x-php-type` or `x-php-skip`;
   the PHP type ignores them. `readOnly`/`writeOnly` are ignored without a warning: they describe requests and
   responses, which one DTO does not tell apart.
 - **OpenAPI 3.0 `nullable: true` has no effect** and gives a warning; use `type: [T, 'null']`.
-- **Strings in literal types are plain.** A `const` or enum string with quotes, backslashes, `|`, `*` or non-ASCII
-  characters keeps the type `string` without the literal.
+- **`const`** keeps a date or a `formats` class when `format` names one, and keeps the declared `type` (with a
+  warning) when the constant does not fit it. A `default` must equal the `const` or, for a mixed enum, one of its
+  values.
+- **Strings in literal types are plain.** A `const` or enum string with quotes, backslashes, `|`, `*`, `{`, `}`, `@`
+  or non-ASCII characters keeps the type `string` without the literal.
+- **Hoisted names give way to named schemas.** An inline member whose title or derived name equals a schema in
+  `components/schemas` gets a collision error; the named schema keeps its class.
 - **Remote `$ref`** (`https://…`) and anchors (`$anchor`, `#Name`) are not supported.
 - **Discriminator values are not enforced.** A variant's discriminator property stays a constructor argument, so
   `new Cat('dog', …)` is accepted. A bare name in `discriminator.mapping` is resolved against the file holding the

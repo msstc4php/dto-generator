@@ -46,6 +46,8 @@ final class Action
         $config = $input->config();
         $registry = new Registry();
         $enums = new EnumBuilder($this->names);
+        /** @var list<array{Schema, string, int}> $aliases named non-object schemas with their name and source */
+        $aliases = [];
 
         foreach ($input->graph()->all() as $resolved) {
             $source = $resolved->source();
@@ -77,7 +79,7 @@ final class Action
             }
 
             if (!$isClass && !$isEnum) {
-                $this->hoistFromAlias($schema, $resolved->name(), $config->sources()[$source]->namespace(), $source, $registry, $enums, $diagnostics);
+                $aliases[] = [$schema, $resolved->name(), $source];
 
                 continue;
             }
@@ -91,6 +93,11 @@ final class Action
             if ($name instanceof ClassName && $registry->claim($name, $schema, $diagnostics)) {
                 $this->declare($schema, $name, $source, $isEnum, $registry, $enums, $diagnostics);
             }
+        }
+
+        // Only once every named schema holds its name, so a derived or titled inline name never takes one.
+        foreach ($aliases as [$alias, $aliasName, $source]) {
+            $this->hoistFromAlias($alias, $aliasName, $config->sources()[$source]->namespace(), $source, $registry, $enums, $diagnostics);
         }
 
         // Every named class is declared by now, so `allOf` can tell which members it may extend.
@@ -249,7 +256,8 @@ final class Action
     }
 
     /**
-     * Declares the inline objects and enums of a class's properties, looking through arrays (`…Item`).
+     * Declares the inline objects and enums of a class's properties, looking through arrays (`…Item`), maps (`…Value`)
+     * and the members of unions (`…Option<N>`).
      */
     private function hoist(Schema $owner, Composition $composition, ClassName $ownerName, int $source, Registry $registry, EnumBuilder $enums, Diagnostics $diagnostics): void
     {
@@ -333,12 +341,17 @@ final class Action
      */
     private function inlines(Schema $schema, string $suffix, Diagnostics $diagnostics, Registry $registry): array
     {
+        // x-php-type maps the whole value to an existing class, so nothing under it is generated.
+        if ($schema->extensions()->has('x-php-type')) {
+            return [];
+        }
+
         // A discriminated union becomes a base class only as a named schema (spec §5.3); inline it is a union type.
         if ((SchemaShape::isClass($schema) && !SchemaShape::isDiscriminated($schema)) || SchemaShape::isEnum($schema)) {
             return [[$schema, $suffix, null]];
         }
 
-        if (SchemaShape::hasUnion($schema) && $schema->allOf() === [] && $schema->propertyNames() === []) {
+        if (SchemaShape::hasUnion($schema) && $schema->allOf() === [] && ($schema->propertyNames() === [] || SchemaShape::isDiscriminated($schema))) {
             return $this->unionMembers($schema, $suffix, $diagnostics, $registry);
         }
 

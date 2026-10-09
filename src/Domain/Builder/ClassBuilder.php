@@ -272,6 +272,56 @@ final class ClassBuilder
         return $name;
     }
 
+    /**
+     * The values `const` and a mixed enum allow are compared as JSON values, whether or not the type carries them as a
+     * PHPDoc literal.
+     *
+     * @param JsonValue $value
+     */
+    private function forbiddenBySchema(Schema $schema, $value): ?string
+    {
+        if ($schema->hasKeyword('const')) {
+            $const = Json::value($schema->keyword('const'));
+
+            return $this->sameJson($value, $const) ? null : sprintf('Default %s is not the "const" value %s; null is used instead.', $this->json($value), $this->json($const));
+        }
+
+        if (!SchemaShape::isMixedEnum($schema)) {
+            return null;
+        }
+
+        foreach ($schema->enum() ?? [] as $allowed) {
+            if ($this->sameJson($value, $allowed)) {
+                return null;
+            }
+        }
+
+        return sprintf('Default %s is not one of the "enum" values; null is used instead.', $this->json($value));
+    }
+
+    /**
+     * JSON equality: 2 and 2.0 are the same number, "2" and 2 are not.
+     *
+     * @param JsonValue $a
+     * @param JsonValue $b
+     */
+    private function sameJson($a, $b): bool
+    {
+        if ((is_int($a) || is_float($a)) && (is_int($b) || is_float($b))) {
+            return (float) $a === (float) $b;
+        }
+
+        return $a === $b;
+    }
+
+    /**
+     * @param JsonValue $value
+     */
+    private function json($value): string
+    {
+        return (string) json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION | JSON_INVALID_UTF8_SUBSTITUTE);
+    }
+
     private function defaultFor(Schema $schema, TypeModel $type, Diagnostics $diagnostics): ?DefaultValue
     {
         $default = $schema->default();
@@ -280,6 +330,13 @@ final class ClassBuilder
         }
 
         $at = $schema->location()->child('default');
+        $forbidden = $this->forbiddenBySchema($schema, $default->value());
+        if ($forbidden !== null) {
+            $diagnostics->error($forbidden, $at);
+
+            return null;
+        }
+
         $inner = $type instanceof NullableType ? $type->inner() : $type;
         // Only a non-empty list reaches its item type; any other value of a list is checked as a plain mismatch.
         $value = $default->value();

@@ -10,8 +10,8 @@ namespace MSSTC4PHP\DtoGenerator\Domain\Builder;
 final class LiteralType
 {
     // Left unrefined rather than escaped: quotes, backslashes, `|` and `*` would need escaping that not every PHPDoc
-    // reader understands, and `*/` would end the docblock.
-    private const SAFE_STRING = '/\A[A-Za-z0-9 _.,:;!?@#$%&+=<>()\[\]{}~^\/-]*\z/';
+    // reader understands, `*/` would end the docblock, and `{@` starts an inline tag.
+    private const SAFE_STRING = '/\A[A-Za-z0-9 _.,:;!?#$%&+=<>()\[\]~^\/-]*\z/';
 
     private const LITERAL = "/\\A(?:'[^']*'|-?\\d+|true|false)\\z/";
 

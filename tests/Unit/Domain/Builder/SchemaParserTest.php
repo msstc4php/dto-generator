@@ -236,6 +236,14 @@ final class SchemaParserTest extends TestCase
         );
     }
 
+    public function testStaysQuietWhereTheTypeIgnoresTheSchema(): void
+    {
+        $diagnostics = new Diagnostics();
+        (new SchemaParser())->parse(['type' => 'string', 'nullable' => false, 'properties' => ['a' => ['x-php-type' => 'App\\A', 'not' => []]], 'additionalProperties' => ['x-php-skip' => true, 'contains' => []]], $this->root(), $diagnostics);
+
+        self::assertSame([], $diagnostics->all());
+    }
+
     public function testPointsOpenApi30NullableAtTheTypeList(): void
     {
         $diagnostics = new Diagnostics();

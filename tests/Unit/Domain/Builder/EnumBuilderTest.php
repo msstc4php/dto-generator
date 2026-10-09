@@ -66,7 +66,7 @@ final class EnumBuilderTest extends TestCase
         yield 'not strings' => [['One', 2], $length];
         yield 'a scalar' => ['One', $length];
         yield 'no usable characters' => [['One', '%%'], 'error ' . self::AT . '/x-enum-varnames/1: Name "%%" has no characters usable in a case name.'];
-        yield 'two names, one case' => [['in-progress', 'in_progress'], 'error ' . self::AT . '/enum/1: Enum values 1 and 2 both become case IN_PROGRESS.'];
+        yield 'two names, one case' => [['in-progress', 'in_progress'], 'error ' . self::AT . '/x-enum-varnames/1: Enum values 1 and 2 both become case IN_PROGRESS.'];
     }
 
     public function testReportsEveryUnusableVarname(): void

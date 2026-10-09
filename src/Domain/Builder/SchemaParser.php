@@ -37,6 +37,8 @@ final class SchemaParser
             return $builder->build();
         }
 
+        // x-php-type or x-php-skip replaces what the schema says, so its keywords have no effect to warn about.
+        $mapped = isset($node['x-php-type']) || ($node['x-php-skip'] ?? null) === true;
         $extensions = [];
         foreach ($node as $key => $rawValue) {
             $keyword = (string) $key;
@@ -53,7 +55,7 @@ final class SchemaParser
                 continue;
             }
 
-            $unsupported = UnsupportedKeywords::warning($keyword);
+            $unsupported = $mapped ? null : UnsupportedKeywords::warning($keyword, $value);
             if ($unsupported !== null) {
                 $diagnostics->warning($unsupported, $location->child($keyword));
             }

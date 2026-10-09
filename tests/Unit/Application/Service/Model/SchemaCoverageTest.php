@@ -26,22 +26,69 @@ final class SchemaCoverageTest extends TestCase
         ]]]);
 
         self::assertSame([], ModelFixture::messages($output));
-        self::assertSame(["s: 'card'", 'i: 5', 'b: true', 'f: float|null', 'u: string|null', 'n: 2|null'], ModelFixture::classes($output)['App\Dto\C']);
+        self::assertSame(["s: 'card'", 'i: 5', 'b: true', 'f: float|null', 'u: string|null', 'n: float|null'], ModelFixture::classes($output)['App\Dto\C']);
     }
 
-    public function testRejectsATypeThatContradictsTheConst(): void
+    public function testKeepsTheDeclaredTypeOfAConstThatContradictsIt(): void
     {
-        $output = ModelFixture::build(['C' => ['type' => 'object', 'properties' => ['s' => ['type' => 'string', 'const' => 5]]]]);
+        $output = ModelFixture::build(['C' => ['type' => 'object', 'properties' => [
+            's' => ['type' => 'string', 'const' => 5],
+            'half' => ['type' => 'integer', 'const' => 2.5],
+        ]]]);
 
-        self::assertSame([self::AT . 'C/properties/s/const: "const" is not of the declared type.'], ModelFixture::messages($output));
-        self::assertSame(['s: mixed'], ModelFixture::classes($output)['App\Dto\C']);
+        $warning = 'warning /project/api/openapi.yaml#/components/schemas/C/properties/%s/const: "const" is not of the declared type; the property keeps its declared type.';
+        self::assertSame([sprintf($warning, 's'), sprintf($warning, 'half')], ModelFixture::messages($output));
+        self::assertSame(['s: string|null', 'half: int|null'], ModelFixture::classes($output)['App\Dto\C']);
+    }
+
+    public function testTypesNumericConstsAsThePropertyHoldsThem(): void
+    {
+        $output = ModelFixture::build(['C' => ['type' => 'object', 'properties' => [
+            'whole' => ['type' => 'integer', 'const' => 2.0],
+            'real' => ['type' => 'number', 'const' => 2.0],
+            'ratio' => ['type' => 'number', 'const' => 1],
+            'bare' => ['const' => 2.0],
+        ]]]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(['whole: 2|null', 'real: float|null', 'ratio: float|null', 'bare: float|null'], ModelFixture::classes($output)['App\Dto\C']);
+    }
+
+    public function testKeepsTheFormatTypeOfAConst(): void
+    {
+        $output = ModelFixture::build(['C' => ['type' => 'object', 'properties' => [
+            'born' => ['type' => 'string', 'format' => 'date-time', 'const' => '2020-01-01T00:00:00Z'],
+            'host' => ['type' => 'string', 'format' => 'hostname', 'const' => 'example.org'],
+        ]]]);
+
+        self::assertSame(['born: DateTimeImmutable|null', "host: 'example.org'|null"], ModelFixture::classes($output)['App\Dto\C']);
+    }
+
+    public function testRejectsDefaultsTheConstOrMixedEnumForbids(): void
+    {
+        $output = ModelFixture::build(['C' => ['type' => 'object', 'properties' => [
+            'u' => ['const' => "it's", 'default' => 'x'],
+            'f' => ['const' => 1.5, 'default' => 2.5],
+            'same' => ['type' => 'number', 'const' => 2, 'default' => 2.0],
+            'm' => ['enum' => ["it's", 1], 'default' => 'zz'],
+        ]]]);
+
+        self::assertSame(
+            [
+                self::AT . 'C/properties/u/default: Default "x" is not the "const" value "it\'s"; null is used instead.',
+                self::AT . 'C/properties/f/default: Default 2.5 is not the "const" value 1.5; null is used instead.',
+                'warning /project/api/openapi.yaml#/components/schemas/C/properties/m/enum: The enum mixes strings and integers, which no PHP enum can back; the property takes either.',
+                self::AT . 'C/properties/m/default: Default "zz" is not one of the "enum" values; null is used instead.',
+            ],
+            ModelFixture::messages($output),
+        );
     }
 
     public function testRejectsADefaultOtherThanTheConst(): void
     {
         $output = ModelFixture::build(['C' => ['type' => 'object', 'properties' => ['i' => ['const' => 5, 'default' => 6]]]]);
 
-        self::assertSame([self::AT . 'C/properties/i/default: Default 6 does not match 5; null is used instead.'], ModelFixture::messages($output));
+        self::assertSame([self::AT . 'C/properties/i/default: Default 6 is not the "const" value 5; null is used instead.'], ModelFixture::messages($output));
     }
 
     public function testGivesAMixedEnumAUnionOfItsLiterals(): void
@@ -266,5 +313,106 @@ final class SchemaCoverageTest extends TestCase
         $output = ModelFixture::build(['C' => ['type' => 'object', 'required' => ['m'], 'properties' => ['m' => ['enum' => ['a', 'a', 1]]]]]);
 
         self::assertSame(["m: 'a'|1"], ModelFixture::classes($output)['App\Dto\C']);
+    }
+
+    public function testLetsNamedComponentsKeepTheirNamesOverAliasMembers(): void
+    {
+        $output = ModelFixture::build([
+            'Shape' => ['oneOf' => [['type' => 'object', 'title' => 'User', 'properties' => ['r' => ['type' => 'number']]], ['type' => 'string']]],
+            'Pets' => ['type' => 'array', 'items' => ['type' => 'object', 'properties' => ['name' => ['type' => 'string']]]],
+            'User' => ['type' => 'object', 'properties' => ['n' => ['type' => 'string']]],
+            'PetsItem' => ['type' => 'object', 'properties' => ['id' => ['type' => 'integer']]],
+        ]);
+
+        $classes = ModelFixture::classes($output);
+        self::assertSame(['n: string|null'], $classes['App\Dto\User']);
+        self::assertSame(['id: int|null'], $classes['App\Dto\PetsItem']);
+        $messages = ModelFixture::messages($output);
+        self::assertCount(2, $messages);
+        self::assertStringStartsWith(self::AT . 'Shape/oneOf/0:', $messages[0]);
+        self::assertStringStartsWith(self::AT . 'Pets/items:', $messages[1]);
+    }
+
+    public function testTypesAUnionOfConstMembers(): void
+    {
+        $output = ModelFixture::build(['C' => ['type' => 'object', 'properties' => [
+            'e' => ['oneOf' => [['const' => 'a', 'title' => 'A'], ['const' => 'b']]],
+            't' => ['type' => 'string', 'oneOf' => [['const' => 'a'], ['const' => 'b']]],
+        ]]]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(["e: 'a'|'b'|null", "t: 'a'|'b'|null"], ModelFixture::classes($output)['App\Dto\C']);
+    }
+
+    public function testDropsALiteralAPlainMemberOfItsKindSubsumes(): void
+    {
+        $output = ModelFixture::build(['C' => ['type' => 'object', 'properties' => [
+            'e' => ['anyOf' => [['enum' => ['a', 1]], ['type' => 'string']]],
+            'n' => ['oneOf' => [['type' => 'string', 'minLength' => 1], ['type' => 'string']]],
+        ]]]);
+
+        self::assertSame(['e: 1|string|null', 'n: string|null'], ModelFixture::classes($output)['App\Dto\C']);
+    }
+
+    public function testReportsInlineMembersOfADiscriminatedInlineClass(): void
+    {
+        $output = ModelFixture::build(['Holder' => ['type' => 'object', 'properties' => ['pet' => [
+            'properties' => ['kind' => ['type' => 'string']],
+            'oneOf' => [['type' => 'object', 'properties' => ['kind' => ['type' => 'string']]]],
+            'discriminator' => ['propertyName' => 'kind'],
+        ]]]]);
+
+        self::assertSame(
+            [self::AT . 'Holder/properties/pet/oneOf/0: An inline object in a oneOf or anyOf with a discriminator is not generated: the discriminator mapping needs a $ref. Move it to components/schemas.'],
+            ModelFixture::messages($output),
+        );
+    }
+
+    public function testHoistsNothingBehindXPhpType(): void
+    {
+        $output = ModelFixture::build(['Holder' => ['type' => 'object', 'properties' => ['e' => [
+            'x-php-type' => 'Foo\Bar',
+            'oneOf' => [['type' => 'object', 'properties' => ['a' => ['type' => 'string']]], ['type' => 'string']],
+        ]]]]);
+
+        self::assertSame(['App\Dto\Holder'], array_keys(ModelFixture::classes($output)));
+    }
+
+    public function testComparesDefaultsWithConstsAsJsonValues(): void
+    {
+        $output = ModelFixture::build(['C' => ['type' => 'object', 'properties' => [
+            'a' => ['type' => 'number', 'const' => 2.0, 'default' => 2],
+            'b' => ['type' => 'number', 'const' => 2, 'default' => 2.0],
+            'c' => ['const' => 'x', 'default' => 'x'],
+            'd' => ['const' => 1, 'default' => '1'],
+            'e' => ['type' => 'string', 'const' => '1', 'default' => 1],
+            'f' => ['const' => 'a/é', 'default' => 'b'],
+            'g' => ['enum' => ['a', 1], 'default' => 1],
+            'h' => ['type' => 'number', 'const' => 2.0, 'default' => 3],
+        ]]]);
+
+        $mixed = 'warning /project/api/openapi.yaml#/components/schemas/C/properties/g/enum: The enum mixes strings and integers, which no PHP enum can back; the property takes either.';
+        self::assertSame(
+            [
+                self::AT . 'C/properties/d/default: Default "1" is not the "const" value 1; null is used instead.',
+                self::AT . 'C/properties/e/default: Default 1 is not the "const" value "1"; null is used instead.',
+                self::AT . 'C/properties/f/default: Default "b" is not the "const" value "a/é"; null is used instead.',
+                $mixed,
+                self::AT . 'C/properties/h/default: Default 3 is not the "const" value 2.0; null is used instead.',
+            ],
+            ModelFixture::messages($output),
+        );
+    }
+
+    public function testKeepsTheDeclaredTypeAgainstAConstOfAnotherKind(): void
+    {
+        $output = ModelFixture::build(['C' => ['type' => 'object', 'properties' => [
+            'i' => ['type' => 'integer', 'const' => 'x'],
+            'b' => ['type' => 'string', 'const' => true],
+            'big' => ['type' => 'integer', 'const' => 1.0e20],
+        ]]]);
+
+        self::assertCount(3, ModelFixture::messages($output));
+        self::assertSame(['i: int|null', 'b: string|null', 'big: int|null'], ModelFixture::classes($output)['App\\Dto\\C']);
     }
 }
