@@ -50,7 +50,7 @@ final class DtoSettings
         return $this->allOfStrategy;
     }
 
-    public function withers(): bool
+    public function hasWithers(): bool
     {
         return $this->withers;
     }

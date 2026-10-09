@@ -199,6 +199,11 @@ final class RawSection
         $this->report(sprintf('"%s" %s.', $key, $problem), $key);
     }
 
+    public function warn(string $message, string ...$path): void
+    {
+        $this->diagnostics->warning($message, $this->location->child(...$path));
+    }
+
     public function report(string $message, string ...$path): void
     {
         $this->diagnostics->error($message, $this->location->child(...$path));

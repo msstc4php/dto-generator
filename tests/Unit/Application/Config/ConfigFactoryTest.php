@@ -36,7 +36,7 @@ final class ConfigFactoryTest extends TestCase
         self::assertSame('auto', $config->dto()->accessors()->value());
         self::assertSame('DateTimeImmutable', $config->dto()->dateTimeClass()->value());
         self::assertSame('extends', $config->dto()->allOfStrategy()->value());
-        self::assertTrue($config->dto()->withers());
+        self::assertTrue($config->dto()->hasWithers());
         self::assertSame([], $config->formats());
         self::assertSame([], $config->extensions()->classes());
         self::assertTrue($config->extensions()->discover());
@@ -55,7 +55,7 @@ final class ConfigFactoryTest extends TestCase
         $config = $this->valid([
             'version' => 1,
             'target' => ['php' => '8.2', 'metadata' => 'annotations', 'strict' => false],
-            'dto' => ['mutability' => 'mutable', 'accessors' => 'getters', 'dateTimeClass' => 'DateTime', 'allOfStrategy' => 'merge', 'withers' => false],
+            'dto' => ['mutability' => 'mutable', 'accessors' => 'getters', 'dateTimeClass' => 'DateTime', 'allOfStrategy' => 'merge', 'withers' => true],
             'formats' => ['uuid' => ['type' => '\Symfony\Component\Uid\Uuid']],
             'attributeAliases' => ['x-audit' => ['class' => 'App\Attr\Audited']],
             'verifyClasses' => false,
@@ -78,7 +78,7 @@ final class ConfigFactoryTest extends TestCase
         self::assertFalse($config->target()->isStrict());
         self::assertSame('mutable', $config->dto()->mutability()->value());
         self::assertSame('merge', $config->dto()->allOfStrategy()->value());
-        self::assertFalse($config->dto()->withers());
+        self::assertTrue($config->dto()->hasWithers());
         self::assertSame('Symfony\Component\Uid\Uuid', $config->formats()['uuid']->fqcn());
         self::assertSame(['x-audit' => ['class' => 'App\Attr\Audited']], $config->extensions()->aliases());
         self::assertFalse($config->extensions()->verifyClasses());
@@ -212,6 +212,29 @@ final class ConfigFactoryTest extends TestCase
             'empty' => [[]],
             'map' => [['main' => 'a.yaml']],
         ];
+    }
+
+    public function testReadsWithersOff(): void
+    {
+        $config = $this->valid(['version' => 1, 'dto' => ['withers' => false], 'sources' => [['spec' => '/abs/openapi.yaml', 'namespace' => 'App\Dto', 'outputDir' => 'src/Dto']]]);
+
+        self::assertFalse($config->dto()->hasWithers());
+    }
+
+    public function testWarnsThatWithersOffLeavesMutableDtosAlone(): void
+    {
+        $diagnostics = new Diagnostics();
+        $config = (new ConfigFactory())->create(
+            ['version' => 1, 'dto' => ['mutability' => 'mutable', 'withers' => false], 'sources' => [['spec' => '/abs/openapi.yaml', 'namespace' => 'App\Dto', 'outputDir' => 'src/Dto']]],
+            self::PATH,
+            $diagnostics,
+        );
+
+        self::assertNotNull($config);
+        self::assertSame(
+            ['warning ' . self::PATH . '#/dto/withers: "withers: false" has no effect on mutable DTOs, which keep their setters; it applies to schemas made immutable with x-dto-mutable: false.'],
+            array_map(static fn (Diagnostic $d): string => $d->toString(), $diagnostics->all()),
+        );
     }
 
     /**

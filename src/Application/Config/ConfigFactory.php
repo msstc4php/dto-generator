@@ -101,12 +101,18 @@ final class ConfigFactory
     {
         $section->rejectUnknownKeys(['mutability', 'accessors', 'dateTimeClass', 'allOfStrategy', 'withers']);
 
+        $mutability = Mutability::from($section->choice('mutability', Mutability::IMMUTABLE, $this->values(Mutability::cases())));
+        $withers = $section->bool('withers', true);
+        if (!$withers && !$mutability->isImmutable()) {
+            $section->warn('"withers: false" has no effect on mutable DTOs, which keep their setters; it applies to schemas made immutable with x-dto-mutable: false.', 'withers');
+        }
+
         return new DtoSettings(
-            Mutability::from($section->choice('mutability', Mutability::IMMUTABLE, $this->values(Mutability::cases()))),
+            $mutability,
             AccessorStyle::from($section->choice('accessors', AccessorStyle::AUTO, $this->values(AccessorStyle::cases()))),
             DateTimeClass::from($section->choice('dateTimeClass', DateTimeClass::IMMUTABLE, $this->values(DateTimeClass::cases()))),
             AllOfStrategy::from($section->choice('allOfStrategy', AllOfStrategy::EXTENDS, $this->values(AllOfStrategy::cases()))),
-            $section->bool('withers', true),
+            $withers,
         );
     }
 

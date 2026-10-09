@@ -50,7 +50,7 @@ final class ConfigObjectsTest extends TestCase
             AllOfStrategy::from(AllOfStrategy::EXTENDS),
         );
 
-        self::assertTrue($settings->withers());
+        self::assertTrue($settings->hasWithers());
     }
 
     public function testASourceNeedsAnIncludePattern(): void
