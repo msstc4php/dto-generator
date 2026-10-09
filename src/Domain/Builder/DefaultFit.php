@@ -38,13 +38,7 @@ final class DefaultFit
         }
 
         if ($type instanceof UnionType) {
-            foreach ($type->members() as $member) {
-                if (self::fits($value, $member)) {
-                    return true;
-                }
-            }
-
-            return false;
+            return self::anyFits($value, $type->members());
         }
 
         if ($type instanceof EnumType) {
@@ -56,6 +50,21 @@ final class DefaultFit
         }
 
         return $type instanceof ScalarType && self::fitsScalar($value, $type);
+    }
+
+    /**
+     * @param JsonValue $value
+     * @param list<TypeModel> $members
+     */
+    private static function anyFits($value, array $members): bool
+    {
+        foreach ($members as $member) {
+            if (self::fits($value, $member)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

@@ -23,7 +23,7 @@ jobs:
         php: ['7.4', '8.0', '8.1', '8.2', '8.3', '8.4', '8.5']
         dependencies: [lowest, highest]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
@@ -31,7 +31,7 @@ jobs:
       - name: Locate the Composer cache
         id: composer-cache
         run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         with:
           path: ${{ steps.composer-cache.outputs.dir }}
           key: composer-${{ matrix.php }}-${{ matrix.dependencies }}-${{ hashFiles('composer.json') }}
@@ -50,7 +50,7 @@ jobs:
     name: Static analysis
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
@@ -62,12 +62,43 @@ jobs:
       - run: composer validate --strict --no-check-publish
       - run: tools/vendor/bin/rector process -n
       - run: tools/vendor/bin/deptrac analyse --config-file=deptrac.yaml --no-progress --fail-on-uncovered
+      - run: composer audit
+
+  bc:
+    name: BC check (Roave)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0  # the check reads the previous release from git
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+      - name: Locate the Composer cache
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v5
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: composer-bc-${{ hashFiles('tools/composer.json') }}
+          restore-keys: composer-bc-
+      - run: composer install --no-interaction --no-progress --working-dir=tools
+      # The public API is the SPI and the entry points (.roave-backward-compatibility-check.xml), compared with the last
+      # stable release; an intended break gets an ignored-regex there in the same change.
+      - run: |
+          if ! base=$(git describe --tags --abbrev=0 --match 'v[0-9]*' --exclude='*-*' 2>/dev/null); then
+            echo "No stable release tag yet: nothing to compare against."
+            exit 0
+          fi
+          echo "Comparing against ${base}"
+          tools/vendor/bin/roave-backward-compatibility-check --from="${base}" --install-development-dependencies --format=github-actions --no-interaction
 
   targets:
     name: Generated code on PHP 7.4–8.5
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
@@ -80,7 +111,7 @@ jobs:
     name: Mutation testing
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
@@ -94,5 +125,5 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: make docker-smoke

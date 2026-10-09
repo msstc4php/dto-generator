@@ -183,6 +183,34 @@ final class ConfigFactoryTest extends TestCase
     }
 
     /**
+     * @dataProvider malformedSources
+     *
+     * @param array<array-key, mixed> $sources
+     */
+    public function testReportsOnlyTheShapeOfMalformedSources(array $sources): void
+    {
+        $diagnostics = new Diagnostics();
+        $config = (new ConfigFactory())->create(['version' => 1, 'sources' => $sources], self::PATH, $diagnostics);
+
+        self::assertNull($config);
+        self::assertSame(
+            ['error ' . self::PATH . '#/sources: "sources" must be a non-empty list.'],
+            array_map(static fn (Diagnostic $d): string => $d->toString(), $diagnostics->all()),
+        );
+    }
+
+    /**
+     * @return array<string, array{array<array-key, mixed>}>
+     */
+    public static function malformedSources(): array
+    {
+        return [
+            'empty' => [[]],
+            'map' => [['main' => 'a.yaml']],
+        ];
+    }
+
+    /**
      * @param array<array-key, mixed> $raw
      */
     private function valid(array $raw): GeneratorConfig

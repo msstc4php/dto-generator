@@ -3,11 +3,13 @@
     "source": {
         "directories": ["src"]
     },
-    "timeout": 10,
+    // Infection 0.32 skips a mutant whose covering tests ran longer than this; 10 s left out about 130.
+    "timeout": 30,
     // Equivalent mutants are ignored below, so the floor sits at the measured level (100 % at end of stage 1) minus one.
     "minMsi": 99,
     "minCoveredMsi": 99,
     "logs": {
+        "github": true,
         "text": "var/infection/infection.log",
         "json": "var/infection/infection.json"
     },

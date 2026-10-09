@@ -4,14 +4,15 @@
     "type": "project",
     "license": "MIT",
     "require": {
-        "deptrac/deptrac": "^3.0",
+        "deptrac/deptrac": "^4.6",
         "friendsofphp/php-cs-fixer": "^3.64",
-        "infection/infection": "^0.29",
+        "infection/infection": "^0.32",
         "phpstan/extension-installer": "^1.4",
         "phpstan/phpstan": "^2.1",
         "phpstan/phpstan-phpunit": "^2.0",
         "phpstan/phpstan-strict-rules": "^2.0",
         "rector/rector": "^2.0",
+        "roave/backward-compatibility-check": "^8.10",
         "spaze/phpstan-disallowed-calls": "^4.0"
     },
     "config": {

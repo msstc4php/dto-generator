@@ -272,6 +272,14 @@ final class ClassBuilderTest extends TestCase
         self::assertSame('mutable', $class->mutability()->value());
     }
 
+    public function testKeepsTheTargetMutabilityWhenXDtoMutableIsNotABoolean(): void
+    {
+        [$class, $messages] = $this->build(['type' => 'object', 'x-dto-mutable' => 'yes', 'properties' => ['id' => ['type' => 'string']]]);
+
+        self::assertSame('immutable', $class->mutability()->value());
+        self::assertSame(['error ' . self::AT . '/x-dto-mutable: "x-dto-mutable" must be true or false.'], $messages);
+    }
+
     public function testRejectsAnImmutableOverrideTheTargetCannotExpress(): void
     {
         [$class, $messages] = $this->build(
