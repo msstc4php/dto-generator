@@ -115,4 +115,25 @@ final class ModelFixture
 
         return $hierarchy;
     }
+
+    /**
+     * @return array<string, list<string>> final class → "property: value|value[ unchecked]" per discriminator, root first
+     */
+    public static function selections(Output $output): array
+    {
+        $selections = [];
+        foreach ($output->classes() as $class) {
+            $lines = [];
+            foreach ($class->model()->discriminatorValues() as $values) {
+                $literals = array_map(static fn ($value): string => var_export($value, true), $values->values());
+                $lines[] = $values->property() . ': ' . implode('|', $literals) . ($values->isChecked() ? '' : ' unchecked');
+            }
+
+            if ($lines !== []) {
+                $selections[$class->model()->name()->fqcn()] = $lines;
+            }
+        }
+
+        return $selections;
+    }
 }

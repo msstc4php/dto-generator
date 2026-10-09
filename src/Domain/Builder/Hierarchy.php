@@ -14,7 +14,8 @@ use MSSTC4PHP\DtoGenerator\Domain\Shared\DefaultValue;
 
 /**
  * Links the built classes into one inheritance forest (spec §5.3): variants extend their discriminated base, which
- * takes the properties all of them share; every parent stops being final.
+ * takes the properties all of them share; every parent stops being final. Records the discriminator values that
+ * select each final class.
  */
 final class Hierarchy
 {
@@ -60,6 +61,7 @@ final class Hierarchy
         $hierarchy->settle($unions);
         $hierarchy->check();
         $hierarchy->checkDiscriminators($unions);
+        $hierarchy->selectVariants();
 
         return array_map(static fn (ClassModel $class): ClassModel => $hierarchy->models[$class->name()->fqcn()], $classes);
     }
@@ -397,5 +399,15 @@ final class Hierarchy
         $default = $property->default();
 
         return $default instanceof DefaultValue ? $default->toJson() : '';
+    }
+
+    /**
+     * Only now are kinds and parents final, so an abstract ancestor can be told from an open one.
+     */
+    private function selectVariants(): void
+    {
+        foreach (SelectingValues::of($this->models, $this->diagnostics) as $fqcn => $values) {
+            $this->models[$fqcn] = $this->models[$fqcn]->withDiscriminatorValues(...$values);
+        }
     }
 }

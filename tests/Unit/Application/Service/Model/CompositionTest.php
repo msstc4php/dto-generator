@@ -885,7 +885,11 @@ final class CompositionTest extends TestCase
             ],
         ]);
 
-        self::assertSame([], ModelFixture::messages($output));
+        // Other's integer discriminator cannot hold its implicit value, so its constructor checks nothing.
+        self::assertSame(
+            ['warning /project/api/openapi.yaml#/components/schemas/Other: Discriminator value "Other" is not a value of property "name", so it does not select App\Dto\Other.'],
+            ModelFixture::messages($output),
+        );
         self::assertSame('final extends App\Dto\Pet', ModelFixture::hierarchy($output)['App\Dto\Cat']);
         self::assertSame(['lives: int|null'], ModelFixture::classes($output)['App\Dto\Cat']);
         self::assertSame('abstract by name {AnyPet: App\Dto\Pet, Other: App\Dto\Other}', ModelFixture::hierarchy($output)['App\Dto\Zoo']);
