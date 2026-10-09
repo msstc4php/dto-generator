@@ -281,4 +281,19 @@ final class SelectingValuesTest extends TestCase
             $discriminated,
         );
     }
+
+    public function testWarnsAboutAValueAConstPropertyCannotHold(): void
+    {
+        $at = self::AT;
+        $output = ModelFixture::build([
+            'Card' => ['oneOf' => [['$ref' => '#/components/schemas/Visa']], 'discriminator' => ['propertyName' => 'brand', 'mapping' => ['amex' => '#/components/schemas/Visa']]],
+            'Visa' => ['type' => 'object', 'required' => ['brand'], 'properties' => ['brand' => ['const' => 'visa']]],
+        ]);
+
+        self::assertSame(
+            ["warning {$at}Visa: Discriminator value \"amex\" is not a value of property \"brand\", so it does not select App\\Dto\\Visa."],
+            ModelFixture::messages($output),
+        );
+        self::assertSame([], ModelFixture::selections($output));
+    }
 }

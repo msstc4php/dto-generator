@@ -919,4 +919,18 @@ final class Order
         $promoted = (new PhpParserEmitter())->emit(EmitterFixture::side(), EmitterFixture::target('8.0', Mutability::IMMUTABLE));
         self::assertStringContainsString('public function getKind(): ?string', $promoted);
     }
+
+    public function testDocumentsADeclaredCheckedEnumDiscriminatorWithoutNull(): void
+    {
+        $coin = EmitterFixture::model('App\Dto\Coin', null, [
+            EmitterFixture::property('currency', new NullableType(EnumType::of(EmitterFixture::currency())), false, new DefaultValue(null)),
+        ])
+            ->withHierarchy(ClassKind::from(ClassKind::FINAL), null, null)
+            ->withDiscriminatorValues(new DiscriminatorValues('currency', ['EUR']))
+        ;
+
+        $code = (new PhpParserEmitter())->emit($coin, EmitterFixture::target('7.4', Mutability::IMMUTABLE));
+
+        self::assertStringContainsString("    /**\n     * @phpstan-var Currency::*\n     */\n    private string \$currency;", $code);
+    }
 }

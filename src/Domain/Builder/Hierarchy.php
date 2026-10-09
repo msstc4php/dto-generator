@@ -430,7 +430,7 @@ final class Hierarchy
         }
 
         foreach ($discriminated as $fqcn => $names) {
-            $this->models[$fqcn] = $this->models[$fqcn]->withDiscriminatedProperties(...array_values(array_unique($names)));
+            $this->models[$fqcn] = $this->models[$fqcn]->withDiscriminatedProperties(...$names);
         }
     }
 
