@@ -8,7 +8,7 @@
 
 **Tech Stack:** PHP ≥ 7.4 (локально 8.4), PHPUnit 9.6, PHPStan 2 (max, strict-rules, phpstan-phpunit, disallowed-calls), PHP-CS-Fixer 3, Rector 2, Deptrac 3, Infection 0.29, Docker.
 
-**Spec:** `docs/specs/2026-10-01-dto-generator-design.md` — этот план реализует §13 этап 1: каркас, инструменты, deptrac (§3, §11.2), Domain — Schema, IR, `TargetProfile` (§3, §5, §6.1). Загрузка документов, Builder, Emitter, конфиг, SPI, CLI — в следующих планах.
+**Spec:** `docs/internal/specs/2026-10-01-dto-generator-design.md` — этот план реализует §13 этап 1: каркас, инструменты, deptrac (§3, §11.2), Domain — Schema, IR, `TargetProfile` (§3, §5, §6.1). Загрузка документов, Builder, Emitter, конфиг, SPI, CLI — в следующих планах.
 
 > **Примечание после ревью (2026-10-01 UTC):** API изменён по итогам code review — `withAttributes()` → `withAddedAttributes()`, `ArgumentValue::items()` → `listItems()`/`mapItems()`, `SchemaBuilder::defaultValue()` → `default()`, `TargetProfile::accessors()` → `configuredAccessors()`. Также `MapType` описывается как `array<array-key, T>` (решение от 2026-10-01 UTC, spec §5.1, сноска ¹). Код в задачах ниже — исторический снимок; актуальный API — в `src/` и `.claude/docs/`.
 
@@ -5398,7 +5398,7 @@ Expected: завершается успешно (порог не нарушен)
 > **Статус:** в разработке. Готов этап 1 — доменная модель (схема, IR, профиль целевой версии).
 > Генерация файлов, CLI, Composer-плагин и Docker-образ появятся в следующих этапах.
 
-Дизайн: [`docs/specs/2026-10-01-dto-generator-design.md`](docs/specs/2026-10-01-dto-generator-design.md).
+Дизайн: [`docs/internal/specs/2026-10-01-dto-generator-design.md`](docs/internal/specs/2026-10-01-dto-generator-design.md).
 
 ## Требования
 
@@ -5428,7 +5428,7 @@ MIT
 ```markdown
 # dto-generator — база знаний
 
-Внутренние заметки для работы над пакетом. Спецификация: `docs/specs/2026-10-01-dto-generator-design.md`; планы: `docs/plans/`.
+Внутренние заметки для работы над пакетом. Спецификация: `docs/internal/specs/2026-10-01-dto-generator-design.md`; планы: `docs/internal/plans/`.
 
 | Файл | О чём |
 |---|---|

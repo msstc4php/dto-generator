@@ -14,7 +14,7 @@
 
 **Tech Stack:** PHP ≥ 7.4, PHPUnit 9.6, PHPStan 2 max (`phpVersion: 70400`), deptrac, Rector, CS-Fixer, Infection.
 
-**Spec:** `docs/specs/2026-10-01-dto-generator-design.md`:
+**Spec:** `docs/internal/specs/2026-10-01-dto-generator-design.md`:
 - §5.1 — типы, `format`, `x-php-type`, nullable, массивы, `$ref`;
 - §5.2 — обязательность и default;
 - §5.4 — именование;
