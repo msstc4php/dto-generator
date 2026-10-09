@@ -228,3 +228,74 @@ components:
       properties:
         mode: {$ref: '#/components/schemas/ShipmentMode'}
         stamp: {type: string}
+    Creature:
+      description: A Swagger-2-style base whose mapping selects an open class and its subclass.
+      type: object
+      required: [kind]
+      properties:
+        kind: {type: string}
+      discriminator:
+        propertyName: kind
+        mapping:
+          bird: '#/components/schemas/Bird'
+          parrot: '#/components/schemas/Parrot'
+          fish: '#/components/schemas/Fish'
+    Bird:
+      allOf:
+        - $ref: '#/components/schemas/Creature'
+        - type: object
+          required: [wings]
+          properties:
+            wings: {type: integer}
+    Parrot:
+      allOf:
+        - $ref: '#/components/schemas/Bird'
+        - type: object
+          properties:
+            words: {type: integer}
+    Fish:
+      allOf:
+        - $ref: '#/components/schemas/Creature'
+        - type: object
+          required: [fins]
+          properties:
+            fins: {type: integer}
+    Node:
+      description: Two discriminators; `kind` stays on Branch, which another property discriminates.
+      oneOf:
+        - $ref: '#/components/schemas/Branch'
+        - $ref: '#/components/schemas/Stub'
+      discriminator:
+        propertyName: kind
+        mapping:
+          branch: '#/components/schemas/Branch'
+          stub: '#/components/schemas/Stub'
+    Branch:
+      oneOf:
+        - $ref: '#/components/schemas/LeftLeaf'
+        - $ref: '#/components/schemas/RightLeaf'
+      discriminator:
+        propertyName: side
+        mapping:
+          left: '#/components/schemas/LeftLeaf'
+          right: '#/components/schemas/RightLeaf'
+    LeftLeaf:
+      type: object
+      required: [kind, side, left]
+      properties:
+        kind: {type: string}
+        side: {type: string}
+        left: {type: string}
+    RightLeaf:
+      type: object
+      required: [kind, side, right]
+      properties:
+        kind: {type: string}
+        side: {type: string}
+        right: {type: string}
+    Stub:
+      type: object
+      required: [note]
+      properties:
+        kind: {type: string}
+        note: {type: string}

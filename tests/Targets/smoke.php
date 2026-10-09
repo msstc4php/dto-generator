@@ -189,6 +189,15 @@ check($parrot instanceof Bird && read($parrot, 'kind') === 'parrot' && read($par
 rejects(static fn (): Parrot => new Parrot(2, 'bird'), '"bird" does not select Parrot by "kind".');
 check((new ReflectionClass(Shape::class))->isAbstract() && !(new ReflectionClass(Animal::class))->isFinal(), 'base classes stay open');
 
+if (strpos(basename($profile), '-nowithers') !== false) {
+    foreach (get_declared_classes() as $class) {
+        if (strpos($class, 'App\\Dto\\') === 0) {
+            $withers = preg_grep('/^with/', get_class_methods($class));
+            check($withers === [], 'no withers in ' . $class);
+        }
+    }
+}
+
 if (strpos(basename($profile), '-immutable') !== false && !method_exists($sample, 'getId')) {
     $rejected = false;
 
