@@ -56,7 +56,7 @@ PHPDoc extractor of Symfony 5.4, mistake `non-empty-string` for a class name; th
 | `enum` mixing strings and integers | no PHP enum: a union of the literals (see [Types](#types)), with a warning |
 | `allOf` with one `$ref` plus own properties, `extends` strategy | `class Child extends Base`; `Base` is not `final` |
 | `allOf` with several `$ref`, or the `merge` strategy | one class with all the properties; one property with two types is an error |
-| `oneOf`/`anyOf` with a `discriminator` | an `abstract` base class with the common properties; the variants extend it. The constructor of each variant accepts only the values that select it (`\InvalidArgumentException` otherwise); a class selected by a single value takes it as the default; an open (concrete) class also accepts the values of its subclasses. No class in the chain has a `withX()`/`setX()` for a property any discriminator of the chain reads |
+| `oneOf`/`anyOf` with a `discriminator` | an `abstract` base class with the common properties; the variants extend it. The constructor of each variant accepts only the values that select it (`\InvalidArgumentException` otherwise); a class selected by a single value takes it as the default; an open (concrete) class accepts its own values when it is instantiated itself and the values of its subclasses only from them (`parent::__construct()`). No class in a discriminated chain (the discriminated bases, their ancestors and their subclasses) has a `withX()`/`setX()` for a property a discriminator of that chain reads; a class outside every such chain that inherits the property from one (a sibling `allOf` subclass of a shared base) declares its own `withX()`/`setX()` for it |
 | `oneOf`/`anyOf` without a discriminator | a union type |
 | an inline object or enum in a property, its `items` or `additionalProperties` | a named class `<Parent><Property>` (`Order.items[]` → `OrderItemsItem`) |
 | an inline object or enum as a member of a `oneOf`/`anyOf` | a named class: the member's `title` in PascalCase, else `<Parent><Property>Option<N>` (N counts from 1 over `oneOf`, then `anyOf`) |
@@ -136,8 +136,10 @@ Classes are `final`, except the bases of `allOf` and of discriminated unions. At
   `\InvalidArgumentException` from the constructor. Symfony's Serializer turns only a `TypeError` there into a
   validation error, so e.g. `#[MapRequestPayload] Cat $cat` answers 500 instead of accepting the foreign value.
   Denormalizing through the base and its `DiscriminatorMap` is unaffected.
-- **On PHP 7.4** a checked optional discriminator that a variant declares itself has a non-nullable property and
-  getter: the constructor rejects `null` before assigning it.
+- **A checked nullable discriminator declared by a concrete class** (a variant or an open class) has a non-nullable
+  property and getter on PHP 7.4 (`getKind(): string`), as the constructor rejects `null` before assigning it; from
+  PHP 8.0 the property is promoted and keeps the parameter's type (`?string`). A rejected `null` reads `null` in the
+  message: `null does not select Side by "kind".`
 - **The discriminator parameter carries no literal PHPDoc type** (`'cat'|'kitty'`): PHPStan would then report the
   constructor's own check as always false.
 - **Swagger-2-style inheritance** (a base with a discriminator that the variants extend through `allOf`) makes the
