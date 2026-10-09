@@ -438,7 +438,7 @@ final class Hierarchy
             $parent = $model->parent();
             if ($parent instanceof ClassName && isset($this->models[$parent->fqcn()])) {
                 $restored = array_diff($this->models[$parent->fqcn()]->discriminatedProperties(), $model->discriminatedProperties());
-                $this->models[$fqcn] = $model->withRestoredMutators(...array_values($restored));
+                $this->models[$fqcn] = $model->withRestoredMutators(...$restored);
             }
         }
     }

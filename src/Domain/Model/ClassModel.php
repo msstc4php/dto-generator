@@ -225,7 +225,7 @@ final class ClassModel
     {
         $own = $this->discriminator instanceof DiscriminatorModel ? [$this->discriminator->propertyName()] : [];
 
-        return array_merge($own, array_values(array_diff($this->discriminatedProperties, $own)));
+        return array_merge($own, array_diff($this->discriminatedProperties, $own));
     }
 
     public function withDiscriminatedProperties(string ...$wireNames): self

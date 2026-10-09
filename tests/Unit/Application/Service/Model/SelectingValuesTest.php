@@ -320,4 +320,26 @@ final class SelectingValuesTest extends TestCase
             $restored,
         );
     }
+
+    public function testCollectsTheValuesOfEverySubclassOfAnOpenClass(): void
+    {
+        $sub = static fn (string $own): array => ['allOf' => [['$ref' => '#/components/schemas/Bird'], ['properties' => [$own => ['type' => 'integer']]]]];
+        $output = ModelFixture::build([
+            'Animal' => [
+                'type' => 'object',
+                'required' => ['kind'],
+                'properties' => ['kind' => ['type' => 'string']],
+                'discriminator' => [
+                    'propertyName' => 'kind',
+                    'mapping' => ['bird' => '#/components/schemas/Bird', 'parrot' => '#/components/schemas/Parrot', 'macaw' => '#/components/schemas/Macaw'],
+                ],
+            ],
+            'Bird' => ['allOf' => [['$ref' => '#/components/schemas/Animal'], ['properties' => ['wings' => ['type' => 'integer']]]]],
+            'Parrot' => $sub('words'),
+            'Macaw' => $sub('colors'),
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(["kind: 'bird'; subclasses: 'parrot'|'macaw'"], ModelFixture::selections($output)['App\Dto\Bird']);
+    }
 }
