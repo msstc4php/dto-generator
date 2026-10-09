@@ -6,6 +6,8 @@ All notable changes to this package are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-10-09
+
 ### Fixed
 
 - `make docker-build` with a checkout of the Symfony bridge works again: the image reports the latest tag as its
@@ -77,7 +79,8 @@ First release.
 - A manifest per output directory: stale classes are deleted, files without the `@generated` header are never
   overwritten.
 
-[Unreleased]: https://github.com/msstc4php/dto-generator/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/msstc4php/dto-generator/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/msstc4php/dto-generator/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/msstc4php/dto-generator/compare/v1.0.2...v1.1.0
 [1.0.2]: https://github.com/msstc4php/dto-generator/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/msstc4php/dto-generator/compare/v1.0.0...v1.0.1
