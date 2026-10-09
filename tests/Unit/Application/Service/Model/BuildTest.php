@@ -246,7 +246,7 @@ final class BuildTest extends TestCase
     public function testChecksTheExtensionVocabularyOfEverySchema(): void
     {
         $at = self::AT;
-        $known = 'known: x-php-class-name, x-php-name, x-php-type, x-dto-mutable, x-php-all-of, x-php-skip, x-php-attributes, x-enum-descriptions.';
+        $known = 'known: x-php-class-name, x-php-name, x-php-type, x-dto-mutable, x-php-all-of, x-php-skip, x-php-attributes, x-enum-descriptions, x-enum-varnames.';
         $output = ModelFixture::build([
             'User' => ['type' => 'object', 'x-dto-mutible' => true, 'x-php-name' => 'u', 'properties' => ['id' => []]],
             'S' => ['type' => 'string', 'x-php-nmae' => 'x', 'x-php-class-name' => 'Foo'],
@@ -526,9 +526,9 @@ final class BuildTest extends TestCase
             [
                 "warning {$at}User/additionalProperties/x-dto-mutable: \"x-dto-mutable\" has no effect here.",
                 "warning {$at}User/properties/scores/additionalProperties/x-php-class-name: \"x-php-class-name\" has no effect here.",
-                "error {$at}User/properties/scores/additionalProperties/x-php-foo: Unknown extension \"x-php-foo\"; known: x-php-class-name, x-php-name, x-php-type, x-dto-mutable, x-php-all-of, x-php-skip, x-php-attributes, x-enum-descriptions.",
+                "error {$at}User/properties/scores/additionalProperties/x-php-foo: Unknown extension \"x-php-foo\"; known: x-php-class-name, x-php-name, x-php-type, x-dto-mutable, x-php-all-of, x-php-skip, x-php-attributes, x-enum-descriptions, x-enum-varnames.",
                 "warning {$at}User/properties/grid/items/additionalProperties/x-dto-mutable: \"x-dto-mutable\" has no effect here.",
-                "error {$at}User/properties/lists/additionalProperties/items/x-php-bar: Unknown extension \"x-php-bar\"; known: x-php-class-name, x-php-name, x-php-type, x-dto-mutable, x-php-all-of, x-php-skip, x-php-attributes, x-enum-descriptions.",
+                "error {$at}User/properties/lists/additionalProperties/items/x-php-bar: Unknown extension \"x-php-bar\"; known: x-php-class-name, x-php-name, x-php-type, x-dto-mutable, x-php-all-of, x-php-skip, x-php-attributes, x-enum-descriptions, x-enum-varnames.",
             ],
             ModelFixture::messages($output),
         );
@@ -599,8 +599,8 @@ final class BuildTest extends TestCase
                 "warning {$at}Status/x-php-attributes: \"x-php-attributes\" has no effect here.",
                 "warning {$at}Status/x-audit: \"x-audit\" has no effect here.",
                 "warning {$at}Cat/allOf/1/x-php-attributes: \"x-php-attributes\" has no effect here.",
-                "error {$at}Cat/allOf/1/x-php-bogus: Unknown extension \"x-php-bogus\"; known: x-php-class-name, x-php-name, x-php-type, x-dto-mutable, x-php-all-of, x-php-skip, x-php-attributes, x-enum-descriptions.",
-                "error {$at}Cat/allOf/1/additionalProperties/x-php-odd: Unknown extension \"x-php-odd\"; known: x-php-class-name, x-php-name, x-php-type, x-dto-mutable, x-php-all-of, x-php-skip, x-php-attributes, x-enum-descriptions.",
+                "error {$at}Cat/allOf/1/x-php-bogus: Unknown extension \"x-php-bogus\"; known: x-php-class-name, x-php-name, x-php-type, x-dto-mutable, x-php-all-of, x-php-skip, x-php-attributes, x-enum-descriptions, x-enum-varnames.",
+                "error {$at}Cat/allOf/1/additionalProperties/x-php-odd: Unknown extension \"x-php-odd\"; known: x-php-class-name, x-php-name, x-php-type, x-dto-mutable, x-php-all-of, x-php-skip, x-php-attributes, x-enum-descriptions, x-enum-varnames.",
                 "warning {$at}Cat/allOf/1/allOf/0/x-dto-mutable: \"x-dto-mutable\" has no effect here.",
             ],
             ModelFixture::messages($output),
@@ -626,7 +626,7 @@ final class BuildTest extends TestCase
         self::assertSame(
             [
                 "warning {$at}Order/properties/comp/allOf/1/x-php-attributes: \"x-php-attributes\" has no effect here.",
-                "error {$at}Order/properties/comp/allOf/1/x-php-typo: Unknown extension \"x-php-typo\"; known: x-php-class-name, x-php-name, x-php-type, x-dto-mutable, x-php-all-of, x-php-skip, x-php-attributes, x-enum-descriptions.",
+                "error {$at}Order/properties/comp/allOf/1/x-php-typo: Unknown extension \"x-php-typo\"; known: x-php-class-name, x-php-name, x-php-type, x-dto-mutable, x-php-all-of, x-php-skip, x-php-attributes, x-enum-descriptions, x-enum-varnames.",
                 "warning {$at}Order/properties/list/items/allOf/1/x-php-name: \"x-php-name\" has no effect here.",
             ],
             ModelFixture::messages($output),
