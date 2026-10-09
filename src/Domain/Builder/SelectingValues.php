@@ -12,7 +12,6 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\DiscriminatorModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\DiscriminatorValues;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumBacking;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumType;
-use MSSTC4PHP\DtoGenerator\Domain\Model\MixedType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\NullableType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\PropertyModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ScalarType;
@@ -137,8 +136,7 @@ final class SelectingValues
     {
         $declared = $property->type();
         $type = $declared instanceof NullableType ? $declared->inner() : $declared;
-        $isInt = $type instanceof EnumType ? $type->backing()->value() === EnumBacking::INT : $type instanceof ScalarType && $type->kind() === 'int';
-        if (!$type instanceof EnumType && !$type instanceof MixedType && (!$type instanceof ScalarType || !in_array($type->kind(), ['string', 'int'], true))) {
+        if (!self::checkable($type)) {
             $diagnostics->warning(
                 sprintf(
                     'The constructor of %s does not check discriminator "%s": only a string, integer or enum property can be checked.',
@@ -151,6 +149,7 @@ final class SelectingValues
             return null;
         }
 
+        $isInt = $type instanceof EnumType ? $type->backing()->value() === EnumBacking::INT : $type instanceof ScalarType && $type->kind() === 'int';
         $values = [];
         foreach ($keys as $key) {
             $value = $isInt ? (is_int($key) ? $key : null) : (string) $key;
@@ -172,6 +171,14 @@ final class SelectingValues
 
         // A check the type already makes would be dead code, which PHPStan reports in the generated class.
         return new DiscriminatorValues($property->name(), $values, $declared instanceof NullableType || !self::covers($type, $values));
+    }
+
+    /**
+     * An untyped property would compare a mixed value in the check and print it in the message.
+     */
+    private static function checkable(TypeModel $type): bool
+    {
+        return $type instanceof EnumType || ($type instanceof ScalarType && in_array($type->kind(), ['string', 'int'], true));
     }
 
     /**

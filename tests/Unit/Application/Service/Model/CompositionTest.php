@@ -308,7 +308,7 @@ final class CompositionTest extends TestCase
             ],
             'discriminated parent in an inheritance loop' => [
                 [
-                    'A' => ['allOf' => [['$ref' => '#/components/schemas/B'], ['properties' => ['kind' => []]]], 'discriminator' => ['propertyName' => 'kind']],
+                    'A' => ['allOf' => [['$ref' => '#/components/schemas/B'], ['properties' => ['kind' => ['type' => 'string']]]], 'discriminator' => ['propertyName' => 'kind']],
                     'B' => ['allOf' => [['$ref' => '#/components/schemas/A'], ['properties' => ['b' => []]]]],
                 ],
                 ["error {$at}A: Class App\\Dto\\A extends itself through App\\Dto\\B."],

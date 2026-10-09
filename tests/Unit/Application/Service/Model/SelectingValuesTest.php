@@ -192,4 +192,19 @@ final class SelectingValuesTest extends TestCase
         self::assertSame([], ModelFixture::messages($output));
         self::assertSame(['App\Dto\Cat' => ["kind: '1'"]], ModelFixture::selections($output));
     }
+
+    public function testDoesNotCheckAnUntypedDiscriminator(): void
+    {
+        $at = self::AT;
+        $output = ModelFixture::build([
+            'Loose' => ['oneOf' => [['$ref' => '#/components/schemas/LooseA']], 'discriminator' => ['propertyName' => 't', 'mapping' => ['5' => '#/components/schemas/LooseA']]],
+            'LooseA' => ['type' => 'object', 'required' => ['t'], 'properties' => ['t' => []]],
+        ]);
+
+        self::assertSame(
+            ["warning {$at}LooseA: The constructor of App\\Dto\\LooseA does not check discriminator \"t\": only a string, integer or enum property can be checked."],
+            ModelFixture::messages($output),
+        );
+        self::assertSame([], ModelFixture::selections($output));
+    }
 }
