@@ -77,6 +77,8 @@ final class Action
             }
 
             if (!$isClass && !$isEnum) {
+                $this->hoistFromAlias($schema, $resolved->name(), $config->sources()[$source]->namespace(), $source, $registry, $enums, $diagnostics);
+
                 continue;
             }
 
@@ -274,6 +276,18 @@ final class Action
             foreach ($this->inlines($schema, '', $diagnostics, $registry) as [$candidate, $suffix, $title]) {
                 $this->declareInline($candidate, $title ?? ($baseName === null ? null : $baseName . $suffix), $wireName, $namespace, $source, $registry, $enums, $diagnostics);
             }
+        }
+    }
+
+    /**
+     * A named non-object schema is inlined where it is used, but its inline objects and enums need a name of their own:
+     * `<Alias>Item`, `<Alias>Value`, `<Alias>Option<N>`.
+     */
+    private function hoistFromAlias(Schema $alias, string $aliasName, string $namespace, int $source, Registry $registry, EnumBuilder $enums, Diagnostics $diagnostics): void
+    {
+        $base = $this->names->className($aliasName);
+        foreach ($this->inlines($alias, '', $diagnostics, $registry) as [$candidate, $suffix, $title]) {
+            $this->declareInline($candidate, $title ?? ($base === null ? null : $base . $suffix), $aliasName, $namespace, $source, $registry, $enums, $diagnostics);
         }
     }
 

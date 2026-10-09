@@ -178,4 +178,32 @@ final class SchemaCoverageTest extends TestCase
             ModelFixture::messages($output),
         );
     }
+
+    public function testHoistsInlineSchemasOfANamedAlias(): void
+    {
+        $output = ModelFixture::build([
+            'Pets' => ['type' => 'array', 'items' => ['type' => 'object', 'properties' => ['name' => ['type' => 'string']]]],
+            'Tags' => ['type' => 'object', 'additionalProperties' => ['type' => 'string', 'enum' => ['a', 'b']]],
+            'Shape' => ['oneOf' => [['type' => 'object', 'properties' => ['r' => ['type' => 'number']]], ['type' => 'object', 'properties' => ['w' => ['type' => 'number']]]]],
+            'Holder' => ['type' => 'object', 'properties' => [
+                'pets' => ['$ref' => '#/components/schemas/Pets'],
+                'tags' => ['$ref' => '#/components/schemas/Tags'],
+                'shape' => ['$ref' => '#/components/schemas/Shape'],
+            ]],
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(
+            ['pets: list<App\Dto\PetsItem>|null', 'tags: array<array-key, App\Dto\TagsValue>|null', 'shape: App\Dto\ShapeOption1|App\Dto\ShapeOption2|null'],
+            ModelFixture::classes($output)['App\Dto\Holder'],
+        );
+        self::assertSame(['App\Dto\TagsValue'], ModelFixture::enums($output));
+    }
+
+    public function testLeavesASkippedAliasAlone(): void
+    {
+        $output = ModelFixture::build(['Pets' => ['type' => 'array', 'x-php-skip' => true, 'items' => ['type' => 'object', 'properties' => ['name' => ['type' => 'string']]]]]);
+
+        self::assertSame([], ModelFixture::classes($output));
+    }
 }
