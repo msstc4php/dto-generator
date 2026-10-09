@@ -46,7 +46,7 @@ final class EmitterFixture
     /**
      * The metadata mode a config with "auto" gets: attributes from PHP 8.0, annotations below.
      */
-    public static function target(string $php, string $mutability, string $accessors = AccessorStyle::AUTO, ?string $metadata = null): TargetProfile
+    public static function target(string $php, string $mutability, string $accessors = AccessorStyle::AUTO, ?string $metadata = null, bool $withers = true): TargetProfile
     {
         $version = PhpVersion::fromString($php);
 
@@ -57,6 +57,7 @@ final class EmitterFixture
             AccessorStyle::from($accessors),
             DateTimeClass::from(DateTimeClass::IMMUTABLE),
             true,
+            $withers,
         );
     }
 

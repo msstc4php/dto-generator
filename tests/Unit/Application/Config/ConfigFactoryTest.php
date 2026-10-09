@@ -36,6 +36,7 @@ final class ConfigFactoryTest extends TestCase
         self::assertSame('auto', $config->dto()->accessors()->value());
         self::assertSame('DateTimeImmutable', $config->dto()->dateTimeClass()->value());
         self::assertSame('extends', $config->dto()->allOfStrategy()->value());
+        self::assertTrue($config->dto()->withers());
         self::assertSame([], $config->formats());
         self::assertSame([], $config->extensions()->classes());
         self::assertTrue($config->extensions()->discover());
@@ -54,7 +55,7 @@ final class ConfigFactoryTest extends TestCase
         $config = $this->valid([
             'version' => 1,
             'target' => ['php' => '8.2', 'metadata' => 'annotations', 'strict' => false],
-            'dto' => ['mutability' => 'mutable', 'accessors' => 'getters', 'dateTimeClass' => 'DateTime', 'allOfStrategy' => 'merge'],
+            'dto' => ['mutability' => 'mutable', 'accessors' => 'getters', 'dateTimeClass' => 'DateTime', 'allOfStrategy' => 'merge', 'withers' => false],
             'formats' => ['uuid' => ['type' => '\Symfony\Component\Uid\Uuid']],
             'attributeAliases' => ['x-audit' => ['class' => 'App\Attr\Audited']],
             'verifyClasses' => false,
@@ -77,6 +78,7 @@ final class ConfigFactoryTest extends TestCase
         self::assertFalse($config->target()->isStrict());
         self::assertSame('mutable', $config->dto()->mutability()->value());
         self::assertSame('merge', $config->dto()->allOfStrategy()->value());
+        self::assertFalse($config->dto()->withers());
         self::assertSame('Symfony\Component\Uid\Uuid', $config->formats()['uuid']->fqcn());
         self::assertSame(['x-audit' => ['class' => 'App\Attr\Audited']], $config->extensions()->aliases());
         self::assertFalse($config->extensions()->verifyClasses());
@@ -165,6 +167,7 @@ final class ConfigFactoryTest extends TestCase
             'bad namespace' => [['version' => 1, 'sources' => [['namespace' => 'App\1Dto'] + $source]], 'is not a valid namespace', '/sources/0/namespace'],
             'empty include' => [['version' => 1, 'sources' => [$source + ['include' => []]]], '"include" must not be empty', '/sources/0/include'],
             'include not strings' => [['version' => 1, 'sources' => [$source + ['include' => [1]]]], 'Expected a non-empty string', '/sources/0/include/0'],
+            'withers not bool' => [['version' => 1, 'dto' => ['withers' => 'no'], 'sources' => [$source]], '"withers" must be true or false', '/dto/withers'],
             'unknown dto key' => [['version' => 1, 'dto' => ['mutable' => true], 'sources' => [$source]], 'Unknown key "mutable"', '/dto/mutable'],
             'unknown format key' => [['version' => 1, 'formats' => ['uuid' => ['type' => 'App\Uuid', 'kind' => 1]], 'sources' => [$source]], 'Unknown key "kind"', '/formats/uuid/kind'],
             'reserved x-dto alias' => [['version' => 1, 'attributeAliases' => ['x-dto-audit' => []], 'sources' => [$source]], 'outside the reserved', '/attributeAliases/x-dto-audit'],

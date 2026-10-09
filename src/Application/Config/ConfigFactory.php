@@ -99,13 +99,14 @@ final class ConfigFactory
 
     private function dto(RawSection $section): DtoSettings
     {
-        $section->rejectUnknownKeys(['mutability', 'accessors', 'dateTimeClass', 'allOfStrategy']);
+        $section->rejectUnknownKeys(['mutability', 'accessors', 'dateTimeClass', 'allOfStrategy', 'withers']);
 
         return new DtoSettings(
             Mutability::from($section->choice('mutability', Mutability::IMMUTABLE, $this->values(Mutability::cases()))),
             AccessorStyle::from($section->choice('accessors', AccessorStyle::AUTO, $this->values(AccessorStyle::cases()))),
             DateTimeClass::from($section->choice('dateTimeClass', DateTimeClass::IMMUTABLE, $this->values(DateTimeClass::cases()))),
             AllOfStrategy::from($section->choice('allOfStrategy', AllOfStrategy::EXTENDS, $this->values(AllOfStrategy::cases()))),
+            $section->bool('withers', true),
         );
     }
 

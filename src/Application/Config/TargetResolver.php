@@ -40,6 +40,7 @@ final class TargetResolver
                 $config->dto()->accessors(),
                 $config->dto()->dateTimeClass(),
                 $settings->isStrict(),
+                $config->dto()->withers(),
             );
         } catch (IncompatibleTarget $exception) {
             $diagnostics->error($exception->getMessage(), $config->location()->child('target'));

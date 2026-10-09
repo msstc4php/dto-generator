@@ -19,12 +19,15 @@ final class DtoSettings
 
     private AllOfStrategy $allOfStrategy;
 
-    public function __construct(Mutability $mutability, AccessorStyle $accessors, DateTimeClass $dateTimeClass, AllOfStrategy $allOfStrategy)
+    private bool $withers;
+
+    public function __construct(Mutability $mutability, AccessorStyle $accessors, DateTimeClass $dateTimeClass, AllOfStrategy $allOfStrategy, bool $withers = true)
     {
         $this->mutability = $mutability;
         $this->accessors = $accessors;
         $this->dateTimeClass = $dateTimeClass;
         $this->allOfStrategy = $allOfStrategy;
+        $this->withers = $withers;
     }
 
     public function mutability(): Mutability
@@ -45,5 +48,10 @@ final class DtoSettings
     public function allOfStrategy(): AllOfStrategy
     {
         return $this->allOfStrategy;
+    }
+
+    public function withers(): bool
+    {
+        return $this->withers;
     }
 }

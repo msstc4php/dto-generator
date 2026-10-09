@@ -117,6 +117,17 @@ final class TargetResolverTest extends TestCase
         self::assertNotNull($this->resolve($this->config('8.0', null, 'App\List\Dto'), null));
     }
 
+    public function testCarriesTheWitherSettingIntoTheTarget(): void
+    {
+        $without = $this->resolve($this->config('8.2', null, 'App\Dto', [], false), null);
+        $with = $this->resolve($this->config('8.2'), null);
+
+        self::assertNotNull($without);
+        self::assertNotNull($with);
+        self::assertFalse($without->hasWithers());
+        self::assertTrue($with->hasWithers());
+    }
+
     private function resolve(GeneratorConfig $config, ?string $constraint): ?TargetProfile
     {
         $diagnostics = new Diagnostics();
@@ -129,7 +140,7 @@ final class TargetResolverTest extends TestCase
     /**
      * @param array<int|string, ClassName> $formats
      */
-    private function config(?string $php, ?string $metadata = null, string $namespace = 'App\Dto', array $formats = []): GeneratorConfig
+    private function config(?string $php, ?string $metadata = null, string $namespace = 'App\Dto', array $formats = [], bool $withers = true): GeneratorConfig
     {
         return new GeneratorConfig(
             ConfigMother::PATH,
@@ -139,6 +150,7 @@ final class TargetResolverTest extends TestCase
                 AccessorStyle::from(AccessorStyle::AUTO),
                 DateTimeClass::from(DateTimeClass::IMMUTABLE),
                 AllOfStrategy::from(AllOfStrategy::EXTENDS),
+                $withers,
             ),
             $formats,
             new ExtensionSettings([], true, [], [], null),

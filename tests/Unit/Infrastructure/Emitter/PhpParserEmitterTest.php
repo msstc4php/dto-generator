@@ -847,4 +847,20 @@ final class Order
 
         (new PhpParserEmitter())->emit(EmitterFixture::tag()->withDiscriminatorValues(new DiscriminatorValues('kind', ['tag'])), EmitterFixture::target('8.2', Mutability::IMMUTABLE));
     }
+
+    public function testLeavesWithersOutWhenTheTargetHasNone(): void
+    {
+        $emitter = new PhpParserEmitter();
+
+        self::assertStringNotContainsString('function with', $emitter->emit(EmitterFixture::sample(), EmitterFixture::target('8.2', Mutability::IMMUTABLE, AccessorStyle::AUTO, null, false)));
+        self::assertStringNotContainsString('function with', $emitter->emit(EmitterFixture::animal(), EmitterFixture::target('7.4', Mutability::IMMUTABLE, AccessorStyle::AUTO, null, false)));
+        self::assertStringNotContainsString(
+            'function with',
+            $emitter->emit(EmitterFixture::dog(), EmitterFixture::target('8.1', Mutability::IMMUTABLE, AccessorStyle::AUTO, null, false), EmitterFixture::animal()->properties()),
+        );
+        self::assertStringContainsString(
+            'public function setId(int $id): self',
+            $emitter->emit(EmitterFixture::sample(Mutability::MUTABLE), EmitterFixture::target('8.2', Mutability::MUTABLE, AccessorStyle::GETTERS, null, false)),
+        );
+    }
 }
