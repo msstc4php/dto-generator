@@ -342,4 +342,26 @@ final class SelectingValuesTest extends TestCase
         self::assertSame([], ModelFixture::messages($output));
         self::assertSame(["kind: 'bird'; subclasses: 'parrot'|'macaw'"], ModelFixture::selections($output)['App\Dto\Bird']);
     }
+
+    public function testRestoresOnlyTheMutatorsOfInheritedProperties(): void
+    {
+        $output = ModelFixture::build([
+            'Named' => ['type' => 'object', 'required' => ['kind'], 'properties' => ['kind' => ['type' => 'string']]],
+            'Pet' => [
+                'allOf' => [['$ref' => '#/components/schemas/Named'], ['type' => 'object', 'required' => ['species'], 'properties' => ['species' => ['type' => 'string']]]],
+                'discriminator' => ['propertyName' => 'species', 'mapping' => ['cat' => '#/components/schemas/Cat']],
+            ],
+            'Cat' => ['allOf' => [['$ref' => '#/components/schemas/Pet'], ['type' => 'object', 'properties' => ['meow' => ['type' => 'string']]]]],
+            'Product' => ['allOf' => [['$ref' => '#/components/schemas/Named'], ['type' => 'object', 'properties' => ['price' => ['type' => 'integer']]]]],
+        ]);
+
+        $restored = [];
+        foreach ($output->classes() as $class) {
+            $restored[$class->model()->name()->shortName()] = [$class->model()->discriminatedProperties(), $class->model()->restoredMutators()];
+        }
+
+        // Named lists `species`, which Pet declares: Product inherits nothing by that name.
+        self::assertSame(['species'], $restored['Named'][0]);
+        self::assertSame([[], []], $restored['Product']);
+    }
 }

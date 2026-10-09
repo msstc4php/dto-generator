@@ -202,6 +202,14 @@ final class ClassModelTest extends TestCase
         self::assertSame(['sub'], $class->withRestoredMutators('sub')->withDiscriminatedProperties('kind')->restoredMutators());
     }
 
+    public function testRejectsAMutatorBothRestoredAndDiscriminated(): void
+    {
+        $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('Class App\User restores the mutators of "kind", which a discriminator of its chain reads.');
+
+        $this->classWith([])->withDiscriminatedProperties('kind')->withRestoredMutators('kind');
+    }
+
     public function testRejectsAnEmptyRestoredMutator(): void
     {
         $this->expectException(InvalidModel::class);

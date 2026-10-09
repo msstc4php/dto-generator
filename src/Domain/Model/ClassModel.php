@@ -111,6 +111,9 @@ final class ClassModel
         $this->discriminatorValues = $discriminatorValues;
         $this->discriminatedProperties = $this->wireNames($discriminatedProperties, $name, 'discriminated property');
         $this->restoredMutators = $this->wireNames($restoredMutators, $name, 'restored mutator');
+        foreach (array_intersect($this->restoredMutators, $this->discriminatedProperties()) as $wireName) {
+            throw new InvalidModel(sprintf('Class %s restores the mutators of "%s", which a discriminator of its chain reads.', $name->fqcn(), $wireName));
+        }
     }
 
     /**

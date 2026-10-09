@@ -437,8 +437,15 @@ final class Hierarchy
         foreach ($this->models as $fqcn => $model) {
             $parent = $model->parent();
             if ($parent instanceof ClassName && isset($this->models[$parent->fqcn()])) {
+                $inherited = [];
+                foreach (array_slice($this->chain($fqcn), 0, -1) as $ancestor) {
+                    foreach ($this->models[$ancestor]->properties() as $property) {
+                        $inherited[] = $property->wireName();
+                    }
+                }
+
                 $restored = array_diff($this->models[$parent->fqcn()]->discriminatedProperties(), $model->discriminatedProperties());
-                $this->models[$fqcn] = $model->withRestoredMutators(...$restored);
+                $this->models[$fqcn] = $model->withRestoredMutators(...array_intersect($restored, $inherited));
             }
         }
     }
