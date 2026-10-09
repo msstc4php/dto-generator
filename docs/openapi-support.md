@@ -114,9 +114,12 @@ Classes are `final`, except the bases of `allOf` and of discriminated unions. At
   responses, which one DTO does not tell apart.
 - **OpenAPI 3.0 `nullable: true` has no effect** and gives a warning; use `type: [T, 'null']`.
 - **`const`** keeps a date or a `formats` class when `format` names one, and keeps the declared `type` (with a
-  warning) when the constant does not fit it. A `const` member of `allOf` (`allOf: [{$ref: Code}, {const: x}]`) narrows
-  the type to its literal when the kinds agree. A `default` must equal the `const` or, for a mixed enum, one of its values, also when they
-  come through a `$ref` or an `allOf` member; an `int` property takes no `2.0` default, as PHP would not compile it.
+  warning) when the constant does not fit it. A bare `const` member of `allOf` (`allOf: [{$ref: Code}, {const: x}]`)
+  narrows the type to its literal; a constant outside that type (`{type: integer, maximum: 10, allOf: [{const: 50}]}`)
+  gives a warning and keeps the type. The narrowed type stays nullable when the rest of the schema admits `null`,
+  although the constant excludes it: wider than the schema, never narrower.
+- **Defaults** must equal every `const` and, for a mixed enum, be one of its values, also when they come through a
+  `$ref` or an `allOf` member. An `int` property takes no `2.0` default, as PHP would not compile it.
 - **Strings in literal types are plain.** A `const` or enum string with quotes, backslashes, `|`, `*`, `{`, `}`, `@`
   or non-ASCII characters keeps the type `string` without the literal.
 - **Hoisted names give way to named schemas.** An inline member whose title or derived name equals a schema in

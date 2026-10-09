@@ -11,7 +11,9 @@ All notable changes to this package are documented here. The format follows
 - Inline objects and enums in a `oneOf`/`anyOf` become classes: named after the member's `title`, else
   `<Parent><Property>Option<N>`. Those in the `items`, `additionalProperties` or union members of a named alias
   become `<Alias>Item`, `<Alias>Value`, `<Alias>Option<N>`. Both used to be errors.
-- `const` gives the property its type with a PHPDoc literal (`@phpstan-var 'card'`) instead of `mixed`.
+- `const` gives the property its type with a PHPDoc literal (`@phpstan-var 'card'`) instead of `mixed`; a `const`
+  member of `allOf` narrows the type of the rest. A `default` other than the `const` (or outside a mixed enum) is an
+  error, also through `$ref` and `allOf`.
 - `x-enum-varnames` names the enum cases.
 - A warning for keywords no generated type expresses (`prefixItems`, `patternProperties`, `if`/`then`/`else`,
   `not`…) and for OpenAPI 3.0 `nullable: true`.

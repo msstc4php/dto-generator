@@ -20,7 +20,6 @@ use MSSTC4PHP\DtoGenerator\Domain\Schema\ResolvedSchema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaGraph;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaType;
-use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
 use MSSTC4PHP\DtoGenerator\Domain\Target\Capability;
 use MSSTC4PHP\DtoGenerator\Domain\Target\TargetProfile;
 
@@ -29,25 +28,15 @@ use MSSTC4PHP\DtoGenerator\Domain\Target\TargetProfile;
  */
 final class TypeMapper
 {
-    private const STRING_FORMATS = [
-        'email', 'idn-email', 'uri', 'uri-reference', 'iri', 'iri-reference', 'uri-template', 'uuid', 'hostname',
-        'idn-hostname', 'ipv4', 'ipv6', 'time', 'duration', 'byte', 'binary', 'password', 'regex', 'json-pointer',
-        'relative-json-pointer',
-    ];
-
     public const ONE_OF_AND_ANY_OF = '"oneOf" and "anyOf" together become one union, which admits more than the schema does.';
-
-    private const DATE_FORMATS = ['date-time', 'date'];
-
-    private const INTEGER_FORMATS = ['int32', 'int64'];
-
-    private const NUMBER_FORMATS = ['float', 'double'];
 
     private SchemaGraph $graph;
 
     private Declarations $declarations;
 
     private TargetProfile $target;
+
+    private ConstMapper $consts;
 
     /** @var array<int|string, TypeModel> */
     private array $formats;
@@ -61,6 +50,7 @@ final class TypeMapper
         $this->declarations = $declarations;
         $this->target = $target;
         $this->formats = $formats;
+        $this->consts = new ConstMapper($formats);
     }
 
     public function map(Schema $schema, Diagnostics $diagnostics): TypeModel
@@ -141,7 +131,7 @@ final class TypeMapper
         }
 
         if ($typed !== []) {
-            return $this->narrowByConst($schema, $this->mapWithin($typed[0], $diagnostics, $aliases), $diagnostics);
+            return $this->consts->narrow($schema, $this->mapWithin($typed[0], $diagnostics, $aliases), $diagnostics);
         }
 
         if (SchemaShape::isMixedEnum($schema)) {
@@ -163,7 +153,7 @@ final class TypeMapper
         }
 
         if ($schema->hasKeyword('const')) {
-            $const = $this->constType($schema, $diagnostics);
+            $const = $this->consts->type($schema, $diagnostics);
             if ($const instanceof TypeModel) {
                 return $const;
             }
@@ -180,11 +170,11 @@ final class TypeMapper
         }
 
         if ($members === []) {
-            return $this->narrowByConst($schema, new MixedType(), $diagnostics);
+            return $this->consts->narrow($schema, new MixedType(), $diagnostics);
         }
 
         // Parsed type lists hold no duplicates, so two or more members always form a valid union.
-        return $this->narrowByConst($schema, count($members) === 1 ? $members[0] : new UnionType(...$members), $diagnostics);
+        return $this->consts->narrow($schema, count($members) === 1 ? $members[0] : new UnionType(...$members), $diagnostics);
     }
 
     /**
@@ -356,91 +346,6 @@ final class TypeMapper
         return new UnionType(ScalarType::string(LiteralType::union($strings)), ScalarType::int(LiteralType::union($ints)));
     }
 
-    /**
-     * The type of the one allowed value, as the property holds it; null leaves the schema's own type: a format mapped to
-     * a class or a date wins, as do null, array and object constants, and a declared type the constant contradicts.
-     */
-    private function constType(Schema $schema, Diagnostics $diagnostics): ?TypeModel
-    {
-        $format = $schema->format();
-        $declared = array_map(static fn (SchemaType $type): string => $type->value(), $schema->nonNullTypes());
-        // A date applies only to a declared string; a configured format applies to any type.
-        $dated = in_array($format, self::DATE_FORMATS, true) && in_array(SchemaType::STRING, $declared, true);
-        if ($format !== null && (isset($this->formats[$format]) || $dated)) {
-            return null;
-        }
-
-        $value = Json::value($schema->keyword('const'));
-        $allows = static fn (string $type): bool => $declared === [] || in_array($type, $declared, true);
-        // JSON Schema counts 2.0 as an integer and every integer as a number.
-        // The round trip leaves out fractions and floats beyond the range of int.
-        $whole = is_int($value) || (is_float($value) && $value === (float) (int) $value) ? (int) $value : null;
-        $integer = in_array(SchemaType::INTEGER, $declared, true);
-        $number = in_array(SchemaType::NUMBER, $declared, true);
-        if ($whole !== null && $integer) {
-            $type = ScalarType::int(LiteralType::of($whole));
-        } elseif (is_float($value) && $value === floor($value) && $integer && !$number) {
-            $diagnostics->warning('"const" is outside the range of PHP int; the property keeps int.', $schema->location()->child('const'));
-
-            return null;
-        } elseif (is_int($value) && $declared === []) {
-            $type = ScalarType::int(LiteralType::of($value));
-        } elseif (is_int($value) || is_float($value)) {
-            $type = $number || $declared === [] ? ScalarType::float() : null;
-        } elseif (is_string($value)) {
-            $type = $allows(SchemaType::STRING) ? ScalarType::string(LiteralType::of($value)) : null;
-        } elseif (is_bool($value)) {
-            $type = $allows(SchemaType::BOOLEAN) ? ScalarType::bool(LiteralType::of($value)) : null;
-        } else {
-            return null;
-        }
-
-        if (!$type instanceof ScalarType) {
-            $diagnostics->warning('"const" is not of the declared type; the property keeps its declared type.', $schema->location()->child('const'));
-
-            return null;
-        }
-
-        $this->checkFormatOf($type, $schema, $diagnostics);
-
-        return $type;
-    }
-
-    /**
-     * The format check single() makes for a scalar of this kind.
-     */
-    private function checkFormatOf(ScalarType $type, Schema $schema, Diagnostics $diagnostics): void
-    {
-        if ($type->kind() === 'string') {
-            $this->checkFormat($schema, self::STRING_FORMATS, 'string', 'a string', $diagnostics);
-        } elseif ($type->kind() === 'int') {
-            $this->checkFormat($schema, self::INTEGER_FORMATS, 'integer', 'an int', $diagnostics);
-        } elseif ($type->kind() === 'float') {
-            $this->checkFormat($schema, self::NUMBER_FORMATS, 'number', 'a float', $diagnostics);
-        }
-    }
-
-    /**
-     * A `const` member of `allOf` narrows the type the rest gives to its literal, when the kinds agree or there is no
-     * other type.
-     */
-    private function narrowByConst(Schema $schema, TypeModel $base, Diagnostics $diagnostics): TypeModel
-    {
-        $inner = $base instanceof NullableType ? $base->inner() : $base;
-        foreach ($schema->allOf() as $member) {
-            if ($member->ref() !== null || !$member->hasKeyword('const')) {
-                continue;
-            }
-
-            $literal = $this->constType($member, $diagnostics);
-            if ($literal instanceof ScalarType && ($inner instanceof MixedType || ($inner instanceof ScalarType && $inner->kind() === $literal->kind()))) {
-                return $base instanceof NullableType ? self::nullable($literal) : $literal;
-            }
-        }
-
-        return $base;
-    }
-
     private function explicitType(Schema $schema, Diagnostics $diagnostics): TypeModel
     {
         $at = $schema->location()->child('x-php-type');
@@ -527,11 +432,11 @@ final class TypeMapper
             case SchemaType::STRING:
                 return $this->stringType($schema, $diagnostics);
             case SchemaType::INTEGER:
-                $this->checkFormat($schema, self::INTEGER_FORMATS, 'integer', 'an int', $diagnostics);
+                FormatCheck::check($schema, 'int', $diagnostics);
 
                 return ScalarType::int($this->integerRange($schema, $diagnostics));
             case SchemaType::NUMBER:
-                $this->checkFormat($schema, self::NUMBER_FORMATS, 'number', 'a float', $diagnostics);
+                FormatCheck::check($schema, 'float', $diagnostics);
 
                 return ScalarType::float();
             case SchemaType::BOOLEAN:
@@ -549,28 +454,14 @@ final class TypeMapper
 
     private function stringType(Schema $schema, Diagnostics $diagnostics): TypeModel
     {
-        if (in_array($schema->format(), self::DATE_FORMATS, true)) {
+        if (in_array($schema->format(), FormatCheck::DATE, true)) {
             return new ClassType(ClassName::fromFqcn($this->target->dateTimeClass()->className()));
         }
 
-        $this->checkFormat($schema, self::STRING_FORMATS, 'string', 'a string', $diagnostics);
+        FormatCheck::check($schema, 'string', $diagnostics);
         $minLength = $schema->hasKeyword('minLength') ? $schema->keyword('minLength') : null;
 
         return ScalarType::string(is_int($minLength) && $minLength >= 1 ? 'non-empty-string' : null);
-    }
-
-    /**
-     * @param list<string> $known
-     */
-    private function checkFormat(Schema $schema, array $known, string $type, string $result, Diagnostics $diagnostics): void
-    {
-        $format = $schema->format();
-        if ($format !== null && !in_array($format, $known, true)) {
-            $diagnostics->warning(
-                sprintf('Unknown %s format "%s"; the property stays %s.', $type, $format, $result),
-                $schema->location()->child('format'),
-            );
-        }
     }
 
     private function integerRange(Schema $schema, Diagnostics $diagnostics): ?string

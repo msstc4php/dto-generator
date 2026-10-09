@@ -110,7 +110,7 @@
         // Equivalent: any unique name in the target's directory works for the temporary file.
         "ConcatOperandRemoval": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Infrastructure\\Writer\\FilesystemWriter::temporaryPath"] },
         // floor(), ceil() and round() agree on whether a float is whole.
-        "RoundingFamily": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Domain\\Builder\\TypeMapper::constType"] },
+        "RoundingFamily": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Domain\\Builder\\ConstMapper::type"] },
         "LessThan": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Application\\Config\\PhpConstraint::lowestMinor"] },
         // Equivalent: every default passed to stringList() has at most one item.
         "ArrayOneItem": { "ignoreSourceCodeByRegex": [".*return \\$default;.*"] },

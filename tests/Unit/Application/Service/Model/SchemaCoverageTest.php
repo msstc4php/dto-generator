@@ -415,7 +415,7 @@ final class SchemaCoverageTest extends TestCase
         self::assertSame(['i: int|null', 'b: string|null'], ModelFixture::classes($output)['App\\Dto\\C']);
     }
 
-    public function testAddsNoTypeForAConstBesideATypeInAllOf(): void
+    public function testNarrowsAReferencedTypeByAConstInAllOf(): void
     {
         $output = ModelFixture::build([
             'S' => ['type' => 'string'],
@@ -574,7 +574,10 @@ final class SchemaCoverageTest extends TestCase
             ]],
         ]);
 
-        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(
+            ['warning /project/api/openapi.yaml#/components/schemas/C/properties/f/allOf/0/const: "const" is outside the type the rest of the schema gives, so no value is valid; the type is kept.'],
+            ModelFixture::messages($output),
+        );
         self::assertSame(["a: 'x'|null", 'b: 5|null', "c: 'x'|null", "d: 'x'|null", 'e: float|null', 'f: string|null'], ModelFixture::classes($output)['App\\Dto\\C']);
     }
 
@@ -653,5 +656,39 @@ final class SchemaCoverageTest extends TestCase
         ]]]);
 
         self::assertSame(["n: 'x'|null", "s: 'x'"], ModelFixture::classes($output)['App\\Dto\\C']);
+    }
+
+    public function testKnowsDateFormatsOfAnUntypedConst(): void
+    {
+        $output = ModelFixture::build(['C' => ['type' => 'object', 'properties' => [
+            'a' => ['const' => '2020-01-01', 'format' => 'date'],
+            'b' => ['type' => 'string', 'allOf' => [['const' => '2020-01-01', 'format' => 'date']]],
+        ]]]);
+
+        self::assertSame([], ModelFixture::messages($output));
+    }
+
+    public function testLeavesAConstOfAMappedMemberToTheMapping(): void
+    {
+        $output = ModelFixture::build(['C' => ['type' => 'object', 'properties' => [
+            'a' => ['allOf' => [['x-php-type' => 'App\\Foo', 'type' => 'integer', 'const' => 'x']]],
+        ]]]);
+
+        self::assertSame([], array_values(array_filter(ModelFixture::messages($output), static fn (string $m): bool => strpos($m, '"const"') !== false)));
+        self::assertSame(['a: App\\Foo|null'], ModelFixture::classes($output)['App\\Dto\\C']);
+    }
+
+    public function testWarnsAboutAConstNoValueOfTheTypeMatches(): void
+    {
+        $output = ModelFixture::build(['C' => ['type' => 'object', 'properties' => [
+            'r' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 10, 'allOf' => [['const' => 50]]],
+            't' => ['allOf' => [['const' => 'x'], ['const' => 'y']]],
+            'ok' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 10, 'allOf' => [['const' => 5]]],
+            'next' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 10, 'allOf' => [['const' => 50], ['const' => 5]]],
+        ]]]);
+
+        $warning = 'warning /project/api/openapi.yaml#/components/schemas/C/properties/%s/const: "const" is outside the type the rest of the schema gives, so no value is valid; the type is kept.';
+        self::assertSame([sprintf($warning, 'r/allOf/0'), sprintf($warning, 't/allOf/1'), sprintf($warning, 'next/allOf/0')], ModelFixture::messages($output));
+        self::assertSame(['r: int<1, 10>|null', "t: 'x'|null", 'ok: 5|null', 'next: 5|null'], ModelFixture::classes($output)['App\\Dto\\C']);
     }
 }
