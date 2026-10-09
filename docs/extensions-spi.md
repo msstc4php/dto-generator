@@ -6,8 +6,8 @@ An extension adds attributes to the generated classes and properties, and PHP ty
 Extensions run inside the generator, so their code must run on **PHP 7.4**, the generator's minimum. Use only the
 public API: the `MSSTC4PHP\DtoGenerator\Contract` namespace, the model classes it hands out (`Domain\Model`,
 `Domain\Schema`, `Domain\Diagnostic`, `Domain\Target`), the helpers in `Domain\Shared` (such as `Json`) and the
-exceptions in `Domain\Exception`. These classes carry the `@api` tag, and releases are checked for backward compatibility on
-them; the rest of the package is internal and may change in any release.
+exceptions in `Domain\Exception`. These classes carry the `@api` tag, and releases are checked for backward
+compatibility on them; the rest of the package is internal and may change in any release.
 
 ## The interfaces
 

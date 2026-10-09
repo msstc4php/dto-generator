@@ -16,25 +16,23 @@ final class PublicApiTest extends TestCase
 {
     private const SRC = __DIR__ . '/../../src/';
 
+    /** A class docblock with an `@api` line of its own, right before the declaration. */
+    private const API_DOCBLOCK = '~/\*\*(?:(?!\*/).)*^\s*\*\s*@api\s*$(?:(?!\*/).)*\*/\s*(?:final |abstract )?(?:class|interface|trait) ~ms';
+
     public function testTagsExactlyTheClassesTheBackwardCompatibilityCheckGuards(): void
     {
-        $config = (string) file_get_contents(__DIR__ . '/../../.roave-backward-compatibility-check.xml');
-        self::assertSame(1, preg_match('~<ignored-regex>(.+)</ignored-regex>~', $config, $match));
-        $ignored = html_entity_decode($match[1]);
-
+        $ignored = $this->ignoredRegexes();
         $untagged = [];
         $overtagged = [];
         $public = 0;
-        $files = new RecursiveIteratorIterator(new RecursiveDirectoryIterator(self::SRC));
-        foreach ($files as $file) {
+        foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator(self::SRC)) as $file) {
             if (!$file instanceof SplFileInfo || $file->getExtension() !== 'php') {
                 continue;
             }
 
-            $fqcn = 'MSSTC4PHP\\DtoGenerator\\' . str_replace('/', '\\', substr($file->getPathname(), strlen(self::SRC), -4));
-            // The check ignores a message when the first class it names is not public API.
-            $guarded = preg_match($ignored, sprintf('Method %s#run() was removed', $fqcn)) === 0;
-            $tagged = preg_match('~/\*\*(?:(?!\*/).)*@api\b(?:(?!\*/).)*\*/\s*(?:final |abstract )?(?:class|interface|trait) ~s', (string) file_get_contents($file->getPathname())) === 1;
+            $fqcn = $this->fqcn($file);
+            $guarded = $this->isGuarded($fqcn, $ignored);
+            $tagged = preg_match(self::API_DOCBLOCK, (string) file_get_contents($file->getPathname())) === 1;
             $public += $guarded ? 1 : 0;
             if ($guarded && !$tagged) {
                 $untagged[] = $fqcn;
@@ -46,5 +44,44 @@ final class PublicApiTest extends TestCase
         self::assertGreaterThan(30, $public);
         self::assertSame([], $untagged, 'Guarded by the BC check but not tagged @api.');
         self::assertSame([], $overtagged, 'Tagged @api but not guarded by the BC check.');
+    }
+
+    /**
+     * Roave ignores a message that any of its baseline regexes matches.
+     *
+     * @return non-empty-list<string>
+     */
+    private function ignoredRegexes(): array
+    {
+        $config = (string) file_get_contents(__DIR__ . '/../../.roave-backward-compatibility-check.xml');
+        preg_match_all('~<ignored-regex>(.+?)</ignored-regex>~s', $config, $matches);
+        $regexes = array_map('html_entity_decode', $matches[1]);
+        self::assertNotSame([], $regexes);
+
+        return $regexes;
+    }
+
+    /**
+     * A message counts by the first class it names, so a made-up message about the class asks whether it is guarded.
+     *
+     * @param list<string> $ignored
+     */
+    private function isGuarded(string $fqcn, array $ignored): bool
+    {
+        foreach ($ignored as $regex) {
+            if (preg_match($regex, sprintf('Method %s#run() was removed', $fqcn)) === 1) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * PSR-4: one class per file under src/.
+     */
+    private function fqcn(SplFileInfo $file): string
+    {
+        return 'MSSTC4PHP\\DtoGenerator\\' . str_replace('/', '\\', substr($file->getPathname(), strlen(self::SRC), -4));
     }
 }
