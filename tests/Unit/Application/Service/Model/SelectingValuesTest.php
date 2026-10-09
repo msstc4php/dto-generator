@@ -250,4 +250,35 @@ final class SelectingValuesTest extends TestCase
         );
         self::assertSame([], ModelFixture::selections($output));
     }
+
+    public function testMarksTheDiscriminatedPropertiesOfTheWholeLineage(): void
+    {
+        $leaf = static fn (string $own): array => ['type' => 'object', 'required' => ['kind', 'sub', $own], 'properties' => ['kind' => ['type' => 'string'], 'sub' => ['type' => 'string'], $own => ['type' => 'string']]];
+        $output = ModelFixture::build([
+            'Top' => [
+                'oneOf' => [['$ref' => '#/components/schemas/Mid'], ['$ref' => '#/components/schemas/Side']],
+                'discriminator' => ['propertyName' => 'kind', 'mapping' => ['m' => '#/components/schemas/Mid', 's' => '#/components/schemas/Side']],
+            ],
+            'Mid' => [
+                'oneOf' => [['$ref' => '#/components/schemas/L1'], ['$ref' => '#/components/schemas/L2']],
+                'discriminator' => ['propertyName' => 'sub', 'mapping' => ['one' => '#/components/schemas/L1', 'two' => '#/components/schemas/L2']],
+            ],
+            'L1' => $leaf('a'),
+            'L2' => $leaf('b'),
+            'Side' => ['type' => 'object', 'required' => ['c'], 'properties' => ['kind' => ['type' => 'string'], 'c' => ['type' => 'string']]],
+            'Flag' => ['oneOf' => [['$ref' => '#/components/schemas/On']], 'discriminator' => ['propertyName' => 'state']],
+            'On' => ['type' => 'object', 'required' => ['state'], 'properties' => ['state' => ['type' => 'boolean']]],
+        ]);
+
+        $discriminated = [];
+        foreach ($output->classes() as $class) {
+            $discriminated[$class->model()->name()->shortName()] = $class->model()->discriminatedProperties();
+        }
+
+        // Mid keeps `kind`, which Top reads; On's discriminator cannot be checked, yet it still has no mutator.
+        self::assertSame(
+            ['Top' => ['kind', 'sub'], 'Mid' => ['sub', 'kind'], 'L1' => ['kind', 'sub'], 'L2' => ['kind', 'sub'], 'Side' => ['kind'], 'Flag' => ['state'], 'On' => ['state']],
+            $discriminated,
+        );
+    }
 }

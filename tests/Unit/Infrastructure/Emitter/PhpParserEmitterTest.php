@@ -886,4 +886,37 @@ final class Order
             $code,
         );
     }
+
+    public function testGivesNoMutatorToAPropertyAnyDiscriminatorOfTheLineageReads(): void
+    {
+        $emitter = new PhpParserEmitter();
+        $top = EmitterFixture::top()->properties();
+        foreach (['7.4', '8.0', '8.5'] as $php) {
+            $mid = $emitter->emit(EmitterFixture::mid(), EmitterFixture::target($php, Mutability::IMMUTABLE), $top);
+            self::assertStringNotContainsString('withKind', $mid, $php);
+            self::assertStringNotContainsString('withSub', $mid, $php);
+        }
+
+        $mutable = $emitter->emit(EmitterFixture::mid(Mutability::MUTABLE), EmitterFixture::target('8.2', Mutability::MUTABLE, AccessorStyle::GETTERS), $top);
+        self::assertStringNotContainsString('setKind', $mutable);
+        self::assertStringContainsString('public function getKind(): string', $mutable);
+
+        // A variant without checked values still rebuilds itself for the inherited properties, but not for `kind`.
+        $blobX = $emitter->emit(EmitterFixture::blobX(), EmitterFixture::target('8.1', Mutability::IMMUTABLE), EmitterFixture::blob()->properties());
+        self::assertStringNotContainsString('withKind', $blobX);
+        self::assertStringContainsString('public function withSize(int $size): self', $blobX);
+    }
+
+    public function testDeclaresACheckedOptionalDiscriminatorWithoutNull(): void
+    {
+        $code = (new PhpParserEmitter())->emit(EmitterFixture::side(), EmitterFixture::target('7.4', Mutability::IMMUTABLE));
+
+        // The check rejects null before the assignment; PHPStan reports a nullable type that never holds it.
+        self::assertStringContainsString('    private string $kind;', $code);
+        self::assertStringContainsString('public function getKind(): string', $code);
+        self::assertStringContainsString("public function __construct(string \$c, ?string \$kind = 's')", $code);
+
+        $promoted = (new PhpParserEmitter())->emit(EmitterFixture::side(), EmitterFixture::target('8.0', Mutability::IMMUTABLE));
+        self::assertStringContainsString('public function getKind(): ?string', $promoted);
+    }
 }

@@ -77,6 +77,15 @@ final class EmitterFixture
             self::square($mutability),
             self::wallet($mutability),
             self::euroWallet($mutability),
+            self::top($mutability),
+            self::mid($mutability),
+            self::leaf($mutability),
+            self::side($mutability),
+            self::blob($mutability),
+            self::blobX($mutability),
+            self::creature($mutability),
+            self::bird($mutability),
+            self::parrot($mutability),
         ];
     }
 
@@ -186,6 +195,103 @@ final class EmitterFixture
         return self::model('App\Dto\EuroWallet', null, [self::property('balance', ScalarType::int(), true)], $mutability)
             ->withHierarchy(ClassKind::from(ClassKind::FINAL), ClassName::fromFqcn('App\Dto\Wallet'), null)
             ->withDiscriminatorValues(new DiscriminatorValues('currency', ['EUR']))
+        ;
+    }
+
+    /**
+     * The root of a nested hierarchy: its discriminator reads `kind`, which only Mid and Side declare.
+     */
+    public static function top(string $mutability = Mutability::IMMUTABLE): ClassModel
+    {
+        return self::model('App\Dto\Top', null, [], $mutability)
+            ->withHierarchy(ClassKind::from(ClassKind::ABSTRACT), null, new DiscriminatorModel('kind', ['m' => ClassName::fromFqcn('App\Dto\Mid'), 's' => ClassName::fromFqcn('App\Dto\Side')]))
+            ->withDiscriminatedProperties('kind', 'sub')
+        ;
+    }
+
+    /**
+     * An intermediate base discriminated by `sub` that keeps `kind`, which Top reads.
+     */
+    public static function mid(string $mutability = Mutability::IMMUTABLE): ClassModel
+    {
+        return self::model('App\Dto\Mid', null, [self::property('kind', ScalarType::string(), true), self::property('sub', ScalarType::string(), true)], $mutability)
+            ->withHierarchy(ClassKind::from(ClassKind::ABSTRACT), ClassName::fromFqcn('App\Dto\Top'), new DiscriminatorModel('sub', ['one' => ClassName::fromFqcn('App\Dto\Leaf')]))
+            ->withDiscriminatedProperties('kind', 'sub')
+        ;
+    }
+
+    public static function leaf(string $mutability = Mutability::IMMUTABLE): ClassModel
+    {
+        return self::model('App\Dto\Leaf', null, [self::property('a', ScalarType::string(), true)], $mutability)
+            ->withHierarchy(ClassKind::from(ClassKind::FINAL), ClassName::fromFqcn('App\Dto\Mid'), null)
+            ->withDiscriminatorValues(new DiscriminatorValues('kind', ['m']), new DiscriminatorValues('sub', ['one']))
+            ->withDiscriminatedProperties('kind', 'sub')
+        ;
+    }
+
+    /**
+     * A variant whose optional discriminator still rejects null.
+     */
+    public static function side(string $mutability = Mutability::IMMUTABLE): ClassModel
+    {
+        return self::model('App\Dto\Side', null, [
+            self::property('kind', new NullableType(ScalarType::string()), false, new DefaultValue(null)),
+            self::property('c', ScalarType::string(), true),
+        ], $mutability)
+            ->withHierarchy(ClassKind::from(ClassKind::FINAL), ClassName::fromFqcn('App\Dto\Top'), null)
+            ->withDiscriminatorValues(new DiscriminatorValues('kind', ['s']))
+            ->withDiscriminatedProperties('kind')
+        ;
+    }
+
+    /**
+     * A base whose untyped discriminator cannot be checked: its variant still gets no mutator for it.
+     */
+    public static function blob(string $mutability = Mutability::IMMUTABLE): ClassModel
+    {
+        return self::model('App\Dto\Blob', null, [self::property('kind', new MixedType(), true)], $mutability)
+            ->withHierarchy(ClassKind::from(ClassKind::ABSTRACT), null, new DiscriminatorModel('kind', ['x' => ClassName::fromFqcn('App\Dto\BlobX')]))
+        ;
+    }
+
+    public static function blobX(string $mutability = Mutability::IMMUTABLE): ClassModel
+    {
+        return self::model('App\Dto\BlobX', null, [self::property('size', ScalarType::int(), true)], $mutability)
+            ->withHierarchy(ClassKind::from(ClassKind::FINAL), ClassName::fromFqcn('App\Dto\Blob'), null)
+            ->withDiscriminatedProperties('kind')
+        ;
+    }
+
+    /**
+     * A base whose mapping selects an open class and its subclass.
+     */
+    public static function creature(string $mutability = Mutability::IMMUTABLE): ClassModel
+    {
+        return self::model('App\Dto\Creature', null, [self::property('kind', ScalarType::string(), true)], $mutability)->withHierarchy(
+            ClassKind::from(ClassKind::ABSTRACT),
+            null,
+            new DiscriminatorModel('kind', ['bird' => ClassName::fromFqcn('App\Dto\Bird'), 'parrot' => ClassName::fromFqcn('App\Dto\Parrot')]),
+        );
+    }
+
+    /**
+     * Open, so it also accepts the value its subclass passes up.
+     */
+    public static function bird(string $mutability = Mutability::IMMUTABLE): ClassModel
+    {
+        return self::model('App\Dto\Bird', null, [self::property('wings', ScalarType::int(), true)], $mutability)
+            ->withHierarchy(ClassKind::from(ClassKind::OPEN), ClassName::fromFqcn('App\Dto\Creature'), null)
+            ->withDiscriminatorValues(new DiscriminatorValues('kind', ['bird', 'parrot']))
+            ->withDiscriminatedProperties('kind')
+        ;
+    }
+
+    public static function parrot(string $mutability = Mutability::IMMUTABLE): ClassModel
+    {
+        return self::model('App\Dto\Parrot', null, [self::property('words', new NullableType(ScalarType::int()), false, new DefaultValue(null))], $mutability)
+            ->withHierarchy(ClassKind::from(ClassKind::FINAL), ClassName::fromFqcn('App\Dto\Bird'), null)
+            ->withDiscriminatorValues(new DiscriminatorValues('kind', ['parrot']))
+            ->withDiscriminatedProperties('kind')
         ;
     }
 

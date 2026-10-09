@@ -174,6 +174,20 @@ final class ClassModelTest extends TestCase
         $this->classWith([])->withDiscriminatorValues(new DiscriminatorValues('kind', ['a']), new DiscriminatorValues('kind', ['b']));
     }
 
+    public function testKnowsThePropertiesItsLineageDiscriminatesBy(): void
+    {
+        $base = $this->classWith([], ClassKind::ABSTRACT, new DiscriminatorModel('sub', ['one' => ClassName::fromFqcn('App\One')]));
+        $class = $base->withDiscriminatedProperties('kind', 'sub');
+
+        self::assertSame([], $this->classWith([])->discriminatedProperties());
+        self::assertSame(['sub'], $base->discriminatedProperties());
+        self::assertSame(['sub', 'kind'], $class->discriminatedProperties());
+        self::assertSame(['sub', 'kind'], $class->withProperties($this->property('name'))->discriminatedProperties());
+        self::assertSame(['sub', 'kind'], $class->withAddedAttributes(new AttributeModel(ClassName::fromFqcn('App\Marker')))->discriminatedProperties());
+        self::assertSame(['kind', 'sub'], $class->withHierarchy(ClassKind::from(ClassKind::FINAL), null, null)->discriminatedProperties());
+        self::assertSame(['sub', 'kind'], $class->withDiscriminatorValues()->discriminatedProperties());
+    }
+
     public function testKeepsDiscriminatorValuesThroughEveryCopy(): void
     {
         $values = new DiscriminatorValues('kind', ['cat', 1]);

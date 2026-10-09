@@ -7,9 +7,10 @@ namespace MSSTC4PHP\DtoGenerator\Infrastructure\Emitter;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassKind;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
-use MSSTC4PHP\DtoGenerator\Domain\Model\DiscriminatorModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\DiscriminatorValues;
+use MSSTC4PHP\DtoGenerator\Domain\Model\NullableType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\PropertyModel;
+use MSSTC4PHP\DtoGenerator\Domain\Model\TypeModel;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\DefaultValue;
 use MSSTC4PHP\DtoGenerator\Domain\Target\Capability;
 use MSSTC4PHP\DtoGenerator\Domain\Target\ClassForm;
@@ -79,14 +80,23 @@ final class ClassShape
     }
 
     /**
+     * The constructor's check rejects null before a checked discriminator is assigned, and PHPStan reports a
+     * declared property that never holds a value its type admits; a promoted one shares the parameter's type.
+     */
+    public function declaredType(PropertyModel $property): TypeModel
+    {
+        $type = $property->type();
+
+        return $type instanceof NullableType && !$this->form->isPromoted() && $this->selection($property) instanceof DiscriminatorValues ? $type->inner() : $type;
+    }
+
+    /**
      * A copy with another discriminator would skip the constructor's check, or select another class when read back.
      */
     public function hasMutators(PropertyModel $property): bool
     {
-        $discriminator = $this->class->discriminator();
-
         return !$this->selection($property) instanceof DiscriminatorValues
-            && (!$discriminator instanceof DiscriminatorModel || $discriminator->propertyName() !== $property->wireName());
+            && !in_array($property->wireName(), $this->class->discriminatedProperties(), true);
     }
 
     /**

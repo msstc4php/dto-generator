@@ -8,11 +8,16 @@ use App\Attr\Constraints\Valid;
 use App\Attr\Meta;
 use App\Attr\Table;
 use App\Dto\Animal;
+use App\Dto\Bird;
+use App\Dto\BlobX;
 use App\Dto\Circle;
 use App\Dto\Dog;
 use App\Dto\EuroWallet;
+use App\Dto\Leaf;
+use App\Dto\Parrot;
 use App\Dto\Sample;
 use App\Dto\Shape;
+use App\Dto\Side;
 use App\Dto\Square;
 use App\Dto\Tag;
 use App\Dto\Wallet;
@@ -37,6 +42,15 @@ require $profile . 'Circle.php.golden';
 require $profile . 'Square.php.golden';
 require $profile . 'Wallet.php.golden';
 require $profile . 'EuroWallet.php.golden';
+require $profile . 'Top.php.golden';
+require $profile . 'Mid.php.golden';
+require $profile . 'Leaf.php.golden';
+require $profile . 'Side.php.golden';
+require $profile . 'Blob.php.golden';
+require $profile . 'BlobX.php.golden';
+require $profile . 'Creature.php.golden';
+require $profile . 'Bird.php.golden';
+require $profile . 'Parrot.php.golden';
 
 /**
  * @return mixed
@@ -152,6 +166,27 @@ rejects(
     static fn (): EuroWallet => new EuroWallet(10, constant('App\\Dto\\Currency::IN_PROGRESS')),
     '"in-progress" does not select EuroWallet by "currency".',
 );
+
+// A discriminator of any class in the chain leaves no mutator that could change it.
+foreach (['App\\Dto\\Mid' => ['Kind', 'Sub'], 'App\\Dto\\Leaf' => ['Kind', 'Sub'], 'App\\Dto\\Side' => ['Kind'], 'App\\Dto\\BlobX' => ['Kind'], 'App\\Dto\\Bird' => ['Kind'], 'App\\Dto\\Parrot' => ['Kind']] as $class => $suffixes) {
+    foreach ($suffixes as $suffix) {
+        check(!method_exists($class, 'with' . $suffix) && !method_exists($class, 'set' . $suffix), 'no mutator of ' . $class . '::' . $suffix);
+    }
+}
+
+$leaf = new Leaf('x');
+check(read($leaf, 'kind') === 'm' && read($leaf, 'sub') === 'one' && read($leaf, 'a') === 'x', 'two discriminator defaults');
+rejects(static fn (): Leaf => new Leaf('x', 's'), '"s" does not select Leaf by "kind".');
+rejects(static fn (): Leaf => new Leaf('x', 'm', 'two'), '"two" does not select Leaf by "sub".');
+check(read(new Side('c'), 'kind') === 's', 'optional discriminator default');
+rejects(static fn (): Side => new Side('c', null), '"" does not select Side by "kind".');
+check(read(new BlobX(['any'], 1), 'kind') === ['any'], 'unchecked discriminator');
+
+check(read(new Bird('bird', 2), 'kind') === 'bird' && read(new Bird('parrot', 2), 'kind') === 'parrot', 'open class accepts its subclass value');
+rejects(static fn (): Bird => new Bird('fish', 2), '"fish" does not select Bird by "kind".');
+$parrot = new Parrot(2);
+check($parrot instanceof Bird && read($parrot, 'kind') === 'parrot' && read($parrot, 'wings') === 2, 'subclass of an open class');
+rejects(static fn (): Parrot => new Parrot(2, 'bird'), '"bird" does not select Parrot by "kind".');
 check((new ReflectionClass(Shape::class))->isAbstract() && !(new ReflectionClass(Animal::class))->isFinal(), 'base classes stay open');
 
 if (strpos(basename($profile), '-immutable') !== false && !method_exists($sample, 'getId')) {

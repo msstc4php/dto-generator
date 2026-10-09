@@ -8,6 +8,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassKind;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
+use MSSTC4PHP\DtoGenerator\Domain\Model\DiscriminatorModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\Identifier;
 use MSSTC4PHP\DtoGenerator\Domain\Model\PropertyModel;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\DefaultValue;
@@ -409,5 +410,41 @@ final class Hierarchy
         foreach (SelectingValues::of($this->models, $this->diagnostics) as $fqcn => $values) {
             $this->models[$fqcn] = $this->models[$fqcn]->withDiscriminatorValues(...$values);
         }
+
+        // Every class in a chain shares its discriminated properties: a mutator inherited from an ancestor, or
+        // declared on an intermediate base, would bypass the check as much as one on the variant.
+        $discriminated = [];
+        foreach (array_keys($this->models) as $fqcn) {
+            $chain = $this->chain($fqcn);
+            $names = [];
+            foreach ($chain as $member) {
+                $discriminator = $this->models[$member]->discriminator();
+                if ($discriminator instanceof DiscriminatorModel) {
+                    $names[] = $discriminator->propertyName();
+                }
+            }
+
+            foreach ($chain as $member) {
+                $discriminated[$member] = array_merge($discriminated[$member] ?? [], $names);
+            }
+        }
+
+        foreach ($discriminated as $fqcn => $names) {
+            $this->models[$fqcn] = $this->models[$fqcn]->withDiscriminatedProperties(...array_values(array_unique($names)));
+        }
+    }
+
+    /**
+     * @return list<string> the class and its ancestors, root first
+     */
+    private function chain(string $fqcn): array
+    {
+        $chain = [$fqcn];
+        // breakCycles() has run; the bound keeps a broken invariant from hanging the run.
+        for ($parent = $this->models[$fqcn]->parent(); $parent instanceof ClassName && isset($this->models[$parent->fqcn()]) && count($chain) < count($this->models); $parent = $this->models[$parent->fqcn()]->parent()) {
+            $chain[] = $parent->fqcn();
+        }
+
+        return array_reverse($chain);
     }
 }

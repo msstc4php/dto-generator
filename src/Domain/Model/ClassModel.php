@@ -33,10 +33,14 @@ final class ClassModel
     /** @var list<DiscriminatorValues> */
     private array $discriminatorValues;
 
+    /** @var list<string> */
+    private array $discriminatedProperties;
+
     /**
      * @param list<PropertyModel> $properties own properties only, in schema order
      * @param list<AttributeModel> $attributes
      * @param list<DiscriminatorValues> $discriminatorValues root discriminator first
+     * @param list<string> $discriminatedProperties wire names read by a discriminator of an ancestor or a subclass
      */
     public function __construct(
         ClassName $name,
@@ -48,7 +52,8 @@ final class ClassModel
         SchemaLocation $source,
         array $attributes = [],
         ?DiscriminatorModel $discriminator = null,
-        array $discriminatorValues = []
+        array $discriminatorValues = [],
+        array $discriminatedProperties = []
     ) {
         if ($parent instanceof ClassName && $parent->equals($name)) {
             throw new InvalidModel(sprintf('Class %s cannot extend itself.', $name->fqcn()));
@@ -98,6 +103,7 @@ final class ClassModel
         $this->attributes = $attributes;
         $this->discriminator = $discriminator;
         $this->discriminatorValues = $discriminatorValues;
+        $this->discriminatedProperties = $discriminatedProperties;
     }
 
     public function name(): ClassName
@@ -181,6 +187,36 @@ final class ClassModel
         return null;
     }
 
+    /**
+     * The wire names a discriminator of the class, an ancestor or a subclass reads: a mutator of one of them would
+     * let an object claim another class.
+     *
+     * @return list<string>
+     */
+    public function discriminatedProperties(): array
+    {
+        $own = $this->discriminator instanceof DiscriminatorModel ? [$this->discriminator->propertyName()] : [];
+
+        return array_values(array_unique(array_merge($own, $this->discriminatedProperties)));
+    }
+
+    public function withDiscriminatedProperties(string ...$wireNames): self
+    {
+        return new self(
+            $this->name,
+            $this->kind,
+            $this->parent,
+            $this->properties,
+            $this->mutability,
+            $this->doc,
+            $this->source,
+            $this->attributes,
+            $this->discriminator,
+            $this->discriminatorValues,
+            $wireNames,
+        );
+    }
+
     public function withDiscriminatorValues(DiscriminatorValues ...$values): self
     {
         return new self(
@@ -194,6 +230,7 @@ final class ClassModel
             $this->attributes,
             $this->discriminator,
             $values,
+            $this->discriminatedProperties,
         );
     }
 
@@ -210,6 +247,7 @@ final class ClassModel
             array_merge($this->attributes, $attributes),
             $this->discriminator,
             $this->discriminatorValues,
+            $this->discriminatedProperties,
         );
     }
 
@@ -226,6 +264,7 @@ final class ClassModel
             $this->attributes,
             $discriminator,
             $this->discriminatorValues,
+            $this->discriminatedProperties,
         );
     }
 
@@ -242,6 +281,7 @@ final class ClassModel
             $this->attributes,
             $this->discriminator,
             $this->discriminatorValues,
+            $this->discriminatedProperties,
         );
     }
 }
