@@ -103,7 +103,16 @@ final class ClassModel
         $this->attributes = $attributes;
         $this->discriminator = $discriminator;
         $this->discriminatorValues = $discriminatorValues;
-        $this->discriminatedProperties = $discriminatedProperties;
+        $this->discriminatedProperties = [];
+        foreach ($discriminatedProperties as $wireName) {
+            if ($wireName === '') {
+                throw new InvalidModel(sprintf('Class %s lists an empty discriminated property.', $name->fqcn()));
+            }
+
+            if (!in_array($wireName, $this->discriminatedProperties, true)) {
+                $this->discriminatedProperties[] = $wireName;
+            }
+        }
     }
 
     public function name(): ClassName
@@ -197,7 +206,7 @@ final class ClassModel
     {
         $own = $this->discriminator instanceof DiscriminatorModel ? [$this->discriminator->propertyName()] : [];
 
-        return array_values(array_unique(array_merge($own, $this->discriminatedProperties)));
+        return array_merge($own, array_values(array_diff($this->discriminatedProperties, $own)));
     }
 
     public function withDiscriminatedProperties(string ...$wireNames): self

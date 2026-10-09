@@ -188,6 +188,19 @@ final class ClassModelTest extends TestCase
         self::assertSame(['sub', 'kind'], $class->withDiscriminatorValues()->discriminatedProperties());
     }
 
+    public function testCollapsesRepeatedDiscriminatedProperties(): void
+    {
+        self::assertSame(['kind', 'sub'], $this->classWith([])->withDiscriminatedProperties('kind', 'sub', 'kind')->discriminatedProperties());
+    }
+
+    public function testRejectsAnEmptyDiscriminatedProperty(): void
+    {
+        $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('Class App\User lists an empty discriminated property.');
+
+        $this->classWith([])->withDiscriminatedProperties('kind', '');
+    }
+
     public function testKeepsDiscriminatorValuesThroughEveryCopy(): void
     {
         $values = new DiscriminatorValues('kind', ['cat', 1]);
