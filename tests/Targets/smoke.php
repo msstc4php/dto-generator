@@ -179,7 +179,8 @@ check(read($leaf, 'kind') === 'm' && read($leaf, 'sub') === 'one' && read($leaf,
 rejects(static fn (): Leaf => new Leaf('x', 's'), '"s" does not select Leaf by "kind".');
 rejects(static fn (): Leaf => new Leaf('x', 'm', 'two'), '"two" does not select Leaf by "sub".');
 check(read(new Side('c'), 'kind') === 's', 'optional discriminator default');
-rejects(static fn (): Side => new Side('c', null), '"" does not select Side by "kind".');
+rejects(static fn (): Side => new Side('c', null), 'null does not select Side by "kind".');
+rejects(static fn (): Side => new Side('c', 'm'), '"m" does not select Side by "kind".');
 check(read(new BlobX(['any'], 1), 'kind') === ['any'], 'unchecked discriminator');
 
 check(read(new Bird('bird', 2), 'kind') === 'bird' && read(new Bird('parrot', 2), 'kind') === 'parrot', 'open class accepts its subclass value');

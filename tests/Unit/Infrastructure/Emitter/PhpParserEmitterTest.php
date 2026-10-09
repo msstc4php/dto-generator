@@ -767,7 +767,8 @@ final class Order
 
         self::assertStringContainsString('public function __construct(?Currency $currency)', $code);
         self::assertStringContainsString('if ($currency !== Currency::EUR && $currency !== Currency::IN_PROGRESS) {', $code);
-        self::assertStringContainsString('$currency?->value', $code);
+        self::assertStringContainsString("'%s does not select Coin by \"currency\".',\n", $code);
+        self::assertStringContainsString("\$currency === null ? 'null' : '\"' . \$currency->value . '\"',\n", $code);
     }
 
     public function testEscapesTheWireNameInTheMessageFormat(): void
@@ -932,5 +933,13 @@ final class Order
         $code = (new PhpParserEmitter())->emit($coin, EmitterFixture::target('7.4', Mutability::IMMUTABLE));
 
         self::assertStringContainsString("    /**\n     * @phpstan-var Currency::*\n     */\n    private string \$currency;", $code);
+    }
+
+    public function testNamesANullDiscriminatorInTheMessage(): void
+    {
+        $code = (new PhpParserEmitter())->emit(EmitterFixture::side(), EmitterFixture::target('8.2', Mutability::IMMUTABLE));
+
+        self::assertStringContainsString("'%s does not select Side by \"kind\".',\n", $code);
+        self::assertStringContainsString("\$kind === null ? 'null' : '\"' . \$kind . '\"',\n", $code);
     }
 }

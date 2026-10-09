@@ -36,14 +36,17 @@ use PhpParser\Node\Expr;
 use PhpParser\Node\Expr\Array_;
 use PhpParser\Node\Expr\Assign;
 use PhpParser\Node\Expr\BinaryOp\BooleanAnd;
+use PhpParser\Node\Expr\BinaryOp\Concat;
+use PhpParser\Node\Expr\BinaryOp\Identical;
 use PhpParser\Node\Expr\BinaryOp\NotIdentical;
 use PhpParser\Node\Expr\ClassConstFetch;
 use PhpParser\Node\Expr\Clone_;
+use PhpParser\Node\Expr\ConstFetch;
 use PhpParser\Node\Expr\FuncCall;
 use PhpParser\Node\Expr\New_;
-use PhpParser\Node\Expr\NullsafePropertyFetch;
 use PhpParser\Node\Expr\PropertyFetch;
 use PhpParser\Node\Expr\StaticCall;
+use PhpParser\Node\Expr\Ternary;
 use PhpParser\Node\Expr\Throw_;
 use PhpParser\Node\Expr\Variable;
 use PhpParser\Node\Name;
@@ -461,8 +464,9 @@ final class PhpParserEmitter implements CodeEmitter
             $condition = new BooleanAnd($condition, new NotIdentical($parameter, $this->defaultValue($value, $property->type(), $types)));
         }
 
-        // The wire name is free text; sprintf() must not read a "%" in it as a conversion.
-        $format = sprintf('"%%s" does not select %s by "%s".', $shape->className()->shortName(), str_replace('%', '%%', $property->wireName()));
+        // The wire name is free text; sprintf() must not read a "%" in it as a conversion. The value is quoted, null not.
+        $placeholder = $property->type() instanceof NullableType ? '%%s' : '"%%s"';
+        $format = sprintf($placeholder . ' does not select %s by "%s".', $shape->className()->shortName(), str_replace('%', '%%', $property->wireName()));
         $message = new FuncCall(new Name('sprintf'), [new Arg(new String_($format)), new Arg($this->printable($parameter, $property->type(), $types))]);
         $throw = new Expression(new Throw_(new New_(new FullyQualified('InvalidArgumentException'), [new Arg($message)])));
 
@@ -470,16 +474,19 @@ final class PhpParserEmitter implements CodeEmitter
     }
 
     /**
-     * A native enum case is not a string; its backing value is.
+     * A native enum case is not a string; its backing value is. Null reads as `null`, apart from a quoted value.
      */
     private function printable(Variable $parameter, TypeModel $type, TypeRenderer $types): Expr
     {
         $inner = $type instanceof NullableType ? $type->inner() : $type;
-        if (!$inner instanceof EnumType || !$types->nativeEnums()) {
-            return $parameter;
+        $value = $inner instanceof EnumType && $types->nativeEnums() ? new PropertyFetch($parameter, 'value') : $parameter;
+        if (!$type instanceof NullableType) {
+            return $value;
         }
 
-        return $type instanceof NullableType ? new NullsafePropertyFetch($parameter, 'value') : new PropertyFetch($parameter, 'value');
+        $quoted = new Concat(new Concat(new String_('"'), $value), new String_('"'));
+
+        return new Ternary(new Identical($parameter, new ConstFetch(new Name('null'))), new String_('null'), $quoted);
     }
 
     /**

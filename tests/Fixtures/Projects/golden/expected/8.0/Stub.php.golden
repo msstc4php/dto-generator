@@ -11,7 +11,12 @@ final class Stub extends Node
     public function __construct(private string $note, private ?string $kind = 'stub')
     {
         if ($kind !== 'stub') {
-            throw new \InvalidArgumentException(sprintf('"%s" does not select Stub by "kind".', $kind));
+            throw new \InvalidArgumentException(
+                sprintf(
+                    '%s does not select Stub by "kind".',
+                    $kind === null ? 'null' : '"' . $kind . '"',
+                ),
+            );
         }
     }
 
