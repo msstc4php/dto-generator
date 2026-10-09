@@ -17,15 +17,18 @@ All notable changes to this package are documented here. The format follows
 - `x-enum-varnames` names the enum cases.
 - A warning for keywords no generated type expresses (`prefixItems`, `patternProperties`, `if`/`then`/`else`,
   `not`…) and for OpenAPI 3.0 `nullable: true`.
-- `dto.withers: false` leaves the `with*()` methods out of immutable DTOs.
+- `dto.withers: false` leaves the `with*()` methods out of immutable DTOs; with `mutability: mutable` it gives a
+  warning, as setters stay.
 
 ### Changed
 
 - An `enum` mixing strings and integers gives a union of its literals (`'low'|1`) with a warning instead of an error.
 - The constructor of a discriminated variant checks the discriminator: a value that does not select the class
-  throws `\InvalidArgumentException`. A variant selected by one value takes it as the default, and the
-  parameter moves behind the required ones. The discriminator has no `withX()`/`setX()` any more, in the
-  variants or in the base:
+  throws `\InvalidArgumentException`. A class selected by a single value takes it as the default, and the
+  parameter moves behind the required ones; an open class selected by the mapping also accepts the values of its
+  subclasses. No class in the hierarchy has a `withX()`/`setX()` for a property any discriminator of the hierarchy
+  reads. Only string, integer and enum discriminators are checked; another type, an untyped one included, gives a
+  warning:
 
   ```php
   // before: public function __construct(string $petType, string $name, ?int $lives = 9)
@@ -42,8 +45,14 @@ All notable changes to this package are documented here. The format follows
   }
   ```
 
-  Positional calls change: `new Cat('cat', 'Tom')` becomes `new Cat('Tom')`; named arguments and Symfony's
-  Serializer are unaffected.
+  Positional calls change: `new Cat('cat', 'Tom')` becomes `new Cat('Tom')`; named arguments are unaffected.
+  An optional nullable discriminator selected by several values, none of them its default, loses `= null` and
+  becomes required: callers that omit it get an `ArgumentCountError`. Symfony's Serializer denormalizing through
+  the base and its `DiscriminatorMap` is unaffected, but denormalizing straight into a variant with another
+  class's value now throws `\InvalidArgumentException` from the constructor, which Symfony does not turn into a
+  validation error (it only catches `TypeError` there): `#[MapRequestPayload] Cat $cat` with `"petType": "dog"`
+  answers 500 instead of accepting it. On PHP 7.4 a checked optional discriminator a variant declares itself gets
+  a non-nullable property and getter.
 
 ## [1.1.1] - 2026-10-09
 

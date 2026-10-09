@@ -80,7 +80,8 @@ Required; must be `1`.
   the referenced class, `merge` copies its properties into one class. `allOf` with several `$ref` always merges. A
   schema can override it with `x-php-all-of`.
 - **`withers`**: `false` leaves the `with*()` methods out of immutable DTOs (half of the output on a large spec);
-  setters of mutable DTOs stay.
+  setters of mutable DTOs stay. With `mutability: mutable` it only affects schemas made immutable with
+  `x-dto-mutable: false`, and the config gets a warning.
 
 ## `formats`
 
