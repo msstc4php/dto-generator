@@ -12,6 +12,7 @@ use PhpParser\Node\Name;
 use PhpParser\Node\Param;
 use PhpParser\Node\Stmt\Class_;
 use PhpParser\Node\Stmt\ClassMethod;
+use PhpParser\Node\Stmt\Namespace_;
 use PhpParser\NodeFinder;
 use PhpParser\ParserFactory;
 use PHPUnit\Framework\TestCase;
@@ -30,15 +31,24 @@ final class ParentCallTest extends TestCase
     public function testPassesTheParentsParametersInItsOrder(string $directory): void
     {
         $parameters = [];
+        $parents = [];
         $calls = [];
         $finder = new NodeFinder();
         $parser = (new ParserFactory())->createForNewestSupportedVersion();
         $files = glob($directory . '*.golden');
         self::assertIsArray($files);
         foreach ($files as $file) {
-            $class = $finder->findFirstInstanceOf($parser->parse((string) file_get_contents($file)) ?? [], Class_::class);
+            $ast = $parser->parse((string) file_get_contents($file)) ?? [];
+            $class = $finder->findFirstInstanceOf($ast, Class_::class);
             if (!$class instanceof Class_ || !$class->name instanceof Identifier) {
                 continue;
+            }
+
+            $namespace = $finder->findFirstInstanceOf($ast, Namespace_::class);
+            $prefix = $namespace instanceof Namespace_ && $namespace->name instanceof Name ? $namespace->name->toString() . '\\' : '';
+            $fqcn = $prefix . $class->name->toString();
+            if ($class->extends instanceof Name) {
+                $parents[$fqcn] = $class->extends->isFullyQualified() ? $class->extends->toString() : $prefix . $class->extends->toString();
             }
 
             $constructor = $class->getMethod('__construct');
@@ -46,18 +56,22 @@ final class ParentCallTest extends TestCase
                 continue;
             }
 
-            $parameters[$class->name->toString()] = array_map(static fn (Param $param): string => self::name($param->var), $constructor->params);
+            $parameters[$fqcn] = array_map(static fn (Param $param): string => self::name($param->var), $constructor->params);
             $call = $finder->findFirst($constructor->stmts ?? [], static fn ($node): bool => $node instanceof StaticCall && $node->class instanceof Name && $node->class->toString() === 'parent');
-            if ($call instanceof StaticCall && $class->extends instanceof Name) {
-                $arguments = array_map(static fn ($arg): string => $arg instanceof Arg ? self::name($arg->value) : '...', $call->args);
-                $calls[$class->name->toString()] = [$class->extends->getLast(), $arguments];
+            if ($call instanceof StaticCall) {
+                $calls[$fqcn] = array_map(static fn ($arg): string => $arg instanceof Arg ? self::name($arg->value) : '...', $call->args);
             }
         }
 
         self::assertNotSame([], $calls);
-        foreach ($calls as $child => [$parent, $arguments]) {
-            self::assertArrayHasKey($parent, $parameters, $directory . $child);
-            self::assertSame($parameters[$parent], $arguments, $directory . $child);
+        foreach ($parents as $child => $parent) {
+            // A parent outside the fixtures, or one without constructor parameters, needs no call.
+            if (($parameters[$parent] ?? []) === []) {
+                continue;
+            }
+
+            self::assertArrayHasKey($child, $calls, $directory . $child . ' never calls parent::__construct().');
+            self::assertSame($parameters[$parent], $calls[$child], $directory . $child);
         }
     }
 

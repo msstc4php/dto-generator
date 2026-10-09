@@ -31,8 +31,8 @@ All notable changes to this package are documented here. The format follows
   The rule is per property: a subclass whose own chain does not read it, while its parent's does (a sibling `allOf`
   subclass of a shared base, or a base with a different discriminator), gets the mutators back. It declares the
   setter and, on 7.4, 8.0 and 8.5, the cloning wither itself; its subclasses inherit them. On 8.1–8.4 an open class
-  has no withers, so its final subclasses declare the `new self` wither; with `dto.withers: false` or `accessors:
-  public-properties` there is none to restore. Only string, integer and enum discriminators are checked; another
+  has no withers, so its final subclasses declare the `new self` wither; with `dto.withers: false`, or mutable DTOs with
+  `accessors: public-properties`, there is none to restore. Only string, integer and enum discriminators are checked; another
   type, an untyped one included, gives a warning:
 
   ```php
