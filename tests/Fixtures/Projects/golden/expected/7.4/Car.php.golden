@@ -10,8 +10,12 @@ final class Car extends Vehicle
 {
     private ?int $doors;
 
-    public function __construct(string $kind, ?int $doors = null)
+    public function __construct(string $kind = 'Car', ?int $doors = null)
     {
+        if ($kind !== 'Car') {
+            throw new \InvalidArgumentException(sprintf('"%s" does not select Car by "kind".', $kind));
+        }
+
         parent::__construct($kind);
         $this->doors = $doors;
     }

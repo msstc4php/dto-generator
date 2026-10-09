@@ -8,23 +8,22 @@ namespace App\Golden;
 
 final class Cat extends Pet
 {
-    public function __construct(string $petType, string $name, public readonly ?int $lives = 9)
+    public function __construct(string $name, string $petType = 'cat', public readonly ?int $lives = 9)
     {
-        parent::__construct($petType, $name);
-    }
+        if ($petType !== 'cat') {
+            throw new \InvalidArgumentException(sprintf('"%s" does not select Cat by "petType".', $petType));
+        }
 
-    public function withPetType(string $petType): self
-    {
-        return new self($petType, $this->name, $this->lives);
+        parent::__construct($petType, $name);
     }
 
     public function withName(string $name): self
     {
-        return new self($this->petType, $name, $this->lives);
+        return new self($name, $this->petType, $this->lives);
     }
 
     public function withLives(?int $lives): self
     {
-        return new self($this->petType, $this->name, $lives);
+        return new self($this->name, $this->petType, $lives);
     }
 }

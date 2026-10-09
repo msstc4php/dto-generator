@@ -9,6 +9,7 @@ use MSSTC4PHP\DtoGenerator\Application\Port\CodeEmitter;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassKind;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
+use MSSTC4PHP\DtoGenerator\Domain\Model\DiscriminatorValues;
 use MSSTC4PHP\DtoGenerator\Domain\Model\DocModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumType;
@@ -34,14 +35,23 @@ use PhpParser\Node\DeclareItem;
 use PhpParser\Node\Expr;
 use PhpParser\Node\Expr\Array_;
 use PhpParser\Node\Expr\Assign;
+use PhpParser\Node\Expr\BinaryOp\BooleanAnd;
+use PhpParser\Node\Expr\BinaryOp\BooleanOr;
+use PhpParser\Node\Expr\BinaryOp\Concat;
+use PhpParser\Node\Expr\BinaryOp\Identical;
+use PhpParser\Node\Expr\BinaryOp\NotIdentical;
 use PhpParser\Node\Expr\ClassConstFetch;
 use PhpParser\Node\Expr\Clone_;
+use PhpParser\Node\Expr\ConstFetch;
 use PhpParser\Node\Expr\FuncCall;
 use PhpParser\Node\Expr\New_;
 use PhpParser\Node\Expr\PropertyFetch;
 use PhpParser\Node\Expr\StaticCall;
+use PhpParser\Node\Expr\Ternary;
+use PhpParser\Node\Expr\Throw_;
 use PhpParser\Node\Expr\Variable;
 use PhpParser\Node\Name;
+use PhpParser\Node\Name\FullyQualified;
 use PhpParser\Node\Param;
 use PhpParser\Node\Scalar\Int_;
 use PhpParser\Node\Scalar\String_;
@@ -50,6 +60,7 @@ use PhpParser\Node\Stmt\Class_;
 use PhpParser\Node\Stmt\ClassMethod;
 use PhpParser\Node\Stmt\Declare_;
 use PhpParser\Node\Stmt\Expression;
+use PhpParser\Node\Stmt\If_;
 use PhpParser\Node\Stmt\Nop;
 use PhpParser\Node\Stmt\Property;
 use PhpParser\Node\Stmt\Return_;
@@ -72,14 +83,14 @@ final class PhpParserEmitter implements CodeEmitter
         $this->factory = new BuilderFactory();
     }
 
-    public function emit(ClassModel $class, TargetProfile $target, array $inherited = []): string
+    public function emit(ClassModel $class, TargetProfile $target, array $inherited = [], ?ClassModel $parent = null): string
     {
-        $this->assertSupported($class, $inherited);
-        [$node, $names] = $this->declare($class, $target, $inherited, []);
+        $this->assertSupported($class, $inherited, $parent);
+        [$node, $names] = $this->declare($class, $target, $inherited, [], $parent);
         // Only once the class is written are all its short names known; an alias that takes one is written in full.
         $collisions = $names->collisions($class->name()->shortName());
         if ($collisions !== []) {
-            [$node, $names] = $this->declare($class, $target, $inherited, $collisions);
+            [$node, $names] = $this->declare($class, $target, $inherited, $collisions, $parent);
         }
 
         return $this->file($node, $class->name(), $target, $names->uses());
@@ -91,9 +102,9 @@ final class PhpParserEmitter implements CodeEmitter
      *
      * @return array{Class_, AttributeNames}
      */
-    private function declare(ClassModel $class, TargetProfile $target, array $inherited, array $refused): array
+    private function declare(ClassModel $class, TargetProfile $target, array $inherited, array $refused, ?ClassModel $parent): array
     {
-        $shape = new ClassShape($class, $inherited, $target->classFormFor($class->mutability()), $target);
+        $shape = new ClassShape($class, $inherited, $target->classFormFor($class->mutability()), $target, $parent);
         $form = $shape->form();
         $types = new TypeRenderer($class->name()->namespace(), $target);
         $names = new AttributeNames($types, $refused);
@@ -113,8 +124,14 @@ final class PhpParserEmitter implements CodeEmitter
         }
 
         foreach ($inherited as $property) {
-            if ($shape->declaresInheritedWithers()) {
-                $members[] = $this->mutator($shape, 'with' . Identifier::asciiUpperFirst($property->name()), $property, $types, $this->witherBody($shape, $property));
+            $suffix = Identifier::asciiUpperFirst($property->name());
+            $restored = $shape->restoresMutators($property);
+            if ($form->hasSetters() && $restored) {
+                $members[] = $this->mutator($shape, 'set' . $suffix, $property, $types, $this->setterBody($property));
+            }
+
+            if ($shape->declaresInheritedWithers() ? $shape->hasMutators($property) : $restored && $shape->hasWithers()) {
+                $members[] = $this->mutator($shape, 'with' . $suffix, $property, $types, $this->witherBody($shape, $property));
             }
         }
 
@@ -188,11 +205,28 @@ final class PhpParserEmitter implements CodeEmitter
     /**
      * @param list<PropertyModel> $inherited
      */
-    private function assertSupported(ClassModel $class, array $inherited): void
+    private function assertSupported(ClassModel $class, array $inherited, ?ClassModel $parent): void
     {
         $fqcn = $class->name()->fqcn();
-        if ($inherited !== [] && !$class->parent() instanceof ClassName) {
+        $extends = $class->parent();
+        if ($inherited !== [] && !$extends instanceof ClassName) {
             throw new LogicException(sprintf('%s inherits properties but extends no class.', $fqcn));
+        }
+
+        if ($inherited !== [] && !$parent instanceof ClassModel) {
+            throw new LogicException(sprintf('%s inherits properties, so its parent class is needed to call its constructor.', $fqcn));
+        }
+
+        $names = static fn (PropertyModel ...$properties): array => array_map(static fn (PropertyModel $property): string => $property->name(), $properties);
+        if ($parent instanceof ClassModel && (!$extends instanceof ClassName || !$parent->name()->equals($extends) || $names(...array_slice($inherited, count($inherited) - count($parent->properties()))) !== $names(...$parent->properties()))) {
+            throw new LogicException(sprintf('%s is not the parent of %s whose properties end the inherited ones.', $parent->name()->fqcn(), $fqcn));
+        }
+
+        $names = array_map(static fn (PropertyModel $property): string => $property->name(), array_merge($inherited, $class->properties()));
+        foreach ($class->discriminatorValues() as $values) {
+            if (!in_array($values->property(), $names, true)) {
+                throw new LogicException(sprintf('%s checks the discriminator $%s, which it neither declares nor inherits.', $fqcn, $values->property()));
+            }
         }
     }
 
@@ -215,14 +249,15 @@ final class PhpParserEmitter implements CodeEmitter
             $shape->isBase() ? $builder->makeProtected() : $builder->makePrivate();
         }
 
-        $type = $types->nativeNode($property->type());
+        $declared = $shape->declaredType($property);
+        $type = $types->nativeNode($declared);
         if ($type instanceof Node) {
             $builder->setType($type);
         }
 
         $node = $builder->getNode();
         $node->attrGroups = $attributes->groups($property->attributes());
-        $this->document($node, $this->propertyDoc($property, $types, $annotations));
+        $this->document($node, $this->propertyDoc($property, $types, $annotations, $declared));
 
         return $node;
     }
@@ -236,20 +271,25 @@ final class PhpParserEmitter implements CodeEmitter
         $params = [];
         $tags = [];
         $body = [];
-        if ($shape->inherited() !== []) {
-            $args = array_map(static fn (PropertyModel $property): Arg => new Arg(new Variable($property->name())), $this->constructorOrder($shape->inherited()));
+        foreach ($shape->checks() as [$property, $values]) {
+            $body[] = $this->check($shape, $property, $values, $types);
+        }
+
+        $parent = $shape->parentShape();
+        if ($shape->inherited() !== [] && $parent instanceof ClassShape) {
+            $args = array_map(static fn (PropertyModel $property): Arg => new Arg(new Variable($property->name())), $this->parameters($parent));
             $body[] = new Expression(new StaticCall(new Name('parent'), '__construct', $args));
         }
 
-        foreach ($this->constructorOrder($shape->all()) as $property) {
-            $param = $this->param($property, $types, $property->default());
+        foreach ($this->parameters($shape) as $property) {
+            $param = $this->param($property, $types, $shape->defaultOf($property));
             if (!$shape->owns($property)) {
                 $tags = array_merge($tags, $this->paramTag($property, $types));
             } elseif ($form->isPromoted()) {
                 $param->attrGroups = $attributes->groups($property->attributes());
                 $param->flags = ($form->hasPublicProperties() ? Modifiers::PUBLIC : $shape->visibility())
                     | ($form->hasReadonlyProperties() ? Modifiers::READONLY : 0);
-                $this->document($param, $this->propertyDoc($property, $types, $annotations));
+                $this->document($param, $this->propertyDoc($property, $types, $annotations, $property->type()));
             } else {
                 $tags = array_merge($tags, $this->paramTag($property, $types));
                 $body[] = new Expression(new Assign($this->fetch($property->name()), new Variable($property->name())));
@@ -280,25 +320,23 @@ final class PhpParserEmitter implements CodeEmitter
 
         if ($form->hasGetters()) {
             $getter = $this->factory->method('get' . $suffix)->makePublic()->addStmt(new Return_($this->fetch($name)));
-            $type = $types->nativeNode($property->type());
+            $declared = $shape->declaredType($property);
+            $type = $types->nativeNode($declared);
             if ($type instanceof Node) {
                 $getter->setReturnType($type);
             }
 
             $node = $getter->getNode();
-            $returnTag = $types->tags($property->type(), 'return');
+            $returnTag = $types->tags($declared, 'return');
             $this->document($node, DocBlock::render(null, array_merge($returnTag, $deprecation)));
             $methods[] = $node;
         }
 
-        if ($form->hasSetters()) {
-            $methods[] = $this->mutator($shape, 'set' . $suffix, $property, $types, [
-                new Expression(new Assign($this->fetch($name), new Variable($name))),
-                new Return_(new Variable('this')),
-            ]);
+        if ($form->hasSetters() && $shape->hasMutators($property)) {
+            $methods[] = $this->mutator($shape, 'set' . $suffix, $property, $types, $this->setterBody($property));
         }
 
-        if ($shape->hasWithers()) {
+        if ($shape->hasWithers() && $shape->hasMutators($property)) {
             $methods[] = $this->mutator($shape, 'with' . $suffix, $property, $types, $this->witherBody($shape, $property));
         }
 
@@ -326,6 +364,17 @@ final class PhpParserEmitter implements CodeEmitter
     /**
      * @return list<Stmt>
      */
+    private function setterBody(PropertyModel $property): array
+    {
+        return [
+            new Expression(new Assign($this->fetch($property->name()), new Variable($property->name()))),
+            new Return_(new Variable('this')),
+        ];
+    }
+
+    /**
+     * @return list<Stmt>
+     */
     private function witherBody(ClassShape $shape, PropertyModel $property): array
     {
         $name = $property->name();
@@ -338,7 +387,7 @@ final class PhpParserEmitter implements CodeEmitter
 
         if ($style->equals(WitherStyle::from(WitherStyle::NEW_SELF))) {
             $args = [];
-            foreach ($this->constructorOrder($shape->all()) as $other) {
+            foreach ($this->parameters($shape) as $other) {
                 $args[] = new Arg($other === $property ? new Variable($name) : $this->fetch($other->name()));
             }
 
@@ -379,9 +428,9 @@ final class PhpParserEmitter implements CodeEmitter
         return $types->tags($property->type(), 'param', ' $' . $property->name());
     }
 
-    private function propertyDoc(PropertyModel $property, TypeRenderer $types, AnnotationRenderer $annotations): ?string
+    private function propertyDoc(PropertyModel $property, TypeRenderer $types, AnnotationRenderer $annotations, TypeModel $declared): ?string
     {
-        $var = $types->tags($property->type(), 'var');
+        $var = $types->tags($declared, 'var');
 
         return DocBlock::render($property->doc()->description(), array_merge($var, $this->deprecation($property->doc()), $annotations->annotations($property->attributes())));
     }
@@ -406,6 +455,82 @@ final class PhpParserEmitter implements CodeEmitter
         }
 
         return array_merge($required, $optional);
+    }
+
+    /**
+     * A discriminator defaulting to the one value that selects the class counts as optional, so it moves behind the
+     * required parameters; the parent call keeps the parent's order, as it passes variables.
+     *
+     * @return list<PropertyModel>
+     */
+    private function parameters(ClassShape $shape): array
+    {
+        $required = [];
+        $optional = [];
+        foreach ($this->constructorOrder($shape->all()) as $property) {
+            if ($shape->defaultOf($property) instanceof DefaultValue) {
+                $optional[] = $property;
+            } else {
+                $required[] = $property;
+            }
+        }
+
+        return array_merge($required, $optional);
+    }
+
+    /**
+     * `new Cat('dog')` must fail: read back, the object would claim to be a Dog.
+     */
+    private function check(ClassShape $shape, PropertyModel $property, DiscriminatorValues $selection, TypeRenderer $types): If_
+    {
+        $parameter = new Variable($property->name());
+        $condition = $this->differsFromAll($parameter, $selection->ownValues(), $property->type(), $types);
+        $passed = $selection->subclassValues();
+        if ($passed !== []) {
+            // An open class takes the values of its subclasses only from them, never from `new Bird('parrot')`.
+            $direct = new Identical(new ClassConstFetch(new Name('static'), 'class'), new ClassConstFetch(new Name('self'), 'class'));
+            $condition = new BooleanAnd(
+                $condition,
+                $selection->areSubclassValuesChecked() ? new BooleanOr($direct, $this->differsFromAll($parameter, $passed, $property->type(), $types)) : $direct,
+            );
+        }
+
+        // The wire name is free text; sprintf() must not read a "%" in it as a conversion. The value is quoted, null not.
+        $placeholder = $property->type() instanceof NullableType ? '%%s' : '"%%s"';
+        $format = sprintf($placeholder . ' does not select %s by "%s".', $shape->className()->shortName(), str_replace('%', '%%', $property->wireName()));
+        $message = new FuncCall(new Name('sprintf'), [new Arg(new String_($format)), new Arg($this->printable($parameter, $property->type(), $types))]);
+        $throw = new Expression(new Throw_(new New_(new FullyQualified('InvalidArgumentException'), [new Arg($message)])));
+
+        return new If_($condition, ['stmts' => [$throw]]);
+    }
+
+    /**
+     * @param non-empty-list<int|string> $values
+     */
+    private function differsFromAll(Variable $parameter, array $values, TypeModel $type, TypeRenderer $types): Expr
+    {
+        $condition = new NotIdentical($parameter, $this->defaultValue($values[0], $type, $types));
+        foreach (array_slice($values, 1) as $value) {
+            $condition = new BooleanAnd($condition, new NotIdentical($parameter, $this->defaultValue($value, $type, $types)));
+        }
+
+        return $condition;
+    }
+
+    /**
+     * A native enum case is not a string; its backing value is. Null reads as `null`, apart from a quoted value.
+     */
+    private function printable(Variable $parameter, TypeModel $type, TypeRenderer $types): Expr
+    {
+        $inner = $type instanceof NullableType ? $type->inner() : $type;
+        $value = $inner instanceof EnumType && $types->nativeEnums() ? new PropertyFetch($parameter, 'value') : $parameter;
+        if (!$type instanceof NullableType) {
+            return $value;
+        }
+
+        $quoted = new Concat(new Concat(new String_('"'), $value), new String_('"'));
+
+        return new Ternary(new Identical($parameter, new ConstFetch(new Name('null'))), new String_('null'), $quoted);
     }
 
     /**

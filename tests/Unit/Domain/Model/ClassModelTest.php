@@ -10,6 +10,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\ClassKind;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\DiscriminatorModel;
+use MSSTC4PHP\DtoGenerator\Domain\Model\DiscriminatorValues;
 use MSSTC4PHP\DtoGenerator\Domain\Model\DocModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\PropertyModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ScalarType;
@@ -152,6 +153,96 @@ final class ClassModelTest extends TestCase
         $second = new AttributeModel(ClassName::fromFqcn('App\Second'));
 
         self::assertSame([$first, $second], $this->classWith([])->withAddedAttributes($first)->withAddedAttributes($second)->attributes());
+    }
+
+    public function testOnlyConcreteClassesAreSelectedByDiscriminatorValues(): void
+    {
+        $values = new DiscriminatorValues('kind', ['user']);
+        self::assertSame([$values], $this->classWith([], ClassKind::OPEN)->withDiscriminatorValues($values)->discriminatorValues());
+
+        $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('Only a concrete class is selected by discriminator values; App\User is abstract.');
+
+        $this->classWith([], ClassKind::ABSTRACT)->withDiscriminatorValues($values);
+    }
+
+    public function testRejectsTwoValueSetsForOneProperty(): void
+    {
+        $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('Class App\User has two sets of discriminator values for $kind.');
+
+        $this->classWith([])->withDiscriminatorValues(new DiscriminatorValues('kind', ['a']), new DiscriminatorValues('kind', ['b']));
+    }
+
+    public function testKnowsThePropertiesItsLineageDiscriminatesBy(): void
+    {
+        $base = $this->classWith([], ClassKind::ABSTRACT, new DiscriminatorModel('sub', ['one' => ClassName::fromFqcn('App\One')]));
+        $class = $base->withDiscriminatedProperties('kind', 'sub');
+
+        self::assertSame([], $this->classWith([])->discriminatedProperties());
+        self::assertSame(['sub'], $base->discriminatedProperties());
+        self::assertSame(['sub', 'kind'], $class->discriminatedProperties());
+        self::assertSame(['sub', 'kind'], $class->withProperties($this->property('name'))->discriminatedProperties());
+        self::assertSame(['sub', 'kind'], $class->withAddedAttributes(new AttributeModel(ClassName::fromFqcn('App\Marker')))->discriminatedProperties());
+        self::assertSame(['kind', 'sub'], $class->withHierarchy(ClassKind::from(ClassKind::FINAL), null, null)->discriminatedProperties());
+        self::assertSame(['sub', 'kind'], $class->withDiscriminatorValues()->discriminatedProperties());
+    }
+
+    public function testKeepsTheMutatorsItRestoresThroughEveryCopy(): void
+    {
+        $class = $this->classWith([])->withRestoredMutators('kind', 'kind');
+
+        self::assertSame([], $this->classWith([])->restoredMutators());
+        self::assertSame(['kind'], $class->restoredMutators());
+        self::assertSame(['kind'], $class->withProperties($this->property('name'))->restoredMutators());
+        self::assertSame(['kind'], $class->withAddedAttributes(new AttributeModel(ClassName::fromFqcn('App\Marker')))->restoredMutators());
+        self::assertSame(['kind'], $class->withHierarchy(ClassKind::from(ClassKind::FINAL), null, null)->restoredMutators());
+        self::assertSame(['kind'], $class->withDiscriminatorValues()->restoredMutators());
+        self::assertSame(['kind'], $class->withDiscriminatedProperties('sub')->restoredMutators());
+        self::assertSame(['sub'], $class->withRestoredMutators('sub')->withDiscriminatedProperties('kind')->restoredMutators());
+    }
+
+    public function testRejectsAMutatorBothRestoredAndDiscriminated(): void
+    {
+        $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('Class App\User restores the mutators of "kind", which a discriminator of its chain reads.');
+
+        $this->classWith([])->withDiscriminatedProperties('kind')->withRestoredMutators('kind');
+    }
+
+    public function testRejectsAnEmptyRestoredMutator(): void
+    {
+        $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('Class App\User lists an empty restored mutator.');
+
+        $this->classWith([])->withRestoredMutators('');
+    }
+
+    public function testCollapsesRepeatedDiscriminatedProperties(): void
+    {
+        self::assertSame(['kind', 'sub'], $this->classWith([])->withDiscriminatedProperties('kind', 'sub', 'kind')->discriminatedProperties());
+    }
+
+    public function testRejectsAnEmptyDiscriminatedProperty(): void
+    {
+        $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('Class App\User lists an empty discriminated property.');
+
+        $this->classWith([])->withDiscriminatedProperties('kind', '');
+    }
+
+    public function testKeepsDiscriminatorValuesThroughEveryCopy(): void
+    {
+        $values = new DiscriminatorValues('kind', ['cat', 1]);
+        $class = $this->classWith([$this->property('id')])->withDiscriminatorValues($values);
+
+        self::assertSame([], $this->classWith([])->discriminatorValues());
+        self::assertSame([$values], $class->discriminatorValues());
+        self::assertSame($values, $class->discriminatorValuesOf('kind'));
+        self::assertNull($class->discriminatorValuesOf('id'));
+        self::assertSame([$values], $class->withProperties($this->property('name'))->discriminatorValues());
+        self::assertSame([$values], $class->withAddedAttributes(new AttributeModel(ClassName::fromFqcn('App\Marker')))->discriminatorValues());
+        self::assertSame([$values], $class->withHierarchy(ClassKind::from(ClassKind::FINAL), ClassName::fromFqcn('App\Pet'), null)->discriminatorValues());
     }
 
     /**

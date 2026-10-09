@@ -21,10 +21,10 @@ final class GoldenEmitterTest extends TestCase
     /**
      * @dataProvider profiles
      */
-    public function testMatchesTheGoldenFiles(string $profile, string $php, string $mutability, string $accessors): void
+    public function testMatchesTheGoldenFiles(string $profile, string $php, string $mutability, string $accessors, bool $withers): void
     {
         $emitter = new PhpParserEmitter();
-        $target = EmitterFixture::target($php, $mutability, $accessors);
+        $target = EmitterFixture::target($php, $mutability, $accessors, null, $withers);
         $classes = EmitterFixture::classes($mutability);
         if (PhpVersion::fromString($php)->isAtLeast(PhpVersion::fromString('8.1'))) {
             $classes[] = EmitterFixture::rules($mutability);
@@ -32,7 +32,7 @@ final class GoldenEmitterTest extends TestCase
 
         foreach ($classes as $class) {
             $path = self::DIR . $profile . '/' . $class->name()->shortName() . '.php.golden';
-            $code = $emitter->emit($class, $target, EmitterFixture::inherited($class));
+            $code = $emitter->emit($class, $target, EmitterFixture::inherited($class), EmitterFixture::parentOf($class));
             if (getenv('UPDATE_SNAPSHOTS') === '1') {
                 if (!is_dir(dirname($path))) {
                     mkdir(dirname($path), 0777, true);
@@ -72,7 +72,7 @@ final class GoldenEmitterTest extends TestCase
     }
 
     /**
-     * @return array<string, array{string, string, string, string}>
+     * @return array<string, array{string, string, string, string, bool}>
      */
     public static function profiles(): array
     {
@@ -92,8 +92,16 @@ final class GoldenEmitterTest extends TestCase
             ['8.5', Mutability::MUTABLE, AccessorStyle::PUBLIC_PROPERTIES],
         ] as [$php, $mutability, $accessors]) {
             $name = $php . '-' . $mutability . ($accessors === AccessorStyle::AUTO ? '' : '-' . ($accessors === AccessorStyle::GETTERS ? 'getters' : 'public'));
-            $profiles[$name] = [$name, $php, $mutability, $accessors];
+            $profiles[$name] = [$name, $php, $mutability, $accessors, true];
         }
+
+        // `dto.withers: false` on every target, each with its own way of copying.
+        foreach (['7.4', '8.0', '8.1', '8.2', '8.5'] as $php) {
+            $name = $php . '-immutable-nowithers';
+            $profiles[$name] = [$name, $php, Mutability::IMMUTABLE, AccessorStyle::AUTO, false];
+        }
+
+        ksort($profiles);
 
         return $profiles;
     }

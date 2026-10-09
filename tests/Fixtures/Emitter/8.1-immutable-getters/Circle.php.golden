@@ -10,12 +10,11 @@ final class Circle extends Shape
 {
     public function __construct(string $kind, private readonly float $radius)
     {
-        parent::__construct($kind);
-    }
+        if ($kind !== 'circle' && $kind !== 'round') {
+            throw new \InvalidArgumentException(sprintf('"%s" does not select Circle by "kind".', $kind));
+        }
 
-    public function withKind(string $kind): self
-    {
-        return new self($kind, $this->radius);
+        parent::__construct($kind);
     }
 
     public function getRadius(): float

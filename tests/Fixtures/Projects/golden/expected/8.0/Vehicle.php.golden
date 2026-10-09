@@ -16,12 +16,4 @@ abstract class Vehicle
     {
         return $this->kind;
     }
-
-    public function withKind(string $kind): static
-    {
-        $clone = clone $this;
-        $clone->kind = $kind;
-
-        return $clone;
-    }
 }

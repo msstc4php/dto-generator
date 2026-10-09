@@ -47,7 +47,7 @@ final class ClassForm
     }
 
     /**
-     * Private properties get getters; every property gets a wither.
+     * Private properties get getters; every property gets a wither unless the config turns them off.
      */
     public static function immutable(
         bool $promoted,
@@ -62,10 +62,6 @@ final class ClassForm
 
         if (!$readonly->isNone() && $withers->equals(WitherStyle::from(WitherStyle::CLONE_ASSIGN))) {
             throw new InvalidModel('A wither cannot assign to a readonly clone before PHP 8.5; use new self or clone with.');
-        }
-
-        if ($withers->isNone()) {
-            throw new InvalidModel('An immutable class needs withers to produce modified copies.');
         }
 
         return new self($promoted, $publicProperties, $readonly, false, $withers);

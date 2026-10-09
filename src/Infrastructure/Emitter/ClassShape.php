@@ -6,7 +6,12 @@ namespace MSSTC4PHP\DtoGenerator\Infrastructure\Emitter;
 
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassKind;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassModel;
+use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
+use MSSTC4PHP\DtoGenerator\Domain\Model\DiscriminatorValues;
+use MSSTC4PHP\DtoGenerator\Domain\Model\NullableType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\PropertyModel;
+use MSSTC4PHP\DtoGenerator\Domain\Model\TypeModel;
+use MSSTC4PHP\DtoGenerator\Domain\Shared\DefaultValue;
 use MSSTC4PHP\DtoGenerator\Domain\Target\Capability;
 use MSSTC4PHP\DtoGenerator\Domain\Target\ClassForm;
 use MSSTC4PHP\DtoGenerator\Domain\Target\TargetProfile;
@@ -28,20 +33,117 @@ final class ClassShape
 
     private TargetProfile $target;
 
+    private ?ClassModel $parent;
+
     /**
      * @param list<PropertyModel> $inherited
+     * @param ClassModel|null $parent the class it extends, whose own properties end $inherited
      */
-    public function __construct(ClassModel $class, array $inherited, ClassForm $form, TargetProfile $target)
+    public function __construct(ClassModel $class, array $inherited, ClassForm $form, TargetProfile $target, ?ClassModel $parent = null)
     {
         $this->class = $class;
         $this->inherited = $inherited;
         $this->form = $form;
         $this->target = $target;
+        $this->parent = $parent;
+    }
+
+    /**
+     * The parent as it emits itself: its parameter order, by its own defaults, is what the parent call must follow.
+     */
+    public function parentShape(): ?self
+    {
+        if (!$this->parent instanceof ClassModel) {
+            return null;
+        }
+
+        $grandInherited = array_slice($this->inherited, 0, count($this->inherited) - count($this->parent->properties()));
+
+        return new self($this->parent, $grandInherited, $this->target->classFormFor($this->parent->mutability()), $this->target);
     }
 
     public function form(): ClassForm
     {
         return $this->form;
+    }
+
+    public function className(): ClassName
+    {
+        return $this->class->name();
+    }
+
+    private function selection(PropertyModel $property): ?DiscriminatorValues
+    {
+        return $this->class->discriminatorValuesOf($property->name());
+    }
+
+    /**
+     * A discriminator selected by one value defaults to it; selected by several, it keeps its own default only when
+     * that is one of them.
+     */
+    public function defaultOf(PropertyModel $property): ?DefaultValue
+    {
+        $selection = $this->selection($property);
+        $default = $property->default();
+        if (!$selection instanceof DiscriminatorValues) {
+            return $default;
+        }
+
+        $values = $selection->values();
+        if (count($values) === 1) {
+            return new DefaultValue($values[0]);
+        }
+
+        return $default instanceof DefaultValue && in_array($default->value(), $values, true) ? $default : null;
+    }
+
+    /**
+     * The constructor's check rejects null before a checked discriminator is assigned, and PHPStan reports a
+     * declared property that never holds a value its type admits; a promoted one shares the parameter's type.
+     */
+    public function declaredType(PropertyModel $property): TypeModel
+    {
+        $type = $property->type();
+
+        return $type instanceof NullableType && !$this->form->isPromoted() && $this->selection($property) instanceof DiscriminatorValues ? $type->inner() : $type;
+    }
+
+    /**
+     * A copy with another discriminator would skip the constructor's check, or select another class when read back.
+     */
+    public function hasMutators(PropertyModel $property): bool
+    {
+        return !$this->selection($property) instanceof DiscriminatorValues
+            && !in_array($property->wireName(), $this->class->discriminatedProperties(), true);
+    }
+
+    /**
+     * An inherited property whose parent left its mutators out for a discriminated chain this class is not in.
+     */
+    public function restoresMutators(PropertyModel $property): bool
+    {
+        return in_array($property->wireName(), $this->class->restoredMutators(), true);
+    }
+
+    /**
+     * @return list<array{PropertyModel, DiscriminatorValues}> root discriminator first
+     */
+    public function checks(): array
+    {
+        $byName = [];
+        foreach ($this->all() as $property) {
+            $byName[$property->name()] = $property;
+        }
+
+        $checks = [];
+        foreach ($this->class->discriminatorValues() as $values) {
+            $property = $byName[$values->property()] ?? null;
+            if ($values->isChecked() && $property instanceof PropertyModel) {
+                $checks[] = [$property, $values];
+            }
+        }
+
+        return $checks;
     }
 
     /**

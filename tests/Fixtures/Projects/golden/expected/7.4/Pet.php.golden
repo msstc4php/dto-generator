@@ -26,17 +26,6 @@ abstract class Pet
         return $this->petType;
     }
 
-    /**
-     * @return static
-     */
-    public function withPetType(string $petType): self
-    {
-        $clone = clone $this;
-        $clone->petType = $petType;
-
-        return $clone;
-    }
-
     public function getName(): string
     {
         return $this->name;

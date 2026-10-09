@@ -25,6 +25,7 @@ final class ClassFormTest extends TestCase
     {
         $target = $this->target($php, $mutability, $accessors);
 
+        self::assertTrue($target->hasWithers());
         self::assertSame($expected, $this->summary($target->classFormFor(Mutability::from($mutability))));
     }
 
@@ -46,6 +47,47 @@ final class ClassFormTest extends TestCase
             '8.5 immutable' => ['8.5', Mutability::IMMUTABLE, AccessorStyle::AUTO, 'promoted public readonly-class withers:clone-with'],
             '8.5 mutable public' => ['8.5', Mutability::MUTABLE, AccessorStyle::PUBLIC_PROPERTIES, 'promoted public withers:none'],
         ];
+    }
+
+    /**
+     * @dataProvider withoutWithers
+     */
+    public function testLeavesWithersOutWhenTheConfigSaysSo(string $php, string $expected): void
+    {
+        $target = new TargetProfile(
+            PhpVersion::fromString($php),
+            MetadataMode::from(MetadataMode::NONE),
+            Mutability::from(Mutability::IMMUTABLE),
+            AccessorStyle::from(AccessorStyle::AUTO),
+            DateTimeClass::from(DateTimeClass::IMMUTABLE),
+            true,
+            false,
+        );
+
+        self::assertFalse($target->hasWithers());
+        self::assertSame($expected, $this->summary($target->classFormFor(Mutability::from(Mutability::IMMUTABLE))));
+        // The mutable form does not depend on the key.
+        $mutable = $php === '7.4' ? 'declared private getters setters withers:none' : 'promoted private getters setters withers:none';
+        self::assertSame($mutable, $this->summary($target->classFormFor(Mutability::from(Mutability::MUTABLE))));
+    }
+
+    /**
+     * @return array<string, array{string, string}>
+     */
+    public static function withoutWithers(): array
+    {
+        return [
+            '7.4' => ['7.4', 'declared private getters withers:none'],
+            '8.2' => ['8.2', 'promoted public readonly-class withers:none'],
+            '8.5' => ['8.5', 'promoted public readonly-class withers:none'],
+        ];
+    }
+
+    public function testAcceptsAnImmutableFormWithoutWithers(): void
+    {
+        $form = ClassForm::immutable(true, true, ReadonlyMode::from(ReadonlyMode::CLASS_), WitherStyle::from(WitherStyle::NONE));
+
+        self::assertTrue($form->withers()->isNone());
     }
 
     public function testFollowsThePerClassMutability(): void
@@ -106,7 +148,6 @@ final class ClassFormTest extends TestCase
             'readonly class with declared properties' => [static fn (): ClassForm => ClassForm::immutable(false, false, $class, $newSelf), 'Readonly properties and classes need promoted properties'],
             'assigning a readonly clone' => [static fn (): ClassForm => ClassForm::immutable(true, false, $properties, $cloneAssign), 'cannot assign to a readonly clone'],
             'assigning a clone of a readonly class' => [static fn (): ClassForm => ClassForm::immutable(true, false, $class, $cloneAssign), 'cannot assign to a readonly clone'],
-            'immutable without withers' => [static fn (): ClassForm => ClassForm::immutable(true, true, $class, WitherStyle::from(WitherStyle::NONE)), 'An immutable class needs withers'],
         ];
     }
 }

@@ -111,7 +111,8 @@
         "ConcatOperandRemoval": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Infrastructure\\Writer\\FilesystemWriter::temporaryPath"] },
         // floor(), ceil() and round() agree on whether a float is whole.
         "RoundingFamily": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Domain\\Builder\\ConstMapper::type", "MSSTC4PHP\\DtoGenerator\\Domain\\Builder\\ConstMapper::wholeFloat"] },
-        "LessThan": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Application\\Config\\PhpConstraint::lowestMinor"] },
+        // The ancestor bounds in SelectingValues and Hierarchy only guard an invariant Hierarchy::breakCycles() already keeps.
+        "LessThan": { "ignore": ["MSSTC4PHP\\DtoGenerator\\Domain\\Builder\\SelectingValues::ancestors", "MSSTC4PHP\\DtoGenerator\\Domain\\Builder\\Hierarchy::chain", "MSSTC4PHP\\DtoGenerator\\Application\\Config\\PhpConstraint::lowestMinor"] },
         // Equivalent: every default passed to stringList() has at most one item.
         "ArrayOneItem": { "ignoreSourceCodeByRegex": [".*return \\$default;.*"] },
         // Equivalent: enum items are already JSON values; the map only narrows the type for PHPStan.

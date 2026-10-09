@@ -56,7 +56,7 @@ PHPDoc extractor of Symfony 5.4, mistake `non-empty-string` for a class name; th
 | `enum` mixing strings and integers | no PHP enum: a union of the literals (see [Types](#types)), with a warning |
 | `allOf` with one `$ref` plus own properties, `extends` strategy | `class Child extends Base`; `Base` is not `final` |
 | `allOf` with several `$ref`, or the `merge` strategy | one class with all the properties; one property with two types is an error |
-| `oneOf`/`anyOf` with a `discriminator` | an `abstract` base class with the common properties; the variants extend it |
+| `oneOf`/`anyOf` with a `discriminator` | an `abstract` base class with the common properties; the variants extend it. The constructor of each variant accepts only the values that select it (`\InvalidArgumentException` otherwise); a class selected by a single value takes it as the default; an open (concrete) class accepts its own values when it is instantiated itself and the values of its subclasses only from them (`parent::__construct()`). No class in a discriminated chain (the discriminated bases, their ancestors and their subclasses) has a `withX()`/`setX()` for a property a discriminator of that chain reads. The rule is per property: a subclass whose own chain does not read it, while its parent's does (a sibling `allOf` subclass of a shared base, or a base with a different discriminator), gets the mutators back. It declares the setter and, on 7.4, 8.0 and 8.5, the cloning wither itself; its subclasses inherit them. On 8.1–8.4 an open class has no withers, so its final subclasses declare the `new self` wither; with `dto.withers: false`, or mutable DTOs with `accessors: public-properties`, there is none to restore |
 | `oneOf`/`anyOf` without a discriminator | a union type |
 | an inline object or enum in a property, its `items` or `additionalProperties` | a named class `<Parent><Property>` (`Order.items[]` → `OrderItemsItem`) |
 | an inline object or enum as a member of a `oneOf`/`anyOf` | a named class: the member's `title` in PascalCase, else `<Parent><Property>Option<N>` (N counts from 1 over `oneOf`, then `anyOf`) |
@@ -125,9 +125,23 @@ Classes are `final`, except the bases of `allOf` and of discriminated unions. At
 - **Hoisted names give way to named schemas.** An inline member whose title or derived name equals a schema in
   `components/schemas` gets a collision error; the named schema keeps its class.
 - **Remote `$ref`** (`https://…`) and anchors (`$anchor`, `#Name`) are not supported.
-- **Discriminator values are not enforced.** A variant's discriminator property stays a constructor argument, so
-  `new Cat('dog', …)` is accepted. A bare name in `discriminator.mapping` is resolved against the file holding the
-  discriminator, not the root document.
+- **A bare name in `discriminator.mapping`** is resolved against the file holding the discriminator, not the root
+  document.
+- **A mutable DTO with `accessors: public-properties`** still lets code assign the discriminator directly.
+- **Only a string, integer or enum discriminator is checked;** another type, an untyped property included, gives a
+  warning and no check.
+- **An optional discriminator selected by several values** becomes a required parameter unless its default is one of
+  them; with a single value it defaults to it.
+- **Denormalizing straight into a variant** with a discriminator value of another class now throws
+  `\InvalidArgumentException` from the constructor. Symfony's Serializer turns only a `TypeError` there into a
+  validation error, so e.g. `#[MapRequestPayload] Cat $cat` answers 500 instead of accepting the foreign value.
+  Denormalizing through the base and its `DiscriminatorMap` is unaffected.
+- **A checked nullable discriminator declared by a concrete class** (a variant or an open class) has a non-nullable
+  property and getter on PHP 7.4 (`getKind(): string`), as the constructor rejects `null` before assigning it; from
+  PHP 8.0 the property is promoted and keeps the parameter's type (`?string`). A rejected `null` reads `null` in the
+  message: `null does not select Side by "kind".`
+- **The discriminator parameter carries no literal PHPDoc type** (`'cat'|'kitty'`): PHPStan would then report the
+  constructor's own check as always false.
 - **Swagger-2-style inheritance** (a base with a discriminator that the variants extend through `allOf`) makes the
   base `abstract`.
 - **A concrete `allOf` base loses its `withX()` methods on PHP 8.1–8.4** once it has a subclass: readonly properties

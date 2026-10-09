@@ -201,7 +201,7 @@ final class Action
             $files[] = new GeneratedFile(
                 $source->outputDir(),
                 $class->name()->shortName() . '.php',
-                $this->emitter->emit($class, $target, $model->inheritedProperties($class)),
+                $this->emitter->emit($class, $target, $model->inheritedProperties($class), $model->parentOf($class)),
             );
         }
 

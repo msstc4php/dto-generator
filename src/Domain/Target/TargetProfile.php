@@ -20,13 +20,16 @@ final class TargetProfile
 
     private bool $strict;
 
+    private bool $withers;
+
     public function __construct(
         PhpVersion $php,
         MetadataMode $metadata,
         Mutability $mutability,
         AccessorStyle $accessors,
         DateTimeClass $dateTimeClass,
-        bool $strict
+        bool $strict,
+        bool $withers = true
     ) {
         $this->php = $php;
         $this->metadata = $metadata;
@@ -34,6 +37,7 @@ final class TargetProfile
         $this->accessors = $accessors;
         $this->dateTimeClass = $dateTimeClass;
         $this->strict = $strict;
+        $this->withers = $withers;
 
         if ($metadata->isAttributes()) {
             $this->assertSupports(Capability::from(Capability::ATTRIBUTES), 'Metadata mode "attributes"');
@@ -72,7 +76,9 @@ final class TargetProfile
         }
 
         $readonly = $this->supports(Capability::from(Capability::READONLY_PROPERTIES));
-        if ($this->supports(Capability::from(Capability::CLONE_WITH))) {
+        if (!$this->withers) {
+            $withers = WitherStyle::NONE;
+        } elseif ($this->supports(Capability::from(Capability::CLONE_WITH))) {
             $withers = WitherStyle::CLONE_WITH;
         } elseif ($readonly) {
             // Readonly properties cannot be assigned on a clone before 8.5, so the copy goes through the constructor.
@@ -121,6 +127,14 @@ final class TargetProfile
     public function isStrict(): bool
     {
         return $this->strict;
+    }
+
+    /**
+     * Whether immutable DTOs get `with*()` methods (`dto.withers`); mutable ones keep their setters either way.
+     */
+    public function hasWithers(): bool
+    {
+        return $this->withers;
     }
 
     private function assertSupports(Capability $capability, string $feature): void

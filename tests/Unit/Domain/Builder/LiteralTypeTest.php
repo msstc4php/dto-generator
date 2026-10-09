@@ -44,4 +44,12 @@ final class LiteralTypeTest extends TestCase
         self::assertNull(LiteralType::admits('non-empty-string', 'x'));
         self::assertNull(LiteralType::admits('int<1, 5>', 3));
     }
+
+    public function testListsTheLiteralsOfARefinementItBuilt(): void
+    {
+        self::assertSame(["'a'", '1', 'true'], LiteralType::literals("'a'|1|true"));
+        self::assertSame(["'a|b'"], LiteralType::literals("'a|b'"));
+        self::assertNull(LiteralType::literals('non-empty-string'));
+        self::assertNull(LiteralType::literals("'a'|int"));
+    }
 }

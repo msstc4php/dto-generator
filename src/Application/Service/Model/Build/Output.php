@@ -72,6 +72,13 @@ final class Output
         return array_merge([], ...array_reverse($chain));
     }
 
+    public function parentOf(ClassModel $class): ?ClassModel
+    {
+        $parent = $class->parent();
+
+        return $parent instanceof ClassName ? $this->models[$parent->fqcn()] ?? null : null;
+    }
+
     public function diagnostics(): Diagnostics
     {
         return $this->diagnostics;

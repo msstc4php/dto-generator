@@ -8,13 +8,15 @@ use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassKind;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
+use MSSTC4PHP\DtoGenerator\Domain\Model\DiscriminatorModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\Identifier;
 use MSSTC4PHP\DtoGenerator\Domain\Model\PropertyModel;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\DefaultValue;
 
 /**
  * Links the built classes into one inheritance forest (spec §5.3): variants extend their discriminated base, which
- * takes the properties all of them share; every parent stops being final.
+ * takes the properties all of them share; every parent stops being final. Records the discriminator values each
+ * concrete class accepts.
  */
 final class Hierarchy
 {
@@ -60,6 +62,7 @@ final class Hierarchy
         $hierarchy->settle($unions);
         $hierarchy->check();
         $hierarchy->checkDiscriminators($unions);
+        $hierarchy->selectVariants();
 
         return array_map(static fn (ClassModel $class): ClassModel => $hierarchy->models[$class->name()->fqcn()], $classes);
     }
@@ -397,5 +400,67 @@ final class Hierarchy
         $default = $property->default();
 
         return $default instanceof DefaultValue ? $default->toJson() : '';
+    }
+
+    /**
+     * Only now are kinds and parents final, so an abstract ancestor can be told from an open one.
+     */
+    private function selectVariants(): void
+    {
+        foreach (SelectingValues::of($this->models, $this->diagnostics) as $fqcn => $values) {
+            $this->models[$fqcn] = $this->models[$fqcn]->withDiscriminatorValues(...$values);
+        }
+
+        // Every class in a chain shares its discriminated properties: a mutator inherited from an ancestor, or
+        // declared on an intermediate base, would bypass the check as much as one on the variant.
+        $discriminated = [];
+        foreach (array_keys($this->models) as $fqcn) {
+            $chain = $this->chain($fqcn);
+            $names = [];
+            foreach ($chain as $member) {
+                $discriminator = $this->models[$member]->discriminator();
+                if ($discriminator instanceof DiscriminatorModel) {
+                    $names[] = $discriminator->propertyName();
+                }
+            }
+
+            foreach ($chain as $member) {
+                $discriminated[$member] = array_merge($discriminated[$member] ?? [], $names);
+            }
+        }
+
+        foreach ($discriminated as $fqcn => $names) {
+            $this->models[$fqcn] = $this->models[$fqcn]->withDiscriminatedProperties(...$names);
+        }
+
+        // A class outside every discriminated chain still changes what its parent, inside one, may not.
+        foreach ($this->models as $fqcn => $model) {
+            $parent = $model->parent();
+            if ($parent instanceof ClassName && isset($this->models[$parent->fqcn()])) {
+                $inherited = [];
+                foreach (array_slice($this->chain($fqcn), 0, -1) as $ancestor) {
+                    foreach ($this->models[$ancestor]->properties() as $property) {
+                        $inherited[] = $property->wireName();
+                    }
+                }
+
+                $restored = array_diff($this->models[$parent->fqcn()]->discriminatedProperties(), $model->discriminatedProperties());
+                $this->models[$fqcn] = $model->withRestoredMutators(...array_intersect($restored, $inherited));
+            }
+        }
+    }
+
+    /**
+     * @return list<string> the class and its ancestors, root first
+     */
+    private function chain(string $fqcn): array
+    {
+        $chain = [$fqcn];
+        // breakCycles() has run; the bound keeps a broken invariant from hanging the run.
+        for ($parent = $this->models[$fqcn]->parent(); $parent instanceof ClassName && isset($this->models[$parent->fqcn()]) && count($chain) < count($this->models); $parent = $this->models[$parent->fqcn()]->parent()) {
+            $chain[] = $parent->fqcn();
+        }
+
+        return array_reverse($chain);
     }
 }
