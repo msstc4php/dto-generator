@@ -28,25 +28,15 @@ use MSSTC4PHP\DtoGenerator\Domain\Target\TargetProfile;
  */
 final class TypeMapper
 {
-    private const STRING_FORMATS = [
-        'email', 'idn-email', 'uri', 'uri-reference', 'iri', 'iri-reference', 'uri-template', 'uuid', 'hostname',
-        'idn-hostname', 'ipv4', 'ipv6', 'time', 'duration', 'byte', 'binary', 'password', 'regex', 'json-pointer',
-        'relative-json-pointer',
-    ];
-
     public const ONE_OF_AND_ANY_OF = '"oneOf" and "anyOf" together become one union, which admits more than the schema does.';
-
-    private const DATE_FORMATS = ['date-time', 'date'];
-
-    private const INTEGER_FORMATS = ['int32', 'int64'];
-
-    private const NUMBER_FORMATS = ['float', 'double'];
 
     private SchemaGraph $graph;
 
     private Declarations $declarations;
 
     private TargetProfile $target;
+
+    private ConstMapper $consts;
 
     /** @var array<int|string, TypeModel> */
     private array $formats;
@@ -60,16 +50,12 @@ final class TypeMapper
         $this->declarations = $declarations;
         $this->target = $target;
         $this->formats = $formats;
+        $this->consts = new ConstMapper($formats);
     }
 
     public function map(Schema $schema, Diagnostics $diagnostics): TypeModel
     {
         return $this->mapWithin($schema, $diagnostics, []);
-    }
-
-    public static function nullable(TypeModel $type): TypeModel
-    {
-        return $type instanceof MixedType || $type instanceof NullableType ? $type : new NullableType($type);
     }
 
     /**
@@ -79,7 +65,7 @@ final class TypeMapper
     {
         $type = $this->bareType($schema, $diagnostics, $aliases);
 
-        return $this->admitsNull($schema) ? self::nullable($type) : $type;
+        return $this->admitsNull($schema) ? NullableType::of($type) : $type;
     }
 
     /**
@@ -115,7 +101,7 @@ final class TypeMapper
         // A discriminated union becomes a base class only as a named schema; anywhere else it is a plain union.
         // Members without a type of their own only constrain the schema's type (`anyOf` of patterns).
         $union = array_merge($schema->oneOf(), $schema->anyOf());
-        if ($this->typed($union) !== [] && ($schema->propertyNames() === [] || SchemaShape::isDiscriminated($schema))) {
+        if ($this->typed($union, true) !== [] && ($schema->propertyNames() === [] || SchemaShape::isDiscriminated($schema))) {
             if ($schema->allOf() !== []) {
                 $diagnostics->warning('"allOf" beside a typed "oneOf" or "anyOf" is not represented; the union alone gives the type.', $schema->location());
             }
@@ -132,7 +118,7 @@ final class TypeMapper
             return new MixedType();
         }
 
-        $typed = $this->typed($schema->allOf());
+        $typed = $this->typed($schema->allOf(), false);
         if (count($typed) > 1) {
             $diagnostics->error('"allOf" combines several typed schemas that are not objects, which no PHP type expresses; keep one of them.', $schema->location());
 
@@ -140,7 +126,11 @@ final class TypeMapper
         }
 
         if ($typed !== []) {
-            return $this->mapWithin($typed[0], $diagnostics, $aliases);
+            return $this->consts->narrow($schema, $this->mapWithin($typed[0], $diagnostics, $aliases), $diagnostics);
+        }
+
+        if (SchemaShape::isMixedEnum($schema)) {
+            return $this->mixedEnum($schema, $diagnostics);
         }
 
         if (SchemaShape::isEnum($schema)) {
@@ -157,6 +147,13 @@ final class TypeMapper
             );
         }
 
+        if ($schema->hasKeyword('const')) {
+            $const = $this->consts->type($schema, $diagnostics);
+            if ($const instanceof TypeModel) {
+                return $const;
+            }
+        }
+
         $format = $schema->format();
         if ($format !== null && isset($this->formats[$format])) {
             return $this->formats[$format];
@@ -168,11 +165,11 @@ final class TypeMapper
         }
 
         if ($members === []) {
-            return new MixedType();
+            return $this->consts->narrow($schema, new MixedType(), $diagnostics);
         }
 
         // Parsed type lists hold no duplicates, so two or more members always form a valid union.
-        return count($members) === 1 ? $members[0] : new UnionType(...$members);
+        return $this->consts->narrow($schema, count($members) === 1 ? $members[0] : new UnionType(...$members), $diagnostics);
     }
 
     /**
@@ -197,7 +194,7 @@ final class TypeMapper
             }
 
             // A member that only constrains (a pattern) admits the schema's own type.
-            if ($this->typed([$member]) === [] && $schema->nonNullTypes() !== []) {
+            if ($this->typed([$member], true) === [] && $schema->nonNullTypes() !== []) {
                 foreach ($schema->nonNullTypes() as $own) {
                     $members[] = $this->single($own, $schema, $diagnostics, $aliases);
                 }
@@ -219,29 +216,129 @@ final class TypeMapper
             return new MixedType();
         }
 
-        $type = UnionType::of(...$members);
+        $type = $this->subsume(UnionType::of(...$members));
 
-        return $nullable ? self::nullable($type) : $type;
+        return $nullable ? NullableType::of($type) : $type;
+    }
+
+    /**
+     * The schemas whose `const` or mixed enum limits the values: the schema itself, `allOf` members and what a `$ref`
+     * leads to, at any depth, short of a generated class, whose default is no constant expression anyway.
+     *
+     * @return list<Schema>
+     */
+    public function valueSources(Schema $schema): array
+    {
+        $visited = [];
+
+        return $this->valueSourcesWithin($schema, $visited);
+    }
+
+    /**
+     * @param list<string> $visited locations reached through `$ref`, each followed once
+     *
+     * @return list<Schema>
+     */
+    private function valueSourcesWithin(Schema $schema, array &$visited): array
+    {
+        $found = $schema->hasKeyword('const') || SchemaShape::isMixedEnum($schema) ? [$schema] : [];
+        foreach ($schema->allOf() as $member) {
+            $found = array_merge($found, $this->valueSourcesWithin($member, $visited));
+        }
+
+        $ref = $schema->ref();
+        $target = $ref === null ? null : $this->graph->resolve(new ReferenceUse($ref, $schema->location()));
+        if (!$target instanceof ResolvedSchema || in_array($target->location()->toString(), $visited, true) || SchemaShape::isClass($target->schema())) {
+            return $found;
+        }
+
+        $visited[] = $target->location()->toString();
+
+        return array_merge($found, $this->valueSourcesWithin($target->schema(), $visited));
+    }
+
+    /**
+     * A plain `string` already admits `'a'` and `non-empty-string`: the refined member of a kind is dropped beside the
+     * plain one.
+     */
+    private function subsume(TypeModel $type): TypeModel
+    {
+        if (!$type instanceof UnionType) {
+            return $type;
+        }
+
+        $members = $type->members();
+        $booleans = [];
+        foreach ($members as $member) {
+            if ($member instanceof ScalarType && $member->kind() === 'bool') {
+                $booleans[] = $member->phpDoc();
+            }
+        }
+
+        // `true|false` is all of bool.
+        if (in_array('true', $booleans, true) && in_array('false', $booleans, true)) {
+            $members[] = ScalarType::bool();
+        }
+
+        $plain = [];
+        foreach ($members as $member) {
+            if ($member instanceof ScalarType && $member->phpDoc() === null) {
+                $plain[] = $member->kind();
+            }
+        }
+
+        $kept = [];
+        foreach ($members as $member) {
+            if (!$member instanceof ScalarType || $member->phpDoc() === null || !in_array($member->kind(), $plain, true)) {
+                $kept[] = $member;
+            }
+        }
+
+        return UnionType::of(...$kept);
     }
 
     /**
      * The members of a composition that carry a type; the others only constrain it.
      *
      * @param list<Schema> $members
+     * @param bool $byConst whether a lone `const` gives a type: each member of a union is one value, while beside a type
+     *                      in `allOf` it only narrows that type
      *
      * @return list<Schema>
      */
-    private function typed(array $members): array
+    private function typed(array $members, bool $byConst): array
     {
         return array_values(array_filter(
             $members,
             static fn (Schema $member): bool => $member->ref() !== null
                 || $member->nonNullTypes() !== []
                 || $member->enum() !== null
+                || ($byConst && $member->hasKeyword('const'))
                 || SchemaShape::isComposed($member)
                 || $member->propertyNames() !== []
                 || $member->extensions()->has('x-php-type'),
         ));
+    }
+
+    private function mixedEnum(Schema $schema, Diagnostics $diagnostics): TypeModel
+    {
+        $declared = array_map(static fn (SchemaType $type): string => $type->value(), $schema->nonNullTypes());
+        $numeric = in_array(SchemaType::INTEGER, $declared, true) || in_array(SchemaType::NUMBER, $declared, true);
+        if ($declared !== [] && (!in_array(SchemaType::STRING, $declared, true) || !$numeric)) {
+            $diagnostics->error('"type" does not match the enum values, which are strings and integers.', $schema->location()->child('type'));
+
+            return new MixedType();
+        }
+
+        $diagnostics->warning(
+            'The enum mixes strings and integers, which no PHP enum can back; the property takes either.',
+            $schema->location()->child('enum'),
+        );
+        $values = $schema->enum() ?? [];
+        $strings = array_unique(array_filter($values, 'is_string'));
+        $ints = array_unique(array_filter($values, 'is_int'));
+
+        return new UnionType(ScalarType::string(LiteralType::union($strings)), ScalarType::int(LiteralType::union($ints)));
     }
 
     private function explicitType(Schema $schema, Diagnostics $diagnostics): TypeModel
@@ -295,7 +392,7 @@ final class TypeMapper
         $key = $target->location()->toString();
         $declared = $this->declared($key);
         if ($declared instanceof TypeModel) {
-            return $this->admitsNull($target->schema()) ? self::nullable($declared) : $declared;
+            return $this->admitsNull($target->schema()) ? NullableType::of($declared) : $declared;
         }
 
         if ($this->declarations->isSkipped($key)) {
@@ -330,11 +427,11 @@ final class TypeMapper
             case SchemaType::STRING:
                 return $this->stringType($schema, $diagnostics);
             case SchemaType::INTEGER:
-                $this->checkFormat($schema, self::INTEGER_FORMATS, 'integer', 'an int', $diagnostics);
+                FormatCheck::check($schema, 'int', $diagnostics);
 
                 return ScalarType::int($this->integerRange($schema, $diagnostics));
             case SchemaType::NUMBER:
-                $this->checkFormat($schema, self::NUMBER_FORMATS, 'number', 'a float', $diagnostics);
+                FormatCheck::check($schema, 'float', $diagnostics);
 
                 return ScalarType::float();
             case SchemaType::BOOLEAN:
@@ -352,28 +449,14 @@ final class TypeMapper
 
     private function stringType(Schema $schema, Diagnostics $diagnostics): TypeModel
     {
-        if (in_array($schema->format(), self::DATE_FORMATS, true)) {
+        if (in_array($schema->format(), FormatCheck::DATE, true)) {
             return new ClassType(ClassName::fromFqcn($this->target->dateTimeClass()->className()));
         }
 
-        $this->checkFormat($schema, self::STRING_FORMATS, 'string', 'a string', $diagnostics);
+        FormatCheck::check($schema, 'string', $diagnostics);
         $minLength = $schema->hasKeyword('minLength') ? $schema->keyword('minLength') : null;
 
         return ScalarType::string(is_int($minLength) && $minLength >= 1 ? 'non-empty-string' : null);
-    }
-
-    /**
-     * @param list<string> $known
-     */
-    private function checkFormat(Schema $schema, array $known, string $type, string $result, Diagnostics $diagnostics): void
-    {
-        $format = $schema->format();
-        if ($format !== null && !in_array($format, $known, true)) {
-            $diagnostics->warning(
-                sprintf('Unknown %s format "%s"; the property stays %s.', $type, $format, $result),
-                $schema->location()->child('format'),
-            );
-        }
     }
 
     private function integerRange(Schema $schema, Diagnostics $diagnostics): ?string

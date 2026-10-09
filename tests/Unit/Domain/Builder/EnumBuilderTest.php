@@ -37,6 +37,65 @@ final class EnumBuilderTest extends TestCase
         self::assertSame(['EUR' => 'EUR', 'in-progress' => 'IN_PROGRESS'], EnumType::of($enum)->cases());
     }
 
+    public function testNamesCasesAfterXEnumVarnames(): void
+    {
+        [$enum, $messages] = $this->build(['type' => 'integer', 'enum' => [1, 2, null], 'x-enum-varnames' => ['Active', 'Blocked']]);
+
+        self::assertSame([], $messages);
+        self::assertInstanceOf(EnumModel::class, $enum);
+        self::assertSame(['ACTIVE' => 1, 'BLOCKED' => 2], $this->cases($enum));
+    }
+
+    public function testCountsVarnamesByPositionLikeOpenapiGenerator(): void
+    {
+        [$enum] = $this->build(['type' => 'integer', 'enum' => [1, null, 1, 2], 'x-enum-varnames' => ['One', 'Again', 'Two']]);
+
+        self::assertInstanceOf(EnumModel::class, $enum);
+        self::assertSame(['ONE' => 1, 'TWO' => 2], $this->cases($enum));
+    }
+
+    /**
+     * @return iterable<string, array{mixed, string}>
+     */
+    public static function malformedVarnames(): iterable
+    {
+        $length = 'error ' . self::AT . '/x-enum-varnames: "x-enum-varnames" must list one name per enum value (2).';
+        yield 'too few' => [['One'], $length];
+        yield 'too many' => [['One', 'Two', 'Three'], $length];
+        yield 'not a list' => [['a' => 'One', 'b' => 'Two'], $length];
+        yield 'not strings' => [['One', 2], $length];
+        yield 'a scalar' => ['One', $length];
+        yield 'no usable characters' => [['One', '%%'], 'error ' . self::AT . '/x-enum-varnames/1: Name "%%" has no characters usable in a case name.'];
+        yield 'two names, one case' => [['in-progress', 'in_progress'], 'error ' . self::AT . '/x-enum-varnames/1: Enum values 1 and 2 both become case IN_PROGRESS.'];
+    }
+
+    public function testReportsEveryUnusableVarname(): void
+    {
+        [$enum, $messages] = $this->build(['type' => 'integer', 'enum' => [1, 2], 'x-enum-varnames' => ['%%', '%%%']]);
+
+        self::assertNull($enum);
+        self::assertSame(
+            [
+                'error ' . self::AT . '/x-enum-varnames/0: Name "%%" has no characters usable in a case name.',
+                'error ' . self::AT . '/x-enum-varnames/1: Name "%%%" has no characters usable in a case name.',
+            ],
+            $messages,
+        );
+    }
+
+    /**
+     * @dataProvider malformedVarnames
+     *
+     * @param mixed $varnames
+     */
+    public function testReportsMalformedVarnames($varnames, string $message): void
+    {
+        [$enum, $messages] = $this->build(['type' => 'integer', 'enum' => [1, 2], 'x-enum-varnames' => $varnames]);
+
+        self::assertNull($enum);
+        self::assertSame([$message], $messages);
+    }
+
     public function testBuildsAnIntegerEnumWithoutAType(): void
     {
         [$enum, $messages] = $this->build(['enum' => [1, -2]]);

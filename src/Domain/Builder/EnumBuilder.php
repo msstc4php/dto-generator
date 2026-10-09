@@ -48,12 +48,28 @@ final class EnumBuilder
             return null;
         }
 
+        $varnames = $this->varnames($schema, $diagnostics);
+        if ($varnames === null) {
+            return null;
+        }
+
         $descriptions = $this->descriptions($schema, $values, $diagnostics);
         $cases = [];
         $taken = [];
         $failed = false;
         foreach ($values as $index => $value) {
-            $case = $this->names->enumCaseName($value);
+            $varname = $varnames[$index] ?? null;
+            $case = $this->names->enumCaseName($varname === null ? $value : $varname[0]);
+            if ($case === null && $varname !== null) {
+                $diagnostics->error(
+                    sprintf('Name "%s" has no characters usable in a case name.', $varname[0]),
+                    $schema->location()->child('x-enum-varnames', (string) $varname[1]),
+                );
+                $failed = true;
+
+                continue;
+            }
+
             if ($case === null) {
                 $diagnostics->error(sprintf('Enum value %s has no characters usable in a case name.', $this->show($value)), $at->child((string) $index));
                 $failed = true;
@@ -64,7 +80,8 @@ final class EnumBuilder
             if (isset($taken[$case])) {
                 $diagnostics->error(
                     sprintf('Enum values %s and %s both become case %s.', $this->show($taken[$case]), $this->show($value), $case),
-                    $at->child((string) $index),
+                    // The name the user wrote is where to fix it.
+                    $varname === null ? $at->child((string) $index) : $schema->location()->child('x-enum-varnames', (string) $varname[1]),
                 );
                 $failed = true;
 
@@ -150,6 +167,37 @@ final class EnumBuilder
         }
 
         return $backing;
+    }
+
+    /**
+     * The x-enum-varnames name of each value, by the value's index in `enum`; positions count the non-null values,
+     * duplicates included, as openapi-generator does. Null when the list is malformed (reported).
+     *
+     * @return array<int, array{string, int}>|null enum index → [name, position in x-enum-varnames]
+     */
+    private function varnames(Schema $schema, Diagnostics $diagnostics): ?array
+    {
+        if (!$schema->extensions()->has('x-enum-varnames')) {
+            return [];
+        }
+
+        $raw = $schema->extensions()->get('x-enum-varnames');
+        $indexes = array_keys(array_filter($schema->enum() ?? [], static fn ($value): bool => $value !== null));
+        if (!is_array($raw) || !Json::isList($raw) || count($raw) !== count($indexes) || array_filter($raw, 'is_string') !== $raw) {
+            $diagnostics->error(
+                sprintf('"x-enum-varnames" must list one name per enum value (%d).', count($indexes)),
+                $schema->location()->child('x-enum-varnames'),
+            );
+
+            return null;
+        }
+
+        $names = [];
+        foreach ($indexes as $position => $index) {
+            $names[$index] = [$raw[$position], $position];
+        }
+
+        return $names;
     }
 
     /**

@@ -218,6 +218,68 @@ final class SchemaParserTest extends TestCase
         ];
     }
 
+    public function testWarnsAboutKeywordsWithNoEffectOnTheType(): void
+    {
+        $diagnostics = new Diagnostics();
+        (new SchemaParser())->parse(
+            ['type' => 'object', 'patternProperties' => ['^x' => ['type' => 'string']], 'not' => ['type' => 'null'], 'pattern' => '^a', 'readOnly' => true],
+            $this->root(),
+            $diagnostics,
+        );
+
+        self::assertSame(
+            [
+                'warning a.yaml#/components/schemas/User/patternProperties: "patternProperties" is not supported and has no effect on the generated type.',
+                'warning a.yaml#/components/schemas/User/not: "not" is not supported and has no effect on the generated type.',
+            ],
+            array_map(static fn (Diagnostic $d): string => $d->toString(), $diagnostics->all()),
+        );
+    }
+
+    public function testStaysQuietWhereTheTypeIgnoresTheSchema(): void
+    {
+        $diagnostics = new Diagnostics();
+        (new SchemaParser())->parse(['type' => 'string', 'nullable' => false, 'properties' => ['a' => ['x-php-type' => 'App\\A', 'not' => []]], 'additionalProperties' => ['x-php-skip' => true, 'contains' => []]], $this->root(), $diagnostics);
+
+        self::assertSame([], $diagnostics->all());
+    }
+
+    public function testStaysQuietBelowASchemaTheTypeIgnores(): void
+    {
+        $diagnostics = new Diagnostics();
+        (new SchemaParser())->parse(
+            ['x-php-type' => 'App\\M', 'properties' => ['a' => ['not' => [], 'nullable' => true]], 'items' => ['contains' => []]],
+            $this->root(),
+            $diagnostics,
+        );
+        (new SchemaParser())->parse(['type' => 'object', 'properties' => ['a' => ['x-php-skip' => true, 'properties' => ['b' => ['not' => []]]]]], $this->root(), $diagnostics);
+        $parser = new SchemaParser();
+        $parser->parse(['x-php-skip' => true, 'not' => []], $this->root(), $diagnostics);
+        // An x-php-type that is no class name replaces nothing.
+        $parser->parse(['x-php-type' => 123, 'properties' => ['a' => ['not' => []]]], $this->root(), $diagnostics);
+        // The parser is reused: quiet below one schema, it warns again for the next.
+        $parser->parse(['not' => []], $this->root(), $diagnostics);
+
+        self::assertSame(
+            [
+                'warning a.yaml#/components/schemas/User/properties/a/not: "not" is not supported and has no effect on the generated type.',
+                'warning a.yaml#/components/schemas/User/not: "not" is not supported and has no effect on the generated type.',
+            ],
+            array_map(static fn (Diagnostic $d): string => $d->toString(), $diagnostics->all()),
+        );
+    }
+
+    public function testPointsOpenApi30NullableAtTheTypeList(): void
+    {
+        $diagnostics = new Diagnostics();
+        (new SchemaParser())->parse(['type' => 'string', 'nullable' => true], $this->root(), $diagnostics);
+
+        self::assertSame(
+            ['warning a.yaml#/components/schemas/User/nullable: "nullable" is OpenAPI 3.0 and has no effect in 3.1; write type: [T, \'null\'].'],
+            array_map(static fn (Diagnostic $d): string => $d->toString(), $diagnostics->all()),
+        );
+    }
+
     private function root(): SchemaLocation
     {
         return new SchemaLocation('a.yaml', '/components/schemas/User');

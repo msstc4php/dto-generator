@@ -51,4 +51,14 @@ final class DefaultFitTest extends TestCase
         self::assertFalse(DefaultFit::fits('GBP', $type));
         self::assertFalse(DefaultFit::fits(1, $type));
     }
+
+    public function testChecksLiteralRefinements(): void
+    {
+        self::assertTrue(DefaultFit::fits(5, ScalarType::int('5')));
+        self::assertFalse(DefaultFit::fits(6, ScalarType::int('5')));
+        self::assertTrue(DefaultFit::fits('a', ScalarType::string("'a'|'b'")));
+        self::assertFalse(DefaultFit::fits('c', ScalarType::string("'a'|'b'")));
+        self::assertTrue(DefaultFit::fits(true, ScalarType::bool('true')));
+        self::assertFalse(DefaultFit::fits(false, ScalarType::bool('true')));
+    }
 }

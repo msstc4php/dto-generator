@@ -19,6 +19,14 @@ final class NullableType implements TypeModel
         $this->inner = $inner;
     }
 
+    /**
+     * The type with null admitted; a type that already admits it is returned as is.
+     */
+    public static function of(TypeModel $type): TypeModel
+    {
+        return $type instanceof self || $type instanceof MixedType ? $type : new self($type);
+    }
+
     public function inner(): TypeModel
     {
         return $this->inner;

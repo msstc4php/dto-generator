@@ -21,6 +21,9 @@ use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
  */
 final class SchemaParser
 {
+    /** Inside a schema whose type x-php-type or x-php-skip replaces. */
+    private bool $quiet = false;
+
     /**
      * @param JsonValue $node
      */
@@ -37,6 +40,23 @@ final class SchemaParser
             return $builder->build();
         }
 
+        // x-php-type or x-php-skip replaces what the schema says, so neither its keywords nor those of its subschemas
+        // have an effect to warn about.
+        $outer = $this->quiet;
+        $this->quiet = $outer || is_string($node['x-php-type'] ?? null) || ($node['x-php-skip'] ?? null) === true;
+
+        try {
+            return $this->parseObject($node, $builder, $location, $diagnostics);
+        } finally {
+            $this->quiet = $outer;
+        }
+    }
+
+    /**
+     * @param array<array-key, mixed> $node
+     */
+    private function parseObject(array $node, SchemaBuilder $builder, SchemaLocation $location, Diagnostics $diagnostics): Schema
+    {
         $extensions = [];
         foreach ($node as $key => $rawValue) {
             $keyword = (string) $key;
@@ -51,6 +71,11 @@ final class SchemaParser
                 $this->applyStructural($builder, $keyword, $value, $location->child($keyword), $diagnostics);
 
                 continue;
+            }
+
+            $unsupported = $this->quiet ? null : UnsupportedKeywords::warning($keyword, $value);
+            if ($unsupported !== null) {
+                $diagnostics->warning($unsupported, $location->child($keyword));
             }
 
             $builder->keyword($keyword, $value);

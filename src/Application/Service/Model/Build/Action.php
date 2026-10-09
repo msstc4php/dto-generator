@@ -29,7 +29,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
 /**
  * Turns the schema graph into the IR: one class per object schema and one enum per enum schema, including schemas
  * only reached by $ref, in the namespace of the source that owns them. Inline objects and enums of class
- * properties become `<Parent><Property>` declarations (spec §5.3).
+ * properties, including the members of their unions, become `<Parent><Property>…` declarations (spec §5.3).
  */
 final class Action
 {
@@ -46,6 +46,8 @@ final class Action
         $config = $input->config();
         $registry = new Registry();
         $enums = new EnumBuilder($this->names);
+        /** @var list<array{Schema, string, int}> $aliases named non-object schemas with their name and source */
+        $aliases = [];
 
         foreach ($input->graph()->all() as $resolved) {
             $source = $resolved->source();
@@ -77,6 +79,8 @@ final class Action
             }
 
             if (!$isClass && !$isEnum) {
+                $aliases[] = [$schema, $resolved->name(), $source];
+
                 continue;
             }
 
@@ -89,6 +93,11 @@ final class Action
             if ($name instanceof ClassName && $registry->claim($name, $schema, $diagnostics)) {
                 $this->declare($schema, $name, $source, $isEnum, $registry, $enums, $diagnostics);
             }
+        }
+
+        // Only once every named schema holds its name, so a derived or titled inline name never takes one.
+        foreach ($aliases as [$alias, $aliasName, $source]) {
+            $this->hoistFromAlias($alias, $aliasName, $config->sources()[$source]->namespace(), $source, $registry, $enums, $diagnostics);
         }
 
         // Every named class is declared by now, so `allOf` can tell which members it may extend.
@@ -247,7 +256,8 @@ final class Action
     }
 
     /**
-     * Declares the inline objects and enums of a class's properties, looking through arrays (`…Item`).
+     * Declares the inline objects and enums of a class's properties, looking through arrays (`…Item`), maps (`…Value`)
+     * and the members of unions (`…Option<N>`).
      */
     private function hoist(Schema $owner, Composition $composition, ClassName $ownerName, int $source, Registry $registry, EnumBuilder $enums, Diagnostics $diagnostics): void
     {
@@ -269,19 +279,40 @@ final class Action
             $candidates[] = [$additional, $ownerName->shortName() . 'AdditionalProperty', 'additionalProperties'];
         }
 
+        $namespace = $ownerName->namespace();
         foreach ($candidates as [$schema, $baseName, $wireName]) {
-            $inline = $this->inline($schema, '');
-            // A schema reached by $ref from elsewhere may already carry its own name.
-            if ($inline === null || $registry->isDeclared($inline[0])) {
-                continue;
+            foreach ($this->inlines($schema, '', $diagnostics, $registry) as [$candidate, $suffix, $title]) {
+                $this->declareInline($candidate, $title ?? ($baseName === null ? null : $baseName . $suffix), $wireName, $namespace, $source, $registry, $enums, $diagnostics);
             }
+        }
+    }
 
-            [$candidate, $suffix] = $inline;
-            $short = $this->inlineName($candidate, $baseName === null ? null : $baseName . $suffix, $wireName, $diagnostics);
-            $name = $short === null ? null : ClassName::fromFqcn(($ownerName->namespace() === '' ? '' : $ownerName->namespace() . '\\') . $short);
-            if (!$name instanceof ClassName || !$registry->claim($name, $candidate, $diagnostics) || !$this->declare($candidate, $name, $source, SchemaShape::isEnum($candidate), $registry, $enums, $diagnostics)) {
-                $registry->abandon($candidate);
-            }
+    /**
+     * A named non-object schema is inlined where it is used, but its inline objects and enums need a name of their own:
+     * `<Alias>Item`, `<Alias>Value`, `<Alias>Option<N>`.
+     */
+    private function hoistFromAlias(Schema $alias, string $aliasName, string $namespace, int $source, Registry $registry, EnumBuilder $enums, Diagnostics $diagnostics): void
+    {
+        $base = $this->names->className($aliasName);
+        foreach ($this->inlines($alias, '', $diagnostics, $registry) as [$candidate, $suffix, $title]) {
+            $this->declareInline($candidate, $title ?? ($base === null ? null : $base . $suffix), $aliasName, $namespace, $source, $registry, $enums, $diagnostics);
+        }
+    }
+
+    /**
+     * @param ?string $derived `<Parent><Property>…` or the member's title; null when the name has no usable characters
+     */
+    private function declareInline(Schema $candidate, ?string $derived, string $wireName, string $namespace, int $source, Registry $registry, EnumBuilder $enums, Diagnostics $diagnostics): void
+    {
+        // A schema reached by $ref from elsewhere may already carry its own name.
+        if ($registry->isDeclared($candidate)) {
+            return;
+        }
+
+        $short = $this->inlineName($candidate, $derived, $wireName, $diagnostics);
+        $name = $short === null ? null : ClassName::fromFqcn(($namespace === '' ? '' : $namespace . '\\') . $short);
+        if (!$name instanceof ClassName || !$registry->claim($name, $candidate, $diagnostics) || !$this->declare($candidate, $name, $source, SchemaShape::isEnum($candidate), $registry, $enums, $diagnostics)) {
+            $registry->abandon($candidate);
         }
     }
 
@@ -303,25 +334,70 @@ final class Action
     }
 
     /**
-     * The inline object or enum a property holds, looking through arrays; each array level adds "Item" to the name.
+     * The inline objects and enums a property holds, looking through arrays (`…Item`), maps (`…Value`) and the members
+     * of a union (`…Option<N>`, or the member's title).
      *
-     * @return array{Schema, string}|null
+     * @return list<array{Schema, string, ?string}> schema, suffix of the derived name, name from the title
      */
-    private function inline(Schema $schema, string $suffix): ?array
+    private function inlines(Schema $schema, string $suffix, Diagnostics $diagnostics, Registry $registry): array
     {
+        // x-php-type maps the whole value to an existing class, so nothing under it is generated.
+        if ($schema->extensions()->has('x-php-type')) {
+            return [];
+        }
+
         // A discriminated union becomes a base class only as a named schema (spec §5.3); inline it is a union type.
         if ((SchemaShape::isClass($schema) && !SchemaShape::isDiscriminated($schema)) || SchemaShape::isEnum($schema)) {
-            return [$schema, $suffix];
+            return [[$schema, $suffix, null]];
+        }
+
+        if (SchemaShape::hasUnion($schema) && $schema->allOf() === [] && ($schema->propertyNames() === [] || SchemaShape::isDiscriminated($schema))) {
+            return $this->unionMembers($schema, $suffix, $diagnostics, $registry);
         }
 
         $items = $schema->items();
         if ($items instanceof Schema) {
-            return $this->inline($items, $suffix . 'Item');
+            return $this->inlines($items, $suffix . 'Item', $diagnostics, $registry);
         }
 
         $values = $schema->additionalProperties();
 
-        return $values instanceof Schema ? $this->inline($values, $suffix . 'Value') : null;
+        return $values instanceof Schema ? $this->inlines($values, $suffix . 'Value', $diagnostics, $registry) : [];
+    }
+
+    /**
+     * Members are numbered across `oneOf` and then `anyOf`, as the type mapper joins them into one union.
+     *
+     * @return list<array{Schema, string, ?string}>
+     */
+    private function unionMembers(Schema $schema, string $suffix, Diagnostics $diagnostics, Registry $registry): array
+    {
+        $found = [];
+        foreach (array_merge($schema->oneOf(), $schema->anyOf()) as $index => $member) {
+            if (SchemaShape::isDiscriminated($schema) && SchemaShape::isClass($member)) {
+                $diagnostics->error(
+                    'An inline object in a oneOf or anyOf with a discriminator is not generated: the discriminator mapping needs a $ref. Move it to components/schemas.',
+                    $member->location(),
+                );
+                // Abandoned, so the type mapper does not report it a second time.
+                $registry->abandon($member);
+
+                continue;
+            }
+
+            foreach ($this->inlines($member, $suffix . 'Option' . ($index + 1), $diagnostics, $registry) as [$candidate, $candidateSuffix, $title]) {
+                $found[] = [$candidate, $candidateSuffix, $candidate === $member ? $this->title($member) : $title];
+            }
+        }
+
+        return $found;
+    }
+
+    private function title(Schema $member): ?string
+    {
+        $title = $member->hasKeyword('title') ? $member->keyword('title') : null;
+
+        return is_string($title) ? $this->names->className($title) : null;
     }
 
     /**

@@ -45,9 +45,9 @@ final class ScalarType implements TypeModel
         return new self('float', $phpDoc);
     }
 
-    public static function bool(): self
+    public static function bool(?string $phpDoc = null): self
     {
-        return new self('bool', null);
+        return new self('bool', $phpDoc);
     }
 
     /**

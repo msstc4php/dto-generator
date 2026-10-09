@@ -16,22 +16,23 @@ final class ExtensionVocabulary
     /** The core keys; any other key starting with x-php- or x-dto- is a typo. */
     public const KNOWN = [
         'x-php-class-name', 'x-php-name', 'x-php-type', 'x-dto-mutable', 'x-php-all-of', 'x-php-skip', 'x-php-attributes',
-        'x-enum-descriptions',
+        'x-enum-descriptions', 'x-enum-varnames',
     ];
 
     private const CLASS_SCHEMA = [
         'x-php-class-name', 'x-php-type', 'x-dto-mutable', 'x-php-all-of', 'x-php-skip', 'x-php-attributes', 'x-enum-descriptions',
+        'x-enum-varnames',
     ];
 
     /** An enum is no class, so it carries no attributes. */
-    private const ENUM_SCHEMA = ['x-php-class-name', 'x-php-type', 'x-dto-mutable', 'x-php-all-of', 'x-php-skip', 'x-enum-descriptions'];
+    private const ENUM_SCHEMA = ['x-php-class-name', 'x-php-type', 'x-dto-mutable', 'x-php-all-of', 'x-php-skip', 'x-enum-descriptions', 'x-enum-varnames'];
 
     private const ALIAS_SCHEMA = ['x-php-type', 'x-php-skip'];
 
     private const PROPERTY = ['x-php-name', 'x-php-type', 'x-php-skip', 'x-php-attributes'];
 
     /** An inline object or enum becomes a class or an enum, so it takes the keys of one. */
-    private const DECLARATION = ['x-php-class-name', 'x-dto-mutable', 'x-enum-descriptions'];
+    private const DECLARATION = ['x-php-class-name', 'x-dto-mutable', 'x-enum-descriptions', 'x-enum-varnames'];
 
     private const ITEMS = ['x-php-type'];
 
@@ -104,13 +105,14 @@ final class ExtensionVocabulary
     }
 
     /**
-     * The `items` and `additionalProperties` schemas, down to any depth.
+     * The `items` and `additionalProperties` schemas and the inline members of a `oneOf`/`anyOf`, down to any depth.
      *
      * @param list<string> $aliases
      */
     private static function checkValues(Schema $schema, Diagnostics $diagnostics, array $aliases): void
     {
-        foreach ([$schema->items(), $schema->additionalProperties()] as $value) {
+        $members = array_filter(array_merge($schema->oneOf(), $schema->anyOf()), static fn (Schema $member): bool => $member->ref() === null);
+        foreach (array_merge([$schema->items(), $schema->additionalProperties()], $members) as $value) {
             if ($value instanceof Schema) {
                 self::checkKeys($value, self::withDeclaration($value, self::ITEMS), $diagnostics, $aliases);
                 self::checkValues($value, $diagnostics, $aliases);

@@ -25,6 +25,10 @@ The generator reads OpenAPI 3.1 documents in YAML or JSON and generates a class 
 | a schema without `type` (`{}`) | `mixed` (no native type on 7.4) | |
 | `$ref` | the referenced class or enum | |
 | `x-php-type` | that class | |
+| `const: 'card'`, `const: 5`, `const: true` | `string`, `int`, `bool` | `'card'`, `5`, `true` |
+| `type: number` with `const: 2`; `const: 1.5` | `float` | |
+| a `oneOf`/`anyOf` of `const` members | the union of their literals (`'a'\|'b'`) | |
+| `enum` mixing strings and integers (`[low, 1]`) | `string\|int` (PHP 8.0+); no native type on 7.4 | `'low'\|1`, with a warning |
 
 Map keys are `array-key`, not `string`: PHP turns a JSON key such as `"200"` into the integer `200`.
 
@@ -49,12 +53,14 @@ PHPDoc extractor of Symfony 5.4, mistake `non-empty-string` for a class name; th
 | Schema | Output |
 |---|---|
 | `enum` of strings or of integers | PHP 8.1+: a backed `enum`. 7.4 and 8.0: a `final class` of constants; the property is `string`/`int` with `@phpstan-var Name::*` |
-| `enum` mixing strings and integers | an error |
+| `enum` mixing strings and integers | no PHP enum: a union of the literals (see [Types](#types)), with a warning |
 | `allOf` with one `$ref` plus own properties, `extends` strategy | `class Child extends Base`; `Base` is not `final` |
 | `allOf` with several `$ref`, or the `merge` strategy | one class with all the properties; one property with two types is an error |
 | `oneOf`/`anyOf` with a `discriminator` | an `abstract` base class with the common properties; the variants extend it |
 | `oneOf`/`anyOf` without a discriminator | a union type |
 | an inline object or enum in a property, its `items` or `additionalProperties` | a named class `<Parent><Property>` (`Order.items[]` → `OrderItemsItem`) |
+| an inline object or enum as a member of a `oneOf`/`anyOf` | a named class: the member's `title` in PascalCase, else `<Parent><Property>Option<N>` (N counts from 1 over `oneOf`, then `anyOf`) |
+| an inline object or enum in a named alias (`Pets: {type: array, items: {…}}`) | `<Alias>Item`, `<Alias>Value`, `<Alias>Option<N>` |
 | two classes with the same name | an error suggesting `x-php-class-name` |
 
 Recursive schemas (trees, graphs) are fine: a `$ref` is a reference to the class, not a copy.
@@ -97,12 +103,27 @@ Classes are `final`, except the bases of `allOf` and of discriminated unions. At
 
 ## Known limitations
 
-- **Inline objects inside `oneOf`/`anyOf` are not generated:** an error asks to move them to `components/schemas`.
-  An inline enum there gives a warning and its base type.
+- **Inline objects in a `oneOf`/`anyOf` with a discriminator are not generated:** the mapping needs a `$ref`, so an
+  error asks to move them to `components/schemas`.
 - **A missing key and `null` are the same.** An optional property is `null` either way.
-- **Not interpreted:** `const` as a type (the property is `mixed`), `readOnly`/`writeOnly`, `prefixItems`,
-  `patternProperties`, `if`/`then`/`else`, `not`, `dependentSchemas`. They produce no error and no PHP type.
-- **OpenAPI 3.0 `nullable: true` is ignored**; use `type: [T, 'null']`.
+- **Not interpreted:** `prefixItems`, `patternProperties`, `if`/`then`/`else`, `not`, `dependentSchemas`,
+  `dependentRequired`, `unevaluatedProperties`, `unevaluatedItems`, `contains`, `minContains`, `maxContains`,
+  `propertyNames`, `additionalItems`, `dependencies`, `$dynamicRef`. Each gives a warning, except in a schema with
+  `x-php-type` or `x-php-skip`;
+  the PHP type ignores them. `readOnly`/`writeOnly` are ignored without a warning: they describe requests and
+  responses, which one DTO does not tell apart.
+- **OpenAPI 3.0 `nullable: true` has no effect** and gives a warning; use `type: [T, 'null']`.
+- **`const`** keeps a date or a `formats` class when `format` names one, and keeps the declared `type` (with a
+  warning) when the constant does not fit it. A bare `const` member of `allOf` (`allOf: [{$ref: Code}, {const: x}]`)
+  narrows the type to its literal; a constant outside that type (`{type: integer, maximum: 10, allOf: [{const: 50}]}`)
+  gives a warning and keeps the type. The narrowed type stays nullable when the rest of the schema admits `null`,
+  although the constant excludes it: wider than the schema, never narrower.
+- **Defaults** must equal every `const` and, for a mixed enum, be one of its values, also when they come through a
+  `$ref` or an `allOf` member. An `int` property takes no `2.0` default, as PHP would not compile it.
+- **Strings in literal types are plain.** A `const` or enum string with quotes, backslashes, `|`, `*`, `{`, `}`, `@`
+  or non-ASCII characters keeps the type `string` without the literal.
+- **Hoisted names give way to named schemas.** An inline member whose title or derived name equals a schema in
+  `components/schemas` gets a collision error; the named schema keeps its class.
 - **Remote `$ref`** (`https://…`) and anchors (`$anchor`, `#Name`) are not supported.
 - **Discriminator values are not enforced.** A variant's discriminator property stays a constructor argument, so
   `new Cat('dog', …)` is accepted. A bare name in `discriminator.mapping` is resolved against the file holding the

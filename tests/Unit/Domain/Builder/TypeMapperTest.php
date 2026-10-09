@@ -13,9 +13,6 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumBacking;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumType;
-use MSSTC4PHP\DtoGenerator\Domain\Model\MixedType;
-use MSSTC4PHP\DtoGenerator\Domain\Model\NullableType;
-use MSSTC4PHP\DtoGenerator\Domain\Model\ScalarType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\TypeModel;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaGraph;
 use MSSTC4PHP\DtoGenerator\Domain\Target\AccessorStyle;
@@ -191,15 +188,6 @@ final class TypeMapperTest extends TestCase
         ];
     }
 
-    public function testNullableNeverWrapsMixedOrNullable(): void
-    {
-        $nullable = new NullableType(ScalarType::string());
-
-        self::assertInstanceOf(MixedType::class, TypeMapper::nullable(new MixedType()));
-        self::assertSame($nullable, TypeMapper::nullable($nullable));
-        self::assertSame('int|null', TypeMapper::nullable(ScalarType::int())->describe());
-    }
-
     public function testRecognisesEnumSchemas(): void
     {
         $graph = $this->graph(['value' => []]);
@@ -318,7 +306,7 @@ final class TypeMapperTest extends TestCase
             'Currency' => ['type' => 'string', 'enum' => ['EUR']],
             'MaybeTag' => ['type' => ['object', 'null'], 'properties' => ['label' => ['type' => 'string']]],
             'MaybeCurrency' => ['enum' => ['EUR', null]],
-            'Failed' => ['enum' => ['a', 1]],
+            'Failed' => ['enum' => ['in-progress', 'in_progress']],
             'LoopA' => ['$ref' => '#/components/schemas/LoopB'],
             'LoopB' => ['$ref' => '#/components/schemas/LoopA'],
             'Hidden' => ['type' => 'object', 'properties' => ['x' => []], 'x-php-skip' => true],

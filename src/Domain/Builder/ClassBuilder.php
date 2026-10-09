@@ -238,7 +238,7 @@ final class ClassBuilder
         $required = $required && !$type instanceof NullableType;
         $default = null;
         if (!$required) {
-            $type = TypeMapper::nullable($type);
+            $type = NullableType::of($type);
             $default = $this->defaultFor($schema, $type, $diagnostics) ?? new DefaultValue(null);
         }
 
@@ -272,6 +272,82 @@ final class ClassBuilder
         return $name;
     }
 
+    /**
+     * The values `const` and a mixed enum allow, here or behind a `$ref`, are compared as JSON values, whether or not the
+     * type carries them as a PHPDoc literal. A JSON-equal value can still not fit the PHP type (2.0 for an int); the
+     * type check after this one reports that.
+     *
+     * @param JsonValue $value
+     */
+    private function forbiddenBySchema(Schema $schema, $value): ?string
+    {
+        foreach ($this->types->valueSources($schema) as $source) {
+            $forbidden = $this->forbiddenBy($source, $value);
+            if ($forbidden !== null) {
+                return $forbidden;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param JsonValue $value
+     */
+    private function forbiddenBy(Schema $source, $value): ?string
+    {
+        if ($source->hasKeyword('const')) {
+            $const = Json::value($source->keyword('const'));
+
+            return $this->sameJson($value, $const) ? null : sprintf('Default %s is not the "const" value %s; null is used instead.', $this->json($value), $this->json($const));
+        }
+
+        foreach ($source->enum() ?? [] as $allowed) {
+            if ($this->sameJson($value, $allowed)) {
+                return null;
+            }
+        }
+
+        return sprintf('Default %s is not one of the "enum" values; null is used instead.', $this->json($value));
+    }
+
+    /**
+     * JSON equality: 2 and 2.0 are the same number, "2" and 2 are not, and the keys of an object have no order.
+     *
+     * @param JsonValue $a
+     * @param JsonValue $b
+     */
+    private function sameJson($a, $b): bool
+    {
+        if ((is_int($a) || is_float($a)) && (is_int($b) || is_float($b))) {
+            return (float) $a === (float) $b;
+        }
+
+        if (!is_array($a) || !is_array($b)) {
+            return $a === $b;
+        }
+
+        if (Json::isList($a) !== Json::isList($b) || count($a) !== count($b)) {
+            return false;
+        }
+
+        foreach ($a as $key => $item) {
+            if (!array_key_exists($key, $b) || !$this->sameJson(Json::value($item), Json::value($b[$key]))) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * @param JsonValue $value
+     */
+    private function json($value): string
+    {
+        return (string) json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION | JSON_INVALID_UTF8_SUBSTITUTE);
+    }
+
     private function defaultFor(Schema $schema, TypeModel $type, Diagnostics $diagnostics): ?DefaultValue
     {
         $default = $schema->default();
@@ -280,6 +356,13 @@ final class ClassBuilder
         }
 
         $at = $schema->location()->child('default');
+        $forbidden = $this->forbiddenBySchema($schema, $default->value());
+        if ($forbidden !== null) {
+            $diagnostics->error($forbidden, $at);
+
+            return null;
+        }
+
         $inner = $type instanceof NullableType ? $type->inner() : $type;
         // Only a non-empty list reaches its item type; any other value of a list is checked as a plain mismatch.
         $value = $default->value();

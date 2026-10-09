@@ -189,3 +189,16 @@ components:
           properties:
             doors:
               type: integer
+    Payment:
+      type: object
+      required: [kind, method]
+      properties:
+        kind: {const: card}
+        method:
+          oneOf:
+            - {type: object, title: card details, required: [number], properties: {number: {type: string}}}
+            - {type: object, properties: {iban: {type: string}}}
+        level: {type: integer, enum: [1, 2], x-enum-varnames: [Basic, Premium]}
+    Labels:
+      type: array
+      items: {type: object, properties: {text: {type: string}}}

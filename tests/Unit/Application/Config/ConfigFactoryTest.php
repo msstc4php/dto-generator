@@ -169,6 +169,7 @@ final class ConfigFactoryTest extends TestCase
             'unknown format key' => [['version' => 1, 'formats' => ['uuid' => ['type' => 'App\Uuid', 'kind' => 1]], 'sources' => [$source]], 'Unknown key "kind"', '/formats/uuid/kind'],
             'reserved x-dto alias' => [['version' => 1, 'attributeAliases' => ['x-dto-audit' => []], 'sources' => [$source]], 'outside the reserved', '/attributeAliases/x-dto-audit'],
             'alias of a core key' => [['version' => 1, 'attributeAliases' => ['x-enum-descriptions' => ['class' => 'App\A']], 'sources' => [$source]], 'outside the reserved', '/attributeAliases/x-enum-descriptions'],
+            'alias of x-enum-varnames' => [['version' => 1, 'attributeAliases' => ['x-enum-varnames' => ['class' => 'App\A']], 'sources' => [$source]], 'outside the reserved', '/attributeAliases/x-enum-varnames'],
             'alias without class' => [['version' => 1, 'attributeAliases' => ['x-audit' => ['args' => []]], 'sources' => [$source]], 'An alias must be an object', '/attributeAliases/x-audit'],
             'alias with another key' => [['version' => 1, 'attributeAliases' => ['x-audit' => ['class' => 'App\A', 'with' => 1]], 'sources' => [$source]], 'An alias must be an object', '/attributeAliases/x-audit'],
             'alias with a class that is no string' => [['version' => 1, 'attributeAliases' => ['x-audit' => ['class' => 5]], 'sources' => [$source]], 'An alias must be an object', '/attributeAliases/x-audit'],
