@@ -31,9 +31,10 @@ final class ParentCallTest extends TestCase
      */
     public function testPassesTheParentsParametersInItsOrder(string $directory): void
     {
-        // The lowest supported nikic/php-parser predates PHP 8.5 and cannot read its clone-with withers.
-        if (strpos($directory, '8.5') !== false && PhpVersion::getNewestSupported()->id < 80500) {
-            self::markTestSkipped('This nikic/php-parser cannot parse PHP 8.5.');
+        // The lowest supported nikic/php-parser predates PHP 8.5: it cannot read clone-with withers and, run on PHP 8.5,
+        // calls APIs 8.5 deprecates. The jobs with the newest dependencies run this test.
+        if (PhpVersion::getNewestSupported()->id < 80500) {
+            self::markTestSkipped('This nikic/php-parser predates PHP 8.5.');
         }
 
         $parameters = [];
