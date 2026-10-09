@@ -20,6 +20,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Schema\ResolvedSchema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaGraph;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaType;
+use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
 use MSSTC4PHP\DtoGenerator\Domain\Target\Capability;
 use MSSTC4PHP\DtoGenerator\Domain\Target\TargetProfile;
 
@@ -157,6 +158,13 @@ final class TypeMapper
             );
         }
 
+        if ($schema->hasKeyword('const')) {
+            $const = $this->constType($schema, $diagnostics);
+            if ($const instanceof TypeModel) {
+                return $const;
+            }
+        }
+
         $format = $schema->format();
         if ($format !== null && isset($this->formats[$format])) {
             return $this->formats[$format];
@@ -242,6 +250,40 @@ final class TypeMapper
                 || $member->propertyNames() !== []
                 || $member->extensions()->has('x-php-type'),
         ));
+    }
+
+    /**
+     * The type of the one allowed value; null leaves the schema's own type (a null, array or object constant).
+     */
+    private function constType(Schema $schema, Diagnostics $diagnostics): ?TypeModel
+    {
+        $value = Json::value($schema->keyword('const'));
+        if (is_string($value)) {
+            $type = ScalarType::string(LiteralType::of($value));
+            $kind = SchemaType::STRING;
+        } elseif (is_int($value)) {
+            $type = ScalarType::int(LiteralType::of($value));
+            $kind = SchemaType::INTEGER;
+        } elseif (is_bool($value)) {
+            $type = ScalarType::bool(LiteralType::of($value));
+            $kind = SchemaType::BOOLEAN;
+        } elseif (is_float($value)) {
+            $type = ScalarType::float();
+            $kind = SchemaType::NUMBER;
+        } else {
+            return null;
+        }
+
+        $declared = array_map(static fn (SchemaType $type): string => $type->value(), $schema->nonNullTypes());
+        // JSON Schema counts integers as numbers too.
+        $fits = in_array($kind, $declared, true) || ($kind === SchemaType::INTEGER && in_array(SchemaType::NUMBER, $declared, true));
+        if ($declared !== [] && !$fits) {
+            $diagnostics->error('"const" is not of the declared type.', $schema->location()->child('const'));
+
+            return new MixedType();
+        }
+
+        return $type;
     }
 
     private function explicitType(Schema $schema, Diagnostics $diagnostics): TypeModel
