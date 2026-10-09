@@ -255,11 +255,16 @@ final class SchemaParserTest extends TestCase
         (new SchemaParser())->parse(['type' => 'object', 'properties' => ['a' => ['x-php-skip' => true, 'properties' => ['b' => ['not' => []]]]]], $this->root(), $diagnostics);
         $parser = new SchemaParser();
         $parser->parse(['x-php-skip' => true, 'not' => []], $this->root(), $diagnostics);
+        // An x-php-type that is no class name replaces nothing.
+        $parser->parse(['x-php-type' => 123, 'properties' => ['a' => ['not' => []]]], $this->root(), $diagnostics);
         // The parser is reused: quiet below one schema, it warns again for the next.
         $parser->parse(['not' => []], $this->root(), $diagnostics);
 
         self::assertSame(
-            ['warning a.yaml#/components/schemas/User/not: "not" is not supported and has no effect on the generated type.'],
+            [
+                'warning a.yaml#/components/schemas/User/properties/a/not: "not" is not supported and has no effect on the generated type.',
+                'warning a.yaml#/components/schemas/User/not: "not" is not supported and has no effect on the generated type.',
+            ],
             array_map(static fn (Diagnostic $d): string => $d->toString(), $diagnostics->all()),
         );
     }

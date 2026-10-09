@@ -43,7 +43,7 @@ final class SchemaParser
         // x-php-type or x-php-skip replaces what the schema says, so neither its keywords nor those of its subschemas
         // have an effect to warn about.
         $outer = $this->quiet;
-        $this->quiet = $outer || isset($node['x-php-type']) || ($node['x-php-skip'] ?? null) === true;
+        $this->quiet = $outer || is_string($node['x-php-type'] ?? null) || ($node['x-php-skip'] ?? null) === true;
 
         try {
             return $this->parseObject($node, $builder, $location, $diagnostics);

@@ -415,7 +415,7 @@ final class SchemaCoverageTest extends TestCase
         self::assertSame(['i: int|null', 'b: string|null'], ModelFixture::classes($output)['App\\Dto\\C']);
     }
 
-    public function testLeavesAConstBesideATypeInAllOfAConstraint(): void
+    public function testAddsNoTypeForAConstBesideATypeInAllOf(): void
     {
         $output = ModelFixture::build([
             'S' => ['type' => 'string'],
@@ -426,7 +426,7 @@ final class SchemaCoverageTest extends TestCase
         ]);
 
         self::assertSame([], ModelFixture::messages($output));
-        self::assertSame(['a: string|null', 'b: string|null'], ModelFixture::classes($output)['App\\Dto\\C']);
+        self::assertSame(["a: 'x'|null", "b: 'x'|null"], ModelFixture::classes($output)['App\\Dto\\C']);
     }
 
     public function testRejectsAFloatDefaultOfAnIntegerConst(): void
@@ -558,5 +558,100 @@ final class SchemaCoverageTest extends TestCase
         $output = ModelFixture::build(['C' => ['type' => 'object', 'properties' => ['e' => ['oneOf' => [['const' => true], ['type' => 'string']]]]]]);
 
         self::assertSame(['e: true|string|null'], ModelFixture::classes($output)['App\\Dto\\C']);
+    }
+
+    public function testNarrowsATypeByAConstInAllOf(): void
+    {
+        $output = ModelFixture::build([
+            'S' => ['type' => 'string'],
+            'C' => ['type' => 'object', 'properties' => [
+                'a' => ['allOf' => [['const' => 'x']]],
+                'b' => ['allOf' => [['const' => 5]], 'default' => 5],
+                'c' => ['type' => 'string', 'allOf' => [['const' => 'x']]],
+                'd' => ['allOf' => [['$ref' => '#/components/schemas/S'], ['const' => 'x']]],
+                'e' => ['type' => 'number', 'allOf' => [['const' => 5]]],
+                'f' => ['type' => 'string', 'allOf' => [['const' => 5]]],
+            ]],
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(["a: 'x'|null", 'b: 5|null', "c: 'x'|null", "d: 'x'|null", 'e: float|null', 'f: string|null'], ModelFixture::classes($output)['App\\Dto\\C']);
+    }
+
+    public function testTakesAHugeIntegralConstAsANumberWhenItMayBeOne(): void
+    {
+        $output = ModelFixture::build(['C' => ['type' => 'object', 'properties' => ['big' => ['type' => ['integer', 'number'], 'const' => 1.0e20]]]]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(['big: float|null'], ModelFixture::classes($output)['App\\Dto\\C']);
+    }
+
+    public function testChecksADefaultAgainstEveryConstAndEnum(): void
+    {
+        $output = ModelFixture::build(['C' => ['type' => 'object', 'properties' => [
+            'a' => ['allOf' => [['enum' => [1, 'a', 2]], ['const' => 2]], 'default' => 1],
+        ]]]);
+
+        self::assertContains(self::AT . 'C/properties/a/default: Default 1 is not the "const" value 2; null is used instead.', ModelFixture::messages($output));
+    }
+
+    public function testLooksNoFurtherThanAGeneratedClass(): void
+    {
+        $output = ModelFixture::build([
+            'Point' => ['type' => 'object', 'const' => ['x' => 1], 'properties' => ['x' => ['type' => 'integer']]],
+            'C' => ['type' => 'object', 'properties' => ['p' => ['$ref' => '#/components/schemas/Point', 'default' => ['x' => 2]]]],
+        ]);
+
+        self::assertSame(
+            ['warning /project/api/openapi.yaml#/components/schemas/C/properties/p/default: A default for App\\Dto\\Point cannot be a PHP constant expression; null is used instead.'],
+            ModelFixture::messages($output),
+        );
+    }
+
+    public function testChecksTheFormatOfAConst(): void
+    {
+        $output = ModelFixture::build(['C' => ['type' => 'object', 'properties' => ['n' => ['type' => 'integer', 'const' => 5, 'format' => 'date']]]]);
+
+        self::assertSame(
+            ['warning /project/api/openapi.yaml#/components/schemas/C/properties/n/format: Unknown integer format "date"; the property stays an int.'],
+            ModelFixture::messages($output),
+        );
+        self::assertSame(['n: 5|null'], ModelFixture::classes($output)['App\\Dto\\C']);
+    }
+
+    public function testChecksAnOwnConstBesideAllOfMembers(): void
+    {
+        $output = ModelFixture::build(['C' => ['type' => 'object', 'properties' => [
+            'a' => ['const' => 2, 'allOf' => [['enum' => [1, 'a', 2]]], 'default' => 1],
+        ]]]);
+
+        self::assertContains(self::AT . 'C/properties/a/default: Default 1 is not the "const" value 2; null is used instead.', ModelFixture::messages($output));
+    }
+
+    public function testChecksTheFormatOfEveryKindOfConst(): void
+    {
+        $output = ModelFixture::build(['C' => ['type' => 'object', 'properties' => [
+            's' => ['const' => 'x', 'format' => 'odd'],
+            'f' => ['const' => 1.5, 'format' => 'odd'],
+            'b' => ['const' => true, 'format' => 'odd'],
+        ]]]);
+
+        self::assertSame(
+            [
+                'warning /project/api/openapi.yaml#/components/schemas/C/properties/s/format: Unknown string format "odd"; the property stays a string.',
+                'warning /project/api/openapi.yaml#/components/schemas/C/properties/f/format: Unknown number format "odd"; the property stays a float.',
+            ],
+            ModelFixture::messages($output),
+        );
+    }
+
+    public function testKeepsTheNullabilityOfANarrowedType(): void
+    {
+        $output = ModelFixture::build(['C' => ['type' => 'object', 'required' => ['n', 's'], 'properties' => [
+            'n' => ['type' => ['string', 'null'], 'allOf' => [['const' => 'x']]],
+            's' => ['type' => 'string', 'allOf' => [['const' => 'x']]],
+        ]]]);
+
+        self::assertSame(["n: 'x'|null", "s: 'x'"], ModelFixture::classes($output)['App\\Dto\\C']);
     }
 }

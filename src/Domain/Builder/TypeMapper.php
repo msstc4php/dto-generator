@@ -141,7 +141,7 @@ final class TypeMapper
         }
 
         if ($typed !== []) {
-            return $this->mapWithin($typed[0], $diagnostics, $aliases);
+            return $this->narrowByConst($schema, $this->mapWithin($typed[0], $diagnostics, $aliases), $diagnostics);
         }
 
         if (SchemaShape::isMixedEnum($schema)) {
@@ -180,11 +180,11 @@ final class TypeMapper
         }
 
         if ($members === []) {
-            return new MixedType();
+            return $this->narrowByConst($schema, new MixedType(), $diagnostics);
         }
 
         // Parsed type lists hold no duplicates, so two or more members always form a valid union.
-        return count($members) === 1 ? $members[0] : new UnionType(...$members);
+        return $this->narrowByConst($schema, count($members) === 1 ? $members[0] : new UnionType(...$members), $diagnostics);
     }
 
     /**
@@ -237,39 +237,39 @@ final class TypeMapper
     }
 
     /**
-     * The schema whose `const` or mixed enum limits the values: the schema itself, an `allOf` member or what a `$ref`
-     * leads to, at any depth; null when none does.
+     * The schemas whose `const` or mixed enum limits the values: the schema itself, `allOf` members and what a `$ref`
+     * leads to, at any depth, short of a generated class, whose default is no constant expression anyway.
+     *
+     * @return list<Schema>
      */
-    public function valueSource(Schema $schema): ?Schema
+    public function valueSources(Schema $schema): array
     {
-        return $this->valueSourceWithin($schema, []);
+        $visited = [];
+
+        return $this->valueSourcesWithin($schema, $visited);
     }
 
     /**
-     * @param list<string> $seen locations reached through `$ref`, to stop at a loop
+     * @param list<string> $visited locations reached through `$ref`, each followed once
+     *
+     * @return list<Schema>
      */
-    private function valueSourceWithin(Schema $schema, array $seen): ?Schema
+    private function valueSourcesWithin(Schema $schema, array &$visited): array
     {
-        if ($schema->hasKeyword('const') || SchemaShape::isMixedEnum($schema)) {
-            return $schema;
-        }
-
+        $found = $schema->hasKeyword('const') || SchemaShape::isMixedEnum($schema) ? [$schema] : [];
         foreach ($schema->allOf() as $member) {
-            $found = $this->valueSourceWithin($member, $seen);
-            if ($found instanceof Schema) {
-                return $found;
-            }
+            $found = array_merge($found, $this->valueSourcesWithin($member, $visited));
         }
 
         $ref = $schema->ref();
         $target = $ref === null ? null : $this->graph->resolve(new ReferenceUse($ref, $schema->location()));
-        if (!$target instanceof ResolvedSchema || in_array($target->location()->toString(), $seen, true)) {
-            return null;
+        if (!$target instanceof ResolvedSchema || in_array($target->location()->toString(), $visited, true) || SchemaShape::isClass($target->schema())) {
+            return $found;
         }
 
-        $seen[] = $target->location()->toString();
+        $visited[] = $target->location()->toString();
 
-        return $this->valueSourceWithin($target->schema(), $seen);
+        return array_merge($found, $this->valueSourcesWithin($target->schema(), $visited));
     }
 
     /**
@@ -375,22 +375,18 @@ final class TypeMapper
         // JSON Schema counts 2.0 as an integer and every integer as a number.
         // The round trip leaves out fractions and floats beyond the range of int.
         $whole = is_int($value) || (is_float($value) && $value === (float) (int) $value) ? (int) $value : null;
-        if ($whole !== null && in_array(SchemaType::INTEGER, $declared, true)) {
-            return ScalarType::int(LiteralType::of($whole));
-        }
-
-        if (is_float($value) && $value === floor($value) && in_array(SchemaType::INTEGER, $declared, true)) {
+        $integer = in_array(SchemaType::INTEGER, $declared, true);
+        $number = in_array(SchemaType::NUMBER, $declared, true);
+        if ($whole !== null && $integer) {
+            $type = ScalarType::int(LiteralType::of($whole));
+        } elseif (is_float($value) && $value === floor($value) && $integer && !$number) {
             $diagnostics->warning('"const" is outside the range of PHP int; the property keeps int.', $schema->location()->child('const'));
 
             return null;
-        }
-
-        if (is_int($value) && $declared === []) {
-            return ScalarType::int(LiteralType::of($value));
-        }
-
-        if (is_int($value) || is_float($value)) {
-            $type = in_array(SchemaType::NUMBER, $declared, true) || $declared === [] ? ScalarType::float() : null;
+        } elseif (is_int($value) && $declared === []) {
+            $type = ScalarType::int(LiteralType::of($value));
+        } elseif (is_int($value) || is_float($value)) {
+            $type = $number || $declared === [] ? ScalarType::float() : null;
         } elseif (is_string($value)) {
             $type = $allows(SchemaType::STRING) ? ScalarType::string(LiteralType::of($value)) : null;
         } elseif (is_bool($value)) {
@@ -401,9 +397,48 @@ final class TypeMapper
 
         if (!$type instanceof ScalarType) {
             $diagnostics->warning('"const" is not of the declared type; the property keeps its declared type.', $schema->location()->child('const'));
+
+            return null;
         }
 
+        $this->checkFormatOf($type, $schema, $diagnostics);
+
         return $type;
+    }
+
+    /**
+     * The format check single() makes for a scalar of this kind.
+     */
+    private function checkFormatOf(ScalarType $type, Schema $schema, Diagnostics $diagnostics): void
+    {
+        if ($type->kind() === 'string') {
+            $this->checkFormat($schema, self::STRING_FORMATS, 'string', 'a string', $diagnostics);
+        } elseif ($type->kind() === 'int') {
+            $this->checkFormat($schema, self::INTEGER_FORMATS, 'integer', 'an int', $diagnostics);
+        } elseif ($type->kind() === 'float') {
+            $this->checkFormat($schema, self::NUMBER_FORMATS, 'number', 'a float', $diagnostics);
+        }
+    }
+
+    /**
+     * A `const` member of `allOf` narrows the type the rest gives to its literal, when the kinds agree or there is no
+     * other type.
+     */
+    private function narrowByConst(Schema $schema, TypeModel $base, Diagnostics $diagnostics): TypeModel
+    {
+        $inner = $base instanceof NullableType ? $base->inner() : $base;
+        foreach ($schema->allOf() as $member) {
+            if ($member->ref() !== null || !$member->hasKeyword('const')) {
+                continue;
+            }
+
+            $literal = $this->constType($member, $diagnostics);
+            if ($literal instanceof ScalarType && ($inner instanceof MixedType || ($inner instanceof ScalarType && $inner->kind() === $literal->kind()))) {
+                return $base instanceof NullableType ? self::nullable($literal) : $literal;
+            }
+        }
+
+        return $base;
     }
 
     private function explicitType(Schema $schema, Diagnostics $diagnostics): TypeModel

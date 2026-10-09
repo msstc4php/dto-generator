@@ -281,18 +281,28 @@ final class ClassBuilder
      */
     private function forbiddenBySchema(Schema $schema, $value): ?string
     {
-        $schema = $this->types->valueSource($schema);
-        if (!$schema instanceof Schema) {
-            return null;
+        foreach ($this->types->valueSources($schema) as $source) {
+            $forbidden = $this->forbiddenBy($source, $value);
+            if ($forbidden !== null) {
+                return $forbidden;
+            }
         }
 
-        if ($schema->hasKeyword('const')) {
-            $const = Json::value($schema->keyword('const'));
+        return null;
+    }
+
+    /**
+     * @param JsonValue $value
+     */
+    private function forbiddenBy(Schema $source, $value): ?string
+    {
+        if ($source->hasKeyword('const')) {
+            $const = Json::value($source->keyword('const'));
 
             return $this->sameJson($value, $const) ? null : sprintf('Default %s is not the "const" value %s; null is used instead.', $this->json($value), $this->json($const));
         }
 
-        foreach ($schema->enum() ?? [] as $allowed) {
+        foreach ($source->enum() ?? [] as $allowed) {
             if ($this->sameJson($value, $allowed)) {
                 return null;
             }
