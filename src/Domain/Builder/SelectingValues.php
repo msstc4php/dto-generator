@@ -50,15 +50,15 @@ final class SelectingValues
         foreach ($own as $fqcn => $found) {
             $values = [];
             foreach ($found as $name => [$property, $selection]) {
-                $accepted = $selection->values();
                 // A subclass passes its own value up through parent::__construct().
+                $passed = [];
                 foreach ($descendants[$fqcn] ?? [] as $other) {
                     if (isset($own[$other][$name])) {
-                        $accepted = self::union($accepted, $own[$other][$name][1]->values());
+                        $passed = array_merge($passed, $own[$other][$name][1]->values());
                     }
                 }
 
-                $values[] = self::selection($property, $accepted);
+                $values[] = self::selection($property, $selection->values(), $passed);
             }
 
             if ($values !== []) {
@@ -193,32 +193,26 @@ final class SelectingValues
     }
 
     /**
-     * @param non-empty-list<int|string> $values
+     * @param non-empty-list<int|string> $own
+     * @param list<int|string> $passed the values of subclasses
      */
-    private static function selection(PropertyModel $property, array $values): DiscriminatorValues
+    private static function selection(PropertyModel $property, array $own, array $passed = []): DiscriminatorValues
     {
         $declared = $property->type();
         $type = $declared instanceof NullableType ? $declared->inner() : $declared;
-
-        // A check the type already makes would be dead code, which PHPStan reports in the generated class.
-        return new DiscriminatorValues($property->name(), $values, $declared instanceof NullableType || !self::covers($type, $values));
-    }
-
-    /**
-     * @param non-empty-list<int|string> $values
-     * @param list<int|string> $more
-     *
-     * @return non-empty-list<int|string>
-     */
-    private static function union(array $values, array $more): array
-    {
-        foreach ($more as $value) {
+        $values = $own;
+        $subclassValues = [];
+        foreach ($passed as $value) {
             if (!in_array($value, $values, true)) {
                 $values[] = $value;
+                $subclassValues[] = $value;
             }
         }
 
-        return $values;
+        // A comparison the type already decides would be dead code, which PHPStan reports in the generated class.
+        $nullable = $declared instanceof NullableType;
+
+        return new DiscriminatorValues($property->name(), $values, $nullable || !self::covers($type, $own), $subclassValues, $nullable || !self::covers($type, $values));
     }
 
     /**

@@ -183,7 +183,8 @@ rejects(static fn (): Side => new Side('c', null), 'null does not select Side by
 rejects(static fn (): Side => new Side('c', 'm'), '"m" does not select Side by "kind".');
 check(read(new BlobX(['any'], 1), 'kind') === ['any'], 'unchecked discriminator');
 
-check(read(new Bird('bird', 2), 'kind') === 'bird' && read(new Bird('parrot', 2), 'kind') === 'parrot', 'open class accepts its subclass value');
+check(read(new Bird('bird', 2), 'kind') === 'bird', 'open class');
+rejects(static fn (): Bird => new Bird('parrot', 2), '"parrot" does not select Bird by "kind".');
 rejects(static fn (): Bird => new Bird('fish', 2), '"fish" does not select Bird by "kind".');
 $parrot = new Parrot(2);
 check($parrot instanceof Bird && read($parrot, 'kind') === 'parrot' && read($parrot, 'wings') === 2, 'subclass of an open class');

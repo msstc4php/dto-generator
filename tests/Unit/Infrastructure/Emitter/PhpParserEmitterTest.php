@@ -942,4 +942,19 @@ final class Order
         self::assertStringContainsString("'%s does not select Side by \"kind\".',\n", $code);
         self::assertStringContainsString("\$kind === null ? 'null' : '\"' . \$kind . '\"',\n", $code);
     }
+
+    public function testLetsOnlyASubclassPassItsValueThroughAnOpenClass(): void
+    {
+        $emitter = new PhpParserEmitter();
+        $creature = EmitterFixture::creature()->properties();
+        $checked = $emitter->emit(EmitterFixture::bird(), EmitterFixture::target('8.2', Mutability::IMMUTABLE), $creature);
+
+        self::assertStringContainsString("if (\$kind !== 'bird' && (static::class === self::class || \$kind !== 'parrot')) {", $checked);
+
+        $ruled = EmitterFixture::bird()->withDiscriminatorValues(new DiscriminatorValues('kind', ['bird', 'parrot'], true, ['parrot'], false));
+        self::assertStringContainsString(
+            "if (\$kind !== 'bird' && static::class === self::class) {",
+            $emitter->emit($ruled, EmitterFixture::target('8.2', Mutability::IMMUTABLE), $creature),
+        );
+    }
 }

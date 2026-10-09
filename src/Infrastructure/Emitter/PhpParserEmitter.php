@@ -36,6 +36,7 @@ use PhpParser\Node\Expr;
 use PhpParser\Node\Expr\Array_;
 use PhpParser\Node\Expr\Assign;
 use PhpParser\Node\Expr\BinaryOp\BooleanAnd;
+use PhpParser\Node\Expr\BinaryOp\BooleanOr;
 use PhpParser\Node\Expr\BinaryOp\Concat;
 use PhpParser\Node\Expr\BinaryOp\Identical;
 use PhpParser\Node\Expr\BinaryOp\NotIdentical;
@@ -458,10 +459,15 @@ final class PhpParserEmitter implements CodeEmitter
     private function check(ClassShape $shape, PropertyModel $property, DiscriminatorValues $selection, TypeRenderer $types): If_
     {
         $parameter = new Variable($property->name());
-        $values = $selection->values();
-        $condition = new NotIdentical($parameter, $this->defaultValue($values[0], $property->type(), $types));
-        foreach (array_slice($values, 1) as $value) {
-            $condition = new BooleanAnd($condition, new NotIdentical($parameter, $this->defaultValue($value, $property->type(), $types)));
+        $condition = $this->differsFromAll($parameter, $selection->ownValues(), $property->type(), $types);
+        $passed = $selection->subclassValues();
+        if ($passed !== []) {
+            // An open class takes the values of its subclasses only from them, never from `new Bird('parrot')`.
+            $direct = new Identical(new ClassConstFetch(new Name('static'), 'class'), new ClassConstFetch(new Name('self'), 'class'));
+            $condition = new BooleanAnd(
+                $condition,
+                $selection->areSubclassValuesChecked() ? new BooleanOr($direct, $this->differsFromAll($parameter, $passed, $property->type(), $types)) : $direct,
+            );
         }
 
         // The wire name is free text; sprintf() must not read a "%" in it as a conversion. The value is quoted, null not.
@@ -471,6 +477,19 @@ final class PhpParserEmitter implements CodeEmitter
         $throw = new Expression(new Throw_(new New_(new FullyQualified('InvalidArgumentException'), [new Arg($message)])));
 
         return new If_($condition, ['stmts' => [$throw]]);
+    }
+
+    /**
+     * @param non-empty-list<int|string> $values
+     */
+    private function differsFromAll(Variable $parameter, array $values, TypeModel $type, TypeRenderer $types): Expr
+    {
+        $condition = new NotIdentical($parameter, $this->defaultValue($values[0], $type, $types));
+        foreach (array_slice($values, 1) as $value) {
+            $condition = new BooleanAnd($condition, new NotIdentical($parameter, $this->defaultValue($value, $type, $types)));
+        }
+
+        return $condition;
     }
 
     /**

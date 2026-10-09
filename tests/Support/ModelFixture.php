@@ -117,7 +117,8 @@ final class ModelFixture
     }
 
     /**
-     * @return array<string, list<string>> concrete class → "property: value|value[ unchecked]" per discriminator, root first
+     * @return array<string, list<string>> concrete class → "property: own|own[ unchecked][; subclasses: value|value[ unchecked]]"
+     *                                     per discriminator, root first
      */
     public static function selections(Output $output): array
     {
@@ -125,8 +126,13 @@ final class ModelFixture
         foreach ($output->classes() as $class) {
             $lines = [];
             foreach ($class->model()->discriminatorValues() as $values) {
-                $literals = array_map(static fn ($value): string => var_export($value, true), $values->values());
-                $lines[] = $values->property() . ': ' . implode('|', $literals) . ($values->isChecked() ? '' : ' unchecked');
+                $literals = static fn (array $list): string => implode('|', array_map(static fn ($value): string => var_export($value, true), $list));
+                $line = $values->property() . ': ' . $literals($values->ownValues()) . ($values->isChecked() ? '' : ' unchecked');
+                if ($values->subclassValues() !== []) {
+                    $line .= '; subclasses: ' . $literals($values->subclassValues()) . ($values->areSubclassValuesChecked() ? '' : ' unchecked');
+                }
+
+                $lines[] = $line;
             }
 
             if ($lines !== []) {

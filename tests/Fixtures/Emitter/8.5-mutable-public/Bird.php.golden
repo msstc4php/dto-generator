@@ -10,7 +10,7 @@ class Bird extends Creature
 {
     public function __construct(string $kind, public int $wings)
     {
-        if ($kind !== 'bird' && $kind !== 'parrot') {
+        if ($kind !== 'bird' && (static::class === self::class || $kind !== 'parrot')) {
             throw new \InvalidArgumentException(sprintf('"%s" does not select Bird by "kind".', $kind));
         }
 

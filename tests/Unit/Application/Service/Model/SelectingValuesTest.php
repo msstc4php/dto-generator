@@ -70,7 +70,7 @@ final class SelectingValuesTest extends TestCase
 
         self::assertSame([], ModelFixture::messages($output));
         // Dog's constructor passes its own value up, so Cat accepts it too.
-        self::assertSame(['App\Dto\Cat' => ["kind: 'Cat'|'Dog'"], 'App\Dto\Dog' => ["kind: 'Dog'"]], ModelFixture::selections($output));
+        self::assertSame(['App\Dto\Cat' => ["kind: 'Cat'; subclasses: 'Dog'"], 'App\Dto\Dog' => ["kind: 'Dog'"]], ModelFixture::selections($output));
     }
 
     public function testChecksAnOpenClassOfAnInheritedDiscriminator(): void
@@ -92,12 +92,12 @@ final class SelectingValuesTest extends TestCase
 
         self::assertSame([], ModelFixture::messages($output));
         self::assertSame(
-            ['App\Dto\Bird' => ["kind: 'bird'|'parrot'"], 'App\Dto\Parrot' => ["kind: 'parrot'"], 'App\Dto\Fish' => ["kind: 'fish'"]],
+            ['App\Dto\Bird' => ["kind: 'bird'; subclasses: 'parrot'"], 'App\Dto\Parrot' => ["kind: 'parrot'"], 'App\Dto\Fish' => ["kind: 'fish'"]],
             ModelFixture::selections($output),
         );
     }
 
-    public function testLeavesAnOpenClassThatAcceptsEveryValueUnchecked(): void
+    public function testComparesNoSubclassValueTheTypeAlreadyRulesOut(): void
     {
         $kind = ['type' => 'object', 'required' => ['kind'], 'properties' => ['kind' => ['$ref' => '#/components/schemas/Kind']]];
         $output = ModelFixture::build([
@@ -111,8 +111,8 @@ final class SelectingValuesTest extends TestCase
         ]);
 
         self::assertSame([], ModelFixture::messages($output));
-        // Dog accepts both values of the enum, so a check could never fail.
-        self::assertSame(['App\Dto\Dog' => ["kind: 'dog'|'puppy' unchecked"], 'App\Dto\Puppy' => ["kind: 'puppy'"]], ModelFixture::selections($output));
+        // A Dog is only a dog; for a subclass instance the enum leaves no other value to compare.
+        self::assertSame(['App\Dto\Dog' => ["kind: 'dog'; subclasses: 'puppy' unchecked"], 'App\Dto\Puppy' => ["kind: 'puppy'"]], ModelFixture::selections($output));
     }
 
     public function testLetsTheNearestDiscriminatorOfAPropertyDecide(): void

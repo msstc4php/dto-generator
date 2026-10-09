@@ -281,7 +281,7 @@ final class EmitterFixture
     {
         return self::model('App\Dto\Bird', null, [self::property('wings', ScalarType::int(), true)], $mutability)
             ->withHierarchy(ClassKind::from(ClassKind::OPEN), ClassName::fromFqcn('App\Dto\Creature'), null)
-            ->withDiscriminatorValues(new DiscriminatorValues('kind', ['bird', 'parrot']))
+            ->withDiscriminatorValues(new DiscriminatorValues('kind', ['bird', 'parrot'], true, ['parrot']))
             ->withDiscriminatedProperties('kind')
         ;
     }
