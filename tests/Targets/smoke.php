@@ -10,9 +10,12 @@ use App\Attr\Table;
 use App\Dto\Animal;
 use App\Dto\Circle;
 use App\Dto\Dog;
+use App\Dto\EuroWallet;
 use App\Dto\Sample;
 use App\Dto\Shape;
+use App\Dto\Square;
 use App\Dto\Tag;
+use App\Dto\Wallet;
 
 // Runs on the profile's own PHP version, so the generated code is checked by the runtime it targets.
 // Notices and deprecations (e.g. an optional parameter before a required one) fail the run.
@@ -31,6 +34,9 @@ require $profile . 'Animal.php.golden';
 require $profile . 'Dog.php.golden';
 require $profile . 'Shape.php.golden';
 require $profile . 'Circle.php.golden';
+require $profile . 'Square.php.golden';
+require $profile . 'Wallet.php.golden';
+require $profile . 'EuroWallet.php.golden';
 
 /**
  * @return mixed
@@ -48,6 +54,19 @@ function check(bool $condition, string $what): void
         fwrite(STDERR, "failed: {$what}\n");
         exit(1);
     }
+}
+
+function rejects(callable $create, string $message): void
+{
+    try {
+        $create();
+    } catch (InvalidArgumentException $exception) {
+        check($exception->getMessage() === $message, 'message: ' . $exception->getMessage());
+
+        return;
+    }
+
+    check(false, 'rejected: ' . $message);
 }
 
 $tag = new Tag('red');
@@ -112,6 +131,27 @@ if (method_exists($dog, 'setNickname')) {
 
 $circle = new Circle('circle', 2.0);
 check($circle instanceof Shape && read($circle, 'kind') === 'circle' && read($circle, 'radius') === 2.0, 'discriminated variant');
+check(read(new Circle('round', 1.0), 'kind') === 'round', 'second discriminator value');
+rejects(static fn (): Circle => new Circle('square', 1.0), '"square" does not select Circle by "kind".');
+
+$square = new Square(3.0);
+check($square instanceof Shape && read($square, 'kind') === 'square' && read($square, 'side') === 3.0, 'discriminator default');
+rejects(static fn (): Square => new Square(3.0, 'circle'), '"circle" does not select Square by "kind".');
+foreach ([$circle, $square] as $variant) {
+    check(!method_exists($variant, 'withKind') && !method_exists($variant, 'setKind'), 'no discriminator mutators');
+}
+
+if (method_exists($square, 'withSide')) {
+    check(read($square->withSide(4.0), 'kind') === 'square', 'a wither keeps the discriminator');
+}
+
+$euro = constant('App\\Dto\\Currency::EUR');
+$wallet = new EuroWallet(10);
+check($wallet instanceof Wallet && read($wallet, 'currency') === $euro && read($wallet, 'balance') === 10, 'enum discriminator default');
+rejects(
+    static fn (): EuroWallet => new EuroWallet(10, constant('App\\Dto\\Currency::IN_PROGRESS')),
+    '"in-progress" does not select EuroWallet by "currency".',
+);
 check((new ReflectionClass(Shape::class))->isAbstract() && !(new ReflectionClass(Animal::class))->isFinal(), 'base classes stay open');
 
 if (strpos(basename($profile), '-immutable') !== false && !method_exists($sample, 'getId')) {
