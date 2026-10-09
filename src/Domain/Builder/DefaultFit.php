@@ -86,6 +86,11 @@ final class DefaultFit
      */
     private static function fitsScalar($value, ScalarType $type): bool
     {
+        $literal = $type->phpDoc() === null ? null : LiteralType::admits($type->phpDoc(), $value);
+        if ($literal !== null) {
+            return $literal;
+        }
+
         switch ($type->kind()) {
             case 'int':
                 return is_int($value) && self::inRange($value, $type->phpDoc());
