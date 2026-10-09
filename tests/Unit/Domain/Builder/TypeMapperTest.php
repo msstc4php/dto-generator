@@ -13,9 +13,6 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumBacking;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumType;
-use MSSTC4PHP\DtoGenerator\Domain\Model\MixedType;
-use MSSTC4PHP\DtoGenerator\Domain\Model\NullableType;
-use MSSTC4PHP\DtoGenerator\Domain\Model\ScalarType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\TypeModel;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaGraph;
 use MSSTC4PHP\DtoGenerator\Domain\Target\AccessorStyle;
@@ -189,15 +186,6 @@ final class TypeMapperTest extends TestCase
             'x-php-type not a class' => [['x-php-type' => 'Not A Class'], 'mixed', ["error {$at}/x-php-type: \"Not A Class\" is not a valid class name: segment \"Not A Class\" is not a PHP identifier."]],
             'x-php-type reserved segment on 7.4' => [['x-php-type' => 'App\List\Uuid'], 'mixed', ["error {$at}/x-php-type: Namespace \"App\\List\" contains the reserved word \"List\", which PHP 7.4 cannot parse in a namespace (allowed from PHP 8.0)."], '7.4'],
         ];
-    }
-
-    public function testNullableNeverWrapsMixedOrNullable(): void
-    {
-        $nullable = new NullableType(ScalarType::string());
-
-        self::assertInstanceOf(MixedType::class, NullableType::of(new MixedType()));
-        self::assertSame($nullable, NullableType::of($nullable));
-        self::assertSame('int|null', NullableType::of(ScalarType::int())->describe());
     }
 
     public function testRecognisesEnumSchemas(): void

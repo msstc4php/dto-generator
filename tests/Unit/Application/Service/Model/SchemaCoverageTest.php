@@ -51,7 +51,7 @@ final class SchemaCoverageTest extends TestCase
         ]]]);
 
         self::assertSame([], ModelFixture::messages($output));
-        self::assertSame(['whole: 2|null', 'real: float|null', 'ratio: float|null', 'bare: float|null'], ModelFixture::classes($output)['App\Dto\C']);
+        self::assertSame(['whole: 2|null', 'real: float|null', 'ratio: float|null', 'bare: 2|null'], ModelFixture::classes($output)['App\Dto\C']);
     }
 
     public function testKeepsTheFormatTypeOfAConst(): void
@@ -695,10 +695,12 @@ final class SchemaCoverageTest extends TestCase
         $output = ModelFixture::build(['C' => ['type' => 'object', 'properties' => [
             'a' => ['type' => 'integer', 'allOf' => [['const' => 5.0]]],
             'b' => ['allOf' => [['const' => 5], ['const' => 5.0]]],
+            'c' => ['allOf' => [['const' => 5.0], ['const' => 5]]],
+            'd' => ['allOf' => [['const' => 5.0]]],
         ]]]);
 
         self::assertSame([], ModelFixture::messages($output));
-        self::assertSame(['a: int|null', 'b: 5|null'], ModelFixture::classes($output)['App\\Dto\\C']);
+        self::assertSame(['a: 5|null', 'b: 5|null', 'c: 5|null', 'd: 5|null'], ModelFixture::classes($output)['App\\Dto\\C']);
     }
 
     public function testWarnsAboutTwoConstsOfANumberThatDiffer(): void

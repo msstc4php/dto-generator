@@ -48,8 +48,8 @@ final class ConstMapper
         $value = Json::value($schema->keyword('const'));
         $allows = static fn (string $type): bool => $declared === [] || in_array($type, $declared, true);
         // JSON Schema counts 2.0 as an integer and every integer as a number.
-        // The round trip leaves out fractions and floats beyond the range of int.
-        $whole = is_int($value) || (is_float($value) && $value === (float) (int) $value) ? (int) $value : null;
+        $normalised = $this->whole($value);
+        $whole = is_int($normalised) ? $normalised : null;
         $integer = in_array(SchemaType::INTEGER, $declared, true);
         $number = in_array(SchemaType::NUMBER, $declared, true);
         if ($whole !== null && $integer) {
@@ -58,8 +58,8 @@ final class ConstMapper
             $diagnostics->warning('"const" is outside the range of PHP int; the property keeps int.', $schema->location()->child('const'));
 
             return null;
-        } elseif (is_int($value) && $declared === []) {
-            $type = ScalarType::int(LiteralType::of($value));
+        } elseif ($whole !== null && $declared === []) {
+            $type = ScalarType::int(LiteralType::of($whole));
         } elseif (is_int($value) || is_float($value)) {
             $type = $number || $declared === [] ? ScalarType::float() : null;
         } elseif (is_string($value)) {
@@ -83,22 +83,22 @@ final class ConstMapper
 
     /**
      * Each bare `const` member of `allOf` narrows the type the rest gives to its literal. A constant no value of that
-     * type matches, or one other than an earlier constant, leaves the schema with no valid value; the type is kept and
-     * the constant reported.
+     * type matches, or one other than an earlier constant, leaves the schema with no valid value: it is reported and
+     * skipped, so it neither narrows the type nor fixes the value a later constant is compared with.
      */
     public function narrow(Schema $schema, TypeModel $base, Diagnostics $diagnostics): TypeModel
     {
         $type = $base instanceof NullableType ? $base->inner() : $base;
-        /** @var list<JsonValue> $fixed the value an earlier constant fixed, if any */
-        $fixed = [];
+        // No constant that narrows is null: type() gives it no literal.
+        $fixed = null;
         foreach ($schema->allOf() as $member) {
-            $literal = self::isBare($member) ? $this->type($member, $diagnostics) : null;
+            $literal = $this->isBare($member) ? $this->type($member, $diagnostics) : null;
             if (!$literal instanceof ScalarType || !$type instanceof MixedType && !$type instanceof ScalarType) {
                 continue;
             }
 
             $value = $this->whole(Json::value($member->keyword('const')));
-            $other = $fixed !== [] && $fixed[0] !== $value;
+            $other = $fixed !== null && $fixed !== $value;
             if ($other || ($type instanceof ScalarType && !DefaultFit::fits($value, $type))) {
                 $diagnostics->warning(
                     '"const" is outside the type the rest of the schema gives, so no value is valid; the type is kept.',
@@ -108,7 +108,7 @@ final class ConstMapper
                 continue;
             }
 
-            $fixed = [$value];
+            $fixed = $value;
             // A float keeps its type for an integer constant: the property holds 5.0 as well.
             if ($type instanceof MixedType || $type->kind() === $literal->kind()) {
                 $type = $literal;
@@ -135,6 +135,7 @@ final class ConstMapper
      */
     private function wholeFloat(float $value)
     {
+        // The round trip leaves out fractions and floats beyond the range of int.
         return $value === (float) (int) $value ? (int) $value : $value;
     }
 
