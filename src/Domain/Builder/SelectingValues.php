@@ -34,11 +34,14 @@ final class SelectingValues
     public static function of(array $models, Diagnostics $diagnostics): array
     {
         $own = [];
-        $lineage = [];
+        $descendants = [];
         foreach ($models as $fqcn => $model) {
             if (!$model->kind()->isAbstract()) {
                 $ancestors = self::ancestors($model, $models);
-                $lineage[$fqcn] = array_map(static fn (ClassModel $ancestor): string => $ancestor->name()->fqcn(), $ancestors);
+                foreach ($ancestors as $ancestor) {
+                    $descendants[$ancestor->name()->fqcn()][] = $fqcn;
+                }
+
                 $own[$fqcn] = self::forClass($model, $ancestors, $diagnostics);
             }
         }
@@ -48,10 +51,10 @@ final class SelectingValues
             $values = [];
             foreach ($found as $name => [$property, $selection]) {
                 $accepted = $selection->values();
-                foreach ($own as $other => $theirs) {
-                    // A subclass passes its own value up through parent::__construct().
-                    if (isset($theirs[$name]) && in_array($fqcn, $lineage[$other], true)) {
-                        $accepted = self::union($accepted, $theirs[$name][1]->values());
+                // A subclass passes its own value up through parent::__construct().
+                foreach ($descendants[$fqcn] ?? [] as $other) {
+                    if (isset($own[$other][$name])) {
+                        $accepted = self::union($accepted, $own[$other][$name][1]->values());
                     }
                 }
 
