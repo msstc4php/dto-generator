@@ -5,7 +5,7 @@ FROM scratch AS bridge
 
 FROM composer:2 AS vendor
 # The package has no lock file and the build context no .git: the image's version is given, not guessed.
-ARG VERSION=1.1.0
+ARG VERSION=1.2.0
 ARG BRIDGE_REPOSITORY=https://github.com/msstc4symfony/dto-generator-bridge
 ARG BRIDGE_VERSION=^1.0
 ENV COMPOSER_ROOT_VERSION=$VERSION

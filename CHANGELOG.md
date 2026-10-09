@@ -6,6 +6,8 @@ All notable changes to this package are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-09
+
 ### Added
 
 - `DtoGenerator::prepareProcess()` gives a console command that wraps the generator the CLI's process settings:
@@ -137,7 +139,8 @@ First release.
 - A manifest per output directory: stale classes are deleted, files without the `@generated` header are never
   overwritten.
 
-[Unreleased]: https://github.com/msstc4php/dto-generator/compare/v1.1.1...HEAD
+[Unreleased]: https://github.com/msstc4php/dto-generator/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/msstc4php/dto-generator/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/msstc4php/dto-generator/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/msstc4php/dto-generator/compare/v1.0.2...v1.1.0
 [1.0.2]: https://github.com/msstc4php/dto-generator/compare/v1.0.1...v1.0.2
