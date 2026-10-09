@@ -58,8 +58,8 @@ final class SelectingValues
     private static function ancestors(ClassModel $model, array $models): array
     {
         $ancestors = [];
-        // Hierarchy::breakCycles() has run, so the chain ends.
-        for ($parent = $model->parent(); $parent instanceof ClassName && isset($models[$parent->fqcn()]); $parent = $models[$parent->fqcn()]->parent()) {
+        // Hierarchy::breakCycles() has run, so the chain ends; the bound keeps a broken invariant from hanging the run.
+        for ($parent = $model->parent(); $parent instanceof ClassName && isset($models[$parent->fqcn()]) && count($ancestors) < count($models); $parent = $models[$parent->fqcn()]->parent()) {
             $ancestors[] = $models[$parent->fqcn()];
         }
 
