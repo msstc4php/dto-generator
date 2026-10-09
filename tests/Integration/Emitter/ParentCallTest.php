@@ -15,6 +15,7 @@ use PhpParser\Node\Stmt\ClassMethod;
 use PhpParser\Node\Stmt\Namespace_;
 use PhpParser\NodeFinder;
 use PhpParser\ParserFactory;
+use PhpParser\PhpVersion;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -30,6 +31,11 @@ final class ParentCallTest extends TestCase
      */
     public function testPassesTheParentsParametersInItsOrder(string $directory): void
     {
+        // The lowest supported nikic/php-parser predates PHP 8.5 and cannot read its clone-with withers.
+        if (strpos($directory, '8.5') !== false && PhpVersion::getNewestSupported()->id < 80500) {
+            self::markTestSkipped('This nikic/php-parser cannot parse PHP 8.5.');
+        }
+
         $parameters = [];
         $parents = [];
         $calls = [];
