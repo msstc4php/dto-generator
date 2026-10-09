@@ -8,6 +8,8 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\TypeModel;
 
 /**
  * The PHP type of a string `format`; a refined scalar carries its PHPDoc type. Constraints belong to enrichers.
+ *
+ * @api
  */
 final class FormatMapping
 {

@@ -8,6 +8,8 @@ use MSSTC4PHP\DtoGenerator\Domain\Exception\InvalidModel;
 
 /**
  * Every schema a generation run needs, keyed by location: selected components and all their $ref targets.
+ *
+ * @api
  */
 final class SchemaGraph
 {

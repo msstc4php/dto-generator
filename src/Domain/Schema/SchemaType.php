@@ -6,6 +6,9 @@ namespace MSSTC4PHP\DtoGenerator\Domain\Schema;
 
 use MSSTC4PHP\DtoGenerator\Domain\Shared\AbstractEnum;
 
+/**
+ * @api
+ */
 final class SchemaType extends AbstractEnum
 {
     public const STRING = 'string';

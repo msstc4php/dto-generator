@@ -9,6 +9,8 @@ use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
 
 /**
  * @phpstan-import-type JsonValue from Json
+ *
+ * @api
  */
 final class Extensions
 {

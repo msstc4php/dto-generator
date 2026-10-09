@@ -6,6 +6,9 @@ namespace MSSTC4PHP\DtoGenerator\Domain\Model;
 
 use MSSTC4PHP\DtoGenerator\Domain\Exception\InvalidModel;
 
+/**
+ * @api
+ */
 final class UnionType implements TypeModel
 {
     /** @var non-empty-list<TypeModel> */

@@ -6,6 +6,9 @@ namespace MSSTC4PHP\DtoGenerator\Domain\Model;
 
 use MSSTC4PHP\DtoGenerator\Domain\Shared\AbstractEnum;
 
+/**
+ * @api
+ */
 final class ClassKind extends AbstractEnum
 {
     public const FINAL = 'final';

@@ -8,6 +8,10 @@ All notable changes to this package are documented here. The format follows
 
 ### Added
 
+- `DtoGenerator::prepareProcess()` gives a console command that wraps the generator the CLI's process settings:
+  `memory_limit`, errors on stderr, exit code `2` on a fatal error.
+- The public API (the extension SPI, the model classes it hands out and the entry points) carries `@api`; a test keeps
+  the tag and the backward-compatibility check in step.
 - Inline objects and enums in a `oneOf`/`anyOf` become classes: named after the member's `title`, else
   `<Parent><Property>Option<N>`. Those in the `items`, `additionalProperties` or union members of a named alias
   become `<Alias>Item`, `<Alias>Value`, `<Alias>Option<N>`. Both used to be errors.

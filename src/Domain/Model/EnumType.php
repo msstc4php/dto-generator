@@ -12,6 +12,8 @@ use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
  * `Name::CASE` and checked against the enum.
  *
  * @phpstan-import-type JsonValue from Json
+ *
+ * @api
  */
 final class EnumType implements TypeModel
 {

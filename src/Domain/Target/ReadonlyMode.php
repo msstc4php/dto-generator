@@ -9,6 +9,8 @@ use MSSTC4PHP\DtoGenerator\Domain\Shared\AbstractEnum;
 /**
  * Where an immutable class enforces immutability: nowhere natively (7.4/8.0), on each property (8.1) or on the
  * class (8.2+).
+ *
+ * @api
  */
 final class ReadonlyMode extends AbstractEnum
 {

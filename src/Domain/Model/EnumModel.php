@@ -7,6 +7,9 @@ namespace MSSTC4PHP\DtoGenerator\Domain\Model;
 use MSSTC4PHP\DtoGenerator\Domain\Exception\InvalidModel;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
 
+/**
+ * @api
+ */
 final class EnumModel
 {
     private ClassName $name;

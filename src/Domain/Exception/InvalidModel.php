@@ -6,6 +6,9 @@ namespace MSSTC4PHP\DtoGenerator\Domain\Exception;
 
 use InvalidArgumentException;
 
+/**
+ * @api
+ */
 final class InvalidModel extends InvalidArgumentException implements DomainError
 {
 }

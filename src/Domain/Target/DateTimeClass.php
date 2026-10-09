@@ -9,6 +9,9 @@ use DateTimeImmutable;
 use DateTimeInterface;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\AbstractEnum;
 
+/**
+ * @api
+ */
 final class DateTimeClass extends AbstractEnum
 {
     public const IMMUTABLE = 'DateTimeImmutable';

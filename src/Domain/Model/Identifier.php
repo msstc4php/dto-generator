@@ -6,6 +6,9 @@ namespace MSSTC4PHP\DtoGenerator\Domain\Model;
 
 use MSSTC4PHP\DtoGenerator\Domain\Exception\InvalidModel;
 
+/**
+ * @api
+ */
 final class Identifier
 {
     /**

@@ -14,6 +14,8 @@ use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
  * (property, keyword) add one entry per call.
  *
  * @phpstan-import-type JsonValue from Json
+ *
+ * @api
  */
 final class SchemaBuilder
 {

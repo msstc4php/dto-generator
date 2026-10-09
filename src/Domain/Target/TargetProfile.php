@@ -6,6 +6,9 @@ namespace MSSTC4PHP\DtoGenerator\Domain\Target;
 
 use MSSTC4PHP\DtoGenerator\Domain\Exception\IncompatibleTarget;
 
+/**
+ * @api
+ */
 final class TargetProfile
 {
     private PhpVersion $php;

@@ -8,6 +8,8 @@ use MSSTC4PHP\DtoGenerator\Domain\Exception\InvalidModel;
 
 /**
  * The shape of one generated class, resolved from the target and the class mutability (spec §6.2).
+ *
+ * @api
  */
 final class ClassForm
 {

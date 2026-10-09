@@ -6,6 +6,9 @@ namespace MSSTC4PHP\DtoGenerator\Domain\Diagnostic;
 
 use MSSTC4PHP\DtoGenerator\Domain\Shared\AbstractEnum;
 
+/**
+ * @api
+ */
 final class Severity extends AbstractEnum
 {
     public const ERROR = 'error';

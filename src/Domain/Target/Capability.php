@@ -7,6 +7,9 @@ namespace MSSTC4PHP\DtoGenerator\Domain\Target;
 use LogicException;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\AbstractEnum;
 
+/**
+ * @api
+ */
 final class Capability extends AbstractEnum
 {
     public const TYPED_PROPERTIES = 'typed-properties';

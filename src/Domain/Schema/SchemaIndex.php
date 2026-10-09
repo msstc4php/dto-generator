@@ -8,6 +8,8 @@ use MSSTC4PHP\DtoGenerator\Domain\Exception\InvalidModel;
 
 /**
  * Every schema of a graph by location, subschemas included, so a model node finds the schema it was built from.
+ *
+ * @api
  */
 final class SchemaIndex
 {

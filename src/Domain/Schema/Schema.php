@@ -12,6 +12,8 @@ use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
  * A parsed JSON Schema 2020-12 node. `$ref` is kept verbatim; resolution happens outside the domain.
  *
  * @phpstan-import-type JsonValue from Json
+ *
+ * @api
  */
 final class Schema
 {

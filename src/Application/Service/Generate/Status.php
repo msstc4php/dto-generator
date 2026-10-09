@@ -8,6 +8,8 @@ use MSSTC4PHP\DtoGenerator\Domain\Shared\AbstractEnum;
 
 /**
  * The outcome of a run; the CLI maps it to the exit codes of spec §9.2.
+ *
+ * @api
  */
 final class Status extends AbstractEnum
 {

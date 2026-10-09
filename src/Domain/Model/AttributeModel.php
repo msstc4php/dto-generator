@@ -13,6 +13,8 @@ use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
  * @phpstan-type AttributeDeclaration array{class: string, args?: JsonValue}
  *
  * @phpstan-import-type JsonValue from Json
+ *
+ * @api
  */
 final class AttributeModel
 {

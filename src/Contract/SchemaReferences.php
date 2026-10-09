@@ -12,6 +12,8 @@ use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaGraph;
 /**
  * Lets an enricher read the schema a `$ref` points to: a property `{$ref: Email}` keeps its keywords, like `format`,
  * in Email.
+ *
+ * @api
  */
 final class SchemaReferences
 {

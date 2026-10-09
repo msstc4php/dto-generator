@@ -6,6 +6,8 @@ namespace MSSTC4PHP\DtoGenerator\Application\Service\Generate;
 
 /**
  * Everything writing would do, computed before anything is touched.
+ *
+ * @api
  */
 final class WritePlan
 {

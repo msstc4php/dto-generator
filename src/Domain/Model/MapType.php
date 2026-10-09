@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Domain\Model;
 
+/**
+ * @api
+ */
 final class MapType implements TypeModel
 {
     private TypeModel $value;

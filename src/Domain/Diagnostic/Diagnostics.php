@@ -9,6 +9,8 @@ use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
 
 /**
  * Collecting parameter: generation reports every problem it finds instead of stopping at the first.
+ *
+ * @api
  */
 final class Diagnostics implements Countable
 {

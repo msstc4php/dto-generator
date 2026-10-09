@@ -40,6 +40,8 @@ use Throwable;
 
 /**
  * The composition root and the PHP API: `DtoGenerator::generator()(new Input($config, Mode::from(Mode::WRITE)))`.
+ *
+ * @api
  */
 final class DtoGenerator
 {
@@ -93,7 +95,7 @@ final class DtoGenerator
     {
         $input ??= new ArgvInput();
         $output ??= new ConsoleOutput();
-        self::prepareRuntime($output);
+        self::prepareProcess($output);
         $application = self::withoutAutoExit($application ?? self::console());
         $application->setCatchExceptions(false);
 
@@ -131,11 +133,12 @@ final class DtoGenerator
     }
 
     /**
-     * The CLI's runtime, so run() changes the process: PHP's default 128M does not hold the model of a large spec
-     * (DTO_GENERATOR_MEMORY_LIMIT sets any other limit); shown errors go to stderr, so stdout stays a valid JSON
-     * report; and a fatal error, out of memory included, ends with exit code 2 rather than PHP's 255.
+     * The CLI's runtime, for run() and for console commands that wrap the generator (with guard()): PHP's default 128M
+     * does not hold the model of a large spec (DTO_GENERATOR_MEMORY_LIMIT sets any other limit); shown errors go to
+     * stderr, so stdout stays a valid JSON report; and a fatal error, out of memory included, ends with exit code 2
+     * rather than PHP's 255. It changes the whole process, so only a one-off process may call it.
      */
-    private static function prepareRuntime(OutputInterface $output): void
+    public static function prepareProcess(OutputInterface $output): void
     {
         // First, so that a warning of ini_set() below reaches stderr too.
         $display = ini_get('display_errors');

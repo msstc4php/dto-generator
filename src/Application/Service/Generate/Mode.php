@@ -8,6 +8,8 @@ use MSSTC4PHP\DtoGenerator\Domain\Shared\AbstractEnum;
 
 /**
  * Write the output, only compare it with the disk (`--check`), or only report the plan (`--dry-run`).
+ *
+ * @api
  */
 final class Mode extends AbstractEnum
 {

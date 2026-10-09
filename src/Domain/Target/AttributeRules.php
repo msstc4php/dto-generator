@@ -16,6 +16,8 @@ use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
 
 /**
  * What the target's PHP version allows in attributes (spec §6.1, §7.1): the emitter has no channel for diagnostics.
+ *
+ * @api
  */
 final class AttributeRules
 {

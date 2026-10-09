@@ -12,6 +12,8 @@ use MSSTC4PHP\DtoGenerator\Domain\Target\TargetProfile;
 
 /**
  * What a property enricher may read; it reports through the diagnostics and returns attributes instead of changing the IR.
+ *
+ * @api
  */
 final class PropertyContext
 {

@@ -8,6 +8,8 @@ use MSSTC4PHP\DtoGenerator\Domain\Shared\AbstractEnum;
 
 /**
  * How an immutable DTO produces a modified copy (spec §6.2, row "with*()").
+ *
+ * @api
  */
 final class WitherStyle extends AbstractEnum
 {

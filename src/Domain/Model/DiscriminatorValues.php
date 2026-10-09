@@ -8,6 +8,8 @@ use MSSTC4PHP\DtoGenerator\Domain\Exception\InvalidModel;
 
 /**
  * The values of one discriminator a concrete class accepts: those that select it or one of its subclasses.
+ *
+ * @api
  */
 final class DiscriminatorValues
 {

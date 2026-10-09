@@ -15,6 +15,8 @@ use MSSTC4PHP\DtoGenerator\Domain\Exception\InvalidModel;
  *
  * A decoded JSON value. Reason for `mixed`: PHPStan type aliases cannot be recursive.
  * @phpstan-type JsonValue JsonScalar|array<array-key, mixed>
+ *
+ * @api
  */
 final class Json
 {
