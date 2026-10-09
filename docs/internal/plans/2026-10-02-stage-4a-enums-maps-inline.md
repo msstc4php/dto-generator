@@ -22,7 +22,7 @@
   - Default enum-свойства печатается как `Name::CASE` на всех целях, включая элементы списков.
 - **Generate.** Эмитит и классы, и enum-ы.
 
-**Spec:** `docs/specs/2026-10-01-dto-generator-design.md` §5.1, §5.3 (строки enum и инлайн), §5.5 (`x-enum-descriptions`), §7.
+**Spec:** `docs/internal/specs/2026-10-01-dto-generator-design.md` §5.1, §5.3 (строки enum и инлайн), §5.5 (`x-enum-descriptions`), §7.
 
 ## Global Constraints
 Все ограничения этапов 3a и 3b остаются в силе:

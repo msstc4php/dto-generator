@@ -14,7 +14,7 @@
 
 **Tech Stack:** PHP ≥ 7.4, `symfony/yaml ^5.4 || ^6.4 || ^7.0`, PHPUnit 9.6, PHPStan 2 max (`phpVersion: 70400`), deptrac, Rector, CS-Fixer, Infection.
 
-**Spec:** `docs/specs/2026-10-01-dto-generator-design.md`. План реализует:
+**Spec:** `docs/internal/specs/2026-10-01-dto-generator-design.md`. План реализует:
 - §13 этап 2, первую половину: загрузчик, `$ref`, конфиг;
 - §4 — конфиг, правила `auto` для `target.php` и `target.metadata`, несколько источников;
 - §10 — классы ошибок «Конфиг» и «Схема».

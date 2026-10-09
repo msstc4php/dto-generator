@@ -1,78 +1,182 @@
-# msstc4php/dto-generator
+# DTO Generator
 
-Генератор PHP DTO из схем OpenAPI 3.1 (`components/schemas`, YAML/JSON) с учётом целевой версии PHP (7.4–8.5).
+![Build Status](https://github.com/msstc4php/dto-generator/actions/workflows/ci.yml/badge.svg?branch=main)
+[![PHP Version](https://img.shields.io/badge/PHP-%3E%3D7.4-787CB5?logo=php&logoColor=white)](https://php.net)
+[![Generated code](https://img.shields.io/badge/generates-PHP%207.4%20%E2%80%93%208.5-787CB5)](docs/openapi-support.md#target-php-versions)
+[![PHPStan](https://img.shields.io/badge/PHPStan-level%20max-2a5ea7)](https://phpstan.org)
+[![Last commit](https://img.shields.io/github/last-commit/msstc4php/dto-generator/main)](https://github.com/msstc4php/dto-generator/commits/main)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-> **Статус:** в разработке. Готовы этапы 1–4: загрузка конфига и спецификаций с графом `$ref`, построение классов
-> (spec §5.1–§5.5), enum, map-типы и вынос инлайн-схем, композиция `allOf` (наследование или слияние),
-> `oneOf`/`anyOf` с discriminator (abstract-база) и без него (union-тип), генерация кода под PHP 7.4–8.5
-> (spec §6.2), запись с манифестом и CLI, расширения (SPI), `x-php-attributes` и `attributeAliases` с выводом
-> атрибутов PHP 8 (этап 5a), аннотации Doctrine для PHP 7.4 и `verifyClasses` (этап 5b), версии пакетов из
-> `composer.lock` и обнаружение расширений через `extra.dto-generator.extensions` (этап 6a), Composer-плагин и
-> Docker-образ (этап 6b). Мост `msstc4symfony/dto-generator-bridge` (атрибуты Symfony Validator и Serializer)
-> готов и входит в Docker-образ; впереди публикация.
+Generates PHP DTO classes from the `components/schemas` of an OpenAPI 3.1 document, written for the PHP version your
+project runs on — from 7.4 to 8.5.
 
-Дизайн: [`docs/specs/2026-10-01-dto-generator-design.md`](docs/specs/2026-10-01-dto-generator-design.md).
+Point it at a YAML or JSON spec and it writes one class per schema: typed constructor, immutable `with*()` methods
+or setters, PHP enums (or constant classes before 8.1), precise PHPStan types in PHPDoc, and attributes or Doctrine
+annotations from extensions. The output is deterministic and committed with your code; a `--check` run in CI tells you
+when it is out of date.
 
-## Использование
+## Features
 
-`dto-generator.yaml` рядом с `composer.json` (пути — относительно файла конфига):
+- **Target-aware code.** The same spec gives `final readonly class` with promoted properties on PHP 8.2, getters and
+  clone-based withers on 7.4, and the shapes in between. `target.php: auto` reads the version from your
+  `composer.json`.
+- **Immutable or mutable** DTOs, per project or per schema; getters or public properties.
+- **OpenAPI 3.1 / JSON Schema 2020-12:** objects, arrays, maps (`additionalProperties`), enums, nullable types,
+  defaults, `format`, internal and cross-file `$ref` (recursive types included), `allOf` as inheritance or merge,
+  `oneOf`/`anyOf` with a discriminator (abstract base class) or as a union type, inline property schemas lifted into
+  named classes.
+- **Precise PHPDoc** — `list<T>`, `array<array-key, T>`, `non-empty-string`, `int<1, 100>`, `Status::*` — in
+  `@phpstan-*` tags, with portable `@var`/`@param` tags for other readers.
+- **`x-` keywords** to rename classes and properties, map to your own types, skip schemas and add arbitrary
+  attributes — see [docs/x-extensions.md](docs/x-extensions.md).
+- **Extensions** add attributes and formats through a small SPI; the
+  [Symfony bridge](https://github.com/msstc4symfony/dto-generator-bridge) writes Validator constraints and Serializer
+  attributes.
+- **Safe writes:** a manifest per output directory, deletion of classes whose schemas are gone, and no overwriting of
+  files the generator did not write.
+- **Three ways to run:** the CLI, a Composer plugin that regenerates after `composer install`/`update`, and a Docker
+  image.
+
+## Requirements
+
+- PHP >= 7.4 to run the generator (any version from 7.4 to 8.5 can be the target).
+- Composer 2.
+- `symfony/console` (^5.4.47), `symfony/yaml` (^5.4.52) — or 6.4, 7.x, 8.x of both; `nikic/php-parser` ^5.1.
+
+## Installation
+
+The package is not on Packagist yet, so register its GitHub repository first:
+
+```bash
+composer config repositories.msstc4php-dto-generator vcs https://github.com/msstc4php/dto-generator
+composer require --dev msstc4php/dto-generator
+```
+
+Install it as a dev dependency: the generated classes are plain PHP and need nothing at runtime. Composer asks whether
+to trust the plugin; answer yes to get [regeneration on install](#composer-plugin), or no to use only the CLI.
+
+## Quick start
+
+Create `dto-generator.yaml` next to `composer.json` (paths are relative to the config file):
 
 ```yaml
 version: 1
 target:
-  php: auto            # нижняя граница require.php из composer.json; иначе 7.4
-dto:
-  mutability: immutable
+  php: auto            # the lowest version allowed by require.php in composer.json; 7.4 without one
 sources:
-  - spec: openapi/public.yaml
+  - spec: openapi/api.yaml
     namespace: App\Dto
     outputDir: src/Dto
 ```
 
-```bash
-vendor/bin/dto-generator generate                # записать классы
-vendor/bin/dto-generator generate --check        # ничего не писать; код 1, если вывод устарел (для CI)
-vendor/bin/dto-generator generate --dry-run      # показать, что изменится
-vendor/bin/dto-generator generate --format=json  # машиночитаемый отчёт
+Given this schema:
+
+```yaml
+components:
+  schemas:
+    Customer:
+      description: A customer of the shop.
+      type: object
+      required: [id, email]
+      properties:
+        id: {type: string, format: uuid}
+        email: {type: string, format: email, maxLength: 254}
+        first_name: {type: string, minLength: 1}
+        status: {type: string, enum: [active, blocked], default: active}
+        registered_at: {type: string, format: date-time}
 ```
 
-Коды выхода: `0` — успех, `1` — `--check` нашёл расхождения, `2` — ошибки в схемах, при записи или
-непредвиденный сбой, `3` — ошибка конфигурации или неверные опции. Все ошибки выводятся разом (в stderr),
-с местом в схеме. При ошибке в конфиге или схемах ничего не пишется; если сбой случится посреди записи
-(нет прав, диск), уже записанное не откатывается — повторный запуск доведёт вывод до нужного состояния.
-CLI поднимает `memory_limit` ниже 1G до 1G (другой предел — `DTO_GENERATOR_MEMORY_LIMIT=512M`); фатальная
-ошибка PHP, в том числе нехватка памяти, даёт код `2` (на PHP 7.4 — `255`).
-
-В каждом `outputDir` лежит `.dto-generator.manifest.json` (его стоит коммитить): генератор удаляет файлы, которые
-сгенерировал раньше, никогда не перезаписывает файл без заголовка `@generated` и отказывается работать с битым
-манифестом. Устаревший файл удаляется, только если заголовок `@generated` стоит сразу после `<?php` и содержимое
-совпадает с хешем в манифесте; изменённый руками файл остаётся, генератор сообщает о конфликте. Сгенерированные файлы всегда с LF;
-`--check` считает CRLF-копию (git `core.autocrlf`) неизменной, но лучше зафиксировать
-`<outputDir>/** text eol=lf` в `.gitattributes`. Параллельные запуски для одного `outputDir` ждут друг друга (через lock-файл во временном каталоге системы; если он недоступен — без ожидания).
-
-Расширения подключаются явно (`extensions:` — список классов) и автоматически: пакеты, установленные рядом с
-генератором, объявляют свои в `extra.dto-generator.extensions` своего `composer.json`. Автообнаружение видит
-только vendor, в котором лежит сам генератор (у глобальной установки или установки в `tools/` — свой vendor);
-отключается через `discoverExtensions: false`. Версии пакетов проекта расширения берут из его `composer.lock`.
-
-Из PHP:
+`vendor/bin/dto-generator generate` writes `src/Dto/Customer.php` and `src/Dto/CustomerStatus.php`. For PHP 8.2:
 
 ```php
-use MSSTC4PHP\DtoGenerator\Application\Service\Generate\Input;
-use MSSTC4PHP\DtoGenerator\Application\Service\Generate\Mode;
-use MSSTC4PHP\DtoGenerator\DtoGenerator;
+<?php
 
-$output = DtoGenerator::generator()(new Input('/path/to/dto-generator.yaml', Mode::from(Mode::WRITE)));
-$output->status()->value();   // ok | out-of-date | generation-failed | config-failed
-$output->diagnostics()->all();
+// @generated by msstc4php/dto-generator — DO NOT EDIT
+
+declare(strict_types=1);
+
+namespace App\Dto;
+
+/**
+ * A customer of the shop.
+ */
+final readonly class Customer
+{
+    public function __construct(
+        public string $id,
+        public string $email,
+        /**
+         * @phpstan-var ?non-empty-string
+         */
+        public ?string $firstName = null,
+        public ?CustomerStatus $status = CustomerStatus::ACTIVE,
+        public ?\DateTimeImmutable $registeredAt = null,
+    ) {
+    }
+
+    public function withId(string $id): self
+    {
+        return new self($id, $this->email, $this->firstName, $this->status, $this->registeredAt);
+    }
+
+    // withEmail(), withFirstName(), withStatus(), withRegisteredAt()
+}
 ```
 
-### Composer-плагин
+```php
+enum CustomerStatus: string
+{
+    case ACTIVE = 'active';
 
-Пакет — Composer-плагин: после каждого `install`, `update` и `dump-autoload` он перегенерирует DTO, если в
-`composer.json` проекта задан путь к конфигу (путь — относительно `composer.json`). Ставьте пакет в `require-dev`
-(`composer require --dev msstc4php/dto-generator`): иначе генерация пойдёт и при `composer install --no-dev` на
-деплое. Плагин запускает `vendor/bin/dto-generator` отдельным процессом, поэтому результат тот же, что у CLI.
+    case BLOCKED = 'blocked';
+}
+```
+
+With `target.php: '7.4'` the same schema becomes a `final class` with private typed properties, `getX()` and
+clone-based `withX()` methods, and `CustomerStatus` becomes a class of constants (`@phpstan-var CustomerStatus::*`).
+
+Commit the generated files together with `.dto-generator.manifest.json` in each output directory.
+
+## Usage
+
+### CLI
+
+```bash
+vendor/bin/dto-generator generate                       # write the classes
+vendor/bin/dto-generator generate --check               # write nothing; exit 1 when the output is out of date (CI)
+vendor/bin/dto-generator generate --dry-run             # write nothing; show what would change
+vendor/bin/dto-generator generate --format=json         # machine-readable report on stdout
+vendor/bin/dto-generator generate --config=api/dto.yaml # default: dto-generator.yaml, then dto-generator.json
+```
+
+| Exit code | Meaning |
+|---|---|
+| `0` | Success; with `--check`, the output is up to date |
+| `1` | `--check`: the output is out of date |
+| `2` | Errors in the schemas, a [conflict with an existing file](#how-the-output-is-managed), a write that failed, or an unexpected failure (a PHP fatal error included; `255` on PHP 7.4) |
+| `3` | An invalid config or invalid options |
+
+Every error is reported at once, on stderr, with its place in the schema:
+
+```
+error openapi/api.yaml#/components/schemas/Customer/properties/status/enum: The enum mixes strings and integers, which no PHP enum can back.
+Generation failed: 1 error(s).
+```
+
+When the config or a schema has errors, or a file conflicts, nothing is written. If a write fails halfway (permissions, a full disk), the
+files already written stay; the next run brings the output to the expected state.
+
+`--format=json` prints `{"status": …, "diagnostics": [{severity, location, message}], "changes": [{kind, path}]}`,
+where `status` is `ok`, `out-of-date`, `generation-failed` or `config-failed` and `kind` is `create`, `update` or
+`delete`. `changes` lists only the files that change, the manifests included.
+
+The CLI raises a `memory_limit` below 1G to 1G; set `DTO_GENERATOR_MEMORY_LIMIT=512M` (or any other limit) to choose
+another one.
+
+### Composer plugin
+
+After every `composer install`, `update` and `dump-autoload` the plugin regenerates the DTOs, if the project's
+`composer.json` names the config:
 
 ```json
 {
@@ -81,42 +185,88 @@ $output->diagnostics()->all();
 }
 ```
 
-По умолчанию ошибки генерации печатаются как предупреждения и команду Composer не роняют; `failOnError: true`
-делает их ошибкой команды. `--no-plugins` и `--no-scripts` плагин отключают. Если плагин не разрешён в
-`allow-plugins`, работают только CLI и PHP API.
+The plugin runs `vendor/bin/dto-generator` in its own process, so the result is the CLI's. Generation errors are
+printed as warnings and do not fail the Composer command, unless `failOnError` is `true`. `--no-plugins` and
+`--no-scripts` turn the plugin off. Keep the generator in `require-dev`, or a `composer install --no-dev` on deploy
+would run it too.
+
+### PHP API
+
+```php
+use MSSTC4PHP\DtoGenerator\Application\Service\Generate\Input;
+use MSSTC4PHP\DtoGenerator\Application\Service\Generate\Mode;
+use MSSTC4PHP\DtoGenerator\DtoGenerator;
+
+// The config path must be absolute.
+$output = DtoGenerator::generator()(new Input('/path/to/dto-generator.yaml', Mode::from(Mode::WRITE)));
+$output->status()->value();   // ok | out-of-date | generation-failed | config-failed
+$output->diagnostics()->all();
+```
+
+`Mode::CHECK` and `Mode::DRY_RUN` match `--check` and `--dry-run`. For a console command that wraps the generator,
+`DtoGenerator::guard($input, $output, $run)` maps exceptions to the CLI's exit codes (`3` for invalid options, `2`
+otherwise); the Symfony bundle uses it. Unlike `vendor/bin/dto-generator`, it leaves the process settings alone:
+`memory_limit`, `display_errors` and the exit code of a PHP fatal error stay as PHP has them.
 
 ### Docker
 
+The image runs the generator on a mounted project, with the Symfony bridge installed:
+
 ```bash
-docker build -f docker/Dockerfile -t dto-generator .   # --build-arg VERSION=1.2.3 — версия образа
+docker build -f docker/Dockerfile -t dto-generator .
 docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/app" dto-generator --config=dto-generator.yaml [--check]
 ```
 
-`target.php: auto` берётся из `composer.json` смонтированного проекта. Код проекта контейнер не выполняет:
-`verifyClasses: auto` в нём выключен (`DTO_GENERATOR_VERIFY_CLASSES=0`), явное `verifyClasses: true` подключит
-автозагрузчик проекта. Расширения — только установленные в образ; в нём есть мост
-`msstc4symfony/dto-generator-bridge`: ограничения Validator и атрибуты Serializer пишутся по версиям Symfony из
-`composer.lock` проекта. Мост ставится из его репозитория (`--build-arg BRIDGE_REPOSITORY=…`, `BRIDGE_VERSION=^1.0`);
-`make docker-build` подставляет закоммиченный `HEAD` соседнего checkout'а моста (`BRIDGE=<путь>`).
+The container does not run your project's code: `verifyClasses: auto` is off in it
+(`DTO_GENERATOR_VERIFY_CLASSES=0`); only an explicit `verifyClasses: true` loads the project's autoloader. Only the
+extensions installed in the image are available. `target.php: auto` and the bridge's Symfony versions are
+read from the mounted `composer.json` and `composer.lock`. Build arguments: `VERSION` (the generator version the image
+reports to Composer, `1.1.0` by default; the bridge requires at least `1.1.0`), `BRIDGE_REPOSITORY` and
+`BRIDGE_VERSION` (where the bridge comes from, `^1.0` by default). `make docker-build` builds `dto-generator:local`
+with the latest tag as `VERSION` and the sibling bridge checkout, if there is one.
 
-## Требования
+## How the output is managed
 
-- PHP ≥ 7.4 для запуска генератора.
-- Для разработки: PHP 8.x локально и Docker (тесты и lint на 7.4).
+- Each `outputDir` holds `.dto-generator.manifest.json`, the list of generated files with their hashes. Commit it.
+- A class whose schema was removed is deleted, but only when the file still starts with the `@generated` header and
+  its content matches the manifest.
+- A file is overwritten only when it starts with the `@generated` header (right after `<?php`).
+- Anything else is a conflict: a stale file edited by hand, a file without the header where a class goes, an
+  unreadable file, two classes in one file. A conflict is an error (exit `2`) and nothing is written until you move or
+  delete the file.
+- A corrupt manifest stops the run instead of guessing.
+- Unchanged files are not touched. Generated files always use LF; `--check` accepts a CRLF checkout (git
+  `core.autocrlf`), but `<outputDir>/** text eol=lf` in `.gitattributes` keeps them stable.
+- Runs on the same `outputDir` wait for each other (a lock file in the system temporary directory).
 
-## Разработка
+## Documentation
+
+- [Configuration reference](docs/configuration.md) — every key of `dto-generator.yaml`.
+- [`x-` keywords](docs/x-extensions.md) — renaming, custom types, skipping, attributes and aliases.
+- [OpenAPI support](docs/openapi-support.md) — how schemas map to PHP, target versions and known limitations.
+- [Writing an extension](docs/extensions-spi.md) — the SPI for attributes and formats.
+- [Changelog](CHANGELOG.md).
+
+## Development
 
 ```bash
-make install   # зависимости пакета и инструментов (tools/)
-make check     # PHPStan, CS-Fixer, Rector, deptrac, lint на PHP 7.4
-make test      # PHPUnit на локальном PHP
-make test-74   # PHPUnit в контейнере php:7.4-cli
-make test-targets # сгенерированный код: php -l, smoke и PHPStan max на php:7.4…8.5-cli (Docker)
-make infection # мутационное тестирование
-make docker-smoke # собрать образ и сгенерировать им golden-проект
-make fix       # автоисправление стиля и Rector
+make install       # package and tool (tools/) dependencies
+make check         # composer audit, PHPStan, CS-Fixer, Rector, deptrac, PHP 7.4 lint
+make test          # PHPUnit on the local PHP
+make test-74       # PHPUnit in php:7.4-cli (Docker)
+make test-targets  # the generated code: php -l, a smoke run and PHPStan max on php:7.4 … 8.5-cli (Docker)
+make bc-check      # compare the public API with the latest release (Roave)
+make infection     # mutation testing
+make docker-smoke  # build the image and generate the golden project with it
+make fix           # apply Rector and CS-Fixer
 ```
 
-## Лицензия
+Running the generator needs only PHP 7.4; developing it needs PHP 8.x and Docker.
 
-MIT
+## Security
+
+See [SECURITY.md](SECURITY.md).
+
+## License
+
+MIT, see [LICENSE](LICENSE).

@@ -13,7 +13,7 @@
 
 **Tech Stack:** PHP ≥ 7.4, `nikic/php-parser ^5.0`, PHPUnit 9.6, PHPStan 2 max (`phpVersion: 70400`), deptrac, Rector, CS-Fixer, Infection, Docker `php:<ver>-cli`.
 
-**Spec:** `docs/specs/2026-10-01-dto-generator-design.md`:
+**Spec:** `docs/internal/specs/2026-10-01-dto-generator-design.md`:
 - §5.1 — PHP-типы и PHPDoc;
 - §5.2 — порядок аргументов конструктора, default;
 - §5.5 — PHPDoc, `*/`, `@deprecated`, заголовок `@generated`;

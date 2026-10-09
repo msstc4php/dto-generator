@@ -16,7 +16,7 @@
 
 **Tech Stack:** PHP ≥ 7.4, `symfony/console ^5.4 || ^6.4 || ^7.0`, `nikic/php-parser ^5.0`, PHPUnit 9.6, PHPStan 2 max, deptrac, Infection, Docker, GitHub Actions.
 
-**Spec:** `docs/specs/2026-10-01-dto-generator-design.md`:
+**Spec:** `docs/internal/specs/2026-10-01-dto-generator-design.md`:
 - §3 — поток данных, «ничего не пишется при ошибке»;
 - §9.1 — запись;
 - §9.2 — CLI;
