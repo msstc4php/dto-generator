@@ -30,9 +30,13 @@ final class ClassModel
 
     private ?DiscriminatorModel $discriminator;
 
+    /** @var list<DiscriminatorValues> */
+    private array $discriminatorValues;
+
     /**
      * @param list<PropertyModel> $properties own properties only, in schema order
      * @param list<AttributeModel> $attributes
+     * @param list<DiscriminatorValues> $discriminatorValues root discriminator first
      */
     public function __construct(
         ClassName $name,
@@ -43,7 +47,8 @@ final class ClassModel
         DocModel $doc,
         SchemaLocation $source,
         array $attributes = [],
-        ?DiscriminatorModel $discriminator = null
+        ?DiscriminatorModel $discriminator = null,
+        array $discriminatorValues = []
     ) {
         if ($parent instanceof ClassName && $parent->equals($name)) {
             throw new InvalidModel(sprintf('Class %s cannot extend itself.', $name->fqcn()));
@@ -51,6 +56,19 @@ final class ClassModel
 
         if ($discriminator instanceof DiscriminatorModel && !$kind->isAbstract()) {
             throw new InvalidModel(sprintf('Only an abstract class can carry a discriminator; %s is %s.', $name->fqcn(), $kind->value()));
+        }
+
+        if ($discriminatorValues !== [] && !$kind->equals(ClassKind::from(ClassKind::FINAL))) {
+            throw new InvalidModel(sprintf('Only a final class is selected by discriminator values; %s is %s.', $name->fqcn(), $kind->value()));
+        }
+
+        $checked = [];
+        foreach ($discriminatorValues as $values) {
+            if (isset($checked[$values->property()])) {
+                throw new InvalidModel(sprintf('Class %s has two sets of discriminator values for $%s.', $name->fqcn(), $values->property()));
+            }
+
+            $checked[$values->property()] = true;
         }
 
         $names = [];
@@ -79,6 +97,7 @@ final class ClassModel
         $this->source = $source;
         $this->attributes = $attributes;
         $this->discriminator = $discriminator;
+        $this->discriminatorValues = $discriminatorValues;
     }
 
     public function name(): ClassName
@@ -143,6 +162,41 @@ final class ClassModel
         return $this->discriminator;
     }
 
+    /**
+     * @return list<DiscriminatorValues> root discriminator first
+     */
+    public function discriminatorValues(): array
+    {
+        return $this->discriminatorValues;
+    }
+
+    public function discriminatorValuesOf(string $property): ?DiscriminatorValues
+    {
+        foreach ($this->discriminatorValues as $values) {
+            if ($values->property() === $property) {
+                return $values;
+            }
+        }
+
+        return null;
+    }
+
+    public function withDiscriminatorValues(DiscriminatorValues ...$values): self
+    {
+        return new self(
+            $this->name,
+            $this->kind,
+            $this->parent,
+            $this->properties,
+            $this->mutability,
+            $this->doc,
+            $this->source,
+            $this->attributes,
+            $this->discriminator,
+            $values,
+        );
+    }
+
     public function withAddedAttributes(AttributeModel ...$attributes): self
     {
         return new self(
@@ -155,6 +209,7 @@ final class ClassModel
             $this->source,
             array_merge($this->attributes, $attributes),
             $this->discriminator,
+            $this->discriminatorValues,
         );
     }
 
@@ -170,6 +225,7 @@ final class ClassModel
             $this->source,
             $this->attributes,
             $discriminator,
+            $this->discriminatorValues,
         );
     }
 
@@ -185,6 +241,7 @@ final class ClassModel
             $this->source,
             $this->attributes,
             $this->discriminator,
+            $this->discriminatorValues,
         );
     }
 }

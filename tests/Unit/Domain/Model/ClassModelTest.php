@@ -10,6 +10,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\ClassKind;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\DiscriminatorModel;
+use MSSTC4PHP\DtoGenerator\Domain\Model\DiscriminatorValues;
 use MSSTC4PHP\DtoGenerator\Domain\Model\DocModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\PropertyModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ScalarType;
@@ -152,6 +153,36 @@ final class ClassModelTest extends TestCase
         $second = new AttributeModel(ClassName::fromFqcn('App\Second'));
 
         self::assertSame([$first, $second], $this->classWith([])->withAddedAttributes($first)->withAddedAttributes($second)->attributes());
+    }
+
+    public function testOnlyFinalClassesAreSelectedByDiscriminatorValues(): void
+    {
+        $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('Only a final class is selected by discriminator values; App\User is open.');
+
+        $this->classWith([], ClassKind::OPEN)->withDiscriminatorValues(new DiscriminatorValues('kind', ['user']));
+    }
+
+    public function testRejectsTwoValueSetsForOneProperty(): void
+    {
+        $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('Class App\User has two sets of discriminator values for $kind.');
+
+        $this->classWith([])->withDiscriminatorValues(new DiscriminatorValues('kind', ['a']), new DiscriminatorValues('kind', ['b']));
+    }
+
+    public function testKeepsDiscriminatorValuesThroughEveryCopy(): void
+    {
+        $values = new DiscriminatorValues('kind', ['cat', 1]);
+        $class = $this->classWith([$this->property('id')])->withDiscriminatorValues($values);
+
+        self::assertSame([], $this->classWith([])->discriminatorValues());
+        self::assertSame([$values], $class->discriminatorValues());
+        self::assertSame($values, $class->discriminatorValuesOf('kind'));
+        self::assertNull($class->discriminatorValuesOf('id'));
+        self::assertSame([$values], $class->withProperties($this->property('name'))->discriminatorValues());
+        self::assertSame([$values], $class->withAddedAttributes(new AttributeModel(ClassName::fromFqcn('App\Marker')))->discriminatorValues());
+        self::assertSame([$values], $class->withHierarchy(ClassKind::from(ClassKind::FINAL), ClassName::fromFqcn('App\Pet'), null)->discriminatorValues());
     }
 
     /**
