@@ -986,4 +986,31 @@ final class Order
             $emitter->emit(EmitterFixture::phone(), EmitterFixture::target('7.4', Mutability::IMMUTABLE), $named, EmitterFixture::device()),
         );
     }
+
+    /**
+     * @dataProvider wrongParents
+     */
+    public function testRefusesAParentThatDoesNotMatch(?ClassModel $parent, string $message): void
+    {
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessage($message);
+
+        (new PhpParserEmitter())->emit(EmitterFixture::dog(), EmitterFixture::target('8.2', Mutability::IMMUTABLE), EmitterFixture::animal()->properties(), $parent);
+    }
+
+    /**
+     * @return array<string, array{ClassModel|null, string}>
+     */
+    public static function wrongParents(): array
+    {
+        $animal = EmitterFixture::animal();
+        $renamed = EmitterFixture::model('App\Dto\Beast', null, $animal->properties())->withHierarchy(ClassKind::from(ClassKind::OPEN), null, null);
+        $reordered = $animal->withProperties(...array_reverse($animal->properties()));
+
+        return [
+            'missing' => [null, 'App\Dto\Dog inherits properties, so its parent class is needed to call its constructor.'],
+            'another class' => [$renamed, 'App\Dto\Beast is not the parent of App\Dto\Dog whose properties end the inherited ones.'],
+            'other properties' => [$reordered, 'App\Dto\Animal is not the parent of App\Dto\Dog whose properties end the inherited ones.'],
+        ];
+    }
 }
