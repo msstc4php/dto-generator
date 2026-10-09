@@ -27,9 +27,12 @@ All notable changes to this package are documented here. The format follows
   `\InvalidArgumentException`. A class selected by a single value takes it as the default, and the parameter moves
   behind the required ones. An open class selected by the mapping accepts its own values when it is instantiated
   itself and its subclasses' values only from them. No class in a discriminated chain (the discriminated bases,
-  their ancestors and their subclasses) has a `withX()`/`setX()` for a property a discriminator of that chain reads;
-  a class outside every such chain that inherits the property from one (a sibling `allOf` subclass of a shared base)
-  declares its own `withX()`/`setX()` for it. Only string, integer and enum discriminators are checked; another
+  their ancestors and their subclasses) has a `withX()`/`setX()` for a property a discriminator of that chain reads.
+  The rule is per property: a subclass whose own chain does not read it, while its parent's does (a sibling `allOf`
+  subclass of a shared base, or a base with a different discriminator), gets the mutators back. It declares the
+  setter and, on 7.4, 8.0 and 8.5, the cloning wither itself; its subclasses inherit them. On 8.1–8.4 an open class
+  has no withers, so its final subclasses declare the `new self` wither; with `dto.withers: false` or `accessors:
+  public-properties` there is none to restore. Only string, integer and enum discriminators are checked; another
   type, an untyped one included, gives a warning:
 
   ```php
