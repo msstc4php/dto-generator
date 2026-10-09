@@ -202,3 +202,29 @@ components:
     Labels:
       type: array
       items: {type: object, properties: {text: {type: string}}}
+    Shipment:
+      description: A shipment, told apart by an enum.
+      oneOf:
+        - $ref: '#/components/schemas/Parcel'
+        - $ref: '#/components/schemas/Letter'
+      discriminator:
+        propertyName: mode
+        mapping:
+          parcel: '#/components/schemas/Parcel'
+          box: '#/components/schemas/Parcel'
+          letter: '#/components/schemas/Letter'
+    ShipmentMode:
+      type: string
+      enum: [parcel, box, letter]
+    Parcel:
+      type: object
+      required: [mode, weight]
+      properties:
+        mode: {$ref: '#/components/schemas/ShipmentMode'}
+        weight: {type: number}
+    Letter:
+      type: object
+      required: [mode]
+      properties:
+        mode: {$ref: '#/components/schemas/ShipmentMode'}
+        stamp: {type: string}
