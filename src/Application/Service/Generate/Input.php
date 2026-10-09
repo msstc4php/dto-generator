@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Application\Service\Generate;
 
+/**
+ * @api
+ */
 final class Input
 {
     private string $configPath;

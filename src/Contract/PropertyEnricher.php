@@ -6,6 +6,9 @@ namespace MSSTC4PHP\DtoGenerator\Contract;
 
 use MSSTC4PHP\DtoGenerator\Domain\Model\AttributeModel;
 
+/**
+ * @api
+ */
 interface PropertyEnricher
 {
     /**

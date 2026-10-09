@@ -6,6 +6,9 @@ namespace MSSTC4PHP\DtoGenerator\Application\Service\Generate;
 
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
 
+/**
+ * @api
+ */
 final class Output
 {
     private Status $status;

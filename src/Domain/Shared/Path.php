@@ -6,6 +6,8 @@ namespace MSSTC4PHP\DtoGenerator\Domain\Shared;
 
 /**
  * Lexical path handling; never touches the filesystem, so symlinks are not resolved.
+ *
+ * @api
  */
 final class Path
 {

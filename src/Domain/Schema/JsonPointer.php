@@ -11,6 +11,8 @@ use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
  * RFC 6901 JSON pointers.
  *
  * @phpstan-import-type JsonValue from Json
+ *
+ * @api
  */
 final class JsonPointer
 {

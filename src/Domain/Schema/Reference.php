@@ -7,6 +7,9 @@ namespace MSSTC4PHP\DtoGenerator\Domain\Schema;
 use MSSTC4PHP\DtoGenerator\Domain\Exception\InvalidModel;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\Path;
 
+/**
+ * @api
+ */
 final class Reference
 {
     private function __construct()

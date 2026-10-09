@@ -6,6 +6,8 @@ namespace MSSTC4PHP\DtoGenerator\Application\Service\Generate;
 
 /**
  * What writing does to one file.
+ *
+ * @api
  */
 final class FileChange
 {

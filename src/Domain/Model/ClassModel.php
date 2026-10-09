@@ -8,6 +8,9 @@ use MSSTC4PHP\DtoGenerator\Domain\Exception\InvalidModel;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
 use MSSTC4PHP\DtoGenerator\Domain\Target\Mutability;
 
+/**
+ * @api
+ */
 final class ClassModel
 {
     private ClassName $name;

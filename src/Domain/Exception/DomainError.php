@@ -8,6 +8,8 @@ use Throwable;
 
 /**
  * Marker for every domain exception, so outer layers can turn them into diagnostics in one catch.
+ *
+ * @api
  */
 interface DomainError extends Throwable
 {

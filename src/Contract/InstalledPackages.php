@@ -8,6 +8,8 @@ use MSSTC4PHP\DtoGenerator\Domain\Exception\InvalidModel;
 
 /**
  * Versions of the packages the consuming project has installed, so an extension can target, say, symfony/validator 6 or 7.
+ *
+ * @api
  */
 final class InstalledPackages
 {

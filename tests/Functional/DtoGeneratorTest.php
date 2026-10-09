@@ -66,6 +66,17 @@ final class DtoGeneratorTest extends TestCase
         ];
     }
 
+    public function testPreparesTheProcessForCommandsThatWrapTheGenerator(): void
+    {
+        ini_set('memory_limit', '128M');
+        ini_set('display_errors', 'stdout');
+
+        DtoGenerator::prepareProcess(new BufferedOutput());
+
+        self::assertSame('1G', ini_get('memory_limit'));
+        self::assertSame('stderr', ini_get('display_errors'));
+    }
+
     public function testTakesTheMemoryLimitFromTheEnvironment(): void
     {
         ini_set('memory_limit', '2G');

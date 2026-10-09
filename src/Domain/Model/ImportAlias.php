@@ -8,6 +8,8 @@ use MSSTC4PHP\DtoGenerator\Domain\Exception\InvalidModel;
 
 /**
  * `use <namespace> as <alias>;` — e.g. Symfony constraints as `Assert`, which annotations rely on.
+ *
+ * @api
  */
 final class ImportAlias
 {

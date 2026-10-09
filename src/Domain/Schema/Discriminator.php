@@ -6,6 +6,9 @@ namespace MSSTC4PHP\DtoGenerator\Domain\Schema;
 
 use MSSTC4PHP\DtoGenerator\Domain\Exception\InvalidModel;
 
+/**
+ * @api
+ */
 final class Discriminator
 {
     private string $propertyName;

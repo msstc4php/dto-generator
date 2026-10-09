@@ -205,8 +205,9 @@ $output->diagnostics()->all();
 
 `Mode::CHECK` and `Mode::DRY_RUN` match `--check` and `--dry-run`. For a console command that wraps the generator,
 `DtoGenerator::guard($input, $output, $run)` maps exceptions to the CLI's exit codes (`3` for invalid options, `2`
-otherwise); the Symfony bundle uses it. Unlike `vendor/bin/dto-generator`, it leaves the process settings alone:
-`memory_limit`, `display_errors` and the exit code of a PHP fatal error stay as PHP has them.
+otherwise); the Symfony bundle uses it. Call `DtoGenerator::prepareProcess($output)` first to give the command the CLI's
+process settings: `memory_limit` (1G or `DTO_GENERATOR_MEMORY_LIMIT`), errors on stderr and exit code `2` on a PHP
+fatal error. It changes the whole process, so call it only from a one-off command.
 
 ### Docker
 

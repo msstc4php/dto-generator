@@ -8,6 +8,8 @@ namespace MSSTC4PHP\DtoGenerator\Domain\Shared;
  * Wraps a default so that "default is null" stays distinct from "no default".
  *
  * @phpstan-import-type JsonValue from Json
+ *
+ * @api
  */
 final class DefaultValue
 {

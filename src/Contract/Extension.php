@@ -10,6 +10,8 @@ use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
  * A plugin of the generator (spec §8), created without arguments and configured from `extensionConfig.<name>`.
  *
  * @phpstan-import-type JsonValue from Json
+ *
+ * @api
  */
 interface Extension
 {

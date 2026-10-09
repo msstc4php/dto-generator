@@ -8,6 +8,8 @@ use InvalidArgumentException;
 
 /**
  * One emitted PHP file, addressed inside the output directory of its source.
+ *
+ * @api
  */
 final class GeneratedFile
 {

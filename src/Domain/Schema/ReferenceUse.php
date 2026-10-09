@@ -8,6 +8,8 @@ use MSSTC4PHP\DtoGenerator\Domain\Exception\InvalidModel;
 
 /**
  * A `$ref` together with the place it was written, for resolution and for diagnostics.
+ *
+ * @api
  */
 final class ReferenceUse
 {

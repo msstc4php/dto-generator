@@ -6,6 +6,9 @@ namespace MSSTC4PHP\DtoGenerator\Domain\Model;
 
 use MSSTC4PHP\DtoGenerator\Domain\Shared\AbstractEnum;
 
+/**
+ * @api
+ */
 final class EnumBacking extends AbstractEnum
 {
     public const STRING = 'string';

@@ -6,6 +6,9 @@ namespace MSSTC4PHP\DtoGenerator\Domain\Target;
 
 use MSSTC4PHP\DtoGenerator\Domain\Shared\AbstractEnum;
 
+/**
+ * @api
+ */
 final class MetadataMode extends AbstractEnum
 {
     public const ATTRIBUTES = 'attributes';

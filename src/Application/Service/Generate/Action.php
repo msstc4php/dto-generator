@@ -33,6 +33,8 @@ use MSSTC4PHP\DtoGenerator\Domain\Target\TargetProfile;
 
 /**
  * The whole run (spec §3): config → schemas → IR → code → files. Nothing is written once any error is known.
+ *
+ * @api
  */
 final class Action
 {

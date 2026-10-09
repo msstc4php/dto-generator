@@ -10,6 +10,8 @@ use MSSTC4PHP\DtoGenerator\Domain\Exception\InvalidModel;
 /**
  * Stand-in for native enums, which need PHP 8.1 while the generator runs on 7.4.
  * Instances are interned per class and value, so `===` is value equality.
+ *
+ * @api
  */
 abstract class AbstractEnum
 {
