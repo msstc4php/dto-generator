@@ -26,7 +26,20 @@ final class SchemaShape
             && !self::isClass($schema)
             && $schema->ref() === null
             && !$schema->extensions()->has('x-php-type')
-            && !self::isComposed($schema);
+            && !self::isComposed($schema)
+            && !self::isMixedEnum($schema);
+    }
+
+    /**
+     * Strings and integers together: no PHP enum can back them, so the property takes a union of both.
+     */
+    public static function isMixedEnum(Schema $schema): bool
+    {
+        $values = array_filter($schema->enum() ?? [], static fn ($value): bool => $value !== null);
+        $strings = array_filter($values, 'is_string');
+        $ints = array_filter($values, 'is_int');
+
+        return $strings !== [] && $ints !== [] && count($strings) + count($ints) === count($values);
     }
 
     /**

@@ -318,7 +318,7 @@ final class TypeMapperTest extends TestCase
             'Currency' => ['type' => 'string', 'enum' => ['EUR']],
             'MaybeTag' => ['type' => ['object', 'null'], 'properties' => ['label' => ['type' => 'string']]],
             'MaybeCurrency' => ['enum' => ['EUR', null]],
-            'Failed' => ['enum' => ['a', 1]],
+            'Failed' => ['enum' => ['in-progress', 'in_progress']],
             'LoopA' => ['$ref' => '#/components/schemas/LoopB'],
             'LoopB' => ['$ref' => '#/components/schemas/LoopA'],
             'Hidden' => ['type' => 'object', 'properties' => ['x' => []], 'x-php-skip' => true],

@@ -144,6 +144,10 @@ final class TypeMapper
             return $this->mapWithin($typed[0], $diagnostics, $aliases);
         }
 
+        if (SchemaShape::isMixedEnum($schema)) {
+            return $this->mixedEnum($schema, $diagnostics);
+        }
+
         if (SchemaShape::isEnum($schema)) {
             $diagnostics->warning(
                 'This inline enum is not generated (only properties of generated classes get one), so the property keeps its plain type.',
@@ -250,6 +254,27 @@ final class TypeMapper
                 || $member->propertyNames() !== []
                 || $member->extensions()->has('x-php-type'),
         ));
+    }
+
+    private function mixedEnum(Schema $schema, Diagnostics $diagnostics): TypeModel
+    {
+        $declared = array_map(static fn (SchemaType $type): string => $type->value(), $schema->nonNullTypes());
+        $numeric = in_array(SchemaType::INTEGER, $declared, true) || in_array(SchemaType::NUMBER, $declared, true);
+        if ($declared !== [] && (!in_array(SchemaType::STRING, $declared, true) || !$numeric)) {
+            $diagnostics->error('"type" does not match the enum values, which are strings and integers.', $schema->location()->child('type'));
+
+            return new MixedType();
+        }
+
+        $diagnostics->warning(
+            'The enum mixes strings and integers, which no PHP enum can back; the property takes either.',
+            $schema->location()->child('enum'),
+        );
+        $values = $schema->enum() ?? [];
+        $strings = array_values(array_unique(array_filter($values, 'is_string')));
+        $ints = array_values(array_unique(array_filter($values, 'is_int')));
+
+        return new UnionType(ScalarType::string(LiteralType::union($strings)), ScalarType::int(LiteralType::union($ints)));
     }
 
     /**

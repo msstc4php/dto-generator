@@ -369,10 +369,10 @@ final class BuildTest extends TestCase
         $at = self::AT;
         $output = ModelFixture::build([
             'User' => ['type' => 'object', 'properties' => ['level' => ['$ref' => '#/components/schemas/Level']]],
-            'Level' => ['enum' => ['low', 1]],
+            'Level' => ['enum' => ['in-progress', 'in_progress']],
         ]);
 
-        self::assertSame(["error {$at}Level/enum: The enum mixes strings and integers, which no PHP enum can back."], ModelFixture::messages($output));
+        self::assertSame(["error {$at}Level/enum/1: Enum values \"in-progress\" and \"in_progress\" both become case IN_PROGRESS."], ModelFixture::messages($output));
         self::assertSame(['App\Dto\User' => ['level: mixed']], ModelFixture::classes($output));
         self::assertSame([], ModelFixture::enums($output));
     }
@@ -391,9 +391,9 @@ final class BuildTest extends TestCase
     public function testReportsAnInlineEnumItCannotBuildOnce(): void
     {
         $at = self::AT;
-        $output = ModelFixture::build(['User' => ['type' => 'object', 'properties' => ['level' => ['enum' => ['low', 1]]]]]);
+        $output = ModelFixture::build(['User' => ['type' => 'object', 'properties' => ['level' => ['enum' => ['in-progress', 'in_progress']]]]]);
 
-        self::assertSame(["error {$at}User/properties/level/enum: The enum mixes strings and integers, which no PHP enum can back."], ModelFixture::messages($output));
+        self::assertSame(["error {$at}User/properties/level/enum/1: Enum values \"in-progress\" and \"in_progress\" both become case IN_PROGRESS."], ModelFixture::messages($output));
         self::assertSame(['App\\Dto\\User' => ['level: mixed']], ModelFixture::classes($output));
     }
 

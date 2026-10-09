@@ -42,4 +42,28 @@ final class SchemaCoverageTest extends TestCase
 
         self::assertSame([self::AT . 'C/properties/i/default: Default 6 does not match 5; null is used instead.'], ModelFixture::messages($output));
     }
+
+    public function testGivesAMixedEnumAUnionOfItsLiterals(): void
+    {
+        $output = ModelFixture::build(['C' => ['type' => 'object', 'required' => ['m'], 'properties' => [
+            'm' => ['enum' => ['active', 2, 'blocked']],
+            'n' => ['enum' => ['a', 1, null]],
+            'o' => ['type' => ['string', 'integer'], 'enum' => ["it's", 1, 1]],
+        ]]]);
+
+        $warning = 'warning /project/api/openapi.yaml#/components/schemas/C/properties/%s/enum: The enum mixes strings and integers, which no PHP enum can back; the property takes either.';
+        self::assertSame([sprintf($warning, 'm'), sprintf($warning, 'n'), sprintf($warning, 'o')], ModelFixture::messages($output));
+        self::assertSame(["m: 'active'|'blocked'|2", "n: 'a'|1|null", 'o: string|1|null'], ModelFixture::classes($output)['App\Dto\C']);
+        self::assertSame([], ModelFixture::enums($output));
+    }
+
+    public function testRejectsAMixedEnumWhoseTypeLeavesOneKindOut(): void
+    {
+        $output = ModelFixture::build(['C' => ['type' => 'object', 'properties' => ['m' => ['type' => 'string', 'enum' => ['a', 1]]]]]);
+
+        self::assertSame(
+            [self::AT . 'C/properties/m/type: "type" does not match the enum values, which are strings and integers.'],
+            ModelFixture::messages($output),
+        );
+    }
 }
