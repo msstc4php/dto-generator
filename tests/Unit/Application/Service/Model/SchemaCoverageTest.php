@@ -66,4 +66,116 @@ final class SchemaCoverageTest extends TestCase
             ModelFixture::messages($output),
         );
     }
+
+    public function testHoistsInlineMembersOfAPropertyUnion(): void
+    {
+        $output = ModelFixture::build(['Holder' => ['type' => 'object', 'properties' => ['either' => ['oneOf' => [
+            ['type' => 'object', 'title' => 'by id', 'properties' => ['id' => ['type' => 'integer']]],
+            ['type' => 'object', 'properties' => ['code' => ['type' => 'string']]],
+            ['type' => 'string'],
+        ]]]]]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        $classes = ModelFixture::classes($output);
+        self::assertSame(['either: App\Dto\ById|App\Dto\HolderEitherOption2|string|null'], $classes['App\Dto\Holder']);
+        self::assertSame(['id: int|null'], $classes['App\Dto\ById']);
+        self::assertSame(['code: string|null'], $classes['App\Dto\HolderEitherOption2']);
+    }
+
+    public function testNumbersAnyOfMembersAfterOneOfMembers(): void
+    {
+        $output = ModelFixture::build(['Holder' => ['type' => 'object', 'properties' => ['either' => [
+            'oneOf' => [['type' => 'string']],
+            'anyOf' => [['type' => 'object', 'properties' => ['a' => ['type' => 'string']]]],
+        ]]]]);
+
+        self::assertArrayHasKey('App\Dto\HolderEitherOption2', ModelFixture::classes($output));
+    }
+
+    public function testHoistsUnionMembersInsideItems(): void
+    {
+        $output = ModelFixture::build(['Holder' => ['type' => 'object', 'properties' => ['list' => ['type' => 'array', 'items' => ['anyOf' => [
+            ['type' => 'object', 'properties' => ['a' => ['type' => 'string']]],
+            ['type' => 'object', 'properties' => ['b' => ['type' => 'string']]],
+        ]]]]]]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(['list: list<App\Dto\HolderListItemOption1|App\Dto\HolderListItemOption2>|null'], ModelFixture::classes($output)['App\Dto\Holder']);
+    }
+
+    public function testHoistsInlineEnumMembers(): void
+    {
+        $output = ModelFixture::build(['Holder' => ['type' => 'object', 'properties' => ['either' => ['oneOf' => [
+            ['type' => 'string', 'enum' => ['a', 'b']],
+            ['type' => 'integer'],
+        ]]]]]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(['App\Dto\HolderEitherOption1'], ModelFixture::enums($output));
+    }
+
+    public function testNamesNestedInlineObjectsAfterTheHoistedMember(): void
+    {
+        $output = ModelFixture::build(['Holder' => ['type' => 'object', 'properties' => ['either' => ['oneOf' => [
+            ['type' => 'object', 'properties' => ['address' => ['type' => 'object', 'properties' => ['city' => ['type' => 'string']]]]],
+            ['type' => 'string'],
+        ]]]]]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertArrayHasKey('App\Dto\HolderEitherOption1Address', ModelFixture::classes($output));
+    }
+
+    public function testTakesXPhpClassNameOnAMember(): void
+    {
+        $output = ModelFixture::build(['Holder' => ['type' => 'object', 'properties' => ['either' => ['oneOf' => [
+            ['type' => 'object', 'title' => 'ignored', 'x-php-class-name' => 'Chosen', 'properties' => ['a' => ['type' => 'string']]],
+            ['type' => 'string'],
+        ]]]]]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertArrayHasKey('App\Dto\Chosen', ModelFixture::classes($output));
+    }
+
+    public function testReportsATitleThatCollides(): void
+    {
+        $output = ModelFixture::build([
+            'User' => ['type' => 'object', 'properties' => ['n' => ['type' => 'string']]],
+            'Holder' => ['type' => 'object', 'properties' => ['either' => ['oneOf' => [
+                ['type' => 'object', 'title' => 'User', 'properties' => ['id' => ['type' => 'integer']]],
+                ['type' => 'string'],
+            ]]]],
+        ]);
+
+        $collisions = array_filter(ModelFixture::messages($output), static fn (string $m): bool => strpos($m, 'x-php-class-name') !== false);
+        self::assertCount(1, $collisions);
+    }
+
+    public function testRefusesInlineMembersOfAnInlineDiscriminatedUnion(): void
+    {
+        $output = ModelFixture::build(['Holder' => ['type' => 'object', 'properties' => ['pet' => [
+            'oneOf' => [['type' => 'object', 'properties' => ['kind' => ['type' => 'string']]]],
+            'discriminator' => ['propertyName' => 'kind'],
+        ]]]]);
+
+        self::assertSame(
+            [self::AT . 'Holder/properties/pet/oneOf/0: An inline object in a oneOf or anyOf with a discriminator is not generated: the discriminator mapping needs a $ref. Move it to components/schemas.'],
+            ModelFixture::messages($output),
+        );
+    }
+
+    public function testChecksTheExtensionKeysOfInlineMembers(): void
+    {
+        $output = ModelFixture::build(['Holder' => ['type' => 'object', 'properties' => ['either' => ['oneOf' => [
+            ['type' => 'object', 'x-php-clas-name' => 'Typo', 'properties' => ['a' => ['type' => 'string']]],
+            ['type' => 'string', 'x-dto-mutable' => true],
+        ]]]]]);
+
+        self::assertSame(
+            [
+                self::AT . 'Holder/properties/either/oneOf/0/x-php-clas-name: Unknown extension "x-php-clas-name"; known: x-php-class-name, x-php-name, x-php-type, x-dto-mutable, x-php-all-of, x-php-skip, x-php-attributes, x-enum-descriptions, x-enum-varnames.',
+                'warning /project/api/openapi.yaml#/components/schemas/Holder/properties/either/oneOf/1/x-dto-mutable: "x-dto-mutable" has no effect here.',
+            ],
+            ModelFixture::messages($output),
+        );
+    }
 }

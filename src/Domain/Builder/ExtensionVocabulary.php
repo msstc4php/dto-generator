@@ -105,13 +105,14 @@ final class ExtensionVocabulary
     }
 
     /**
-     * The `items` and `additionalProperties` schemas, down to any depth.
+     * The `items` and `additionalProperties` schemas and the inline members of a `oneOf`/`anyOf`, down to any depth.
      *
      * @param list<string> $aliases
      */
     private static function checkValues(Schema $schema, Diagnostics $diagnostics, array $aliases): void
     {
-        foreach ([$schema->items(), $schema->additionalProperties()] as $value) {
+        $members = array_filter(array_merge($schema->oneOf(), $schema->anyOf()), static fn (Schema $member): bool => $member->ref() === null);
+        foreach (array_merge([$schema->items(), $schema->additionalProperties()], $members) as $value) {
             if ($value instanceof Schema) {
                 self::checkKeys($value, self::withDeclaration($value, self::ITEMS), $diagnostics, $aliases);
                 self::checkValues($value, $diagnostics, $aliases);
