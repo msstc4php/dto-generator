@@ -271,8 +271,8 @@ final class TypeMapper
             $schema->location()->child('enum'),
         );
         $values = $schema->enum() ?? [];
-        $strings = array_values(array_unique(array_filter($values, 'is_string')));
-        $ints = array_values(array_unique(array_filter($values, 'is_int')));
+        $strings = array_unique(array_filter($values, 'is_string'));
+        $ints = array_unique(array_filter($values, 'is_int'));
 
         return new UnionType(ScalarType::string(LiteralType::union($strings)), ScalarType::int(LiteralType::union($ints)));
     }

@@ -34,6 +34,7 @@ final class SchemaCoverageTest extends TestCase
         $output = ModelFixture::build(['C' => ['type' => 'object', 'properties' => ['s' => ['type' => 'string', 'const' => 5]]]]);
 
         self::assertSame([self::AT . 'C/properties/s/const: "const" is not of the declared type.'], ModelFixture::messages($output));
+        self::assertSame(['s: mixed'], ModelFixture::classes($output)['App\Dto\C']);
     }
 
     public function testRejectsADefaultOtherThanTheConst(): void
@@ -205,5 +206,65 @@ final class SchemaCoverageTest extends TestCase
         $output = ModelFixture::build(['Pets' => ['type' => 'array', 'x-php-skip' => true, 'items' => ['type' => 'object', 'properties' => ['name' => ['type' => 'string']]]]]);
 
         self::assertSame([], ModelFixture::classes($output));
+    }
+
+    public function testNamesAnArrayMemberAfterItsPosition(): void
+    {
+        $output = ModelFixture::build(['Holder' => ['type' => 'object', 'properties' => ['either' => ['oneOf' => [
+            ['type' => 'array', 'items' => ['type' => 'object', 'properties' => ['a' => ['type' => 'string']]]],
+            ['type' => 'string'],
+        ]]]]]);
+
+        self::assertArrayHasKey('App\Dto\HolderEitherOption1Item', ModelFixture::classes($output));
+    }
+
+    public function testNamesAliasMembersAfterTheirTitle(): void
+    {
+        $output = ModelFixture::build(['Shape' => ['oneOf' => [
+            ['type' => 'object', 'title' => 'circle', 'properties' => ['r' => ['type' => 'number']]],
+            ['type' => 'string'],
+        ]]]);
+
+        self::assertSame(['App\Dto\Circle'], array_keys(ModelFixture::classes($output)));
+    }
+
+    public function testReportsEveryInlineMemberOfAnInlineDiscriminatedUnion(): void
+    {
+        $output = ModelFixture::build(['Holder' => ['type' => 'object', 'properties' => ['pet' => [
+            'oneOf' => [
+                ['type' => 'object', 'properties' => ['kind' => ['type' => 'string']]],
+                ['type' => 'object', 'properties' => ['kind' => ['type' => 'string']]],
+            ],
+            'discriminator' => ['propertyName' => 'kind'],
+        ]]]]);
+
+        $message = ': An inline object in a oneOf or anyOf with a discriminator is not generated: the discriminator mapping needs a $ref. Move it to components/schemas.';
+        self::assertSame([self::AT . 'Holder/properties/pet/oneOf/0' . $message, self::AT . 'Holder/properties/pet/oneOf/1' . $message], ModelFixture::messages($output));
+    }
+
+    public function testChecksAnyOfMembersButNotReferencedOnes(): void
+    {
+        $output = ModelFixture::build([
+            'User' => ['type' => 'object', 'properties' => ['n' => ['type' => 'string']]],
+            'Holder' => ['type' => 'object', 'properties' => ['either' => [
+                'oneOf' => [['$ref' => '#/components/schemas/User', 'x-dto-mutable' => true]],
+                'anyOf' => [['type' => 'string', 'x-dto-mutable' => true]],
+            ]]],
+        ]);
+
+        self::assertSame(
+            [
+                'warning /project/api/openapi.yaml#/components/schemas/Holder/properties/either/anyOf/0/x-dto-mutable: "x-dto-mutable" has no effect here.',
+                'warning /project/api/openapi.yaml#/components/schemas/Holder/properties/either: "oneOf" and "anyOf" together become one union, which admits more than the schema does.',
+            ],
+            ModelFixture::messages($output),
+        );
+    }
+
+    public function testListsEachLiteralOfAMixedEnumOnce(): void
+    {
+        $output = ModelFixture::build(['C' => ['type' => 'object', 'required' => ['m'], 'properties' => ['m' => ['enum' => ['a', 'a', 1]]]]]);
+
+        self::assertSame(["m: 'a'|1"], ModelFixture::classes($output)['App\Dto\C']);
     }
 }

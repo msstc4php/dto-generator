@@ -69,6 +69,20 @@ final class EnumBuilderTest extends TestCase
         yield 'two names, one case' => [['in-progress', 'in_progress'], 'error ' . self::AT . '/enum/1: Enum values 1 and 2 both become case IN_PROGRESS.'];
     }
 
+    public function testReportsEveryUnusableVarname(): void
+    {
+        [$enum, $messages] = $this->build(['type' => 'integer', 'enum' => [1, 2], 'x-enum-varnames' => ['%%', '%%%']]);
+
+        self::assertNull($enum);
+        self::assertSame(
+            [
+                'error ' . self::AT . '/x-enum-varnames/0: Name "%%" has no characters usable in a case name.',
+                'error ' . self::AT . '/x-enum-varnames/1: Name "%%%" has no characters usable in a case name.',
+            ],
+            $messages,
+        );
+    }
+
     /**
      * @dataProvider malformedVarnames
      *

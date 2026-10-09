@@ -38,7 +38,7 @@ final class LiteralType
     /**
      * Null when a value is unsafe or there is none.
      *
-     * @param list<int|string|bool> $values
+     * @param array<int|string|bool> $values
      */
     public static function union(array $values): ?string
     {
