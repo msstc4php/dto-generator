@@ -104,12 +104,16 @@ final class ClassShape
      */
     public function checks(): array
     {
+        $byName = [];
+        foreach ($this->all() as $property) {
+            $byName[$property->name()] = $property;
+        }
+
         $checks = [];
         foreach ($this->class->discriminatorValues() as $values) {
-            foreach ($this->all() as $property) {
-                if ($values->isChecked() && $property->name() === $values->property()) {
-                    $checks[] = [$property, $values];
-                }
+            $property = $byName[$values->property()] ?? null;
+            if ($values->isChecked() && $property instanceof PropertyModel) {
+                $checks[] = [$property, $values];
             }
         }
 
