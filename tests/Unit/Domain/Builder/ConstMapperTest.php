@@ -27,6 +27,23 @@ final class ConstMapperTest extends TestCase
         self::assertNull($mapper->type($this->schema(['const' => null]), new Diagnostics()));
     }
 
+    public function testCastsOnlyWholeFloatsWithinTheRangeOfInt(): void
+    {
+        $mapper = new ConstMapper([]);
+        $diagnostics = new Diagnostics();
+
+        // -2^63 is PHP_INT_MIN; 2^63 is one past PHP_INT_MAX, and PHP 8.5 warns about casting it.
+        self::assertSame((string) PHP_INT_MIN, $this->describe($mapper->type($this->schema(['type' => 'integer', 'const' => -2.0 ** 63]), $diagnostics)));
+        self::assertSame([], $diagnostics->all());
+        foreach ([2.0 ** 63, -2.0 ** 64] as $beyond) {
+            $diagnostics = new Diagnostics();
+            self::assertNull($mapper->type($this->schema(['type' => 'integer', 'const' => $beyond]), $diagnostics));
+            self::assertCount(1, $diagnostics->all());
+        }
+
+        self::assertSame('float', $this->describe($mapper->type($this->schema(['const' => 2.0 ** 63]), new Diagnostics())));
+    }
+
     public function testLeavesAConfiguredFormatItsClass(): void
     {
         $mapper = new ConstMapper(['money' => new ClassType(ClassName::fromFqcn('App\Money'))]);
