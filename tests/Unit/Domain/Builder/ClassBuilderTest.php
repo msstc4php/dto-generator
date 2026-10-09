@@ -272,7 +272,7 @@ final class ClassBuilderTest extends TestCase
         self::assertSame('mutable', $class->mutability()->value());
     }
 
-    public function testKeepsTheTargetMutabilityWhenXDtoMutableIsNoBoolean(): void
+    public function testKeepsTheTargetMutabilityWhenXDtoMutableIsNotABoolean(): void
     {
         [$class, $messages] = $this->build(['type' => 'object', 'x-dto-mutable' => 'yes', 'properties' => ['id' => ['type' => 'string']]]);
 

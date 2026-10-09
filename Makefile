@@ -15,7 +15,8 @@ check: ## Static checks (incl. PHP 7.4 syntax lint)
 	$(MAKE) lint-74
 
 bc-check: ## Compare the public API with the latest release tag (Roave)
-	$(TOOLS)/roave-backward-compatibility-check --from=$$(git describe --tags --abbrev=0 --exclude='*-*') --install-development-dependencies --no-interaction
+	@base=$$(git describe --tags --abbrev=0 --match 'v[0-9]*' --exclude='*-*') || { echo "No release tag to compare with."; exit 1; }; \
+	$(TOOLS)/roave-backward-compatibility-check --from=$$base --install-development-dependencies --no-interaction
 
 lint-74: ## Lint sources with the PHP 7.4 parser
 	$(PHP74) sh -c "find src tests -name '*.php' -print0 | xargs -0 -r -n1 php -l > /dev/null"
