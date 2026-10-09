@@ -208,12 +208,13 @@ final class SelectingValues
         }
 
         $refinement = $type instanceof ScalarType ? $type->phpDoc() : null;
-        if ($refinement === null || LiteralType::admits($refinement, $values[0]) === null) {
+        $admitted = $refinement === null ? null : LiteralType::literals($refinement);
+        if ($admitted === null) {
             return false;
         }
 
         $literals = array_map(static fn ($value): ?string => LiteralType::of($value), $values);
 
-        return array_diff(explode('|', $refinement), $literals) === [];
+        return array_diff($admitted, $literals) === [];
     }
 }
