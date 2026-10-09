@@ -135,8 +135,12 @@ final class ConstMapper
      */
     private function wholeFloat(float $value)
     {
-        // The round trip leaves out fractions and floats beyond the range of int.
-        return $value === (float) (int) $value ? (int) $value : $value;
+        // Range first: PHP 8.5 warns about casting a float int cannot hold. PHP_INT_MAX compares as 2^63, outside.
+        if ($value < PHP_INT_MIN || $value >= PHP_INT_MAX || $value !== floor($value)) {
+            return $value;
+        }
+
+        return (int) $value;
     }
 
     /**
