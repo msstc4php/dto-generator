@@ -409,10 +409,154 @@ final class SchemaCoverageTest extends TestCase
         $output = ModelFixture::build(['C' => ['type' => 'object', 'properties' => [
             'i' => ['type' => 'integer', 'const' => 'x'],
             'b' => ['type' => 'string', 'const' => true],
-            'big' => ['type' => 'integer', 'const' => 1.0e20],
         ]]]);
 
-        self::assertCount(3, ModelFixture::messages($output));
-        self::assertSame(['i: int|null', 'b: string|null', 'big: int|null'], ModelFixture::classes($output)['App\\Dto\\C']);
+        self::assertCount(2, ModelFixture::messages($output));
+        self::assertSame(['i: int|null', 'b: string|null'], ModelFixture::classes($output)['App\\Dto\\C']);
+    }
+
+    public function testLeavesAConstBesideATypeInAllOfAConstraint(): void
+    {
+        $output = ModelFixture::build([
+            'S' => ['type' => 'string'],
+            'C' => ['type' => 'object', 'properties' => [
+                'a' => ['allOf' => [['type' => 'string'], ['const' => 'x']]],
+                'b' => ['allOf' => [['$ref' => '#/components/schemas/S'], ['const' => 'x']]],
+            ]],
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(['a: string|null', 'b: string|null'], ModelFixture::classes($output)['App\\Dto\\C']);
+    }
+
+    public function testRejectsAFloatDefaultOfAnIntegerConst(): void
+    {
+        $output = ModelFixture::build(['C' => ['type' => 'object', 'properties' => ['i' => ['type' => 'integer', 'const' => 2, 'default' => 2.0]]]]);
+
+        // JSON-equal, but `int $i = 2.0` does not compile.
+        self::assertSame([self::AT . 'C/properties/i/default: Default 2.0 does not match 2; null is used instead.'], ModelFixture::messages($output));
+    }
+
+    public function testComparesNestedDefaultsAsJsonValues(): void
+    {
+        $output = ModelFixture::build(['C' => ['type' => 'object', 'properties' => [
+            'l' => ['const' => [1, 2.0], 'default' => [1, 2]],
+            'm' => ['const' => ['a' => 1, 'b' => 2], 'default' => ['b' => 2, 'a' => 1]],
+            'n' => ['const' => [1, 2], 'default' => [1, 3]],
+            'o' => ['const' => ['a' => 1], 'default' => ['b' => 1]],
+            'p' => ['const' => [1], 'default' => ['a' => 1]],
+        ]]]);
+
+        self::assertSame(
+            [
+                self::AT . 'C/properties/n/default: Default [1,3] is not the "const" value [1,2]; null is used instead.',
+                self::AT . 'C/properties/o/default: Default {"b":1} is not the "const" value {"a":1}; null is used instead.',
+                self::AT . 'C/properties/p/default: Default {"a":1} is not the "const" value [1]; null is used instead.',
+            ],
+            array_values(array_filter(ModelFixture::messages($output), static fn (string $m): bool => strpos($m, '"const" value') !== false)),
+        );
+    }
+
+    public function testFindsTheConstBehindAReference(): void
+    {
+        $output = ModelFixture::build([
+            'Two' => ['type' => 'number', 'const' => 2.5],
+            'Txt' => ['type' => 'string', 'const' => 'a|b'],
+            'Mix' => ['enum' => ["it's", 1]],
+            'C' => ['type' => 'object', 'properties' => [
+                'r' => ['$ref' => '#/components/schemas/Two', 'default' => 3.5],
+                'a' => ['allOf' => [['$ref' => '#/components/schemas/Txt']], 'default' => 'zz'],
+                'm' => ['$ref' => '#/components/schemas/Mix', 'default' => 'zz'],
+                'ok' => ['$ref' => '#/components/schemas/Two', 'default' => 2.5],
+            ]],
+        ]);
+
+        self::assertSame(
+            [
+                self::AT . 'C/properties/r/default: Default 3.5 is not the "const" value 2.5; null is used instead.',
+                self::AT . 'C/properties/a/default: Default "zz" is not the "const" value "a|b"; null is used instead.',
+                self::AT . 'C/properties/m/default: Default "zz" is not one of the "enum" values; null is used instead.',
+            ],
+            array_values(array_filter(ModelFixture::messages($output), static fn (string $m): bool => strpos($m, 'error') === 0)),
+        );
+    }
+
+    public function testKeepsTheLiteralOfAnUntypedDateConst(): void
+    {
+        $output = ModelFixture::build(['C' => ['type' => 'object', 'properties' => [
+            'e' => ['const' => '2020-01-01', 'format' => 'date'],
+            't' => ['type' => 'string', 'const' => '2020-01-01', 'format' => 'date'],
+        ]]]);
+
+        self::assertSame(["e: '2020-01-01'|null", 't: DateTimeImmutable|null'], ModelFixture::classes($output)['App\\Dto\\C']);
+    }
+
+    public function testExplainsAnIntegerConstBeyondTheRangeOfInt(): void
+    {
+        $output = ModelFixture::build(['C' => ['type' => 'object', 'properties' => ['big' => ['type' => 'integer', 'const' => 1.0e20]]]]);
+
+        self::assertSame(
+            ['warning /project/api/openapi.yaml#/components/schemas/C/properties/big/const: "const" is outside the range of PHP int; the property keeps int.'],
+            ModelFixture::messages($output),
+        );
+    }
+
+    public function testGivesBothBooleanConstsTheirType(): void
+    {
+        $output = ModelFixture::build(['C' => ['type' => 'object', 'properties' => ['f' => ['oneOf' => [['const' => true], ['const' => false]]]]]]);
+
+        self::assertSame(['f: bool|null'], ModelFixture::classes($output)['App\\Dto\\C']);
+    }
+
+    public function testFindsTheConstOfAnyCompositionMember(): void
+    {
+        $output = ModelFixture::build([
+            'S' => ['type' => 'string'],
+            'Color' => ['type' => 'string', 'enum' => ['a', 'b'], 'const' => 'a'],
+            'LoopA' => ['$ref' => '#/components/schemas/LoopB'],
+            'LoopB' => ['$ref' => '#/components/schemas/LoopA'],
+            'C' => ['type' => 'object', 'properties' => [
+                'a' => ['allOf' => [['type' => 'string'], ['const' => 'x']], 'default' => 'y'],
+                'b' => ['allOf' => [['$ref' => '#/components/schemas/S', 'const' => 'x']], 'default' => 'y'],
+                'c' => ['allOf' => [['enum' => ['a', 1]]], 'default' => 'zz'],
+                'd' => ['$ref' => '#/components/schemas/Color', 'default' => 'b'],
+                'e' => ['$ref' => '#/components/schemas/LoopA', 'default' => 'x'],
+            ]],
+        ]);
+
+        self::assertSame(
+            [
+                self::AT . 'C/properties/a/default: Default "y" is not the "const" value "x"; null is used instead.',
+                self::AT . 'C/properties/b/default: Default "y" is not the "const" value "x"; null is used instead.',
+                self::AT . 'C/properties/c/default: Default "zz" is not one of the "enum" values; null is used instead.',
+                self::AT . 'C/properties/d/default: Default "b" is not the "const" value "a"; null is used instead.',
+            ],
+            array_values(array_filter(ModelFixture::messages($output), static fn (string $m): bool => strpos($m, '/default:') !== false)),
+        );
+    }
+
+    public function testTellsArraysOfAnotherShapeApart(): void
+    {
+        $output = ModelFixture::build(['C' => ['type' => 'object', 'properties' => [
+            'a' => ['const' => [1], 'default' => 1],
+            'b' => ['const' => [1, 2], 'default' => [1]],
+            'c' => ['const' => ['a', 'b'], 'default' => [1 => 'b', 0 => 'a']],
+        ]]]);
+
+        self::assertSame(
+            [
+                self::AT . 'C/properties/a/default: Default 1 is not the "const" value [1]; null is used instead.',
+                self::AT . 'C/properties/b/default: Default [1] is not the "const" value [1,2]; null is used instead.',
+                self::AT . 'C/properties/c/default: Default {"1":"b","0":"a"} is not the "const" value ["a","b"]; null is used instead.',
+            ],
+            array_values(array_filter(ModelFixture::messages($output), static fn (string $m): bool => strpos($m, '"const" value') !== false)),
+        );
+    }
+
+    public function testKeepsALoneBooleanLiteralBesideAnotherType(): void
+    {
+        $output = ModelFixture::build(['C' => ['type' => 'object', 'properties' => ['e' => ['oneOf' => [['const' => true], ['type' => 'string']]]]]]);
+
+        self::assertSame(['e: true|string|null'], ModelFixture::classes($output)['App\\Dto\\C']);
     }
 }

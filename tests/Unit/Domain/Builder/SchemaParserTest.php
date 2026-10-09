@@ -244,6 +244,26 @@ final class SchemaParserTest extends TestCase
         self::assertSame([], $diagnostics->all());
     }
 
+    public function testStaysQuietBelowASchemaTheTypeIgnores(): void
+    {
+        $diagnostics = new Diagnostics();
+        (new SchemaParser())->parse(
+            ['x-php-type' => 'App\\M', 'properties' => ['a' => ['not' => [], 'nullable' => true]], 'items' => ['contains' => []]],
+            $this->root(),
+            $diagnostics,
+        );
+        (new SchemaParser())->parse(['type' => 'object', 'properties' => ['a' => ['x-php-skip' => true, 'properties' => ['b' => ['not' => []]]]]], $this->root(), $diagnostics);
+        $parser = new SchemaParser();
+        $parser->parse(['x-php-skip' => true, 'not' => []], $this->root(), $diagnostics);
+        // The parser is reused: quiet below one schema, it warns again for the next.
+        $parser->parse(['not' => []], $this->root(), $diagnostics);
+
+        self::assertSame(
+            ['warning a.yaml#/components/schemas/User/not: "not" is not supported and has no effect on the generated type.'],
+            array_map(static fn (Diagnostic $d): string => $d->toString(), $diagnostics->all()),
+        );
+    }
+
     public function testPointsOpenApi30NullableAtTheTypeList(): void
     {
         $diagnostics = new Diagnostics();

@@ -273,21 +273,23 @@ final class ClassBuilder
     }
 
     /**
-     * The values `const` and a mixed enum allow are compared as JSON values, whether or not the type carries them as a
-     * PHPDoc literal.
+     * The values `const` and a mixed enum allow, here or behind a `$ref`, are compared as JSON values, whether or not the
+     * type carries them as a PHPDoc literal. A JSON-equal value can still not fit the PHP type (2.0 for an int); the
+     * type check after this one reports that.
      *
      * @param JsonValue $value
      */
     private function forbiddenBySchema(Schema $schema, $value): ?string
     {
+        $schema = $this->types->valueSource($schema);
+        if (!$schema instanceof Schema) {
+            return null;
+        }
+
         if ($schema->hasKeyword('const')) {
             $const = Json::value($schema->keyword('const'));
 
             return $this->sameJson($value, $const) ? null : sprintf('Default %s is not the "const" value %s; null is used instead.', $this->json($value), $this->json($const));
-        }
-
-        if (!SchemaShape::isMixedEnum($schema)) {
-            return null;
         }
 
         foreach ($schema->enum() ?? [] as $allowed) {
@@ -300,7 +302,7 @@ final class ClassBuilder
     }
 
     /**
-     * JSON equality: 2 and 2.0 are the same number, "2" and 2 are not.
+     * JSON equality: 2 and 2.0 are the same number, "2" and 2 are not, and the keys of an object have no order.
      *
      * @param JsonValue $a
      * @param JsonValue $b
@@ -311,7 +313,21 @@ final class ClassBuilder
             return (float) $a === (float) $b;
         }
 
-        return $a === $b;
+        if (!is_array($a) || !is_array($b)) {
+            return $a === $b;
+        }
+
+        if (Json::isList($a) !== Json::isList($b) || count($a) !== count($b)) {
+            return false;
+        }
+
+        foreach ($a as $key => $item) {
+            if (!array_key_exists($key, $b) || !$this->sameJson(Json::value($item), Json::value($b[$key]))) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**

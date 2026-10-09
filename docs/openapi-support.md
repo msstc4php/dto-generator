@@ -114,8 +114,9 @@ Classes are `final`, except the bases of `allOf` and of discriminated unions. At
   responses, which one DTO does not tell apart.
 - **OpenAPI 3.0 `nullable: true` has no effect** and gives a warning; use `type: [T, 'null']`.
 - **`const`** keeps a date or a `formats` class when `format` names one, and keeps the declared `type` (with a
-  warning) when the constant does not fit it. A `default` must equal the `const` or, for a mixed enum, one of its
-  values.
+  warning) when the constant does not fit it. A `const` beside a type in `allOf` (`allOf: [{$ref: Code}, {const: x}]`)
+  only constrains the type. A `default` must equal the `const` or, for a mixed enum, one of its values, also when they
+  come through a `$ref` or an `allOf` member; an `int` property takes no `2.0` default, as PHP would not compile it.
 - **Strings in literal types are plain.** A `const` or enum string with quotes, backslashes, `|`, `*`, `{`, `}`, `@`
   or non-ASCII characters keeps the type `string` without the literal.
 - **Hoisted names give way to named schemas.** An inline member whose title or derived name equals a schema in
