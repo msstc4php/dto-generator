@@ -218,6 +218,35 @@ final class SchemaParserTest extends TestCase
         ];
     }
 
+    public function testWarnsAboutKeywordsWithNoEffectOnTheType(): void
+    {
+        $diagnostics = new Diagnostics();
+        (new SchemaParser())->parse(
+            ['type' => 'object', 'patternProperties' => ['^x' => ['type' => 'string']], 'not' => ['type' => 'null'], 'pattern' => '^a', 'readOnly' => true],
+            $this->root(),
+            $diagnostics,
+        );
+
+        self::assertSame(
+            [
+                'warning a.yaml#/components/schemas/User/patternProperties: "patternProperties" is not supported and has no effect on the generated type.',
+                'warning a.yaml#/components/schemas/User/not: "not" is not supported and has no effect on the generated type.',
+            ],
+            array_map(static fn (Diagnostic $d): string => $d->toString(), $diagnostics->all()),
+        );
+    }
+
+    public function testPointsOpenApi30NullableAtTheTypeList(): void
+    {
+        $diagnostics = new Diagnostics();
+        (new SchemaParser())->parse(['type' => 'string', 'nullable' => true], $this->root(), $diagnostics);
+
+        self::assertSame(
+            ['warning a.yaml#/components/schemas/User/nullable: "nullable" is OpenAPI 3.0 and has no effect in 3.1; write type: [T, \'null\'].'],
+            array_map(static fn (Diagnostic $d): string => $d->toString(), $diagnostics->all()),
+        );
+    }
+
     private function root(): SchemaLocation
     {
         return new SchemaLocation('a.yaml', '/components/schemas/User');

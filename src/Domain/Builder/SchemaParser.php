@@ -53,6 +53,11 @@ final class SchemaParser
                 continue;
             }
 
+            $unsupported = UnsupportedKeywords::warning($keyword);
+            if ($unsupported !== null) {
+                $diagnostics->warning($unsupported, $location->child($keyword));
+            }
+
             $builder->keyword($keyword, $value);
         }
 

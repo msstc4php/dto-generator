@@ -103,6 +103,30 @@ final class LoadTest extends TestCase
         );
     }
 
+    public function testWarnsOncePerSchemaReachedTwice(): void
+    {
+        $output = $this->load([
+            self::SPEC => $this->spec([
+                'Odd' => ['type' => 'object', 'not' => ['required' => ['b']]],
+                'X' => ['properties' => [
+                    'one' => ['$ref' => '#/components/schemas/Odd'],
+                    'two' => ['$ref' => '#/components/schemas/Odd'],
+                    'three' => ['$ref' => 'shared.yaml#/Far'],
+                    'four' => ['$ref' => 'shared.yaml#/Far'],
+                ]],
+            ]),
+            '/project/api/shared.yaml' => ['Far' => ['type' => 'string', 'nullable' => true]],
+        ]);
+
+        self::assertSame(
+            [
+                'warning /project/api/openapi.yaml#/components/schemas/Odd/not: "not" is not supported and has no effect on the generated type.',
+                'warning /project/api/shared.yaml#/Far/nullable: "nullable" is OpenAPI 3.0 and has no effect in 3.1; write type: [T, \'null\'].',
+            ],
+            $this->messages($output),
+        );
+    }
+
     public function testFollowsCyclesOnce(): void
     {
         $output = $this->load([self::SPEC => $this->spec([
