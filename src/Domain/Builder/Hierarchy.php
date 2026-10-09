@@ -14,8 +14,8 @@ use MSSTC4PHP\DtoGenerator\Domain\Shared\DefaultValue;
 
 /**
  * Links the built classes into one inheritance forest (spec §5.3): variants extend their discriminated base, which
- * takes the properties all of them share; every parent stops being final. Records the discriminator values that
- * select each final class.
+ * takes the properties all of them share; every parent stops being final. Records the discriminator values each
+ * concrete class accepts.
  */
 final class Hierarchy
 {

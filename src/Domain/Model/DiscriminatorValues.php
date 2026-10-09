@@ -7,7 +7,7 @@ namespace MSSTC4PHP\DtoGenerator\Domain\Model;
 use MSSTC4PHP\DtoGenerator\Domain\Exception\InvalidModel;
 
 /**
- * The values of one discriminator that select a final class: its constructor accepts no other.
+ * The values of one discriminator a concrete class accepts: those that select it or one of its subclasses.
  */
 final class DiscriminatorValues
 {

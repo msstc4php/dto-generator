@@ -60,7 +60,7 @@ final class SelectingValuesTest extends TestCase
         );
     }
 
-    public function testIgnoresTheValueOfAnOpenAncestor(): void
+    public function testLetsAnOpenClassAcceptTheValuesOfItsSubclasses(): void
     {
         $output = ModelFixture::build([
             'Pet' => ['oneOf' => [['$ref' => '#/components/schemas/Cat'], ['$ref' => '#/components/schemas/Dog']], 'discriminator' => ['propertyName' => 'kind']],
@@ -69,7 +69,50 @@ final class SelectingValuesTest extends TestCase
         ]);
 
         self::assertSame([], ModelFixture::messages($output));
-        self::assertSame(['App\Dto\Dog' => ["kind: 'Dog'"]], ModelFixture::selections($output));
+        // Dog's constructor passes its own value up, so Cat accepts it too.
+        self::assertSame(['App\Dto\Cat' => ["kind: 'Cat'|'Dog'"], 'App\Dto\Dog' => ["kind: 'Dog'"]], ModelFixture::selections($output));
+    }
+
+    public function testChecksAnOpenClassOfAnInheritedDiscriminator(): void
+    {
+        $output = ModelFixture::build([
+            'Animal' => [
+                'type' => 'object',
+                'required' => ['kind'],
+                'properties' => ['kind' => ['type' => 'string'], 'name' => ['type' => 'string']],
+                'discriminator' => [
+                    'propertyName' => 'kind',
+                    'mapping' => ['bird' => '#/components/schemas/Bird', 'parrot' => '#/components/schemas/Parrot', 'fish' => '#/components/schemas/Fish'],
+                ],
+            ],
+            'Bird' => ['allOf' => [['$ref' => '#/components/schemas/Animal'], ['required' => ['wings'], 'properties' => ['wings' => ['type' => 'integer']]]]],
+            'Parrot' => ['allOf' => [['$ref' => '#/components/schemas/Bird'], ['properties' => ['words' => ['type' => 'integer']]]]],
+            'Fish' => ['allOf' => [['$ref' => '#/components/schemas/Animal'], ['required' => ['fins'], 'properties' => ['fins' => ['type' => 'integer']]]]],
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(
+            ['App\Dto\Bird' => ["kind: 'bird'|'parrot'"], 'App\Dto\Parrot' => ["kind: 'parrot'"], 'App\Dto\Fish' => ["kind: 'fish'"]],
+            ModelFixture::selections($output),
+        );
+    }
+
+    public function testLeavesAnOpenClassThatAcceptsEveryValueUnchecked(): void
+    {
+        $kind = ['type' => 'object', 'required' => ['kind'], 'properties' => ['kind' => ['$ref' => '#/components/schemas/Kind']]];
+        $output = ModelFixture::build([
+            'Kind' => ['type' => 'string', 'enum' => ['dog', 'puppy']],
+            'Pet' => [
+                'oneOf' => [['$ref' => '#/components/schemas/Dog'], ['$ref' => '#/components/schemas/Puppy']],
+                'discriminator' => ['propertyName' => 'kind', 'mapping' => ['dog' => '#/components/schemas/Dog', 'puppy' => '#/components/schemas/Puppy']],
+            ],
+            'Dog' => $kind,
+            'Puppy' => ['allOf' => [['$ref' => '#/components/schemas/Dog'], ['properties' => ['age' => ['type' => 'integer']]]]],
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        // Dog accepts both values of the enum, so a check could never fail.
+        self::assertSame(['App\Dto\Dog' => ["kind: 'dog'|'puppy' unchecked"], 'App\Dto\Puppy' => ["kind: 'puppy'"]], ModelFixture::selections($output));
     }
 
     public function testLetsTheNearestDiscriminatorOfAPropertyDecide(): void

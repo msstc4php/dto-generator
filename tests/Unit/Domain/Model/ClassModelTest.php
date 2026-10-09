@@ -155,12 +155,15 @@ final class ClassModelTest extends TestCase
         self::assertSame([$first, $second], $this->classWith([])->withAddedAttributes($first)->withAddedAttributes($second)->attributes());
     }
 
-    public function testOnlyFinalClassesAreSelectedByDiscriminatorValues(): void
+    public function testOnlyConcreteClassesAreSelectedByDiscriminatorValues(): void
     {
-        $this->expectException(InvalidModel::class);
-        $this->expectExceptionMessage('Only a final class is selected by discriminator values; App\User is open.');
+        $values = new DiscriminatorValues('kind', ['user']);
+        self::assertSame([$values], $this->classWith([], ClassKind::OPEN)->withDiscriminatorValues($values)->discriminatorValues());
 
-        $this->classWith([], ClassKind::OPEN)->withDiscriminatorValues(new DiscriminatorValues('kind', ['user']));
+        $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('Only a concrete class is selected by discriminator values; App\User is abstract.');
+
+        $this->classWith([], ClassKind::ABSTRACT)->withDiscriminatorValues($values);
     }
 
     public function testRejectsTwoValueSetsForOneProperty(): void

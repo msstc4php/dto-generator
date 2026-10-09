@@ -58,8 +58,8 @@ final class ClassModel
             throw new InvalidModel(sprintf('Only an abstract class can carry a discriminator; %s is %s.', $name->fqcn(), $kind->value()));
         }
 
-        if ($discriminatorValues !== [] && !$kind->equals(ClassKind::from(ClassKind::FINAL))) {
-            throw new InvalidModel(sprintf('Only a final class is selected by discriminator values; %s is %s.', $name->fqcn(), $kind->value()));
+        if ($discriminatorValues !== [] && $kind->isAbstract()) {
+            throw new InvalidModel(sprintf('Only a concrete class is selected by discriminator values; %s is %s.', $name->fqcn(), $kind->value()));
         }
 
         $checked = [];

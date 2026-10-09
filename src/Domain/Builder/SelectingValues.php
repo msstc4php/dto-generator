@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace MSSTC4PHP\DtoGenerator\Domain\Builder;
 
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
-use MSSTC4PHP\DtoGenerator\Domain\Model\ClassKind;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\DiscriminatorModel;
@@ -18,8 +17,8 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\ScalarType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\TypeModel;
 
 /**
- * The discriminator values that select each final class: for every discriminator of its ancestors, the mapping keys
- * of the class itself or of an abstract ancestor below the discriminated base.
+ * The discriminator values each concrete class accepts: for every discriminator of its ancestors, the mapping keys
+ * of the class itself or of an abstract ancestor below the discriminated base, and those of its subclasses.
  */
 final class SelectingValues
 {
@@ -34,13 +33,31 @@ final class SelectingValues
      */
     public static function of(array $models, Diagnostics $diagnostics): array
     {
-        $selected = [];
+        $own = [];
+        $lineage = [];
         foreach ($models as $fqcn => $model) {
-            if (!$model->kind()->equals(ClassKind::from(ClassKind::FINAL))) {
-                continue;
+            if (!$model->kind()->isAbstract()) {
+                $ancestors = self::ancestors($model, $models);
+                $lineage[$fqcn] = array_map(static fn (ClassModel $ancestor): string => $ancestor->name()->fqcn(), $ancestors);
+                $own[$fqcn] = self::forClass($model, $ancestors, $diagnostics);
+            }
+        }
+
+        $selected = [];
+        foreach ($own as $fqcn => $found) {
+            $values = [];
+            foreach ($found as $name => [$property, $selection]) {
+                $accepted = $selection->values();
+                foreach ($own as $other => $theirs) {
+                    // A subclass passes its own value up through parent::__construct().
+                    if (isset($theirs[$name]) && in_array($fqcn, $lineage[$other], true)) {
+                        $accepted = self::union($accepted, $theirs[$name][1]->values());
+                    }
+                }
+
+                $values[] = self::selection($property, $accepted);
             }
 
-            $values = self::forClass($model, self::ancestors($model, $models), $diagnostics);
             if ($values !== []) {
                 $selected[$fqcn] = $values;
             }
@@ -71,7 +88,7 @@ final class SelectingValues
      *
      * @param list<ClassModel> $ancestors nearest first
      *
-     * @return list<DiscriminatorValues> root discriminator first
+     * @return array<string, array{PropertyModel, DiscriminatorValues}> by property name, root discriminator first
      */
     private static function forClass(ClassModel $model, array $ancestors, Diagnostics $diagnostics): array
     {
@@ -92,14 +109,14 @@ final class SelectingValues
                 $keys = self::keysSelecting($model, $between, $discriminator);
                 $values = $keys === [] ? null : self::typed($keys, $property, $model, $diagnostics);
                 if ($values instanceof DiscriminatorValues) {
-                    $found[$property->name()] = $values;
+                    $found[$property->name()] = [$property, $values];
                 }
             }
 
             $between[] = $base;
         }
 
-        return array_reverse(array_values($found));
+        return array_reverse($found, true);
     }
 
     /**
@@ -169,8 +186,36 @@ final class SelectingValues
             return null;
         }
 
+        return self::selection($property, $values);
+    }
+
+    /**
+     * @param non-empty-list<int|string> $values
+     */
+    private static function selection(PropertyModel $property, array $values): DiscriminatorValues
+    {
+        $declared = $property->type();
+        $type = $declared instanceof NullableType ? $declared->inner() : $declared;
+
         // A check the type already makes would be dead code, which PHPStan reports in the generated class.
         return new DiscriminatorValues($property->name(), $values, $declared instanceof NullableType || !self::covers($type, $values));
+    }
+
+    /**
+     * @param non-empty-list<int|string> $values
+     * @param list<int|string> $more
+     *
+     * @return non-empty-list<int|string>
+     */
+    private static function union(array $values, array $more): array
+    {
+        foreach ($more as $value) {
+            if (!in_array($value, $values, true)) {
+                $values[] = $value;
+            }
+        }
+
+        return $values;
     }
 
     /**

@@ -117,7 +117,7 @@ final class ModelFixture
     }
 
     /**
-     * @return array<string, list<string>> final class → "property: value|value[ unchecked]" per discriminator, root first
+     * @return array<string, list<string>> concrete class → "property: value|value[ unchecked]" per discriminator, root first
      */
     public static function selections(Output $output): array
     {
