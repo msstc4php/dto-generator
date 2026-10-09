@@ -17,10 +17,33 @@ All notable changes to this package are documented here. The format follows
 - `x-enum-varnames` names the enum cases.
 - A warning for keywords no generated type expresses (`prefixItems`, `patternProperties`, `if`/`then`/`else`,
   `not`…) and for OpenAPI 3.0 `nullable: true`.
+- `dto.withers: false` leaves the `with*()` methods out of immutable DTOs.
 
 ### Changed
 
 - An `enum` mixing strings and integers gives a union of its literals (`'low'|1`) with a warning instead of an error.
+- The constructor of a discriminated variant checks the discriminator: a value that does not select the class
+  throws `\InvalidArgumentException`. A variant selected by one value takes it as the default, and the
+  parameter moves behind the required ones. The discriminator has no `withX()`/`setX()` any more, in the
+  variants or in the base:
+
+  ```php
+  // before: public function __construct(string $petType, string $name, ?int $lives = 9)
+  final readonly class Cat extends Pet
+  {
+      public function __construct(string $name, string $petType = 'cat', public ?int $lives = 9)
+      {
+          if ($petType !== 'cat') {
+              throw new \InvalidArgumentException(sprintf('"%s" does not select Cat by "petType".', $petType));
+          }
+
+          parent::__construct($petType, $name);
+      }
+  }
+  ```
+
+  Positional calls change: `new Cat('cat', 'Tom')` becomes `new Cat('Tom')`; named arguments and Symfony's
+  Serializer are unaffected.
 
 ## [1.1.1] - 2026-10-09
 

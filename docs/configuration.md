@@ -16,6 +16,7 @@ dto:
   accessors: auto                # auto | getters | public-properties
   dateTimeClass: DateTimeImmutable   # DateTimeImmutable | DateTime
   allOfStrategy: extends         # extends | merge
+  withers: true                  # false: immutable DTOs get no with*()
 
 formats:                         # your own string formats → PHP classes
   money: { type: App\Money\Money }
@@ -67,6 +68,7 @@ Required; must be `1`.
 | `accessors` | `auto` | `auto`, `getters`, `public-properties` |
 | `dateTimeClass` | `DateTimeImmutable` | `DateTimeImmutable`, `DateTime` |
 | `allOfStrategy` | `extends` | `extends`, `merge` |
+| `withers` | `true` | `true`, `false` |
 
 - **`mutability`.** Immutable DTOs have `with*()` methods returning a copy; mutable ones have setters. A schema can
   override it with `x-dto-mutable`.
@@ -77,6 +79,8 @@ Required; must be `1`.
 - **`allOfStrategy`** is how `allOf` with one `$ref` plus own properties is generated: `extends` makes a subclass of
   the referenced class, `merge` copies its properties into one class. `allOf` with several `$ref` always merges. A
   schema can override it with `x-php-all-of`.
+- **`withers`**: `false` leaves the `with*()` methods out of immutable DTOs (half of the output on a large spec);
+  setters of mutable DTOs stay.
 
 ## `formats`
 

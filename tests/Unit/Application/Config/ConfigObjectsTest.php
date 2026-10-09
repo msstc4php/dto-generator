@@ -41,6 +41,18 @@ final class ConfigObjectsTest extends TestCase
         ];
     }
 
+    public function testDtoSettingsKeepWithersByDefault(): void
+    {
+        $settings = new DtoSettings(
+            Mutability::from(Mutability::IMMUTABLE),
+            AccessorStyle::from(AccessorStyle::AUTO),
+            DateTimeClass::from(DateTimeClass::IMMUTABLE),
+            AllOfStrategy::from(AllOfStrategy::EXTENDS),
+        );
+
+        self::assertTrue($settings->withers());
+    }
+
     public function testASourceNeedsAnIncludePattern(): void
     {
         $this->expectException(InvalidArgumentException::class);

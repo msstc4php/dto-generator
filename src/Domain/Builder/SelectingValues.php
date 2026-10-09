@@ -58,9 +58,8 @@ final class SelectingValues
     private static function ancestors(ClassModel $model, array $models): array
     {
         $ancestors = [];
-        $seen = [$model->name()->fqcn() => true];
-        for ($parent = $model->parent(); $parent instanceof ClassName && isset($models[$parent->fqcn()]) && !isset($seen[$parent->fqcn()]); $parent = $models[$parent->fqcn()]->parent()) {
-            $seen[$parent->fqcn()] = true;
+        // Hierarchy::breakCycles() has run, so the chain ends.
+        for ($parent = $model->parent(); $parent instanceof ClassName && isset($models[$parent->fqcn()]); $parent = $models[$parent->fqcn()]->parent()) {
             $ancestors[] = $models[$parent->fqcn()];
         }
 
@@ -85,19 +84,20 @@ final class SelectingValues
         }
 
         $found = [];
-        foreach ($ancestors as $index => $base) {
+        $between = [];
+        foreach ($ancestors as $base) {
             $discriminator = $base->discriminator();
             // A class without the property, or one the mapping leaves out, was reported while linking.
             $property = $discriminator instanceof DiscriminatorModel ? $byWireName[$discriminator->propertyName()] ?? null : null;
-            if (!$discriminator instanceof DiscriminatorModel || !$property instanceof PropertyModel || isset($found[$property->name()])) {
-                continue;
+            if ($discriminator instanceof DiscriminatorModel && $property instanceof PropertyModel && !isset($found[$property->name()])) {
+                $keys = self::keysSelecting($model, $between, $discriminator);
+                $values = $keys === [] ? null : self::typed($keys, $property, $model, $diagnostics);
+                if ($values instanceof DiscriminatorValues) {
+                    $found[$property->name()] = $values;
+                }
             }
 
-            $keys = self::keysSelecting($model, array_slice($ancestors, 0, $index), $discriminator);
-            $values = $keys === [] ? null : self::typed($keys, $property, $model, $diagnostics);
-            if ($values instanceof DiscriminatorValues) {
-                $found[$property->name()] = $values;
-            }
+            $between[] = $base;
         }
 
         return array_reverse(array_values($found));
@@ -110,17 +110,17 @@ final class SelectingValues
      */
     private static function keysSelecting(ClassModel $model, array $between, DiscriminatorModel $discriminator): array
     {
-        $targets = [$model->name()->fqcn() => true];
+        $targets = [$model->name()->fqcn()];
         foreach ($between as $ancestor) {
             // An open ancestor is a class of its own: its value selects it, not its subclasses.
             if ($ancestor->kind()->isAbstract()) {
-                $targets[$ancestor->name()->fqcn()] = true;
+                $targets[] = $ancestor->name()->fqcn();
             }
         }
 
         $keys = [];
         foreach ($discriminator->mapping() as $key => $target) {
-            if (isset($targets[$target->fqcn()])) {
+            if (in_array($target->fqcn(), $targets, true)) {
                 $keys[] = $key;
             }
         }
@@ -195,9 +195,9 @@ final class SelectingValues
      */
     private static function covers(TypeModel $type, array $values): bool
     {
-        $held = array_map('strval', $values);
+        // array_diff() compares as strings, so integer and string backing values meet.
         if ($type instanceof EnumType) {
-            return array_diff(array_map('strval', array_keys($type->cases())), $held) === [];
+            return array_diff(array_keys($type->cases()), $values) === [];
         }
 
         $refinement = $type instanceof ScalarType ? $type->phpDoc() : null;

@@ -121,7 +121,7 @@ final readonly class Payment
 
 | Method | Returns |
 |---|---|
-| `property()` / `class()` | the model: name, wire name, type, required, default, discriminator… |
+| `property()` / `class()` | the model: name, wire name, type, required, default, discriminator; `discriminatorValues()` of a final class lists the discriminator values that select it… |
 | `owner()` (property) | the class the property belongs to |
 | `schema()` | the source schema with all its keywords and `x-` keys (`keyword()`, `extensions()->get()`) |
 | `references()` | `resolve($schema)` follows a `$ref` chain to its end; `chain($schema)` lists every schema on the way |

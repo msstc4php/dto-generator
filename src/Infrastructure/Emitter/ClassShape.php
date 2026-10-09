@@ -53,7 +53,7 @@ final class ClassShape
         return $this->class->name();
     }
 
-    public function selection(PropertyModel $property): ?DiscriminatorValues
+    private function selection(PropertyModel $property): ?DiscriminatorValues
     {
         return $this->class->discriminatorValuesOf($property->name());
     }

@@ -56,7 +56,7 @@ PHPDoc extractor of Symfony 5.4, mistake `non-empty-string` for a class name; th
 | `enum` mixing strings and integers | no PHP enum: a union of the literals (see [Types](#types)), with a warning |
 | `allOf` with one `$ref` plus own properties, `extends` strategy | `class Child extends Base`; `Base` is not `final` |
 | `allOf` with several `$ref`, or the `merge` strategy | one class with all the properties; one property with two types is an error |
-| `oneOf`/`anyOf` with a `discriminator` | an `abstract` base class with the common properties; the variants extend it |
+| `oneOf`/`anyOf` with a `discriminator` | an `abstract` base class with the common properties; the variants extend it. The constructor of each variant accepts only the values that select it (`\InvalidArgumentException` otherwise); one such value is the default; the discriminator has no `withX()`/`setX()` |
 | `oneOf`/`anyOf` without a discriminator | a union type |
 | an inline object or enum in a property, its `items` or `additionalProperties` | a named class `<Parent><Property>` (`Order.items[]` → `OrderItemsItem`) |
 | an inline object or enum as a member of a `oneOf`/`anyOf` | a named class: the member's `title` in PascalCase, else `<Parent><Property>Option<N>` (N counts from 1 over `oneOf`, then `anyOf`) |
@@ -125,9 +125,13 @@ Classes are `final`, except the bases of `allOf` and of discriminated unions. At
 - **Hoisted names give way to named schemas.** An inline member whose title or derived name equals a schema in
   `components/schemas` gets a collision error; the named schema keeps its class.
 - **Remote `$ref`** (`https://…`) and anchors (`$anchor`, `#Name`) are not supported.
-- **Discriminator values are not enforced.** A variant's discriminator property stays a constructor argument, so
-  `new Cat('dog', …)` is accepted. A bare name in `discriminator.mapping` is resolved against the file holding the
-  discriminator, not the root document.
+- **A bare name in `discriminator.mapping`** is resolved against the file holding the discriminator, not the root
+  document.
+- **A mutable DTO with `accessors: public-properties`** still lets code assign the discriminator directly.
+- **Only a string, integer or enum discriminator is checked;** another type gives a warning. A mapping value of an
+  open (concrete) class selects that class, not its subclasses.
+- **The discriminator parameter carries no literal PHPDoc type** (`'cat'|'kitty'`): PHPStan would then report the
+  constructor's own check as always false.
 - **Swagger-2-style inheritance** (a base with a discriminator that the variants extend through `allOf`) makes the
   base `abstract`.
 - **A concrete `allOf` base loses its `withX()` methods on PHP 8.1–8.4** once it has a subclass: readonly properties

@@ -45,6 +45,11 @@ final class SelectingValuesTest extends TestCase
         ]);
 
         self::assertSame([], ModelFixture::messages($output));
+        foreach ($output->classes() as $class) {
+            $values = $class->model()->discriminatorValues();
+            self::assertSame(array_values($values), $values);
+        }
+
         self::assertSame(
             [
                 'App\Dto\Siamese' => ["kind: 'cat'|'kitty'", "breed: 'Siamese'"],
@@ -129,7 +134,7 @@ final class SelectingValuesTest extends TestCase
             'Kind' => ['type' => 'string', 'enum' => ['cat']],
             'Pet' => [
                 'oneOf' => [['$ref' => '#/components/schemas/Cat']],
-                'discriminator' => ['propertyName' => 'kind', 'mapping' => ['cat' => '#/components/schemas/Cat', 'puma' => '#/components/schemas/Cat']],
+                'discriminator' => ['propertyName' => 'kind', 'mapping' => ['puma' => '#/components/schemas/Cat', 'cat' => '#/components/schemas/Cat']],
             ],
             'Cat' => ['type' => 'object', 'required' => ['kind'], 'properties' => ['kind' => ['$ref' => '#/components/schemas/Kind']]],
             'Coin' => ['oneOf' => [['$ref' => '#/components/schemas/One'], ['$ref' => '#/components/schemas/Two']], 'discriminator' => ['propertyName' => 'value', 'mapping' => ['1' => '#/components/schemas/One']]],
@@ -175,5 +180,16 @@ final class SelectingValuesTest extends TestCase
 
         self::assertCount(1, ModelFixture::messages($output));
         self::assertSame(['App\Dto\Dog' => ["kind: 'Cat'"]], ModelFixture::selections($output));
+    }
+
+    public function testKeepsANumericKeyAStringForAStringProperty(): void
+    {
+        $output = ModelFixture::build([
+            'Pet' => ['oneOf' => [['$ref' => '#/components/schemas/Cat']], 'discriminator' => ['propertyName' => 'kind', 'mapping' => ['1' => '#/components/schemas/Cat']]],
+            'Cat' => ['type' => 'object', 'required' => ['kind'], 'properties' => ['kind' => ['type' => 'string']]],
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(['App\Dto\Cat' => ["kind: '1'"]], ModelFixture::selections($output));
     }
 }

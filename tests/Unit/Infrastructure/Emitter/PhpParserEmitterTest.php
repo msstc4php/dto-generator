@@ -863,4 +863,27 @@ final class Order
             $emitter->emit(EmitterFixture::sample(Mutability::MUTABLE), EmitterFixture::target('8.2', Mutability::MUTABLE, AccessorStyle::GETTERS, null, false)),
         );
     }
+
+    public function testChecksEveryDiscriminatorRootFirst(): void
+    {
+        $inherited = [EmitterFixture::property('kind', ScalarType::string(), true), EmitterFixture::property('breed', ScalarType::string(), true)];
+        $siamese = EmitterFixture::model('App\Dto\Siamese', null, [])
+            ->withHierarchy(ClassKind::from(ClassKind::FINAL), ClassName::fromFqcn('App\Dto\Cat'), null)
+            ->withDiscriminatorValues(new DiscriminatorValues('kind', ['cat', 'kitty']), new DiscriminatorValues('breed', ['siamese']))
+        ;
+
+        $code = (new PhpParserEmitter())->emit($siamese, EmitterFixture::target('8.2', Mutability::IMMUTABLE), $inherited);
+
+        self::assertStringContainsString(
+            "    public function __construct(string \$kind, string \$breed = 'siamese')\n    {\n"
+            . "        if (\$kind !== 'cat' && \$kind !== 'kitty') {\n"
+            . "            throw new \\InvalidArgumentException(sprintf('\"%s\" does not select Siamese by \"kind\".', \$kind));\n"
+            . "        }\n\n"
+            . "        if (\$breed !== 'siamese') {\n"
+            . "            throw new \\InvalidArgumentException(sprintf('\"%s\" does not select Siamese by \"breed\".', \$breed));\n"
+            . "        }\n\n"
+            . "        parent::__construct(\$kind, \$breed);\n    }",
+            $code,
+        );
+    }
 }
