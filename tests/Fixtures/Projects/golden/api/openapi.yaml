@@ -335,3 +335,26 @@ components:
         - type: object
           properties:
             price: {type: integer}
+    Being:
+      description: An optional discriminator inherited by an open class and its subclass.
+      type: object
+      properties:
+        name: {type: string}
+        kind: {type: string}
+      discriminator:
+        propertyName: kind
+        mapping:
+          hen: '#/components/schemas/Hen'
+          chick: '#/components/schemas/Chick'
+    Hen:
+      allOf:
+        - $ref: '#/components/schemas/Being'
+        - type: object
+          properties:
+            eggs: {type: integer}
+    Chick:
+      allOf:
+        - $ref: '#/components/schemas/Hen'
+        - type: object
+          properties:
+            fluff: {type: boolean}

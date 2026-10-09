@@ -10,16 +10,20 @@ use App\Attr\Table;
 use App\Dto\Animal;
 use App\Dto\Bird;
 use App\Dto\BlobX;
+use App\Dto\Chick;
 use App\Dto\Circle;
 use App\Dto\Dog;
 use App\Dto\EuroWallet;
+use App\Dto\Hen;
 use App\Dto\Leaf;
+use App\Dto\OpenSide;
 use App\Dto\Parrot;
 use App\Dto\Product;
 use App\Dto\Sample;
 use App\Dto\Shape;
 use App\Dto\Side;
 use App\Dto\Square;
+use App\Dto\SubSide;
 use App\Dto\Tag;
 use App\Dto\Wallet;
 
@@ -56,6 +60,12 @@ require $profile . 'Named.php.golden';
 require $profile . 'Device.php.golden';
 require $profile . 'Phone.php.golden';
 require $profile . 'Product.php.golden';
+require $profile . 'Being.php.golden';
+require $profile . 'Hen.php.golden';
+require $profile . 'Chick.php.golden';
+require $profile . 'Rim.php.golden';
+require $profile . 'OpenSide.php.golden';
+require $profile . 'SubSide.php.golden';
 
 /**
  * @return mixed
@@ -213,6 +223,19 @@ if (method_exists($product, 'setKind')) {
 if (strpos(basename($profile), '-mutable-getters') !== false) {
     check(method_exists($product, 'setKind'), 'restored setter declared');
 }
+
+// A subclass calls its parent with the parent's own parameter order, which defaults may make differ from its own.
+$chick = new Chick();
+check($chick instanceof Hen && read($chick, 'kind') === 'chick' && read($chick, 'name') === null, 'subclass of an open class with defaults');
+$named = new Chick('Tweety', 'chick', 3);
+check(read($named, 'name') === 'Tweety' && read($named, 'eggs') === 3, 'subclass of an open class with arguments');
+check(read(new Hen('hen', 'Ginger', 2), 'name') === 'Ginger', 'open class with an optional discriminator');
+rejects(static fn (): Hen => new Hen('chick'), '"chick" does not select Hen by "kind".');
+rejects(static fn (): Hen => new Hen(null), 'null does not select Hen by "kind".');
+check(read(new SubSide(), 'kind') === 'sub', 'subclass of an open variant with defaults');
+$sub = new SubSide('left', 'sub', 'more');
+check(read($sub, 'label') === 'left' && read($sub, 'extra') === 'more', 'subclass of an open variant with arguments');
+check(read(new OpenSide('open', 'right'), 'label') === 'right', 'open variant declaring its discriminator');
 check((new ReflectionClass(Shape::class))->isAbstract() && !(new ReflectionClass(Animal::class))->isFinal(), 'base classes stay open');
 
 if (strpos(basename($profile), '-nowithers') !== false) {

@@ -83,14 +83,14 @@ final class PhpParserEmitter implements CodeEmitter
         $this->factory = new BuilderFactory();
     }
 
-    public function emit(ClassModel $class, TargetProfile $target, array $inherited = []): string
+    public function emit(ClassModel $class, TargetProfile $target, array $inherited = [], ?ClassModel $parent = null): string
     {
-        $this->assertSupported($class, $inherited);
-        [$node, $names] = $this->declare($class, $target, $inherited, []);
+        $this->assertSupported($class, $inherited, $parent);
+        [$node, $names] = $this->declare($class, $target, $inherited, [], $parent);
         // Only once the class is written are all its short names known; an alias that takes one is written in full.
         $collisions = $names->collisions($class->name()->shortName());
         if ($collisions !== []) {
-            [$node, $names] = $this->declare($class, $target, $inherited, $collisions);
+            [$node, $names] = $this->declare($class, $target, $inherited, $collisions, $parent);
         }
 
         return $this->file($node, $class->name(), $target, $names->uses());
@@ -102,9 +102,9 @@ final class PhpParserEmitter implements CodeEmitter
      *
      * @return array{Class_, AttributeNames}
      */
-    private function declare(ClassModel $class, TargetProfile $target, array $inherited, array $refused): array
+    private function declare(ClassModel $class, TargetProfile $target, array $inherited, array $refused, ?ClassModel $parent): array
     {
-        $shape = new ClassShape($class, $inherited, $target->classFormFor($class->mutability()), $target);
+        $shape = new ClassShape($class, $inherited, $target->classFormFor($class->mutability()), $target, $parent);
         $form = $shape->form();
         $types = new TypeRenderer($class->name()->namespace(), $target);
         $names = new AttributeNames($types, $refused);
@@ -205,11 +205,21 @@ final class PhpParserEmitter implements CodeEmitter
     /**
      * @param list<PropertyModel> $inherited
      */
-    private function assertSupported(ClassModel $class, array $inherited): void
+    private function assertSupported(ClassModel $class, array $inherited, ?ClassModel $parent): void
     {
         $fqcn = $class->name()->fqcn();
-        if ($inherited !== [] && !$class->parent() instanceof ClassName) {
+        $extends = $class->parent();
+        if ($inherited !== [] && !$extends instanceof ClassName) {
             throw new LogicException(sprintf('%s inherits properties but extends no class.', $fqcn));
+        }
+
+        if ($inherited !== [] && !$parent instanceof ClassModel) {
+            throw new LogicException(sprintf('%s inherits properties, so its parent class is needed to call its constructor.', $fqcn));
+        }
+
+        $names = static fn (PropertyModel ...$properties): array => array_map(static fn (PropertyModel $property): string => $property->name(), $properties);
+        if ($parent instanceof ClassModel && (!$extends instanceof ClassName || !$parent->name()->equals($extends) || $names(...array_slice($inherited, count($inherited) - count($parent->properties()))) !== $names(...$parent->properties()))) {
+            throw new LogicException(sprintf('%s is not the parent of %s whose properties end the inherited ones.', $parent->name()->fqcn(), $fqcn));
         }
 
         $names = array_map(static fn (PropertyModel $property): string => $property->name(), array_merge($inherited, $class->properties()));
@@ -265,8 +275,9 @@ final class PhpParserEmitter implements CodeEmitter
             $body[] = $this->check($shape, $property, $values, $types);
         }
 
-        if ($shape->inherited() !== []) {
-            $args = array_map(static fn (PropertyModel $property): Arg => new Arg(new Variable($property->name())), $this->constructorOrder($shape->inherited()));
+        $parent = $shape->parentShape();
+        if ($shape->inherited() !== [] && $parent instanceof ClassShape) {
+            $args = array_map(static fn (PropertyModel $property): Arg => new Arg(new Variable($property->name())), $this->parameters($parent));
             $body[] = new Expression(new StaticCall(new Name('parent'), '__construct', $args));
         }
 

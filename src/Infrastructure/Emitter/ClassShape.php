@@ -33,15 +33,33 @@ final class ClassShape
 
     private TargetProfile $target;
 
+    private ?ClassModel $parent;
+
     /**
      * @param list<PropertyModel> $inherited
+     * @param ClassModel|null $parent the class it extends, whose own properties end $inherited
      */
-    public function __construct(ClassModel $class, array $inherited, ClassForm $form, TargetProfile $target)
+    public function __construct(ClassModel $class, array $inherited, ClassForm $form, TargetProfile $target, ?ClassModel $parent = null)
     {
         $this->class = $class;
         $this->inherited = $inherited;
         $this->form = $form;
         $this->target = $target;
+        $this->parent = $parent;
+    }
+
+    /**
+     * The parent as it emits itself: its parameter order, by its own defaults, is what the parent call must follow.
+     */
+    public function parentShape(): ?self
+    {
+        if (!$this->parent instanceof ClassModel) {
+            return null;
+        }
+
+        $grandInherited = array_slice($this->inherited, 0, count($this->inherited) - count($this->parent->properties()));
+
+        return new self($this->parent, $grandInherited, $this->target->classFormFor($this->parent->mutability()), $this->target);
     }
 
     public function form(): ClassForm

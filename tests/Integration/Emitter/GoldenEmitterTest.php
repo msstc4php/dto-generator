@@ -32,7 +32,7 @@ final class GoldenEmitterTest extends TestCase
 
         foreach ($classes as $class) {
             $path = self::DIR . $profile . '/' . $class->name()->shortName() . '.php.golden';
-            $code = $emitter->emit($class, $target, EmitterFixture::inherited($class));
+            $code = $emitter->emit($class, $target, EmitterFixture::inherited($class), EmitterFixture::parentOf($class));
             if (getenv('UPDATE_SNAPSHOTS') === '1') {
                 if (!is_dir(dirname($path))) {
                     mkdir(dirname($path), 0777, true);

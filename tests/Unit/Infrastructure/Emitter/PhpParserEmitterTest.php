@@ -366,7 +366,7 @@ final class PhpParserEmitterTest extends TestCase
 
     public function testPassesInheritedParametersToTheParentConstructor(): void
     {
-        $code = (new PhpParserEmitter())->emit(EmitterFixture::dog(Mutability::IMMUTABLE), EmitterFixture::target('8.1', Mutability::IMMUTABLE), EmitterFixture::animal(Mutability::IMMUTABLE)->properties());
+        $code = (new PhpParserEmitter())->emit(EmitterFixture::dog(Mutability::IMMUTABLE), EmitterFixture::target('8.1', Mutability::IMMUTABLE), EmitterFixture::animal(Mutability::IMMUTABLE)->properties(), EmitterFixture::animal(Mutability::IMMUTABLE));
 
         self::assertStringContainsString("\nfinal class Dog extends Animal\n", $code);
         self::assertStringContainsString(
@@ -380,7 +380,7 @@ final class PhpParserEmitterTest extends TestCase
 
     public function testAssignsOwnPropertiesAfterTheParentConstructorOnPhp74(): void
     {
-        $code = (new PhpParserEmitter())->emit(EmitterFixture::dog(Mutability::IMMUTABLE), EmitterFixture::target('7.4', Mutability::IMMUTABLE), EmitterFixture::animal(Mutability::IMMUTABLE)->properties());
+        $code = (new PhpParserEmitter())->emit(EmitterFixture::dog(Mutability::IMMUTABLE), EmitterFixture::target('7.4', Mutability::IMMUTABLE), EmitterFixture::animal(Mutability::IMMUTABLE)->properties(), EmitterFixture::animal(Mutability::IMMUTABLE));
 
         self::assertStringContainsString("    private string \$breed;\n", $code);
         self::assertStringNotContainsString('$id;', $code);
@@ -401,7 +401,7 @@ final class PhpParserEmitterTest extends TestCase
         $child = EmitterFixture::model('App\Dto\Child', null, [EmitterFixture::property('label', ScalarType::string('non-empty-string'), true)])
             ->withHierarchy(ClassKind::from(ClassKind::FINAL), $base->name(), null)
         ;
-        $code = (new PhpParserEmitter())->emit($child, EmitterFixture::target('7.4', Mutability::IMMUTABLE), $base->properties());
+        $code = (new PhpParserEmitter())->emit($child, EmitterFixture::target('7.4', Mutability::IMMUTABLE), $base->properties(), $base);
 
         self::assertStringContainsString("    /**\n     * @param int|string \$code\n     * @phpstan-param non-empty-string \$name\n     * @phpstan-param non-empty-string \$label\n     */\n    public function __construct(", $code);
     }
@@ -419,7 +419,7 @@ final class PhpParserEmitterTest extends TestCase
         $emitter = new PhpParserEmitter();
         $target = EmitterFixture::target('8.2', Mutability::MUTABLE, AccessorStyle::GETTERS);
         $base = $emitter->emit(EmitterFixture::animal(Mutability::MUTABLE), $target);
-        $child = $emitter->emit(EmitterFixture::dog(Mutability::MUTABLE), $target, EmitterFixture::animal(Mutability::MUTABLE)->properties());
+        $child = $emitter->emit(EmitterFixture::dog(Mutability::MUTABLE), $target, EmitterFixture::animal(Mutability::MUTABLE)->properties(), EmitterFixture::animal(Mutability::MUTABLE));
 
         self::assertStringContainsString('public function setId(string $id): static', $base);
         self::assertStringContainsString('protected string $id', $base);
@@ -431,7 +431,8 @@ final class PhpParserEmitterTest extends TestCase
     public function testExtendsAParentFromAnotherNamespace(): void
     {
         $child = EmitterFixture::model('App\Dto\Public\Dog', null, [])->withHierarchy(ClassKind::from(ClassKind::FINAL), ClassName::fromFqcn('App\Dto\Shared\Animal'), null);
-        $code = (new PhpParserEmitter())->emit($child, EmitterFixture::target('8.2', Mutability::IMMUTABLE), EmitterFixture::animal(Mutability::IMMUTABLE)->properties());
+        $parent = EmitterFixture::model('App\Dto\Shared\Animal', null, EmitterFixture::animal()->properties())->withHierarchy(ClassKind::from(ClassKind::OPEN), null, null);
+        $code = (new PhpParserEmitter())->emit($child, EmitterFixture::target('8.2', Mutability::IMMUTABLE), $parent->properties(), $parent);
 
         self::assertStringContainsString("final readonly class Dog extends \\App\\Dto\\Shared\\Animal\n", $code);
         self::assertStringContainsString('public function __construct(string $id, ?string $nickname = null)', $code);
@@ -507,7 +508,7 @@ final class Order
         $animal = EmitterFixture::animal(Mutability::IMMUTABLE);
         $inherited = [$animal->properties()[0]->withAddedAttributes(new AttributeModel(ClassName::fromFqcn('App\Attr\Id'))), $animal->properties()[1]];
 
-        $code = (new PhpParserEmitter())->emit($dog, $this->attributesTarget('8.2'), $inherited);
+        $code = (new PhpParserEmitter())->emit($dog, $this->attributesTarget('8.2'), $inherited, $animal);
 
         self::assertStringContainsString('#[\App\Attr\Breed] public string $breed', $code);
         self::assertStringNotContainsString('App\Attr\Id', $code);
@@ -713,7 +714,7 @@ final class Order
 
     public function testChecksTheDiscriminatorBeforeCallingTheParent(): void
     {
-        $code = (new PhpParserEmitter())->emit(EmitterFixture::circle(), EmitterFixture::target('8.2', Mutability::IMMUTABLE), EmitterFixture::shape()->properties());
+        $code = (new PhpParserEmitter())->emit(EmitterFixture::circle(), EmitterFixture::target('8.2', Mutability::IMMUTABLE), EmitterFixture::shape()->properties(), EmitterFixture::shape());
 
         self::assertStringContainsString(
             "    public function __construct(string \$kind, public float \$radius)\n    {\n"
@@ -729,7 +730,7 @@ final class Order
 
     public function testMovesADefaultedDiscriminatorBehindTheRequiredParameters(): void
     {
-        $code = (new PhpParserEmitter())->emit(EmitterFixture::square(), EmitterFixture::target('8.1', Mutability::IMMUTABLE), EmitterFixture::shape()->properties());
+        $code = (new PhpParserEmitter())->emit(EmitterFixture::square(), EmitterFixture::target('8.1', Mutability::IMMUTABLE), EmitterFixture::shape()->properties(), EmitterFixture::shape());
 
         self::assertStringContainsString("    public function __construct(public readonly float \$side, string \$kind = 'square')\n", $code);
         self::assertStringContainsString("        if (\$kind !== 'square') {\n", $code);
@@ -741,8 +742,8 @@ final class Order
     public function testComparesAnEnumDiscriminatorWithItsCases(): void
     {
         $inherited = EmitterFixture::wallet()->properties();
-        $modern = (new PhpParserEmitter())->emit(EmitterFixture::euroWallet(), EmitterFixture::target('8.1', Mutability::IMMUTABLE), $inherited);
-        $legacy = (new PhpParserEmitter())->emit(EmitterFixture::euroWallet(), EmitterFixture::target('7.4', Mutability::IMMUTABLE), $inherited);
+        $modern = (new PhpParserEmitter())->emit(EmitterFixture::euroWallet(), EmitterFixture::target('8.1', Mutability::IMMUTABLE), $inherited, EmitterFixture::wallet());
+        $legacy = (new PhpParserEmitter())->emit(EmitterFixture::euroWallet(), EmitterFixture::target('7.4', Mutability::IMMUTABLE), $inherited, EmitterFixture::wallet());
 
         self::assertStringContainsString('public function __construct(public readonly int $balance, Currency $currency = Currency::EUR)', $modern);
         self::assertStringContainsString('if ($currency !== Currency::EUR) {', $modern);
@@ -763,7 +764,7 @@ final class Order
             ->withDiscriminatorValues(new DiscriminatorValues('currency', ['EUR', 'in-progress']))
         ;
 
-        $code = (new PhpParserEmitter())->emit($coin, EmitterFixture::target('8.1', Mutability::IMMUTABLE), $purse->properties());
+        $code = (new PhpParserEmitter())->emit($coin, EmitterFixture::target('8.1', Mutability::IMMUTABLE), $purse->properties(), $purse);
 
         self::assertStringContainsString('public function __construct(?Currency $currency)', $code);
         self::assertStringContainsString('if ($currency !== Currency::EUR && $currency !== Currency::IN_PROGRESS) {', $code);
@@ -783,7 +784,7 @@ final class Order
             ->withDiscriminatorValues(new DiscriminatorValues('petType', ['cat']))
         ;
 
-        $code = (new PhpParserEmitter())->emit($cat, EmitterFixture::target('8.2', Mutability::IMMUTABLE), $pet->properties());
+        $code = (new PhpParserEmitter())->emit($cat, EmitterFixture::target('8.2', Mutability::IMMUTABLE), $pet->properties(), $pet);
 
         self::assertStringContainsString("sprintf('\"%s\" does not select Cat by \"pet%%type\\'s\".', \$petType)", $code);
     }
@@ -795,7 +796,7 @@ final class Order
             ->withDiscriminatorValues(new DiscriminatorValues('kind', ['square'], false))
         ;
 
-        $code = (new PhpParserEmitter())->emit($square, EmitterFixture::target('8.2', Mutability::IMMUTABLE), EmitterFixture::shape()->properties());
+        $code = (new PhpParserEmitter())->emit($square, EmitterFixture::target('8.2', Mutability::IMMUTABLE), EmitterFixture::shape()->properties(), EmitterFixture::shape());
 
         self::assertStringContainsString("    public function __construct(string \$kind = 'square')\n    {\n        parent::__construct(\$kind);\n    }", $code);
         self::assertStringNotContainsString('InvalidArgumentException', $code);
@@ -813,8 +814,8 @@ final class Order
         ;
         $target = EmitterFixture::target('8.2', Mutability::IMMUTABLE);
 
-        $kept = (new PhpParserEmitter())->emit($pick('a', 'b'), $target, $choice->properties());
-        $dropped = (new PhpParserEmitter())->emit($pick('b', 'c'), $target, $choice->properties());
+        $kept = (new PhpParserEmitter())->emit($pick('a', 'b'), $target, $choice->properties(), $choice);
+        $dropped = (new PhpParserEmitter())->emit($pick('b', 'c'), $target, $choice->properties(), $choice);
 
         self::assertStringContainsString("public function __construct(public string \$label, ?string \$mode = 'a', ?int \$size = null)", $kept);
         self::assertStringContainsString('public function __construct(public string $label, ?string $mode, ?int $size = null)', $dropped);
@@ -857,7 +858,7 @@ final class Order
         self::assertStringNotContainsString('function with', $emitter->emit(EmitterFixture::animal(), EmitterFixture::target('7.4', Mutability::IMMUTABLE, AccessorStyle::AUTO, null, false)));
         self::assertStringNotContainsString(
             'function with',
-            $emitter->emit(EmitterFixture::dog(), EmitterFixture::target('8.1', Mutability::IMMUTABLE, AccessorStyle::AUTO, null, false), EmitterFixture::animal()->properties()),
+            $emitter->emit(EmitterFixture::dog(), EmitterFixture::target('8.1', Mutability::IMMUTABLE, AccessorStyle::AUTO, null, false), EmitterFixture::animal()->properties(), EmitterFixture::animal()),
         );
         self::assertStringContainsString(
             'public function setId(int $id): self',
@@ -873,7 +874,8 @@ final class Order
             ->withDiscriminatorValues(new DiscriminatorValues('kind', ['cat', 'kitty']), new DiscriminatorValues('breed', ['siamese']))
         ;
 
-        $code = (new PhpParserEmitter())->emit($siamese, EmitterFixture::target('8.2', Mutability::IMMUTABLE), $inherited);
+        $cat = EmitterFixture::model('App\Dto\Cat', null, $inherited)->withHierarchy(ClassKind::from(ClassKind::ABSTRACT), null, null);
+        $code = (new PhpParserEmitter())->emit($siamese, EmitterFixture::target('8.2', Mutability::IMMUTABLE), $inherited, $cat);
 
         self::assertStringContainsString(
             "    public function __construct(string \$kind, string \$breed = 'siamese')\n    {\n"
@@ -903,7 +905,7 @@ final class Order
         self::assertStringContainsString('public function getKind(): string', $mutable);
 
         // A variant without checked values still rebuilds itself for the inherited properties, but not for `kind`.
-        $blobX = $emitter->emit(EmitterFixture::blobX(), EmitterFixture::target('8.1', Mutability::IMMUTABLE), EmitterFixture::blob()->properties());
+        $blobX = $emitter->emit(EmitterFixture::blobX(), EmitterFixture::target('8.1', Mutability::IMMUTABLE), EmitterFixture::blob()->properties(), EmitterFixture::blob());
         self::assertStringNotContainsString('withKind', $blobX);
         self::assertStringContainsString('public function withSize(int $size): self', $blobX);
     }
@@ -947,14 +949,14 @@ final class Order
     {
         $emitter = new PhpParserEmitter();
         $creature = EmitterFixture::creature()->properties();
-        $checked = $emitter->emit(EmitterFixture::bird(), EmitterFixture::target('8.2', Mutability::IMMUTABLE), $creature);
+        $checked = $emitter->emit(EmitterFixture::bird(), EmitterFixture::target('8.2', Mutability::IMMUTABLE), $creature, EmitterFixture::creature());
 
         self::assertStringContainsString("if (\$kind !== 'bird' && (static::class === self::class || \$kind !== 'parrot')) {", $checked);
 
         $ruled = EmitterFixture::bird()->withDiscriminatorValues(new DiscriminatorValues('kind', ['bird', 'parrot'], true, ['parrot'], false));
         self::assertStringContainsString(
             "if (\$kind !== 'bird' && static::class === self::class) {",
-            $emitter->emit($ruled, EmitterFixture::target('8.2', Mutability::IMMUTABLE), $creature),
+            $emitter->emit($ruled, EmitterFixture::target('8.2', Mutability::IMMUTABLE), $creature, EmitterFixture::creature()),
         );
     }
 
@@ -965,23 +967,23 @@ final class Order
 
         self::assertStringContainsString(
             "    public function withKind(string \$kind): self\n    {\n        \$clone = clone \$this;\n        \$clone->kind = \$kind;\n",
-            $emitter->emit(EmitterFixture::product(), EmitterFixture::target('7.4', Mutability::IMMUTABLE), $named),
+            $emitter->emit(EmitterFixture::product(), EmitterFixture::target('7.4', Mutability::IMMUTABLE), $named, EmitterFixture::named()),
         );
         self::assertStringContainsString(
             "return clone(\$this, ['kind' => \$kind]);",
-            $emitter->emit(EmitterFixture::product(), EmitterFixture::target('8.5', Mutability::IMMUTABLE), $named),
+            $emitter->emit(EmitterFixture::product(), EmitterFixture::target('8.5', Mutability::IMMUTABLE), $named, EmitterFixture::named()),
         );
         self::assertSame(
             1,
-            substr_count($emitter->emit(EmitterFixture::product(), EmitterFixture::target('8.2', Mutability::IMMUTABLE), $named), 'function withKind('),
+            substr_count($emitter->emit(EmitterFixture::product(), EmitterFixture::target('8.2', Mutability::IMMUTABLE), $named, EmitterFixture::named()), 'function withKind('),
         );
         self::assertStringContainsString(
             "    public function setKind(string \$kind): self\n    {\n        \$this->kind = \$kind;\n",
-            $emitter->emit(EmitterFixture::product(Mutability::MUTABLE), EmitterFixture::target('8.2', Mutability::MUTABLE, AccessorStyle::GETTERS), EmitterFixture::named(Mutability::MUTABLE)->properties()),
+            $emitter->emit(EmitterFixture::product(Mutability::MUTABLE), EmitterFixture::target('8.2', Mutability::MUTABLE, AccessorStyle::GETTERS), EmitterFixture::named(Mutability::MUTABLE)->properties(), EmitterFixture::named(Mutability::MUTABLE)),
         );
         self::assertStringNotContainsString(
             'withKind',
-            $emitter->emit(EmitterFixture::phone(), EmitterFixture::target('7.4', Mutability::IMMUTABLE), $named),
+            $emitter->emit(EmitterFixture::phone(), EmitterFixture::target('7.4', Mutability::IMMUTABLE), $named, EmitterFixture::device()),
         );
     }
 }

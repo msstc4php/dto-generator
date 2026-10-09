@@ -90,6 +90,12 @@ final class EmitterFixture
             self::device($mutability),
             self::phone($mutability),
             self::product($mutability),
+            self::being($mutability),
+            self::hen($mutability),
+            self::chick($mutability),
+            self::rim($mutability),
+            self::openSide($mutability),
+            self::subSide($mutability),
         ];
     }
 
@@ -103,6 +109,21 @@ final class EmitterFixture
         return self::model('App\\Dto\\Rules', null, [
             self::property('count', ScalarType::int(), true)->withAddedAttributes(new AttributeModel(ClassName::fromFqcn('App\\Attr\\Guard'), [AttributeArgument::positional($limit)])),
         ], $mutability);
+    }
+
+    /**
+     * The fixture class a fixture class extends.
+     */
+    public static function parentOf(ClassModel $class): ?ClassModel
+    {
+        foreach (self::classes($class->mutability()->value()) as $candidate) {
+            $parent = $class->parent();
+            if ($parent instanceof ClassName && $candidate->name()->equals($parent)) {
+                return $candidate;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -334,6 +355,78 @@ final class EmitterFixture
         return self::model('App\Dto\Product', null, [self::property('price', ScalarType::int(), true)], $mutability)
             ->withHierarchy(ClassKind::from(ClassKind::FINAL), ClassName::fromFqcn('App\Dto\Named'), null)
             ->withRestoredMutators('kind')
+        ;
+    }
+
+    /**
+     * A base whose optional discriminator an open class and its subclass inherit.
+     */
+    public static function being(string $mutability = Mutability::IMMUTABLE): ClassModel
+    {
+        return self::model('App\Dto\Being', null, [
+            self::property('name', new NullableType(ScalarType::string()), false, new DefaultValue(null)),
+            self::property('kind', new NullableType(ScalarType::string()), false, new DefaultValue(null)),
+        ], $mutability)->withHierarchy(
+            ClassKind::from(ClassKind::ABSTRACT),
+            null,
+            new DiscriminatorModel('kind', ['hen' => ClassName::fromFqcn('App\Dto\Hen'), 'chick' => ClassName::fromFqcn('App\Dto\Chick')]),
+        );
+    }
+
+    /**
+     * Selected by two values, its null default selects nothing: `kind` becomes its first, required parameter.
+     */
+    public static function hen(string $mutability = Mutability::IMMUTABLE): ClassModel
+    {
+        return self::model('App\Dto\Hen', null, [self::property('eggs', new NullableType(ScalarType::int()), false, new DefaultValue(null))], $mutability)
+            ->withHierarchy(ClassKind::from(ClassKind::OPEN), ClassName::fromFqcn('App\Dto\Being'), null)
+            ->withDiscriminatorValues(new DiscriminatorValues('kind', ['hen', 'chick'], true, ['chick']))
+            ->withDiscriminatedProperties('kind')
+        ;
+    }
+
+    /**
+     * Defaults `kind`, so its parameters are in another order than Hen's.
+     */
+    public static function chick(string $mutability = Mutability::IMMUTABLE): ClassModel
+    {
+        return self::model('App\Dto\Chick', null, [], $mutability)
+            ->withHierarchy(ClassKind::from(ClassKind::FINAL), ClassName::fromFqcn('App\Dto\Hen'), null)
+            ->withDiscriminatorValues(new DiscriminatorValues('kind', ['chick']))
+            ->withDiscriminatedProperties('kind')
+        ;
+    }
+
+    public static function rim(string $mutability = Mutability::IMMUTABLE): ClassModel
+    {
+        return self::model('App\Dto\Rim', null, [], $mutability)->withHierarchy(
+            ClassKind::from(ClassKind::ABSTRACT),
+            null,
+            new DiscriminatorModel('kind', ['open' => ClassName::fromFqcn('App\Dto\OpenSide'), 'sub' => ClassName::fromFqcn('App\Dto\SubSide')]),
+        );
+    }
+
+    /**
+     * An open variant that declares the optional discriminator itself, after another property.
+     */
+    public static function openSide(string $mutability = Mutability::IMMUTABLE): ClassModel
+    {
+        return self::model('App\Dto\OpenSide', null, [
+            self::property('label', new NullableType(ScalarType::string()), false, new DefaultValue(null)),
+            self::property('kind', new NullableType(ScalarType::string()), false, new DefaultValue(null)),
+        ], $mutability)
+            ->withHierarchy(ClassKind::from(ClassKind::OPEN), ClassName::fromFqcn('App\Dto\Rim'), null)
+            ->withDiscriminatorValues(new DiscriminatorValues('kind', ['open', 'sub'], true, ['sub']))
+            ->withDiscriminatedProperties('kind')
+        ;
+    }
+
+    public static function subSide(string $mutability = Mutability::IMMUTABLE): ClassModel
+    {
+        return self::model('App\Dto\SubSide', null, [self::property('extra', new NullableType(ScalarType::string()), false, new DefaultValue(null))], $mutability)
+            ->withHierarchy(ClassKind::from(ClassKind::FINAL), ClassName::fromFqcn('App\Dto\OpenSide'), null)
+            ->withDiscriminatorValues(new DiscriminatorValues('kind', ['sub']))
+            ->withDiscriminatedProperties('kind')
         ;
     }
 
