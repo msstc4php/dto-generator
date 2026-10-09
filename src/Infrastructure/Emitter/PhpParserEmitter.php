@@ -268,7 +268,7 @@ final class PhpParserEmitter implements CodeEmitter
                 $param->attrGroups = $attributes->groups($property->attributes());
                 $param->flags = ($form->hasPublicProperties() ? Modifiers::PUBLIC : $shape->visibility())
                     | ($form->hasReadonlyProperties() ? Modifiers::READONLY : 0);
-                $this->document($param, $this->propertyDoc($property, $types, $annotations));
+                $this->document($param, $this->propertyDoc($property, $types, $annotations, $property->type()));
             } else {
                 $tags = array_merge($tags, $this->paramTag($property, $types));
                 $body[] = new Expression(new Assign($this->fetch($property->name()), new Variable($property->name())));
@@ -299,13 +299,14 @@ final class PhpParserEmitter implements CodeEmitter
 
         if ($form->hasGetters()) {
             $getter = $this->factory->method('get' . $suffix)->makePublic()->addStmt(new Return_($this->fetch($name)));
-            $type = $types->nativeNode($shape->declaredType($property));
+            $declared = $shape->declaredType($property);
+            $type = $types->nativeNode($declared);
             if ($type instanceof Node) {
                 $getter->setReturnType($type);
             }
 
             $node = $getter->getNode();
-            $returnTag = $types->tags($shape->declaredType($property), 'return');
+            $returnTag = $types->tags($declared, 'return');
             $this->document($node, DocBlock::render(null, array_merge($returnTag, $deprecation)));
             $methods[] = $node;
         }
@@ -398,9 +399,9 @@ final class PhpParserEmitter implements CodeEmitter
         return $types->tags($property->type(), 'param', ' $' . $property->name());
     }
 
-    private function propertyDoc(PropertyModel $property, TypeRenderer $types, AnnotationRenderer $annotations, ?TypeModel $declared = null): ?string
+    private function propertyDoc(PropertyModel $property, TypeRenderer $types, AnnotationRenderer $annotations, TypeModel $declared): ?string
     {
-        $var = $types->tags($declared ?? $property->type(), 'var');
+        $var = $types->tags($declared, 'var');
 
         return DocBlock::render($property->doc()->description(), array_merge($var, $this->deprecation($property->doc()), $annotations->annotations($property->attributes())));
     }
