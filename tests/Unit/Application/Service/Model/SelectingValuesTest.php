@@ -296,4 +296,28 @@ final class SelectingValuesTest extends TestCase
         );
         self::assertSame([], ModelFixture::selections($output));
     }
+
+    public function testRestoresTheMutatorsASiblingOfADiscriminatedBranchInherits(): void
+    {
+        $output = ModelFixture::build([
+            'Named' => ['type' => 'object', 'required' => ['kind', 'name'], 'properties' => ['kind' => ['type' => 'string'], 'name' => ['type' => 'string']]],
+            'Pet' => [
+                'allOf' => [['$ref' => '#/components/schemas/Named'], ['type' => 'object', 'properties' => ['age' => ['type' => 'integer']]]],
+                'discriminator' => ['propertyName' => 'kind', 'mapping' => ['cat' => '#/components/schemas/Cat']],
+            ],
+            'Cat' => ['allOf' => [['$ref' => '#/components/schemas/Pet'], ['type' => 'object', 'properties' => ['meow' => ['type' => 'string']]]]],
+            'Product' => ['allOf' => [['$ref' => '#/components/schemas/Named'], ['type' => 'object', 'properties' => ['price' => ['type' => 'integer']]]]],
+        ]);
+
+        $restored = [];
+        foreach ($output->classes() as $class) {
+            $restored[$class->model()->name()->shortName()] = [$class->model()->discriminatedProperties(), $class->model()->restoredMutators()];
+        }
+
+        // Named is in Pet's chain, so it has no mutator for `kind`; Product, outside it, declares its own.
+        self::assertSame(
+            ['Named' => [['kind'], []], 'Pet' => [['kind'], []], 'Cat' => [['kind'], []], 'Product' => [[], ['kind']]],
+            $restored,
+        );
+    }
 }

@@ -299,3 +299,39 @@ components:
       properties:
         kind: {type: string}
         note: {type: string}
+    Named:
+      description: An allOf base shared by a discriminated branch (Device) and a plain subclass (Product).
+      type: object
+      required: [kind, name]
+      properties:
+        kind: {type: string}
+        name: {type: string}
+    Device:
+      allOf:
+        - $ref: '#/components/schemas/Named'
+        - type: object
+          properties:
+            serial: {type: string}
+      discriminator:
+        propertyName: kind
+        mapping:
+          phone: '#/components/schemas/Phone'
+          tablet: '#/components/schemas/Tablet'
+    Phone:
+      allOf:
+        - $ref: '#/components/schemas/Device'
+        - type: object
+          properties:
+            number: {type: string}
+    Tablet:
+      allOf:
+        - $ref: '#/components/schemas/Device'
+        - type: object
+          properties:
+            inches: {type: number}
+    Product:
+      allOf:
+        - $ref: '#/components/schemas/Named'
+        - type: object
+          properties:
+            price: {type: integer}

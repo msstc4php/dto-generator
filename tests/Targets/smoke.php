@@ -15,6 +15,7 @@ use App\Dto\Dog;
 use App\Dto\EuroWallet;
 use App\Dto\Leaf;
 use App\Dto\Parrot;
+use App\Dto\Product;
 use App\Dto\Sample;
 use App\Dto\Shape;
 use App\Dto\Side;
@@ -51,6 +52,10 @@ require $profile . 'BlobX.php.golden';
 require $profile . 'Creature.php.golden';
 require $profile . 'Bird.php.golden';
 require $profile . 'Parrot.php.golden';
+require $profile . 'Named.php.golden';
+require $profile . 'Device.php.golden';
+require $profile . 'Phone.php.golden';
+require $profile . 'Product.php.golden';
 
 /**
  * @return mixed
@@ -189,6 +194,25 @@ rejects(static fn (): Bird => new Bird('fish', 2), '"fish" does not select Bird 
 $parrot = new Parrot(2);
 check($parrot instanceof Bird && read($parrot, 'kind') === 'parrot' && read($parrot, 'wings') === 2, 'subclass of an open class');
 rejects(static fn (): Parrot => new Parrot(2, 'bird'), '"bird" does not select Parrot by "kind".');
+
+// Product is outside Device's discriminated chain, so it changes `kind` although Named, inside it, may not.
+foreach (['App\\Dto\\Named', 'App\\Dto\\Phone'] as $class) {
+    check(!method_exists($class, 'withKind') && !method_exists($class, 'setKind'), 'no mutator of ' . $class . '::kind');
+}
+
+$product = new Product('gadget', 'box', 5);
+if (strpos(basename($profile), '-immutable') !== false && strpos(basename($profile), '-nowithers') === false) {
+    $renamed = $product->withKind('crate');
+    check($renamed instanceof Product && read($renamed, 'kind') === 'crate' && read($product, 'kind') === 'gadget', 'restored wither');
+}
+
+if (method_exists($product, 'setKind')) {
+    check($product->setKind('crate') === $product && read($product, 'kind') === 'crate', 'restored setter');
+}
+
+if (strpos(basename($profile), '-mutable-getters') !== false) {
+    check(method_exists($product, 'setKind'), 'restored setter declared');
+}
 check((new ReflectionClass(Shape::class))->isAbstract() && !(new ReflectionClass(Animal::class))->isFinal(), 'base classes stay open');
 
 if (strpos(basename($profile), '-nowithers') !== false) {

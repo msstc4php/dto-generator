@@ -86,6 +86,10 @@ final class EmitterFixture
             self::creature($mutability),
             self::bird($mutability),
             self::parrot($mutability),
+            self::named($mutability),
+            self::device($mutability),
+            self::phone($mutability),
+            self::product($mutability),
         ];
     }
 
@@ -292,6 +296,44 @@ final class EmitterFixture
             ->withHierarchy(ClassKind::from(ClassKind::FINAL), ClassName::fromFqcn('App\Dto\Bird'), null)
             ->withDiscriminatorValues(new DiscriminatorValues('kind', ['parrot']))
             ->withDiscriminatedProperties('kind')
+        ;
+    }
+
+    /**
+     * An open base in Device's discriminated chain, so it has no mutator for `kind`.
+     */
+    public static function named(string $mutability = Mutability::IMMUTABLE): ClassModel
+    {
+        return self::model('App\Dto\Named', null, [self::property('kind', ScalarType::string(), true), self::property('name', ScalarType::string(), true)], $mutability)
+            ->withHierarchy(ClassKind::from(ClassKind::OPEN), null, null)
+            ->withDiscriminatedProperties('kind')
+        ;
+    }
+
+    public static function device(string $mutability = Mutability::IMMUTABLE): ClassModel
+    {
+        return self::model('App\Dto\Device', null, [], $mutability)
+            ->withHierarchy(ClassKind::from(ClassKind::ABSTRACT), ClassName::fromFqcn('App\Dto\Named'), new DiscriminatorModel('kind', ['phone' => ClassName::fromFqcn('App\Dto\Phone')]))
+        ;
+    }
+
+    public static function phone(string $mutability = Mutability::IMMUTABLE): ClassModel
+    {
+        return self::model('App\Dto\Phone', null, [self::property('screen', ScalarType::int(), true)], $mutability)
+            ->withHierarchy(ClassKind::from(ClassKind::FINAL), ClassName::fromFqcn('App\Dto\Device'), null)
+            ->withDiscriminatorValues(new DiscriminatorValues('kind', ['phone']))
+            ->withDiscriminatedProperties('kind')
+        ;
+    }
+
+    /**
+     * Named's other subclass, outside every discriminated chain: it changes `kind` itself.
+     */
+    public static function product(string $mutability = Mutability::IMMUTABLE): ClassModel
+    {
+        return self::model('App\Dto\Product', null, [self::property('price', ScalarType::int(), true)], $mutability)
+            ->withHierarchy(ClassKind::from(ClassKind::FINAL), ClassName::fromFqcn('App\Dto\Named'), null)
+            ->withRestoredMutators('kind')
         ;
     }
 

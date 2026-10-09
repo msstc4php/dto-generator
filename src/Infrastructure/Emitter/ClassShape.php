@@ -100,6 +100,14 @@ final class ClassShape
     }
 
     /**
+     * An inherited property whose parent left its mutators out for a discriminated chain this class is not in.
+     */
+    public function restoresMutators(PropertyModel $property): bool
+    {
+        return in_array($property->wireName(), $this->class->restoredMutators(), true);
+    }
+
+    /**
      * @return list<array{PropertyModel, DiscriminatorValues}> root discriminator first
      */
     public function checks(): array

@@ -432,6 +432,15 @@ final class Hierarchy
         foreach ($discriminated as $fqcn => $names) {
             $this->models[$fqcn] = $this->models[$fqcn]->withDiscriminatedProperties(...$names);
         }
+
+        // A class outside every discriminated chain still changes what its parent, inside one, may not.
+        foreach ($this->models as $fqcn => $model) {
+            $parent = $model->parent();
+            if ($parent instanceof ClassName && isset($this->models[$parent->fqcn()])) {
+                $restored = array_diff($this->models[$parent->fqcn()]->discriminatedProperties(), $model->discriminatedProperties());
+                $this->models[$fqcn] = $model->withRestoredMutators(...array_values($restored));
+            }
+        }
     }
 
     /**

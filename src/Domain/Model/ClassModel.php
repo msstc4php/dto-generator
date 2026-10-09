@@ -36,11 +36,16 @@ final class ClassModel
     /** @var list<string> */
     private array $discriminatedProperties;
 
+    /** @var list<string> */
+    private array $restoredMutators;
+
     /**
      * @param list<PropertyModel> $properties own properties only, in schema order
      * @param list<AttributeModel> $attributes
      * @param list<DiscriminatorValues> $discriminatorValues root discriminator first
      * @param list<string> $discriminatedProperties wire names read by a discriminator of an ancestor or a subclass
+     * @param list<string> $restoredMutators wire names of inherited properties whose mutators the parent leaves out but
+     *                                       no discriminator of this class's chain reads
      */
     public function __construct(
         ClassName $name,
@@ -53,7 +58,8 @@ final class ClassModel
         array $attributes = [],
         ?DiscriminatorModel $discriminator = null,
         array $discriminatorValues = [],
-        array $discriminatedProperties = []
+        array $discriminatedProperties = [],
+        array $restoredMutators = []
     ) {
         if ($parent instanceof ClassName && $parent->equals($name)) {
             throw new InvalidModel(sprintf('Class %s cannot extend itself.', $name->fqcn()));
@@ -103,16 +109,29 @@ final class ClassModel
         $this->attributes = $attributes;
         $this->discriminator = $discriminator;
         $this->discriminatorValues = $discriminatorValues;
-        $this->discriminatedProperties = [];
-        foreach ($discriminatedProperties as $wireName) {
+        $this->discriminatedProperties = $this->wireNames($discriminatedProperties, $name, 'discriminated property');
+        $this->restoredMutators = $this->wireNames($restoredMutators, $name, 'restored mutator');
+    }
+
+    /**
+     * @param list<string> $wireNames
+     *
+     * @return list<string> without repeats, in their order
+     */
+    private function wireNames(array $wireNames, ClassName $name, string $what): array
+    {
+        $unique = [];
+        foreach ($wireNames as $wireName) {
             if ($wireName === '') {
-                throw new InvalidModel(sprintf('Class %s lists an empty discriminated property.', $name->fqcn()));
+                throw new InvalidModel(sprintf('Class %s lists an empty %s.', $name->fqcn(), $what));
             }
 
-            if (!in_array($wireName, $this->discriminatedProperties, true)) {
-                $this->discriminatedProperties[] = $wireName;
+            if (!in_array($wireName, $unique, true)) {
+                $unique[] = $wireName;
             }
         }
+
+        return $unique;
     }
 
     public function name(): ClassName
@@ -223,6 +242,33 @@ final class ClassModel
             $this->discriminator,
             $this->discriminatorValues,
             $wireNames,
+            $this->restoredMutators,
+        );
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function restoredMutators(): array
+    {
+        return $this->restoredMutators;
+    }
+
+    public function withRestoredMutators(string ...$wireNames): self
+    {
+        return new self(
+            $this->name,
+            $this->kind,
+            $this->parent,
+            $this->properties,
+            $this->mutability,
+            $this->doc,
+            $this->source,
+            $this->attributes,
+            $this->discriminator,
+            $this->discriminatorValues,
+            $this->discriminatedProperties,
+            $wireNames,
         );
     }
 
@@ -240,6 +286,7 @@ final class ClassModel
             $this->discriminator,
             $values,
             $this->discriminatedProperties,
+            $this->restoredMutators,
         );
     }
 
@@ -257,6 +304,7 @@ final class ClassModel
             $this->discriminator,
             $this->discriminatorValues,
             $this->discriminatedProperties,
+            $this->restoredMutators,
         );
     }
 
@@ -274,6 +322,7 @@ final class ClassModel
             $discriminator,
             $this->discriminatorValues,
             $this->discriminatedProperties,
+            $this->restoredMutators,
         );
     }
 
@@ -291,6 +340,7 @@ final class ClassModel
             $this->discriminator,
             $this->discriminatorValues,
             $this->discriminatedProperties,
+            $this->restoredMutators,
         );
     }
 }

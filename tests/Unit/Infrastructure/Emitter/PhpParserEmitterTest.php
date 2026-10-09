@@ -957,4 +957,31 @@ final class Order
             $emitter->emit($ruled, EmitterFixture::target('8.2', Mutability::IMMUTABLE), $creature),
         );
     }
+
+    public function testRedeclaresAMutatorItsParentLeavesOut(): void
+    {
+        $emitter = new PhpParserEmitter();
+        $named = EmitterFixture::named()->properties();
+
+        self::assertStringContainsString(
+            "    public function withKind(string \$kind): self\n    {\n        \$clone = clone \$this;\n        \$clone->kind = \$kind;\n",
+            $emitter->emit(EmitterFixture::product(), EmitterFixture::target('7.4', Mutability::IMMUTABLE), $named),
+        );
+        self::assertStringContainsString(
+            "return clone(\$this, ['kind' => \$kind]);",
+            $emitter->emit(EmitterFixture::product(), EmitterFixture::target('8.5', Mutability::IMMUTABLE), $named),
+        );
+        self::assertSame(
+            1,
+            substr_count($emitter->emit(EmitterFixture::product(), EmitterFixture::target('8.2', Mutability::IMMUTABLE), $named), 'function withKind('),
+        );
+        self::assertStringContainsString(
+            "    public function setKind(string \$kind): self\n    {\n        \$this->kind = \$kind;\n",
+            $emitter->emit(EmitterFixture::product(Mutability::MUTABLE), EmitterFixture::target('8.2', Mutability::MUTABLE, AccessorStyle::GETTERS), EmitterFixture::named(Mutability::MUTABLE)->properties()),
+        );
+        self::assertStringNotContainsString(
+            'withKind',
+            $emitter->emit(EmitterFixture::phone(), EmitterFixture::target('7.4', Mutability::IMMUTABLE), $named),
+        );
+    }
 }

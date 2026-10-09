@@ -124,8 +124,14 @@ final class PhpParserEmitter implements CodeEmitter
         }
 
         foreach ($inherited as $property) {
-            if ($shape->declaresInheritedWithers() && $shape->hasMutators($property)) {
-                $members[] = $this->mutator($shape, 'with' . Identifier::asciiUpperFirst($property->name()), $property, $types, $this->witherBody($shape, $property));
+            $suffix = Identifier::asciiUpperFirst($property->name());
+            $restored = $shape->restoresMutators($property);
+            if ($form->hasSetters() && $restored) {
+                $members[] = $this->mutator($shape, 'set' . $suffix, $property, $types, $this->setterBody($property));
+            }
+
+            if ($shape->declaresInheritedWithers() ? $shape->hasMutators($property) : $restored && $shape->hasWithers()) {
+                $members[] = $this->mutator($shape, 'with' . $suffix, $property, $types, $this->witherBody($shape, $property));
             }
         }
 
@@ -316,10 +322,7 @@ final class PhpParserEmitter implements CodeEmitter
         }
 
         if ($form->hasSetters() && $shape->hasMutators($property)) {
-            $methods[] = $this->mutator($shape, 'set' . $suffix, $property, $types, [
-                new Expression(new Assign($this->fetch($name), new Variable($name))),
-                new Return_(new Variable('this')),
-            ]);
+            $methods[] = $this->mutator($shape, 'set' . $suffix, $property, $types, $this->setterBody($property));
         }
 
         if ($shape->hasWithers() && $shape->hasMutators($property)) {
@@ -345,6 +348,17 @@ final class PhpParserEmitter implements CodeEmitter
         $this->document($node, DocBlock::render(null, $tags));
 
         return $node;
+    }
+
+    /**
+     * @return list<Stmt>
+     */
+    private function setterBody(PropertyModel $property): array
+    {
+        return [
+            new Expression(new Assign($this->fetch($property->name()), new Variable($property->name()))),
+            new Return_(new Variable('this')),
+        ];
     }
 
     /**

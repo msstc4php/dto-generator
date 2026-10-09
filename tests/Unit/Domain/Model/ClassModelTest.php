@@ -188,6 +188,28 @@ final class ClassModelTest extends TestCase
         self::assertSame(['sub', 'kind'], $class->withDiscriminatorValues()->discriminatedProperties());
     }
 
+    public function testKeepsTheMutatorsItRestoresThroughEveryCopy(): void
+    {
+        $class = $this->classWith([])->withRestoredMutators('kind', 'kind');
+
+        self::assertSame([], $this->classWith([])->restoredMutators());
+        self::assertSame(['kind'], $class->restoredMutators());
+        self::assertSame(['kind'], $class->withProperties($this->property('name'))->restoredMutators());
+        self::assertSame(['kind'], $class->withAddedAttributes(new AttributeModel(ClassName::fromFqcn('App\Marker')))->restoredMutators());
+        self::assertSame(['kind'], $class->withHierarchy(ClassKind::from(ClassKind::FINAL), null, null)->restoredMutators());
+        self::assertSame(['kind'], $class->withDiscriminatorValues()->restoredMutators());
+        self::assertSame(['kind'], $class->withDiscriminatedProperties('sub')->restoredMutators());
+        self::assertSame(['sub'], $class->withRestoredMutators('sub')->withDiscriminatedProperties('kind')->restoredMutators());
+    }
+
+    public function testRejectsAnEmptyRestoredMutator(): void
+    {
+        $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('Class App\User lists an empty restored mutator.');
+
+        $this->classWith([])->withRestoredMutators('');
+    }
+
     public function testCollapsesRepeatedDiscriminatedProperties(): void
     {
         self::assertSame(['kind', 'sub'], $this->classWith([])->withDiscriminatedProperties('kind', 'sub', 'kind')->discriminatedProperties());
