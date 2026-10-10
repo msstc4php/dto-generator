@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Infrastructure\Remote;
 
+use MSSTC4PHP\DtoGenerator\Domain\Exception\InvalidModel;
+use MSSTC4PHP\DtoGenerator\Domain\Shared\Url;
+
 /**
  * One HTTP/1.0 GET over a socket: PHP's http wrapper bounds neither the time of a whole response (its timeout is per
  * read) nor the size of its headers, and both are the server's to choose. HTTP/1.0 keeps the body free of chunks.
@@ -14,33 +17,16 @@ final class StreamFetcher implements Fetcher
 
     public function get(string $url, int $timeout, int $maxBytes): Response
     {
-        $parts = parse_url($url);
+        // Only the spelling the allow list checked, which also keeps line breaks out of the request.
+        $parts = $this->isNormalized($url) ? parse_url($url) : false;
         if (!is_array($parts) || !isset($parts['scheme'], $parts['host'])) {
-            throw new FetchFailed(sprintf('"%s" is no absolute URL', $url));
+            throw new FetchFailed(sprintf('"%s" is no normalized http(s) URL', $url));
         }
 
         $deadline = microtime(true) + $timeout;
-        $secure = strtolower($parts['scheme']) === 'https';
+        $secure = $parts['scheme'] === 'https';
         $port = $parts['port'] ?? ($secure ? 443 : 80);
-        $name = trim($parts['host'], '[]');
-        $context = stream_context_create(['ssl' => ['verify_peer' => true, 'verify_peer_name' => true, 'peer_name' => $name, 'SNI_enabled' => true]]);
-        // A failed TLS handshake explains itself in a warning only.
-        $warning = null;
-        set_error_handler(static function (int $level, string $message) use (&$warning): bool {
-            $warning = $message;
-
-            return true;
-        });
-        try {
-            $stream = stream_socket_client(($secure ? 'tls' : 'tcp') . '://' . $parts['host'] . ':' . $port, $errno, $error, $timeout, STREAM_CLIENT_CONNECT, $context);
-        } finally {
-            restore_error_handler();
-        }
-
-        if (!is_resource($stream)) {
-            throw new FetchFailed($warning ?? (($error ?? '') === '' ? 'the connection failed' : (string) $error));
-        }
-
+        $stream = $this->connect($parts['host'], $port, $secure, $deadline, $timeout);
         try {
             $target = ($parts['path'] ?? '/') . (isset($parts['query']) ? '?' . $parts['query'] : '');
             $host = $parts['host'] . (isset($parts['port']) ? ':' . $port : '');
@@ -50,6 +36,55 @@ final class StreamFetcher implements Fetcher
         } finally {
             fclose($stream);
         }
+    }
+
+    private function isNormalized(string $url): bool
+    {
+        try {
+            return Url::normalize($url) === $url;
+        } catch (InvalidModel $exception) {
+            return false;
+        }
+    }
+
+    /**
+     * TCP first, then TLS 1.2 or newer within what is left of the deadline; a failed handshake explains itself only in
+     * warnings, which are kept.
+     *
+     * @param positive-int $timeout
+     *
+     * @return resource
+     */
+    private function connect(string $host, int $port, bool $secure, float $deadline, int $timeout)
+    {
+        $name = trim($host, '[]');
+        $methods = STREAM_CRYPTO_METHOD_TLSv1_2_CLIENT | (defined('STREAM_CRYPTO_METHOD_TLSv1_3_CLIENT') ? STREAM_CRYPTO_METHOD_TLSv1_3_CLIENT : 0);
+        $context = stream_context_create(['ssl' => ['verify_peer' => true, 'verify_peer_name' => true, 'peer_name' => $name, 'SNI_enabled' => true, 'crypto_method' => $methods]]);
+        $warnings = [];
+        set_error_handler(static function (int $level, string $message) use (&$warnings): bool {
+            $warnings[] = $message;
+
+            return true;
+        });
+        try {
+            $stream = stream_socket_client('tcp://' . $host . ':' . $port, $errno, $error, $timeout, STREAM_CLIENT_CONNECT, $context);
+            if (is_resource($stream) && $secure) {
+                $this->limit($stream, $deadline, $timeout);
+                // Without a method the context's crypto_method applies: TLS 1.2 or newer.
+                if (stream_socket_enable_crypto($stream, true) !== true) {
+                    fclose($stream);
+                    $stream = false;
+                }
+            }
+        } finally {
+            restore_error_handler();
+        }
+
+        if (!is_resource($stream)) {
+            throw new FetchFailed($warnings === [] ? (($error ?? '') === '' ? 'the connection failed' : (string) $error) : implode('; ', $warnings));
+        }
+
+        return $stream;
     }
 
     /**
@@ -62,11 +97,17 @@ final class StreamFetcher implements Fetcher
         $status = 0;
         $contentType = null;
         $location = null;
+        $lengths = [];
         $headerBytes = 0;
         for ($first = true; ($line = $this->line($stream, $deadline, $timeout)) !== ''; $first = false) {
             $headerBytes += strlen($line);
             if ($headerBytes > self::MAX_HEADER_BYTES) {
                 throw new FetchFailed(sprintf('its headers are larger than %d bytes', self::MAX_HEADER_BYTES));
+            }
+
+            // They would reach the diagnostics, and a terminal, as they are.
+            if (preg_match('#[\x00-\x08\x0A-\x1F\x7F]#', $line) === 1) {
+                throw new FetchFailed('its headers hold control characters');
             }
 
             if ($first) {
@@ -81,19 +122,53 @@ final class StreamFetcher implements Fetcher
                     $contentType = $matches[2];
                 } elseif ($header === 'location') {
                     $location = $matches[2];
+                } elseif ($header === 'content-length') {
+                    $lengths[$matches[2]] = true;
+                } elseif ($header === 'transfer-encoding') {
+                    throw new FetchFailed(sprintf('it answered an HTTP/1.0 request with Transfer-Encoding %s', $matches[2]));
                 }
             }
         }
 
+        $length = $this->length(array_keys($lengths), $maxBytes);
         $body = '';
-        while (!feof($stream)) {
-            $body .= $this->read($stream, $deadline, $timeout, 8192);
+        while (!feof($stream) && ($length === null || strlen($body) < $length)) {
+            $body .= $this->read($stream, $deadline, $timeout, $length === null ? 8192 : max(1, min(8192, $length - strlen($body))));
             if (strlen($body) > $maxBytes) {
                 throw new FetchFailed(sprintf('it is larger than %d bytes', $maxBytes));
             }
         }
 
+        // A short body would be cached, and its hash would vouch for it.
+        if ($length !== null && strlen($body) < $length) {
+            throw new FetchFailed(sprintf('it ended after %d of %d bytes', strlen($body), $length));
+        }
+
         return new Response($status, $contentType, $location, $body);
+    }
+
+    /**
+     * The length the headers announce, if any.
+     *
+     * @param list<array-key> $values the distinct values of Content-Length
+     * @param positive-int $maxBytes
+     */
+    private function length(array $values, int $maxBytes): ?int
+    {
+        if ($values === []) {
+            return null;
+        }
+
+        $value = (string) $values[0];
+        if (count($values) > 1 || preg_match('#^\d{1,18}\z#', $value) !== 1) {
+            throw new FetchFailed('its Content-Length is not one number');
+        }
+
+        if ((int) $value > $maxBytes) {
+            throw new FetchFailed(sprintf('it is larger than %d bytes', $maxBytes));
+        }
+
+        return (int) $value;
     }
 
     /**
@@ -120,17 +195,27 @@ final class StreamFetcher implements Fetcher
      */
     private function read($stream, float $deadline, int $timeout, int $length): string
     {
-        $left = $deadline - microtime(true);
-        if ($left <= 0) {
-            throw new FetchFailed(sprintf('it took longer than %d seconds', $timeout));
-        }
-
-        stream_set_timeout($stream, (int) $left, (int) (($left - (int) $left) * 1000000));
+        $this->limit($stream, $deadline, $timeout);
         $chunk = fread($stream, $length);
         if (stream_get_meta_data($stream)['timed_out']) {
             throw new FetchFailed(sprintf('it took longer than %d seconds', $timeout));
         }
 
         return is_string($chunk) ? $chunk : '';
+    }
+
+    /**
+     * Gives the next socket operation what is left of the deadline.
+     *
+     * @param resource $stream
+     */
+    private function limit($stream, float $deadline, int $timeout): void
+    {
+        $left = $deadline - microtime(true);
+        if ($left <= 0) {
+            throw new FetchFailed(sprintf('it took longer than %d seconds', $timeout));
+        }
+
+        stream_set_timeout($stream, (int) $left, (int) (($left - (int) $left) * 1000000));
     }
 }

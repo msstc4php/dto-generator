@@ -75,10 +75,16 @@ final class Url
             throw new InvalidModel(sprintf('URL "%s": credentials in a URL are not supported.', $url));
         }
 
+        // A reg-name or an IP literal: parse_url() leaves "good.com:80" of "good.com:80:80" in the host.
+        if (preg_match('#^(?:[a-z0-9\-._~!$&\'()*+,=%]+|\[[0-9a-f:.]+\])\z#i', $parts['host']) !== 1) {
+            throw new InvalidModel(sprintf('URL "%s" is not a valid absolute URL.', $url));
+        }
+
         $path = self::canonicalEscapes($parts['path'] ?? '');
-        // A server decodes them into separators, so "..%2F" would climb out of an allowed prefix.
-        if (preg_match('#%2F|%5C#', $path) === 1) {
-            throw new InvalidModel(sprintf('URL "%s": an encoded "/" or "\\" in the path is not supported.', $url));
+        // Servers decode, drop or double-decode these into separators or dot segments ("..%2F", "..;", "%252e%252e"), so
+        // each would climb out of an allowed prefix.
+        if (preg_match('#%2F|%5C|%25|%00|;#', $path) === 1 || preg_match('//u', rawurldecode($path)) !== 1) {
+            throw new InvalidModel(sprintf('URL "%s": an encoded "/", "\\", "%%" or NUL, a ";" or bytes that are not UTF-8 in the path are not supported.', $url));
         }
 
         $port = $parts['port'] ?? self::DEFAULT_PORTS[$scheme];

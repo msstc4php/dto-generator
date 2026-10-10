@@ -45,6 +45,8 @@ final class UrlTest extends TestCase
             'collapsing to the root with a dot' => ['https://example.com/a/b/../..', 'https://example.com/'],
             'empty query' => ['https://example.com/a.yaml?', 'https://example.com/a.yaml'],
             'ipv6' => ['http://[::1]:8080/a.yaml', 'http://[::1]:8080/a.yaml'],
+            'utf-8 in the path' => ['https://example.com/b%C3%BCcher.yaml', 'https://example.com/b%C3%BCcher.yaml'],
+            'semicolon in the query' => ['https://example.com/a.yaml?a=1;b=2', 'https://example.com/a.yaml?a=1;b=2'],
         ];
     }
 
@@ -68,8 +70,16 @@ final class UrlTest extends TestCase
             'not a url' => ['a.yaml', 'URL "a.yaml" is not a valid absolute URL.'],
             'scheme without slashes' => ['file:/etc/passwd', 'URL "file:/etc/passwd": only http and https are supported.'],
             'http without slashes' => ['https:example.com/a.yaml', 'URL "https:example.com/a.yaml" is not a valid absolute URL.'],
-            'encoded slash' => ['https://example.com/common/..%2fsecret/s.yaml', 'URL "https://example.com/common/..%2fsecret/s.yaml": an encoded "/" or "\\" in the path is not supported.'],
-            'encoded backslash' => ['https://example.com/common/..%5Csecret/s.yaml', 'an encoded "/" or "\\" in the path is not supported.'],
+            'encoded slash' => ['https://example.com/common/..%2fsecret/s.yaml', 'URL "https://example.com/common/..%2fsecret/s.yaml": an encoded "/", "\\", "%" or NUL, a ";" or bytes that are not UTF-8 in the path are not supported.'],
+            'encoded backslash' => ['https://example.com/common/..%5Csecret/s.yaml', 'an encoded "/", "\\", "%" or NUL, a ";" or bytes that are not UTF-8 in the path are not supported.'],
+            'path parameter after dots' => ['https://good.com/api/..;/secret', 'a ";" or bytes that are not UTF-8 in the path are not supported.'],
+            'path parameter after encoded dots' => ['https://good.com/api/.%2e;x/secret', 'a ";" or bytes that are not UTF-8 in the path are not supported.'],
+            'double encoded dots' => ['https://good.com/api/%252e%252e/secret', 'a ";" or bytes that are not UTF-8 in the path are not supported.'],
+            'double encoded percent' => ['https://good.com/api/%25%32%65/secret', 'a ";" or bytes that are not UTF-8 in the path are not supported.'],
+            'nul' => ['https://good.com/api/a%00.yaml', 'a ";" or bytes that are not UTF-8 in the path are not supported.'],
+            'overlong utf-8' => ['https://good.com/api/%C0%AE%C0%AE/secret', 'a ";" or bytes that are not UTF-8 in the path are not supported.'],
+            'port in the host' => ['http://good.com:80:80/x', 'is not a valid absolute URL.'],
+            'ports in the host' => ['http://a.com:1:2:3/x', 'is not a valid absolute URL.'],
             'backslash' => ['https://example.com/common/..\\secret\\s.yaml', 'has characters a URL cannot hold; percent-encode them.'],
             'line break' => ["https://example.com/a\r\nHost: evil", 'has characters a URL cannot hold; percent-encode them.'],
             'space' => ['https://example.com/a b.yaml', 'has characters a URL cannot hold; percent-encode them.'],

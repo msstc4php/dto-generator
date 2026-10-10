@@ -122,11 +122,19 @@ final class CachedRemoteDocuments implements RemoteDocuments
      */
     private function store(string $url, string $directory, bool $json, string $content): void
     {
-        $file = hash('sha256', $url) . ($json ? '.json' : '.yaml');
+        // Named by content: two runs that got different answers write different files, and the index names one of them.
+        $file = hash('sha256', $content) . ($json ? '.json' : '.yaml');
         $this->write($url, $directory, $file, $content);
-        $lock = fopen($directory . '/' . self::LOCK, 'c');
+        $path = $directory . '/' . self::LOCK;
+        set_error_handler(static fn (): bool => true);
+        try {
+            $lock = is_link($path) ? false : fopen($path, 'c');
+        } finally {
+            restore_error_handler();
+        }
+
         if ($lock === false || !flock($lock, LOCK_EX)) {
-            throw DocumentLoadFailed::remote($url, sprintf('could not be cached in %s: its index cannot be locked.', $directory));
+            throw DocumentLoadFailed::remote($url, sprintf('could not be cached in %s: its index cannot be locked (%s must be a plain file).', $directory, self::LOCK));
         }
 
         try {
@@ -184,6 +192,10 @@ final class CachedRemoteDocuments implements RemoteDocuments
     private function index(string $url, string $directory): array
     {
         $path = $directory . '/' . self::INDEX;
+        if (is_link($path)) {
+            throw DocumentLoadFailed::remote($url, sprintf('cannot use the cache: %s is a symbolic link; replace it with the file.', $path));
+        }
+
         if (!is_file($path)) {
             return [];
         }

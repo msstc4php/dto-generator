@@ -6,6 +6,7 @@ namespace MSSTC4PHP\DtoGenerator\Tests\Integration\Infrastructure;
 
 use MSSTC4PHP\DtoGenerator\Infrastructure\Remote\FetchFailed;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Remote\StreamFetcher;
+use MSSTC4PHP\DtoGenerator\Tests\Support\RawServer;
 use MSSTC4PHP\DtoGenerator\Tests\Support\RemoteServer;
 use PHPUnit\Framework\TestCase;
 
@@ -128,7 +129,7 @@ final class StreamFetcherTest extends TestCase
             }
 
             $this->expectException(FetchFailed::class);
-            $this->expectExceptionMessageMatches('~certificate|SSL|TLS|crypto~i');
+            $this->expectExceptionMessageMatches('~certificate verify failed~i');
 
             (new StreamFetcher())->get('https://' . $name . '/a.yaml', 5, 1024);
         } finally {
@@ -139,6 +140,58 @@ final class StreamFetcherTest extends TestCase
             }
             rmdir($dir);
         }
+    }
+
+    /**
+     * @return array<string, array{string, string}>
+     */
+    public static function brokenAnswers(): array
+    {
+        return [
+            'short body' => ["HTTP/1.0 200 OK\r\nContent-Length: 1000\r\n\r\nA: {}", 'it ended after 5 of 1000 bytes'],
+            'announced too much' => ["HTTP/1.0 200 OK\r\nContent-Length: 2000\r\n\r\nA: {}", 'it is larger than 1024 bytes'],
+            'two lengths' => ["HTTP/1.0 200 OK\r\nContent-Length: 5\r\nContent-Length: 6\r\n\r\nA: {}", 'its Content-Length is not one number'],
+            'length not a number' => ["HTTP/1.0 200 OK\r\nContent-Length: 5x\r\n\r\nA: {}", 'its Content-Length is not one number'],
+            'chunked' => ["HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nA: {}\r\n0\r\n\r\n", 'it answered an HTTP/1.0 request with Transfer-Encoding chunked'],
+            'control characters' => ["HTTP/1.0 301 Moved\r\nLocation: http://x/\x1b[31mred\r\n\r\n", 'its headers hold control characters'],
+            'not http' => ["SSH-2.0-OpenSSH\r\n\r\n", 'the server did not answer in HTTP'],
+        ];
+    }
+
+    /**
+     * @dataProvider brokenAnswers
+     */
+    public function testRefusesAnAnswerItCannotTrust(string $answer, string $message): void
+    {
+        $server = RawServer::answering($answer);
+
+        try {
+            $this->expectException(FetchFailed::class);
+            $this->expectExceptionMessage($message);
+
+            (new StreamFetcher())->get($server->url('/a.yaml'), 5, 1024);
+        } finally {
+            $server->stop();
+        }
+    }
+
+    public function testReadsTheAnnouncedLengthOnly(): void
+    {
+        $server = RawServer::answering("HTTP/1.0 200 OK\r\nContent-Length: 5\r\nContent-Length: 5\r\n\r\nA: {}EXTRA");
+
+        try {
+            self::assertSame('A: {}', (new StreamFetcher())->get($server->url('/a.yaml'), 5, 1024)->body());
+        } finally {
+            $server->stop();
+        }
+    }
+
+    public function testFetchesOnlyANormalizedUrl(): void
+    {
+        $this->expectException(FetchFailed::class);
+        $this->expectExceptionMessage('"http://127.0.0.1:9/a/../b.yaml" is no normalized http(s) URL');
+
+        (new StreamFetcher())->get('http://127.0.0.1:9/a/../b.yaml', 5, 1024);
     }
 
     public function testReportsAServerThatDoesNotAnswer(): void

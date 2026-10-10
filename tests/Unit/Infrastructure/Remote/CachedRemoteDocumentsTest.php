@@ -9,6 +9,7 @@ use MSSTC4PHP\DtoGenerator\Application\Port\DocumentLoadFailed;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Remote\CachedRemoteDocuments;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Remote\FetchFailed;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Remote\Response;
+use MSSTC4PHP\DtoGenerator\Tests\Support\CallbackFetcher;
 use MSSTC4PHP\DtoGenerator\Tests\Support\RecordingFetcher;
 use MSSTC4PHP\DtoGenerator\Tests\Support\TestRunTemporaryDirectory;
 use PHPUnit\Framework\TestCase;
@@ -41,7 +42,7 @@ final class CachedRemoteDocumentsTest extends TestCase
         self::assertCount(1, $this->requests());
         self::assertSame([self::URL, 7, 10485760], $this->requests()[0]);
 
-        $file = hash('sha256', self::URL) . '.yaml';
+        $file = hash('sha256', "Money: {type: string}\n") . '.yaml';
         self::assertSame("Money: {type: string}\n", file_get_contents($this->cache . '/' . $file));
         self::assertSame(
             "{\n    \"" . self::URL . "\": {\n        \"file\": \"" . $file . "\",\n        \"fetchedAt\": \"2026-10-10T12:00:00Z\",\n        \"sha256\": \"" . hash('sha256', "Money: {type: string}\n") . "\"\n    }\n}\n",
@@ -91,7 +92,7 @@ final class CachedRemoteDocumentsTest extends TestCase
         $documents = $this->documents(new Response(200, $type, null, $body));
 
         self::assertSame(['A' => []], $documents->load($url, $this->cache, 7, true)->root());
-        self::assertSame([hash('sha256', $url) . $extension, 'index.json'], $this->listed());
+        self::assertSame([hash('sha256', $body) . $extension, 'index.json'], $this->listed());
     }
 
     /**
@@ -147,7 +148,7 @@ final class CachedRemoteDocumentsTest extends TestCase
     public function testRefusesACachedCopyChangedByHand(): void
     {
         $this->documents(new Response(200, null, null, 'A: {}'))->load(self::URL, $this->cache, 7, true);
-        $file = $this->cache . '/' . hash('sha256', self::URL) . '.yaml';
+        $file = $this->cache . '/' . hash('sha256', 'A: {}') . '.yaml';
         file_put_contents($file, 'A: {type: integer}');
 
         $this->expectException(DocumentLoadFailed::class);
@@ -159,7 +160,7 @@ final class CachedRemoteDocumentsTest extends TestCase
     public function testReportsACachedCopyThatIsGone(): void
     {
         $this->documents(new Response(200, null, null, 'A: {}'))->load(self::URL, $this->cache, 7, true);
-        $file = $this->cache . '/' . hash('sha256', self::URL) . '.yaml';
+        $file = $this->cache . '/' . hash('sha256', 'A: {}') . '.yaml';
         unlink($file);
 
         $this->expectException(DocumentLoadFailed::class);
@@ -216,7 +217,7 @@ final class CachedRemoteDocumentsTest extends TestCase
     public function testRefusesACachedCopyThatIsALink(): void
     {
         $this->documents(new Response(200, null, null, 'A: {}'))->load(self::URL, $this->cache, 7, true);
-        $file = $this->cache . '/' . hash('sha256', self::URL) . '.yaml';
+        $file = $this->cache . '/' . hash('sha256', 'A: {}') . '.yaml';
         rename($file, $this->cache . '/target.yaml');
         symlink($this->cache . '/target.yaml', $file);
 
@@ -224,6 +225,48 @@ final class CachedRemoteDocumentsTest extends TestCase
         $this->expectExceptionMessage('cannot be read as a plain file');
 
         $this->documents()->load(self::URL, $this->cache, 7, true);
+    }
+
+    public function testRefusesAnIndexOrALockThatIsALink(): void
+    {
+        mkdir($this->cache, 0777, true);
+        file_put_contents($this->cache . '/elsewhere.json', '{}');
+        symlink($this->cache . '/elsewhere.json', $this->cache . '/index.json');
+
+        try {
+            $this->documents(new Response(200, null, null, 'A: {}'))->load(self::URL, $this->cache, 7, true);
+            self::fail('No failure');
+        } catch (DocumentLoadFailed $exception) {
+            self::assertSame('Remote document "' . self::URL . '" cannot use the cache: ' . $this->cache . '/index.json is a symbolic link; replace it with the file.', $exception->getMessage());
+        }
+
+        unlink($this->cache . '/index.json');
+        symlink(dirname($this->cache) . '/victim', $this->cache . '/.index.lock');
+        $this->expectException(DocumentLoadFailed::class);
+        $this->expectExceptionMessage('could not be cached in ' . $this->cache . ': its index cannot be locked (.index.lock must be a plain file).');
+
+        try {
+            $this->documents(new Response(200, null, null, 'A: {}'))->load(self::URL, $this->cache, 7, true);
+        } finally {
+            self::assertFileDoesNotExist(dirname($this->cache) . '/victim');
+        }
+    }
+
+    public function testKeepsTheAnswersOfRacingRunsApart(): void
+    {
+        $cache = $this->cache;
+        // The other run fetches and records B while this one waits for A.
+        $racing = new CachedRemoteDocuments(new CallbackFetcher(static function () use ($cache): Response {
+            (new CachedRemoteDocuments(new RecordingFetcher([new Response(200, null, null, 'B: {}')])))->load(self::URL, $cache, 7, true);
+
+            return new Response(200, null, null, 'A: {}');
+        }));
+
+        self::assertSame(['A' => []], $racing->load(self::URL, $this->cache, 7, true)->root());
+        self::assertSame(['A' => []], $this->documents()->load(self::URL, $this->cache, 7, false)->root());
+        $files = [hash('sha256', 'A: {}') . '.yaml', hash('sha256', 'B: {}') . '.yaml', 'index.json'];
+        sort($files);
+        self::assertSame($files, $this->listed());
     }
 
     public function testKeepsTheDocumentsOfEachCacheApart(): void

@@ -39,23 +39,28 @@ remoteRefs:
 
 ## 3. Ссылки внутри удалённых документов
 
-- Относительный `$ref` в удалённом документе разрешается от его URL (RFC 3986: точки сегментов, `../`) и снова
-  проходит проверку `allow`.
-- Ссылка из удалённого документа на локальный файл (абсолютный путь, `file:`) — ошибка: чужой документ не читает
-  файлы проекта.
-- Идентичность документа — нормализованный URL (схема и хост в нижнем регистре, без порта по умолчанию, без
-  fragment). Расположения схем (`SchemaLocation`) несут URL; диагностики показывают его как есть.
+- Относительный `$ref` в удалённом документе разрешается от его URL (RFC 3986 §5.2: точки сегментов, `../`, путь от
+  корня `/x` — от хоста документа) и снова проходит проверку `allow`.
+- Ссылка из удалённого документа с другой схемой (`file:`, `mailto:`) — ошибка: чужой документ не читает файлы
+  проекта.
+- Идентичность документа — нормализованный URL: схема и хост в нижнем регистре, без порта по умолчанию, экранирования
+  unreserved-символов декодированы, остальные — в верхнем регистре, без dot-сегментов, без пустого query и fragment.
+  Отвергаются символы вне RFC 3986, userinfo, хост вне reg-name/IP-literal, а в пути — `%2F`, `%5C`, `%25`, `%00`,
+  `;` и байты не UTF-8: серверы декодируют или отбрасывают их так, что путь выходит за префикс (`..%2F`, `..;`,
+  `%252e`). Расположения схем (`SchemaLocation`) несут URL; диагностики показывают его как есть.
 
 ## 4. Архитектура
 
-- Domain: `Shared\Url` — разбор, нормализация, разрешение относительной ссылки; `Reference::target()` возвращает
-  `SchemaLocation` и для URL (схема не `http(s)` — ошибка модели).
+- Domain: `Shared\Url` — `normalize`, `resolve`, `isUnder`, `hasScheme`; `Reference::target()` возвращает
+  `SchemaLocation` и для URL.
 - Application: `Config\RemoteRefsSettings` (allow, cacheDir, timeout); порт `Port\RemoteDocuments`
-  (`load(url, bool $fetch): Document`, исключение `DocumentLoadFailed`); `Schemas\Load` решает, разрешён ли URL,
-  и в каком режиме (`fetch` только в write).
-- Infrastructure: `Remote\CachedRemoteDocuments` (кэш + декодирование через общий декодер `FileDocumentLoader`) и порт
-  `Remote\Fetcher` с адаптером `StreamFetcher` (`file_get_contents` + stream context: `follow_location 0`,
-  `ignore_errors`, `timeout`, `verify_peer`, лимит через `maxlen`); PHP 7.4.
+  (`load(url, cacheDir, timeout, bool $fetch): Document`, исключение `DocumentLoadFailed`); `Schemas\Load` решает,
+  разрешён ли URL, и в каком режиме (`fetch` только в write).
+- Infrastructure: `Remote\CachedRemoteDocuments` (индекс под `flock`, проверка записей, файлы по хешу содержимого,
+  без символических ссылок; декодирование — общий `Document\DocumentDecoder`) и `Remote\Fetcher` с адаптером
+  `StreamFetcher` — свой HTTP/1.0-клиент на `stream_socket_client`: принимает только нормализованный URL, TLS 1.2+ с
+  проверкой сертификата и SNI, срок на весь ответ (рукопожатие включено), заголовки до 64 КБ без управляющих символов,
+  `Content-Length` — одно число, тело ровно такой длины (короче — ошибка), без `Transfer-Encoding`.
 - Composer-плагин, Docker и CLI работают через тот же use-case.
 
 ## 5. Вне рамок
