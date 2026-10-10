@@ -8,6 +8,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Target\AccessorStyle;
 use MSSTC4PHP\DtoGenerator\Domain\Target\AllOfStrategy;
 use MSSTC4PHP\DtoGenerator\Domain\Target\DateTimeClass;
 use MSSTC4PHP\DtoGenerator\Domain\Target\Mutability;
+use MSSTC4PHP\DtoGenerator\Domain\Target\ReadWriteModels;
 
 final class DtoSettings
 {
@@ -21,7 +22,7 @@ final class DtoSettings
 
     private bool $withers;
 
-    private bool $splitsReadAndWrite;
+    private ReadWriteModels $readWriteModels;
 
     private ViewSuffixes $viewSuffixes;
 
@@ -31,7 +32,7 @@ final class DtoSettings
         DateTimeClass $dateTimeClass,
         AllOfStrategy $allOfStrategy,
         bool $withers = true,
-        bool $splitsReadAndWrite = false,
+        ?ReadWriteModels $readWriteModels = null,
         ?ViewSuffixes $viewSuffixes = null
     ) {
         $this->mutability = $mutability;
@@ -39,7 +40,7 @@ final class DtoSettings
         $this->dateTimeClass = $dateTimeClass;
         $this->allOfStrategy = $allOfStrategy;
         $this->withers = $withers;
-        $this->splitsReadAndWrite = $splitsReadAndWrite;
+        $this->readWriteModels = $readWriteModels ?? ReadWriteModels::from(ReadWriteModels::SINGLE);
         $this->viewSuffixes = $viewSuffixes ?? new ViewSuffixes();
     }
 
@@ -73,7 +74,12 @@ final class DtoSettings
      */
     public function splitsReadAndWrite(): bool
     {
-        return $this->splitsReadAndWrite;
+        return $this->readWriteModels->isSplit();
+    }
+
+    public function readWriteModels(): ReadWriteModels
+    {
+        return $this->readWriteModels;
     }
 
     public function viewSuffixes(): ViewSuffixes

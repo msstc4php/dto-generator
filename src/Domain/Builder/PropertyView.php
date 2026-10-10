@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Domain\Builder;
 
-use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
-use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaGraph;
 
 /**
  * The properties one view of a direction-dependent class keeps (spec F1 §5).
@@ -15,12 +13,12 @@ final class PropertyView
 {
     private Direction $direction;
 
-    private SchemaGraph $graph;
+    private Directions $directions;
 
-    public function __construct(Direction $direction, SchemaGraph $graph)
+    public function __construct(Direction $direction, Directions $directions)
     {
         $this->direction = $direction;
-        $this->graph = $graph;
+        $this->directions = $directions;
     }
 
     public function direction(): Direction
@@ -28,10 +26,29 @@ final class PropertyView
         return $this->direction;
     }
 
-    public function admits(Schema $property, Diagnostics $diagnostics): bool
+    public function admits(Schema $property): bool
     {
-        $direction = Directions::of($property, $this->graph, $diagnostics);
+        $direction = $this->directions->of($property);
 
         return !$direction instanceof Direction || $direction->equals($this->direction);
+    }
+
+    /**
+     * The properties of the other view among a class's declarations, whichever member of its composition marks them.
+     *
+     * @param list<array{string, Schema}> $sources wire name and schema of each declaration
+     *
+     * @return array<string, string> wire name → wire name
+     */
+    public function excluded(array $sources): array
+    {
+        $excluded = [];
+        foreach ($this->directions->ofSources($sources) as [$wireName, $direction]) {
+            if (!$direction->equals($this->direction)) {
+                $excluded[$wireName] = $wireName;
+            }
+        }
+
+        return $excluded;
     }
 }

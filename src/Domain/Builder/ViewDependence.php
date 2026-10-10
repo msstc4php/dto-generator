@@ -33,34 +33,25 @@ final class ViewDependence
      */
     public static function of(array $classes, array $directed): array
     {
-        $dependent = $directed;
-        do {
-            $grown = false;
-            foreach ($classes as $class) {
-                $fqcn = $class->name()->fqcn();
-                if (!($dependent[$fqcn] ?? false) && self::reachesAny(self::neighbours($class), $dependent)) {
-                    $dependent[$fqcn] = true;
-                    $grown = true;
-                }
-            }
-        } while ($grown);
-
-        return $dependent;
-    }
-
-    /**
-     * @param iterable<ClassName> $names
-     * @param array<string, bool> $dependent
-     */
-    private static function reachesAny(iterable $names, array $dependent): bool
-    {
-        foreach ($names as $name) {
-            if ($dependent[$name->fqcn()] ?? false) {
-                return true;
+        // Who must follow whom: from each class to the classes that hold, extend or list it.
+        $followers = [];
+        foreach ($classes as $class) {
+            foreach (self::neighbours($class) as $neighbour) {
+                $followers[$neighbour->fqcn()][] = $class->name()->fqcn();
             }
         }
 
-        return false;
+        $dependent = [];
+        $pending = array_keys(array_filter($directed));
+        while ($pending !== []) {
+            $fqcn = array_shift($pending);
+            if (!($dependent[$fqcn] ?? false)) {
+                $dependent[$fqcn] = true;
+                $pending = array_merge($pending, $followers[$fqcn] ?? []);
+            }
+        }
+
+        return $dependent;
     }
 
     /**

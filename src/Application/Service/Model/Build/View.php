@@ -4,15 +4,15 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Application\Service\Model\Build;
 
-use MSSTC4PHP\DtoGenerator\Domain\Builder\PropertyView;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\Direction;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
 
 /**
- * One direction's build (spec F1 §5): its properties, and the suffix its direction-dependent classes take.
+ * One direction's build (spec F1 §5): the direction, and the suffix its direction-dependent classes take.
  */
 final class View
 {
-    private PropertyView $properties;
+    private Direction $direction;
 
     private string $suffix;
 
@@ -22,16 +22,16 @@ final class View
     /**
      * @param array<string, bool> $dependent locations of the schemas whose classes depend on the direction
      */
-    public function __construct(PropertyView $properties, string $suffix, array $dependent)
+    public function __construct(Direction $direction, string $suffix, array $dependent)
     {
-        $this->properties = $properties;
+        $this->direction = $direction;
         $this->suffix = $suffix;
         $this->dependent = $dependent;
     }
 
-    public function properties(): PropertyView
+    public function direction(): Direction
     {
-        return $this->properties;
+        return $this->direction;
     }
 
     /**

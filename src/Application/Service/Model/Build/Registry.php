@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Application\Service\Model\Build;
 
+use MSSTC4PHP\DtoGenerator\Domain\Builder\Composition;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\Declarations;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\PropertyView;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\SchemaShape;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumModel;
@@ -43,22 +46,54 @@ final class Registry
 
     private ?View $view;
 
+    private ?PropertyView $properties;
+
     /** @var array<string, string> FQCN of a class → its short name without the view's suffix */
     private array $bases = [];
 
-    public function __construct(?View $view = null)
+    /** @var array<string, string> FQCN of a name not claimed yet → its short name without the view's suffix */
+    private array $unclaimed = [];
+
+    /** @var list<Schema> */
+    private array $rejected = [];
+
+    public function __construct(?View $view = null, ?PropertyView $properties = null)
     {
         $this->view = $view;
+        $this->properties = $properties;
+    }
+
+    public function properties(): ?PropertyView
+    {
+        return $this->properties;
     }
 
     /**
-     * The class a schema gives in this build's view. The short name without the suffix is remembered, so the classes
-     * of its inline schemas are named after the schema, not the view (`PetOwnerRead`, not `PetReadOwner`).
+     * Whether a property schema belongs to this build's view; every property does without a view.
+     */
+    public function admits(Schema $property): bool
+    {
+        return !$this->properties instanceof PropertyView || $this->properties->admits($property);
+    }
+
+    /**
+     * The properties of a composition that belong to the other view.
+     *
+     * @return array<string, string>
+     */
+    public function excluded(Composition $composition): array
+    {
+        return $this->properties instanceof PropertyView ? $this->properties->excluded($composition->propertySources()) : [];
+    }
+
+    /**
+     * The class a schema gives in this build's view. Once claimed, the short name without the suffix is remembered, so
+     * the classes of its inline schemas are named after the schema, not the view (`PetOwnerRead`, not `PetReadOwner`).
      */
     public function className(string $namespace, string $short, Schema $schema): ClassName
     {
         $name = ClassName::fromFqcn(($namespace === '' ? '' : $namespace . '\\') . ($this->view instanceof View ? $this->view->name($short, $schema) : $short));
-        $this->bases[$name->fqcn()] = $short;
+        $this->unclaimed[$name->fqcn()] = $short;
 
         return $name;
     }
@@ -72,13 +107,28 @@ final class Registry
     }
 
     /**
+     * The object schemas whose class name another schema took.
+     *
+     * @return list<Schema>
+     */
+    public function rejected(): array
+    {
+        return $this->rejected;
+    }
+
+    /**
      * Claims a class or enum name; a second schema claiming it (letter case ignored) is an error.
      */
     public function claim(ClassName $name, Schema $schema, Diagnostics $diagnostics): bool
     {
         $lower = Identifier::asciiLower($name->fqcn());
-        $suffixed = $this->baseOf($name) !== $name->shortName();
+        $base = $this->unclaimed[$name->fqcn()] ?? $name->shortName();
+        $suffixed = $base !== $name->shortName();
         if (isset($this->taken[$lower])) {
+            if (SchemaShape::isClass($schema)) {
+                $this->rejected[] = $schema;
+            }
+
             $diagnostics->error(
                 sprintf(
                     'Class %s is already generated from %s; set "x-php-class-name" on one of them%s.',
@@ -93,6 +143,7 @@ final class Registry
         }
 
         $this->taken[$lower] = $schema->location()->toString();
+        $this->bases[$name->fqcn()] = $base;
         if ($suffixed) {
             $this->views[$lower] = true;
         }

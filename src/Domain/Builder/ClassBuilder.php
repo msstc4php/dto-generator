@@ -79,8 +79,9 @@ final class ClassBuilder
         $properties = [];
         $taken = [];
         $byWireName = [];
-        $sources = $this->sources($composition);
-        $skipped = $this->skippedWireNames($sources) + $this->otherViewsWireNames($sources, $diagnostics);
+        $sources = $composition->propertySources();
+        // The other view's properties are left out quietly, unlike x-php-skip.
+        $skipped = $this->skippedWireNames($sources) + ($this->view instanceof PropertyView ? $this->view->excluded($sources) : []);
         foreach ($sources as [$wireName, $propertySchema]) {
             ExtensionVocabulary::checkProperty($propertySchema, $diagnostics, $this->aliases);
             if (self::isSkipped($propertySchema, $diagnostics) && $composition->isRequired($wireName)) {
@@ -160,7 +161,7 @@ final class ClassBuilder
     private function additionalProperties(Schema $schema, bool $nameTaken, Diagnostics $diagnostics): ?PropertyModel
     {
         $additional = $schema->additionalProperties();
-        if (!$additional instanceof Schema || ($this->view instanceof PropertyView && !$this->view->admits($additional, $diagnostics))) {
+        if (!$additional instanceof Schema || ($this->view instanceof PropertyView && !$this->view->admits($additional))) {
             return null;
         }
 
@@ -207,30 +208,6 @@ final class ClassBuilder
     }
 
     /**
-     * The properties of the other view, which no merged member brings back either; quietly, unlike x-php-skip.
-     *
-     * @param list<array{string, Schema}> $sources
-     *
-     * @return array<string, string>
-     */
-    private function otherViewsWireNames(array $sources, Diagnostics $diagnostics): array
-    {
-        $view = $this->view;
-        if (!$view instanceof PropertyView) {
-            return [];
-        }
-
-        $excluded = [];
-        foreach ($sources as [$wireName, $propertySchema]) {
-            if (!$view->admits($propertySchema, $diagnostics)) {
-                $excluded[$wireName] = $wireName;
-            }
-        }
-
-        return $excluded;
-    }
-
-    /**
      * The default as JSON writes it: `1` and `1.0` of a number are the same default.
      */
     private function defaultOf(PropertyModel $property): string
@@ -238,21 +215,6 @@ final class ClassBuilder
         $default = $property->default();
 
         return $default instanceof DefaultValue ? $default->toJson() : '';
-    }
-
-    /**
-     * @return list<array{string, Schema}> wire name and schema of every property, part by part
-     */
-    private function sources(Composition $composition): array
-    {
-        $sources = [];
-        foreach ($composition->parts() as $part) {
-            foreach ($part->propertyNames() as $wireName) {
-                $sources[] = [$wireName, $part->requireProperty($wireName)];
-            }
-        }
-
-        return $sources;
     }
 
     private function property(string $wireName, Schema $schema, bool $required, Diagnostics $diagnostics): ?PropertyModel

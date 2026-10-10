@@ -14,6 +14,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Target\AccessorStyle;
 use MSSTC4PHP\DtoGenerator\Domain\Target\AllOfStrategy;
 use MSSTC4PHP\DtoGenerator\Domain\Target\DateTimeClass;
 use MSSTC4PHP\DtoGenerator\Domain\Target\Mutability;
+use MSSTC4PHP\DtoGenerator\Domain\Target\ReadWriteModels;
 
 final class ConfigMother
 {
@@ -52,7 +53,7 @@ final class ConfigMother
                 DateTimeClass::from(DateTimeClass::IMMUTABLE),
                 AllOfStrategy::from(AllOfStrategy::EXTENDS),
                 true,
-                true,
+                ReadWriteModels::from(ReadWriteModels::SPLIT),
                 $suffixes,
             ),
             [],

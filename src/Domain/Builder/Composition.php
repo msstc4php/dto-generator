@@ -65,6 +65,23 @@ final class Composition
         return $this->ownParts;
     }
 
+    /**
+     * Every declaration of a property across the parts, in their order: a property may be declared by several.
+     *
+     * @return list<array{string, Schema}> wire name and schema
+     */
+    public function propertySources(): array
+    {
+        $sources = [];
+        foreach ($this->parts as $part) {
+            foreach ($part->propertyNames() as $wireName) {
+                $sources[] = [$wireName, $part->requireProperty($wireName)];
+            }
+        }
+
+        return $sources;
+    }
+
     public function isRequired(string $wireName): bool
     {
         return isset($this->required[$wireName]);

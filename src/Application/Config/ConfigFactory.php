@@ -22,6 +22,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Target\DateTimeClass;
 use MSSTC4PHP\DtoGenerator\Domain\Target\MetadataMode;
 use MSSTC4PHP\DtoGenerator\Domain\Target\Mutability;
 use MSSTC4PHP\DtoGenerator\Domain\Target\PhpVersion;
+use MSSTC4PHP\DtoGenerator\Domain\Target\ReadWriteModels;
 
 /**
  * Validates a decoded `dto-generator.yaml` (spec §4) into a {@see GeneratorConfig}.
@@ -103,6 +104,11 @@ final class ConfigFactory
 
         $mutability = Mutability::from($section->choice('mutability', Mutability::IMMUTABLE, $this->values(Mutability::cases())));
         $withers = $section->bool('withers', true);
+        $readWriteModels = ReadWriteModels::from($section->choice('readWriteModels', ReadWriteModels::SINGLE, $this->values(ReadWriteModels::cases())));
+        if ($section->has('readWriteSuffixes') && !$readWriteModels->isSplit()) {
+            $section->warn('"readWriteSuffixes" has no effect without "readWriteModels: split".', 'readWriteSuffixes');
+        }
+
         if (!$withers && !$mutability->isImmutable()) {
             $section->warn('"withers: false" has no effect on mutable DTOs, which keep their setters; it applies to schemas made immutable with x-dto-mutable: false.', 'withers');
         }
@@ -113,7 +119,7 @@ final class ConfigFactory
             DateTimeClass::from($section->choice('dateTimeClass', DateTimeClass::IMMUTABLE, $this->values(DateTimeClass::cases()))),
             AllOfStrategy::from($section->choice('allOfStrategy', AllOfStrategy::EXTENDS, $this->values(AllOfStrategy::cases()))),
             $withers,
-            $section->choice('readWriteModels', 'single', ['single', 'split']) === 'split',
+            $readWriteModels,
             $this->viewSuffixes($section->section('readWriteSuffixes')),
         );
     }
@@ -132,7 +138,8 @@ final class ConfigFactory
             $suffixes[$key] = $value;
         }
 
-        if ($suffixes['read'] === $suffixes['write']) {
+        // File names compare letter case ignored on many systems, and PHP class names always.
+        if (Identifier::asciiLower($suffixes['read']) === Identifier::asciiLower($suffixes['write'])) {
             $section->report('The read and write suffixes must differ.');
 
             return new ViewSuffixes();

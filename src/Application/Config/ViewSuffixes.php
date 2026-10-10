@@ -22,11 +22,11 @@ final class ViewSuffixes
     private string $write;
 
     /**
-     * @throws InvalidArgumentException unless both are distinct PHP identifiers
+     * @throws InvalidArgumentException unless both are PHP identifiers that differ, letter case ignored
      */
     public function __construct(string $read = self::READ, string $write = self::WRITE)
     {
-        if (!Identifier::isValid($read) || !Identifier::isValid($write) || $read === $write) {
+        if (!Identifier::isValid($read) || !Identifier::isValid($write) || Identifier::asciiLower($read) === Identifier::asciiLower($write)) {
             throw new InvalidArgumentException(sprintf('View suffixes must be distinct PHP identifiers, got "%s" and "%s".', $read, $write));
         }
 

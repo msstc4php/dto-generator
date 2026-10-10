@@ -29,6 +29,7 @@ final class ViewSuffixesTest extends TestCase
             'read' => ['Read-Model', 'Write'],
             'write' => ['Read', '1Write'],
             'same' => ['Model', 'Model'],
+            'same but case' => ['Model', 'MODEL'],
         ];
     }
 

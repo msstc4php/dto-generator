@@ -7,6 +7,7 @@ namespace MSSTC4PHP\DtoGenerator\Tests\Unit\Domain\Builder;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\ClassBuilder;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\Declarations;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\Direction;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\Directions;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\NameResolver;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\PropertyView;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\TypeMapper;
@@ -372,8 +373,8 @@ final class ClassBuilderTest extends TestCase
             DateTimeClass::from(DateTimeClass::IMMUTABLE),
             true,
         );
-        $builder = new ClassBuilder(new NameResolver(), new TypeMapper($graph, new Declarations(), $target, []), $target, [], $view === null ? null : new PropertyView(Direction::from($view), $graph));
         $diagnostics = new Diagnostics();
+        $builder = new ClassBuilder(new NameResolver(), new TypeMapper($graph, new Declarations(), $target, []), $target, [], $view === null ? null : new PropertyView(Direction::from($view), new Directions($graph, $diagnostics)));
         $class = $builder->build(ClassName::fromFqcn('App\Dto\User'), $graph->all()[0]->schema(), $diagnostics);
 
         return [$class, array_map(static fn (Diagnostic $d): string => $d->toString(), $diagnostics->all())];

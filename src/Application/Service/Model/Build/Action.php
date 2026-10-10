@@ -8,7 +8,6 @@ use MSSTC4PHP\DtoGenerator\Domain\Builder\AllOfResolver;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\ClassBuilder;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\ClassLookup;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\Composition;
-use MSSTC4PHP\DtoGenerator\Domain\Builder\Direction;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\Directions;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\EnumBuilder;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\ExtensionVocabulary;
@@ -21,7 +20,6 @@ use MSSTC4PHP\DtoGenerator\Domain\Builder\SchemaShape;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\TypeMapper;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\VariantResolver;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\Variants;
-use MSSTC4PHP\DtoGenerator\Domain\Builder\ViewDependence;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumModel;
@@ -29,8 +27,6 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\Identifier;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Discriminator;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\ResolvedSchema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
-use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaGraph;
-use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaIndex;
 
 /**
  * Turns the schema graph into the IR: one class per object schema and one enum per enum schema, including schemas
@@ -48,92 +44,19 @@ final class Action
 
     public function __invoke(Input $input): Output
     {
-        $single = $this->build($input, null);
         $dto = $input->config()->dto();
         if (!$dto->splitsReadAndWrite()) {
-            return $single;
+            return $this->build($input, null)->output();
         }
 
-        $dependent = $this->dependent($single, $input->graph());
-        $views = [];
-        foreach ([Direction::READ, Direction::WRITE] as $value) {
-            $direction = Direction::from($value);
-            $views[] = $this->build($input, new View(new PropertyView($direction, $input->graph()), $dto->viewSuffixes()->of($direction), $dependent));
-        }
-
-        return $this->merge(...$views);
+        return (new Views($input->graph(), $dto->viewSuffixes()))->build(fn (?View $view): Run => $this->build($input, $view));
     }
 
-    /**
-     * Locations of the schemas whose classes depend on the direction, read off the build that keeps every property.
-     *
-     * @return array<string, bool>
-     */
-    private function dependent(Output $single, SchemaGraph $graph): array
-    {
-        $index = SchemaIndex::of($graph);
-        $models = [];
-        $directed = [];
-        foreach ($single->classes() as $class) {
-            $model = $class->model();
-            $models[] = $model;
-            foreach ($model->properties() as $property) {
-                $schema = $index->get($property->source());
-                // Reported by the views' builds, which read the same flags.
-                if ($schema instanceof Schema && Directions::of($schema, $graph, new Diagnostics()) instanceof Direction) {
-                    $directed[$model->name()->fqcn()] = true;
-                }
-            }
-        }
-
-        $dependent = [];
-        $classes = ViewDependence::of($models, $directed);
-        foreach ($models as $model) {
-            if ($classes[$model->name()->fqcn()] ?? false) {
-                $dependent[$model->source()->toString()] = true;
-            }
-        }
-
-        return $dependent;
-    }
-
-    /**
-     * Both views of every dependent class, and once each the classes and enums the views share.
-     */
-    private function merge(Output $read, Output $write): Output
-    {
-        $classes = [];
-        $enums = [];
-        $seen = [];
-        $diagnostics = new Diagnostics();
-        foreach ([$read, $write] as $view) {
-            foreach ($view->classes() as $class) {
-                $fqcn = $class->model()->name()->fqcn();
-                if (!($seen[$fqcn] ?? false)) {
-                    $seen[$fqcn] = true;
-                    $classes[] = $class;
-                }
-            }
-
-            foreach ($view->enums() as $enum) {
-                $fqcn = $enum->model()->name()->fqcn();
-                if (!($seen[$fqcn] ?? false)) {
-                    $seen[$fqcn] = true;
-                    $enums[] = $enum;
-                }
-            }
-
-            $diagnostics->merge($view->diagnostics());
-        }
-
-        return new Output($classes, $diagnostics, $enums);
-    }
-
-    private function build(Input $input, ?View $view): Output
+    private function build(Input $input, ?View $view): Run
     {
         $diagnostics = new Diagnostics();
         $config = $input->config();
-        $registry = new Registry($view);
+        $registry = new Registry($view, $view instanceof View ? new PropertyView($view->direction(), new Directions($input->graph(), $diagnostics)) : null);
         $enums = new EnumBuilder($this->names);
         /** @var list<array{Schema, string, int}> $aliases named non-object schemas with their name and source */
         $aliases = [];
@@ -204,7 +127,7 @@ final class Action
             new TypeMapper($input->graph(), $declarations, $input->target(), $input->formats()),
             $input->target(),
             $input->aliases(),
-            $view instanceof View ? $view->properties() : null,
+            $registry->properties(),
         );
         $models = [];
         $children = [];
@@ -237,8 +160,17 @@ final class Action
         }
 
         RequiredCycles::check($models, $diagnostics, $inherited);
+        $classSchemas = [];
+        foreach ($registry->planned() as $index => [$schema]) {
+            $classSchemas[] = [$schema, $compositions[$index]];
+        }
 
-        return $output;
+        foreach ($registry->rejected() as $schema) {
+            // Reported where its name was refused; a split still needs to know whether it depends on the direction.
+            $classSchemas[] = [$schema, $allOf->compose($schema, new Diagnostics())];
+        }
+
+        return new Run($output, $classSchemas);
     }
 
     /**
@@ -353,11 +285,13 @@ final class Action
     {
         /** @var list<array{Schema, ?string, string}> $candidates schema, `<Parent><Property>` (null without usable characters), wire name */
         $candidates = [];
+        // The other view's properties hold no class of this view.
+        $excluded = $registry->excluded($composition);
         foreach ($composition->ownParts() as $part) {
             foreach ($part->propertyNames() as $wireName) {
                 $property = $part->requireProperty($wireName);
                 // The class builder reports a malformed x-php-skip; here it only decides whether to look further.
-                if (!ClassBuilder::isSkipped($property, new Diagnostics())) {
+                if (!isset($excluded[$wireName]) && !ClassBuilder::isSkipped($property, new Diagnostics())) {
                     $base = $this->names->className($wireName);
                     $candidates[] = [$property, $base === null ? null : $registry->baseOf($ownerName) . $base, $wireName];
                 }
@@ -365,7 +299,7 @@ final class Action
         }
 
         $additional = $owner->additionalProperties();
-        if ($additional instanceof Schema) {
+        if ($additional instanceof Schema && $registry->admits($additional)) {
             $candidates[] = [$additional, $registry->baseOf($ownerName) . 'AdditionalProperty', 'additionalProperties'];
         }
 

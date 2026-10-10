@@ -59,24 +59,15 @@ final class SchemaReferences
      */
     private function walk(Schema $schema): array
     {
-        $chain = [$schema];
-        $seen = [];
-        $current = $schema;
-        while ($this->graph instanceof SchemaGraph && $current->ref() !== null) {
-            $seen[] = $current->location()->toString();
-            $target = $this->graph->resolve(new ReferenceUse($current->ref(), $current->location()));
-            if (!$target instanceof ResolvedSchema) {
-                break;
-            }
-
-            if (in_array($target->schema()->location()->toString(), $seen, true)) {
-                return [$chain, $target->schema()];
-            }
-
-            $current = $target->schema();
-            $chain[] = $current;
+        if (!$this->graph instanceof SchemaGraph) {
+            return [[$schema], $schema];
         }
 
-        return [$chain, $current];
+        $chain = $this->graph->chain($schema);
+        $last = $chain[count($chain) - 1];
+        // A chain stops at a reference that does not resolve or that closes a cycle; only the latter has a target.
+        $target = $last->ref() === null ? null : $this->graph->resolve(new ReferenceUse($last->ref(), $last->location()));
+
+        return [$chain, $target instanceof ResolvedSchema ? $target->schema() : $last];
     }
 }

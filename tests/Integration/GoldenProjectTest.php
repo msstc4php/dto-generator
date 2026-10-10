@@ -51,11 +51,15 @@ final class GoldenProjectTest extends TestCase
         self::assertSame($generated, array_map(static fn (string $path): string => basename($path), $expected));
     }
 
-    public function testGeneratesTheSameFilesOnEveryRun(): void
+    /**
+     * @testWith ["8.2"]
+     *           ["8.2-views"]
+     */
+    public function testGeneratesTheSameFilesOnEveryRun(string $php): void
     {
         $contents = static fn (Output $output): array => array_map(static fn (GeneratedFile $file): string => $file->contents(), $output->files());
 
-        self::assertSame($contents($this->generate('8.2')), $contents($this->generate('8.2')));
+        self::assertSame($contents($this->generate($php)), $contents($this->generate($php)));
     }
 
     /**

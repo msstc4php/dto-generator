@@ -50,21 +50,35 @@ final class DirectionsTest extends TestCase
     public function testAdmitsThePropertiesOfAView(): void
     {
         $graph = $this->graph(['type' => 'string']);
-        $read = new PropertyView(Direction::from(Direction::READ), $graph);
-        $write = new PropertyView(Direction::from(Direction::WRITE), $graph);
+        $read = new PropertyView(Direction::from(Direction::READ), new Directions($graph, new Diagnostics()));
+        $write = new PropertyView(Direction::from(Direction::WRITE), new Directions($graph, new Diagnostics()));
         $holder = $graph->all()[0]->schema();
         $id = $holder->requireProperty('id');
         $password = $holder->requireProperty('password');
         $name = $holder->requireProperty('value');
-        $diagnostics = new Diagnostics();
-
-        self::assertTrue($read->admits($id, $diagnostics));
-        self::assertFalse($write->admits($id, $diagnostics));
-        self::assertFalse($read->admits($password, $diagnostics));
-        self::assertTrue($write->admits($password, $diagnostics));
-        self::assertTrue($read->admits($name, $diagnostics));
-        self::assertTrue($write->admits($name, $diagnostics));
+        self::assertTrue($read->admits($id));
+        self::assertFalse($write->admits($id));
+        self::assertFalse($read->admits($password));
+        self::assertTrue($write->admits($password));
+        self::assertTrue($read->admits($name));
+        self::assertTrue($write->admits($name));
+        self::assertSame(['password' => 'password'], $read->excluded([['id', $id], ['password', $password], ['value', $name]]));
+        self::assertSame(['id' => 'id'], $write->excluded([['id', $id], ['password', $password], ['value', $name]]));
         self::assertTrue($read->direction()->equals(Direction::from(Direction::READ)));
+    }
+
+    public function testCombinesTheDeclarationsOfAPropertyAcrossAComposition(): void
+    {
+        $graph = $this->graph(['type' => 'string']);
+        $holder = $graph->all()[0]->schema();
+        $plain = $holder->requireProperty('value');
+        $id = $holder->requireProperty('id');
+        $password = $holder->requireProperty('password');
+        $diagnostics = new Diagnostics();
+        $directed = (new Directions($graph, $diagnostics))->ofSources([['x', $plain], ['x', $id], ['y', $id], ['y', $password], ['z', $password], ['z', $plain]]);
+
+        self::assertSame([['x', 'read'], ['z', 'write']], array_map(static fn (array $pair): array => [$pair[0], $pair[1]->value()], $directed));
+        self::assertSame(['warning /project/api/openapi.yaml#/components/schemas/Holder/properties/id: "readOnly" and "writeOnly" are both true; the property is in both views.'], array_map(static fn (Diagnostic $diagnostic): string => $diagnostic->toString(), $diagnostics->all()));
     }
 
     /**
@@ -75,7 +89,11 @@ final class DirectionsTest extends TestCase
     {
         $graph = $this->graph($property);
         $diagnostics = new Diagnostics();
-        $direction = Directions::of($graph->all()[0]->schema()->requireProperty('value'), $graph, $diagnostics);
+        $directions = new Directions($graph, $diagnostics);
+        $property = $graph->all()[0]->schema()->requireProperty('value');
+        $direction = $directions->of($property);
+        // Read once: asking again reports nothing new.
+        $directions->of($property);
 
         self::assertSame($messages, array_map(static fn (Diagnostic $diagnostic): string => $diagnostic->toString(), $diagnostics->all()));
 

@@ -5,50 +5,93 @@ declare(strict_types=1);
 namespace MSSTC4PHP\DtoGenerator\Domain\Builder;
 
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
-use MSSTC4PHP\DtoGenerator\Domain\Schema\ReferenceUse;
-use MSSTC4PHP\DtoGenerator\Domain\Schema\ResolvedSchema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaGraph;
 
 /**
- * The direction of a property (spec F1 §3): readOnly or writeOnly on its schema or anywhere along its $ref chain, as
- * a referenced `{readOnly: true}` schema marks every property holding it.
+ * The direction of properties (spec F1 §3): readOnly or writeOnly on a property's schema or anywhere along its $ref
+ * chain, as a referenced `{readOnly: true}` schema marks every property holding it. One instance serves one build: the
+ * flags of a schema are read, and reported, once.
  */
 final class Directions
 {
-    private function __construct()
+    private SchemaGraph $graph;
+
+    private Diagnostics $diagnostics;
+
+    /** @var array<string, array{bool, bool}> location → readOnly, writeOnly of the schema and its chain */
+    private array $flags = [];
+
+    public function __construct(SchemaGraph $graph, Diagnostics $diagnostics)
     {
+        $this->graph = $graph;
+        $this->diagnostics = $diagnostics;
     }
 
     /**
-     * The only view the property belongs to; null when it belongs to both.
+     * The only view a property belongs to; null when it belongs to both.
      */
-    public static function of(Schema $property, SchemaGraph $graph, Diagnostics $diagnostics): ?Direction
+    public function of(Schema $property): ?Direction
     {
-        $read = false;
-        $write = false;
-        foreach (self::chain($property, $graph) as $schema) {
-            $read = self::flag($schema, 'readOnly', $diagnostics) || $read;
-            $write = self::flag($schema, 'writeOnly', $diagnostics) || $write;
+        $directed = $this->ofSources([['', $property]]);
+
+        return $directed === [] ? null : $directed[0][1];
+    }
+
+    /**
+     * The directed properties of a class, from every member of its composition that declares them: a flag on any one
+     * of them counts, and readOnly in one with writeOnly in another is both.
+     *
+     * @param list<array{string, Schema}> $sources wire name and schema of each declaration
+     *
+     * @return list<array{string, Direction}> wire name and the only view the property belongs to, of each directed one
+     */
+    public function ofSources(array $sources): array
+    {
+        /** @var array<array-key, array{string, bool, bool, Schema}> $properties wire names may be numeric keys */
+        $properties = [];
+        foreach ($sources as [$wireName, $schema]) {
+            [$read, $write] = $this->flagsOf($schema);
+            $earlier = $properties[$wireName] ?? [$wireName, false, false, $schema];
+            $properties[$wireName] = [$wireName, $earlier[1] || $read, $earlier[2] || $write, $earlier[3]];
         }
 
-        if ($read && $write) {
-            $diagnostics->warning('"readOnly" and "writeOnly" are both true; the property is in both views.', $property->location());
-
-            return null;
+        $directed = [];
+        foreach ($properties as [$wireName, $read, $write, $first]) {
+            if ($read && $write) {
+                $this->diagnostics->warning('"readOnly" and "writeOnly" are both true; the property is in both views.', $first->location());
+            } elseif ($read || $write) {
+                $directed[] = [$wireName, Direction::from($read ? Direction::READ : Direction::WRITE)];
+            }
         }
 
-        if ($read) {
-            return Direction::from(Direction::READ);
+        return $directed;
+    }
+
+    /**
+     * @return array{bool, bool}
+     */
+    private function flagsOf(Schema $schema): array
+    {
+        $key = $schema->location()->toString();
+        if (!array_key_exists($key, $this->flags)) {
+            $read = false;
+            $write = false;
+            foreach ($this->graph->chain($schema) as $link) {
+                $read = $this->flag($link, 'readOnly') || $read;
+                $write = $this->flag($link, 'writeOnly') || $write;
+            }
+
+            $this->flags[$key] = [$read, $write];
         }
 
-        return $write ? Direction::from(Direction::WRITE) : null;
+        return $this->flags[$key];
     }
 
     /**
      * @param 'readOnly'|'writeOnly' $keyword
      */
-    private static function flag(Schema $schema, string $keyword, Diagnostics $diagnostics): bool
+    private function flag(Schema $schema, string $keyword): bool
     {
         if (!$schema->hasKeyword($keyword)) {
             return false;
@@ -56,46 +99,11 @@ final class Directions
 
         $value = $schema->keyword($keyword);
         if (!is_bool($value)) {
-            $diagnostics->warning(sprintf('"%s" must be true or false; it is ignored.', $keyword), $schema->location()->child($keyword));
+            $this->diagnostics->warning(sprintf('"%s" must be true or false; it is ignored.', $keyword), $schema->location()->child($keyword));
 
             return false;
         }
 
         return $value;
-    }
-
-    /**
-     * The schema and every schema its $ref chain passes through, each once.
-     *
-     * @return non-empty-list<Schema>
-     */
-    private static function chain(Schema $schema, SchemaGraph $graph): array
-    {
-        $chain = [$schema];
-        for ($current = $schema; $current->ref() !== null; $current = $next) {
-            $target = $graph->resolve(new ReferenceUse($current->ref(), $current->location()));
-            if (!$target instanceof ResolvedSchema || self::listed($target->schema(), $chain)) {
-                break;
-            }
-
-            $next = $target->schema();
-            $chain[] = $next;
-        }
-
-        return $chain;
-    }
-
-    /**
-     * @param list<Schema> $chain
-     */
-    private static function listed(Schema $schema, array $chain): bool
-    {
-        foreach ($chain as $listed) {
-            if ($listed->location()->toString() === $schema->location()->toString()) {
-                return true;
-            }
-        }
-
-        return false;
     }
 }
