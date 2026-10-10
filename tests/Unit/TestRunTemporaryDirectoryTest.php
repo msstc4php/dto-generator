@@ -24,7 +24,7 @@ final class TestRunTemporaryDirectoryTest extends TestCase
 
     public function testTheSuiteRunsInsideItsOwnDirectoryUnderVar(): void
     {
-        $base = realpath(dirname(__DIR__, 2) . '/var/tmp');
+        $base = realpath(dirname(__DIR__, 2) . '/var/tmp') . '/' . TestRunTemporaryDirectory::owner();
 
         self::assertSame($base, dirname(sys_get_temp_dir()));
         self::assertStringStartsWith('run-' . getmypid() . '-', basename(sys_get_temp_dir()));
@@ -84,6 +84,66 @@ final class TestRunTemporaryDirectoryTest extends TestCase
         self::assertDirectoryExists($outside);
     }
 
+    public function testSeparatesTheRunsOfEachUser(): void
+    {
+        $expected = function_exists('posix_geteuid') ? 'u' . posix_geteuid() : 'shared';
+
+        self::assertSame($expected, TestRunTemporaryDirectory::owner());
+    }
+
+    public function testAnIsolatedProcessRemovesItsDirectoryOnExit(): void
+    {
+        $code = sprintf(
+            'require %s; %s::isolate(%s); touch(sys_get_temp_dir() . "/left.lock"); echo sys_get_temp_dir();',
+            var_export(dirname(__DIR__, 2) . '/vendor/autoload.php', true),
+            TestRunTemporaryDirectory::class,
+            var_export($this->base, true),
+        );
+        $process = proc_open([PHP_BINARY, '-r', $code], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+        self::assertIsResource($process);
+        $run = (string) stream_get_contents($pipes[1]);
+        $errors = (string) stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+
+        self::assertSame(0, proc_close($process), $errors);
+        self::assertSame(realpath($this->base) . '/' . TestRunTemporaryDirectory::owner(), dirname($run));
+        self::assertDirectoryDoesNotExist($run);
+    }
+
+    public function testRefusesABaseItCannotWriteTo(): void
+    {
+        mkdir($this->base);
+        chmod($this->base, 0555);
+        if (is_writable($this->base)) {
+            chmod($this->base, 0700);
+            self::markTestSkipped('Permissions are not enforced for this user.');
+        }
+
+        try {
+            $this->expectException(RuntimeException::class);
+            $this->expectExceptionMessage('is not writable');
+
+            TestRunTemporaryDirectory::create($this->base, time());
+        } finally {
+            chmod($this->base, 0700);
+        }
+    }
+
+    public function testRemoveDeletesEntriesThatAreNeitherFilesNorDirectories(): void
+    {
+        if (!function_exists('posix_mkfifo')) {
+            self::markTestSkipped('posix_mkfifo() is unavailable.');
+        }
+
+        $run = TestRunTemporaryDirectory::create($this->base, time());
+        posix_mkfifo($run . '/pipe', 0600);
+
+        TestRunTemporaryDirectory::remove($run);
+
+        self::assertFileDoesNotExist($run);
+    }
+
     public function testRemoveIgnoresAMissingDirectory(): void
     {
         TestRunTemporaryDirectory::remove($this->base . '/missing');
@@ -94,7 +154,7 @@ final class TestRunTemporaryDirectoryTest extends TestCase
     public function testIsolateFailsWhenTheTemporaryDirectoryWasAlreadyResolved(): void
     {
         $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('sys_get_temp_dir()');
+        $this->expectExceptionMessage('sys_temp_dir');
 
         TestRunTemporaryDirectory::isolate($this->base);
     }
