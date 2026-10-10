@@ -123,7 +123,9 @@ final class Action
                 throw DocumentLoadFailed::remote($path, 'cannot be loaded: this generator was built without remote documents.');
             }
 
-            return $this->remote->load($path, $input->config()->remoteRefs(), $input->fetchesRemote());
+            $settings = $input->config()->remoteRefs();
+
+            return $this->remote->load($path, $settings->cacheDir(), $settings->timeout(), $input->fetchesRemote());
         } catch (DocumentLoadFailed $exception) {
             $diagnostics->error($exception->getMessage(), $requestedAt);
             $graph->markUnloadable($path);

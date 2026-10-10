@@ -16,6 +16,11 @@ final class Url
 {
     private const DEFAULT_PORTS = ['http' => 80, 'https' => 443];
 
+    private const UNRESERVED = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
+
+    /** RFC 3986 reserved and unreserved characters, and "%" of an escape. */
+    private const CHARACTERS = '#^[A-Za-z0-9\-._~:/?\#\[\]@!$&\'()*+,;=%]*$#D';
+
     private function __construct()
     {
     }
@@ -29,18 +34,39 @@ final class Url
     }
 
     /**
-     * Scheme and host in lower case, no default port, no dot segments, no fragment.
+     * Whether the string starts with a scheme ("file:", "mailto:" too), which a reference in a remote document may name.
+     */
+    public static function hasScheme(string $value): bool
+    {
+        return preg_match('#^[A-Za-z][A-Za-z0-9+.\-]*:#', $value) === 1;
+    }
+
+    /**
+     * Scheme and host in lower case, no default port, escapes of unreserved characters decoded and the others in upper
+     * case, no dot segments, no empty query, no fragment: one spelling per document, the one the allow list checks and
+     * the one fetched.
      *
-     * @throws InvalidModel unless it is an absolute http(s) URL without credentials
+     * @throws InvalidModel unless it is an absolute http(s) URL without credentials, of RFC 3986 characters only and
+     *                      without an encoded "/" or "\" in its path
      */
     public static function normalize(string $url): string
     {
-        $scheme = self::isUrl($url) ? strtolower((string) strstr($url, ':', true)) : '';
-        if ($scheme !== '' && !isset(self::DEFAULT_PORTS[$scheme])) {
+        $url = explode('#', $url, 2)[0];
+        $scheme = self::hasScheme($url) ? strtolower((string) strstr($url, ':', true)) : '';
+        if ($scheme === '') {
+            throw new InvalidModel(sprintf('URL "%s" is not a valid absolute URL.', $url));
+        }
+
+        if ($scheme !== 'http' && $scheme !== 'https') {
             throw new InvalidModel(sprintf('URL "%s": only http and https are supported.', $url));
         }
 
-        $parts = $scheme === '' ? false : parse_url($url);
+        // parse_url() would quietly turn other characters into "_", and a space or a line break would reach the request.
+        if (preg_match(self::CHARACTERS, $url) !== 1 || preg_match('#%(?![0-9A-Fa-f]{2})#', $url) === 1) {
+            throw new InvalidModel(sprintf('URL "%s" has characters a URL cannot hold; percent-encode them.', $url));
+        }
+
+        $parts = self::isUrl($url) ? parse_url($url) : false;
         if (!is_array($parts) || !isset($parts['host']) || $parts['host'] === '') {
             throw new InvalidModel(sprintf('URL "%s" is not a valid absolute URL.', $url));
         }
@@ -49,10 +75,18 @@ final class Url
             throw new InvalidModel(sprintf('URL "%s": credentials in a URL are not supported.', $url));
         }
 
+        $path = self::canonicalEscapes($parts['path'] ?? '');
+        // A server decodes them into separators, so "..%2F" would climb out of an allowed prefix.
+        if (preg_match('#%2F|%5C#', $path) === 1) {
+            throw new InvalidModel(sprintf('URL "%s": an encoded "/" or "\\" in the path is not supported.', $url));
+        }
+
         $port = $parts['port'] ?? self::DEFAULT_PORTS[$scheme];
         $authority = strtolower($parts['host']) . ($port === self::DEFAULT_PORTS[$scheme] ? '' : ':' . $port);
+        // PHP 8 keeps an empty query, 7.4 drops it; one spelling keeps cache entries shared between versions.
+        $query = self::canonicalEscapes($parts['query'] ?? '');
 
-        return $scheme . '://' . $authority . self::withoutDotSegments($parts['path'] ?? '') . (isset($parts['query']) ? '?' . $parts['query'] : '');
+        return $scheme . '://' . $authority . self::withoutDotSegments($path) . ($query === '' ? '' : '?' . $query);
     }
 
     /**
@@ -63,7 +97,8 @@ final class Url
     public static function resolve(string $base, string $reference): string
     {
         $reference = explode('#', $reference, 2)[0];
-        if (self::isUrl($reference)) {
+        // Any scheme, so "file:/etc/passwd" in a remote document is refused rather than read as a relative path.
+        if (self::hasScheme($reference)) {
             return self::normalize($reference);
         }
 
@@ -107,6 +142,23 @@ final class Url
         return $at === false ? [$reference, null] : [(string) substr($reference, 0, $at), (string) substr($reference, $at + 1)];
     }
 
+    /**
+     * Escapes of unreserved characters decoded (RFC 3986 §6.2.2.2), so "%2e%2e" is the ".." it means; others in upper
+     * case.
+     */
+    private static function canonicalEscapes(string $value): string
+    {
+        return (string) preg_replace_callback(
+            '#%([0-9A-Fa-f]{2})#',
+            static function (array $escape): string {
+                $character = chr((int) hexdec($escape[1]));
+
+                return strspn($character, self::UNRESERVED) === 1 ? $character : '%' . strtoupper($escape[1]);
+            },
+            $value,
+        );
+    }
+
     private static function withoutDotSegments(string $path): string
     {
         $segments = [];
@@ -119,9 +171,10 @@ final class Url
             }
         }
 
-        // The last segment of "a/." or "a/.." is a directory, which keeps its slash.
+        // The last segment of "a/." or "a/.." is a directory, which keeps its slash; above the root there is the root.
         $last = $parts[count($parts) - 1];
+        $joined = implode('/', $segments) . ($last === '.' || $last === '..' ? '/' : '');
 
-        return '/' . implode('/', $segments) . ($last === '.' || $last === '..' ? '/' : '');
+        return '/' . ltrim($joined, '/');
     }
 }

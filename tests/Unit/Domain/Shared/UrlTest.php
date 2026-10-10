@@ -36,6 +36,15 @@ final class UrlTest extends TestCase
             'query' => ['https://example.com/a?v=1', 'https://example.com/a?v=1'],
             'trailing slash' => ['https://example.com/common/', 'https://example.com/common/'],
             'fragment dropped' => ['https://example.com/a.yaml#/x', 'https://example.com/a.yaml'],
+            'encoded dots' => ['https://example.com/common/%2e%2e/secret/s.yaml', 'https://example.com/secret/s.yaml'],
+            'encoded dots in upper case' => ['https://example.com/common/%2E./s.yaml', 'https://example.com/s.yaml'],
+            'one encoded dot' => ['https://example.com/common/.%2e/s.yaml', 'https://example.com/s.yaml'],
+            'escapes of unreserved characters' => ['https://example.com/%7Euser/%61.yaml', 'https://example.com/~user/a.yaml'],
+            'escapes of reserved characters' => ['https://example.com/a%3ab%20c.yaml?q=%3d', 'https://example.com/a%3Ab%20c.yaml?q=%3D'],
+            'collapsing to the root' => ['https://example.com/a/..', 'https://example.com/'],
+            'collapsing to the root with a dot' => ['https://example.com/a/b/../..', 'https://example.com/'],
+            'empty query' => ['https://example.com/a.yaml?', 'https://example.com/a.yaml'],
+            'ipv6' => ['http://[::1]:8080/a.yaml', 'http://[::1]:8080/a.yaml'],
         ];
     }
 
@@ -57,6 +66,15 @@ final class UrlTest extends TestCase
             'userinfo' => ['https://user:secret@example.com/a.yaml', 'URL "https://user:secret@example.com/a.yaml": credentials in a URL are not supported.'],
             'no host' => ['https:///a.yaml', 'URL "https:///a.yaml" is not a valid absolute URL.'],
             'not a url' => ['a.yaml', 'URL "a.yaml" is not a valid absolute URL.'],
+            'scheme without slashes' => ['file:/etc/passwd', 'URL "file:/etc/passwd": only http and https are supported.'],
+            'http without slashes' => ['https:example.com/a.yaml', 'URL "https:example.com/a.yaml" is not a valid absolute URL.'],
+            'encoded slash' => ['https://example.com/common/..%2fsecret/s.yaml', 'URL "https://example.com/common/..%2fsecret/s.yaml": an encoded "/" or "\\" in the path is not supported.'],
+            'encoded backslash' => ['https://example.com/common/..%5Csecret/s.yaml', 'an encoded "/" or "\\" in the path is not supported.'],
+            'backslash' => ['https://example.com/common/..\\secret\\s.yaml', 'has characters a URL cannot hold; percent-encode them.'],
+            'line break' => ["https://example.com/a\r\nHost: evil", 'has characters a URL cannot hold; percent-encode them.'],
+            'space' => ['https://example.com/a b.yaml', 'has characters a URL cannot hold; percent-encode them.'],
+            'broken escape' => ['https://example.com/a%zz.yaml', 'has characters a URL cannot hold; percent-encode them.'],
+            'unicode host' => ['https://bücher.example/a.yaml', 'has characters a URL cannot hold; percent-encode them.'],
         ];
     }
 
@@ -84,6 +102,7 @@ final class UrlTest extends TestCase
             'query' => ['money.yaml?v=2', 'https://example.com/common/v1/money.yaml?v=2'],
             'absolute' => ['https://Other.org/x.yaml', 'https://other.org/x.yaml'],
             'network path' => ['//other.org/x.yaml', 'https://other.org/x.yaml'],
+            'encoded parent' => ['%2e%2e/%2E%2E/x.yaml', 'https://example.com/x.yaml'],
         ];
     }
 
@@ -93,6 +112,30 @@ final class UrlTest extends TestCase
     public function testResolvesAReferenceAgainstTheUrlOfItsDocument(string $reference, string $expected): void
     {
         self::assertSame($expected, Url::resolve('https://example.com/common/v1/api.yaml', $reference));
+    }
+
+    /**
+     * @dataProvider normalized
+     */
+    public function testNormalizesOnce(string $url): void
+    {
+        self::assertSame(Url::normalize($url), Url::normalize(Url::normalize($url)));
+    }
+
+    public function testRefusesAnotherSchemeInAReference(): void
+    {
+        $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('URL "file:/etc/passwd": only http and https are supported.');
+
+        Url::resolve('https://example.com/api.yaml', 'file:/etc/passwd');
+    }
+
+    public function testTellsASchemeFromAPath(): void
+    {
+        self::assertTrue(Url::hasScheme('mailto:a@b'));
+        self::assertTrue(Url::hasScheme('file:/etc'));
+        self::assertFalse(Url::hasScheme('a/b:c'));
+        self::assertFalse(Url::hasScheme(':a'));
     }
 
     public function testTellsWhetherAUrlIsUnderAPrefix(): void

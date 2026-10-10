@@ -16,7 +16,9 @@ All notable changes to this package are documented here. The format follows
 - `remoteRefs.allow` lets a `$ref` name an `http(s)` URL under one of its prefixes, including relative `$ref`s inside
   a remote document. A run that writes fetches each document once into `remoteRefs.cacheDir`
   (`.dto-generator/remote`, with an `index.json` of URLs, fetch times and SHA-256 sums); later runs, `--check` and
-  `--dry-run` read the cache only. No redirects, verified TLS, 10 MB and `remoteRefs.timeout` seconds per document.
+  `--dry-run` read the cache only. No redirects, verified TLS, 64 KB of headers, 10 MB of body,
+  `remoteRefs.timeout` seconds for the whole answer. Escaped dot segments count as dots; an encoded `/` or `\` and
+  characters a URL cannot hold are refused; an invalid `index.json` stops the run.
 
 ### Changed
 

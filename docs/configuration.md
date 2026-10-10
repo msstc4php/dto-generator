@@ -185,19 +185,27 @@ remoteRefs:
 ```
 
 A `$ref` to a URL (`https://schemas.example.com/common/v1/money.yaml#/Money`) is an error unless its URL starts with
-one of the `allow` prefixes; a prefix that ends in `/` covers everything below it, any other one that document. Scheme
-and host are compared letter case ignored, and default ports do not count. A relative `$ref` inside a remote document
-is resolved against its URL and must be allowed too; it can never reach a file of the project.
+one of the `allow` prefixes: a prefix that ends in `/` covers everything below it; any other one covers that URL and
+everything below it plus `/`. Scheme and host are compared letter case ignored and default ports do not count, but a
+host must be spelled as in `allow` (a trailing dot or a Unicode name instead of its punycode is refused). Escapes of
+unreserved characters are decoded before the check, so `%2e%2e` is `..`; an encoded `/` or `\`, a backslash, a
+space or another character a URL cannot hold is an error. A relative `$ref` inside a remote document is resolved
+against its URL and must be allowed too; another scheme (`file:`) is an error, so it can never reach a file of the
+project.
 
-- **Fetching.** A run that writes (`generate`) fetches a document it does not have yet with one `GET`: TLS
+- **Fetching.** A run that writes (`generate`) fetches a document it does not have yet with one HTTP/1.0 `GET`: TLS
   certificates are verified, redirects are not followed (a `3xx` is an error naming the new URL, which you then allow
-  and refer to), the body may be 10 MB at most, and any status but `200` is an error. JSON or YAML is told by the
+  and refer to), headers may take 64 KB and the body 10 MB, the whole answer must arrive within `timeout` seconds
+  (resolving the host name is not counted), and any status but `200` is an error. Proxies (`HTTP_PROXY`,
+  `HTTPS_PROXY`) are not used. JSON or YAML is told by the
   extension of the URL, else by a YAML `Content-Type`, else by whether it starts with `{`.
 - **Cache.** Fetched documents are kept in `cacheDir`, with `index.json` recording each URL, when it was fetched (UTC)
   and the SHA-256 of what came back. Later runs read the cache and never go to the network; a cached copy that no
-  longer matches its SHA-256 is an error. Commit the directory: builds then need no network, and a change in a schema
-  you depend on shows in review. To fetch a document again, delete its file and its entry in `index.json` (or the
-  whole directory).
+  longer matches its SHA-256, a symbolic link, and an `index.json` that is not valid (say, after a merge conflict) are
+  errors. Commit the directory: builds then need no network, and a change in a schema you depend on shows in review.
+  The SHA-256 catches accidents, not someone who may commit both a file and its hash: review the directory like code.
+  The empty `.index.lock` serializes runs that share the cache and need not be committed. To fetch a document again,
+  delete its file and its entry in `index.json` (or the whole directory).
 - **Checks.** `--check` and `--dry-run` read the cache only: a document that is not there is an error asking to run
   `generate`.
 - Credentials in URLs, other schemes (`file:`, `ftp:`) and specifications given by URL in `sources` are not supported.

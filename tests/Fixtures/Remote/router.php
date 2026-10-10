@@ -11,6 +11,33 @@ if ($path === '/moved.yaml') {
     return true;
 }
 
+if ($path === '/drip.yaml') {
+    header('Content-Type: application/yaml');
+    for ($i = 0; $i < 6; $i++) {
+        echo 'a';
+        flush();
+        usleep(500000);
+    }
+
+    return true;
+}
+
+if ($path === '/headers.yaml') {
+    for ($i = 0; $i < 2000; $i++) {
+        header('X-Filler-' . $i . ': ' . str_repeat('x', 30));
+    }
+
+    echo 'A: {}';
+
+    return true;
+}
+
+if ($path === '/no-location.yaml') {
+    http_response_code(302);
+
+    return true;
+}
+
 if ($path === '/big.json') {
     header('Content-Type: application/json');
     echo '{"x": "' . str_repeat('a', 2048) . '"}';

@@ -8,7 +8,6 @@ use Closure;
 use DateTimeImmutable;
 use DateTimeZone;
 use JsonException;
-use MSSTC4PHP\DtoGenerator\Application\Config\RemoteRefsSettings;
 use MSSTC4PHP\DtoGenerator\Application\Port\Document;
 use MSSTC4PHP\DtoGenerator\Application\Port\DocumentLoadFailed;
 use MSSTC4PHP\DtoGenerator\Application\Port\RemoteDocuments;
@@ -17,13 +16,20 @@ use MSSTC4PHP\DtoGenerator\Infrastructure\Document\UndecodableDocument;
 
 /**
  * Remote documents kept in the cache directory of the config (spec F2 §2): `index.json` maps each URL to its file, the
- * time it was fetched (UTC) and the SHA-256 of its content, which a later run checks before reading the file.
+ * time it was fetched (UTC) and the SHA-256 of its content, which a later run checks before reading the file. The hash
+ * guards against accidents, not against whoever may commit the directory: review it like code.
  */
 final class CachedRemoteDocuments implements RemoteDocuments
 {
     private const MAX_BYTES = 10485760;
 
     private const INDEX = 'index.json';
+
+    private const LOCK = '.index.lock';
+
+    private const FILE = '#^[0-9a-f]{64}\.(?:json|yaml)\z#';
+
+    private const SHA256 = '#^[0-9a-f]{64}\z#';
 
     private Fetcher $fetcher;
 
@@ -32,7 +38,7 @@ final class CachedRemoteDocuments implements RemoteDocuments
     /** @var Closure(): DateTimeImmutable */
     private Closure $clock;
 
-    /** @var array<string, array<array-key, mixed>> decoded documents by URL */
+    /** @var array<string, array<array-key, mixed>> decoded documents by cache directory and URL */
     private array $decoded = [];
 
     /**
@@ -45,23 +51,24 @@ final class CachedRemoteDocuments implements RemoteDocuments
         $this->clock = $clock ?? static fn (): DateTimeImmutable => new DateTimeImmutable('now', new DateTimeZone('UTC'));
     }
 
-    public function load(string $url, RemoteRefsSettings $settings, bool $fetch): Document
+    public function load(string $url, string $cacheDir, int $timeout, bool $fetch): Document
     {
-        $this->decoded[$url] ??= $this->read($url, $settings, $fetch);
+        $key = $cacheDir . "\0" . $url;
+        $this->decoded[$key] ??= $this->read($url, $cacheDir, $timeout, $fetch);
 
-        return new Document($url, $this->decoded[$url]);
+        return new Document($url, $this->decoded[$key]);
     }
 
     /**
+     * @param positive-int $timeout
+     *
      * @return array<array-key, mixed>
      */
-    private function read(string $url, RemoteRefsSettings $settings, bool $fetch): array
+    private function read(string $url, string $directory, int $timeout, bool $fetch): array
     {
-        $directory = $settings->cacheDir();
-        $index = $this->index($directory);
-        $entry = $index[$url] ?? null;
-        if (is_array($entry) && is_string($entry['file'] ?? null) && is_string($entry['sha256'] ?? null)) {
-            return $this->cached($url, $directory . '/' . basename($entry['file']), $entry['sha256']);
+        $entry = $this->index($url, $directory)[$url] ?? null;
+        if ($entry !== null) {
+            return $this->cached($url, $directory . '/' . $entry['file'], $entry['sha256']);
         }
 
         if (!$fetch) {
@@ -69,26 +76,24 @@ final class CachedRemoteDocuments implements RemoteDocuments
         }
 
         try {
-            $response = $this->fetcher->get($url, $settings->timeout(), self::MAX_BYTES);
+            $response = $this->fetcher->get($url, $timeout, self::MAX_BYTES);
         } catch (FetchFailed $exception) {
             throw DocumentLoadFailed::remote($url, sprintf('could not be fetched: %s.', rtrim($exception->getMessage(), '.')));
         }
 
-        if ($response->status() >= 300 && $response->status() < 400) {
-            throw DocumentLoadFailed::remote($url, sprintf('redirects to "%s"; refer to that URL instead, and allow it.', (string) $response->location()));
+        $status = $response->status();
+        $location = $response->location();
+        if ($status >= 300 && $status < 400) {
+            throw DocumentLoadFailed::remote($url, $location === null ? sprintf('could not be fetched: the server answered %d without a Location.', $status) : sprintf('redirects to "%s"; refer to that URL instead, and allow it.', $location));
         }
 
-        if ($response->status() !== 200) {
-            throw DocumentLoadFailed::remote($url, sprintf('could not be fetched: the server answered %d.', $response->status()));
+        if ($status !== 200) {
+            throw DocumentLoadFailed::remote($url, sprintf('could not be fetched: the server answered %d.', $status));
         }
 
         $json = $this->isJson($url, $response->contentType(), $response->body());
         $decoded = $this->decode($url, $response->body(), $json);
-        $file = hash('sha256', $url) . ($json ? '.json' : '.yaml');
-        $this->write($url, $directory, $file, $response->body());
-        $index[$url] = ['file' => $file, 'fetchedAt' => ($this->clock)()->format('Y-m-d\TH:i:s\Z'), 'sha256' => hash('sha256', $response->body())];
-        ksort($index);
-        $this->write($url, $directory, self::INDEX, json_encode($index, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n");
+        $this->store($url, $directory, $json, $response->body());
 
         return $decoded;
     }
@@ -98,9 +103,10 @@ final class CachedRemoteDocuments implements RemoteDocuments
      */
     private function cached(string $url, string $path, string $sha256): array
     {
-        $content = is_file($path) ? file_get_contents($path) : false;
+        // A link could make a committed cache read a file of the machine that runs the generator.
+        $content = is_file($path) && !is_link($path) ? file_get_contents($path) : false;
         if ($content === false) {
-            throw DocumentLoadFailed::remote($url, sprintf('is listed in the cache, but %s cannot be read; delete its entry in %s to fetch it again.', $path, self::INDEX));
+            throw DocumentLoadFailed::remote($url, sprintf('is listed in the cache, but %s cannot be read as a plain file; delete its entry in %s to fetch it again.', $path, self::INDEX));
         }
 
         // A cached copy is part of the build; one changed by hand must not pass for what the server sent.
@@ -109,6 +115,35 @@ final class CachedRemoteDocuments implements RemoteDocuments
         }
 
         return $this->decode($url, $content, substr($path, -5) === '.json');
+    }
+
+    /**
+     * Writes the document, then adds it to the index under a lock, so runs sharing the cache keep each other's entries.
+     */
+    private function store(string $url, string $directory, bool $json, string $content): void
+    {
+        $file = hash('sha256', $url) . ($json ? '.json' : '.yaml');
+        $this->write($url, $directory, $file, $content);
+        $lock = fopen($directory . '/' . self::LOCK, 'c');
+        if ($lock === false || !flock($lock, LOCK_EX)) {
+            throw DocumentLoadFailed::remote($url, sprintf('could not be cached in %s: its index cannot be locked.', $directory));
+        }
+
+        try {
+            $index = $this->index($url, $directory);
+            $index[$url] = ['file' => $file, 'fetchedAt' => ($this->clock)()->format('Y-m-d\TH:i:s\Z'), 'sha256' => hash('sha256', $content)];
+            ksort($index);
+            try {
+                $encoded = json_encode($index, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+            } catch (JsonException $exception) {
+                throw DocumentLoadFailed::remote($url, sprintf('could not be cached in %s: %s.', $directory, $exception->getMessage()));
+            }
+
+            $this->write($url, $directory, self::INDEX, $encoded . "\n");
+        } finally {
+            flock($lock, LOCK_UN);
+            fclose($lock);
+        }
     }
 
     /**
@@ -129,8 +164,7 @@ final class CachedRemoteDocuments implements RemoteDocuments
      */
     private function isJson(string $url, ?string $contentType, string $body): bool
     {
-        $path = (string) parse_url($url, PHP_URL_PATH);
-        $extension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+        $extension = strtolower(pathinfo(explode('?', $url)[0], PATHINFO_EXTENSION));
         if (in_array($extension, ['json', 'yaml', 'yml'], true)) {
             return $extension === 'json';
         }
@@ -139,27 +173,40 @@ final class CachedRemoteDocuments implements RemoteDocuments
             return false;
         }
 
-        return in_array(substr(ltrim($body), 0, 1), ['{', '['], true);
+        return strncmp(ltrim($body), '{', 1) === 0;
     }
 
     /**
-     * @return array<array-key, mixed>
+     * The index, every entry checked: a merge conflict or a hand edit must stop the run, not empty the cache.
+     *
+     * @return array<string, array{file: string, fetchedAt: string, sha256: string}>
      */
-    private function index(string $directory): array
+    private function index(string $url, string $directory): array
     {
         $path = $directory . '/' . self::INDEX;
-        $content = is_file($path) ? file_get_contents($path) : false;
-        if ($content === false) {
+        if (!is_file($path)) {
             return [];
         }
 
         try {
-            $index = json_decode($content, true, 512, JSON_THROW_ON_ERROR);
+            $index = json_decode((string) file_get_contents($path), true, 512, JSON_THROW_ON_ERROR);
         } catch (JsonException $exception) {
-            return [];
+            throw DocumentLoadFailed::remote($url, sprintf('cannot use the cache: %s is not valid JSON (%s); fix or delete it.', $path, $exception->getMessage()));
         }
 
-        return is_array($index) ? $index : [];
+        $entries = [];
+        foreach (is_array($index) ? $index : [false] as $key => $entry) {
+            $file = is_array($entry) ? $entry['file'] ?? null : null;
+            $sha256 = is_array($entry) ? $entry['sha256'] ?? null : null;
+            $fetchedAt = is_array($entry) ? $entry['fetchedAt'] ?? null : null;
+            if (!is_string($key) || !is_string($file) || preg_match(self::FILE, $file) !== 1 || !is_string($sha256) || preg_match(self::SHA256, $sha256) !== 1 || !is_string($fetchedAt)) {
+                throw DocumentLoadFailed::remote($url, sprintf('cannot use the cache: %s holds an entry that is not {file, fetchedAt, sha256}; fix or delete it.', $path));
+            }
+
+            $entries[$key] = ['file' => $file, 'fetchedAt' => $fetchedAt, 'sha256' => $sha256];
+        }
+
+        return $entries;
     }
 
     /**

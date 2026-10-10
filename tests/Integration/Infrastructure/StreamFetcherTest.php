@@ -67,6 +67,80 @@ final class StreamFetcherTest extends TestCase
         self::assertSame($length, strlen((new StreamFetcher())->get($this->url('/big.json'), 5, $length)->body()));
     }
 
+    public function testGivesUpOnADocumentThatTakesTooLong(): void
+    {
+        $started = microtime(true);
+
+        try {
+            (new StreamFetcher())->get($this->url('/drip.yaml'), 1, 1024);
+            self::fail('No failure');
+        } catch (FetchFailed $exception) {
+            self::assertSame('it took longer than 1 seconds', $exception->getMessage());
+        }
+
+        self::assertLessThan(2.0, microtime(true) - $started);
+    }
+
+    public function testRefusesHeadersOverTheirLimit(): void
+    {
+        $this->expectException(FetchFailed::class);
+        $this->expectExceptionMessage('its headers are larger than 65536 bytes');
+
+        (new StreamFetcher())->get($this->url('/headers.yaml'), 5, 1024);
+    }
+
+    public function testSendsTheQueryAndThePort(): void
+    {
+        $response = (new StreamFetcher())->get($this->url('/docs/currency.yaml?v=1'), 5, 1024);
+
+        self::assertSame(200, $response->status());
+        self::assertStringStartsWith('Currency:', $response->body());
+    }
+
+    public function testRefusesAServerWhoseCertificateItCannotVerify(): void
+    {
+        $openssl = trim((string) shell_exec('command -v openssl'));
+        if ($openssl === '') {
+            self::markTestSkipped('openssl is not installed.');
+        }
+
+        $dir = sys_get_temp_dir() . '/tls-' . bin2hex(random_bytes(4));
+        mkdir($dir);
+        exec(sprintf('%s req -x509 -newkey rsa:2048 -nodes -subj /CN=127.0.0.1 -days 1 -keyout %s -out %s 2>/dev/null', escapeshellarg($openssl), escapeshellarg($dir . '/key.pem'), escapeshellarg($dir . '/cert.pem')));
+        $socket = stream_socket_server('tcp://127.0.0.1:0');
+        self::assertIsResource($socket);
+        $name = (string) stream_socket_get_name($socket, false);
+        fclose($socket);
+        $port = substr($name, (int) strrpos($name, ':') + 1);
+        $server = proc_open([$openssl, 's_server', '-accept', $port, '-cert', $dir . '/cert.pem', '-key', $dir . '/key.pem', '-www', '-quiet'], [1 => ['file', '/dev/null', 'w'], 2 => ['file', '/dev/null', 'w']], $pipes);
+        self::assertIsResource($server);
+
+        try {
+            for ($attempt = 0; $attempt < 100; $attempt++) {
+                $connection = @fsockopen('127.0.0.1', (int) $port);
+                if (is_resource($connection)) {
+                    fclose($connection);
+
+                    break;
+                }
+
+                usleep(20000);
+            }
+
+            $this->expectException(FetchFailed::class);
+            $this->expectExceptionMessageMatches('~certificate|SSL|TLS|crypto~i');
+
+            (new StreamFetcher())->get('https://' . $name . '/a.yaml', 5, 1024);
+        } finally {
+            proc_terminate($server);
+            proc_close($server);
+            foreach ((array) glob($dir . '/*') as $file) {
+                unlink((string) $file);
+            }
+            rmdir($dir);
+        }
+    }
+
     public function testReportsAServerThatDoesNotAnswer(): void
     {
         $socket = stream_socket_server('tcp://127.0.0.1:0');

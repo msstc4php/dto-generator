@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Tests\Support;
 
-use MSSTC4PHP\DtoGenerator\Application\Config\RemoteRefsSettings;
 use MSSTC4PHP\DtoGenerator\Application\Port\Document;
 use MSSTC4PHP\DtoGenerator\Application\Port\DocumentLoadFailed;
 use MSSTC4PHP\DtoGenerator\Application\Port\RemoteDocuments;
@@ -25,7 +24,7 @@ final class InMemoryRemoteDocuments implements RemoteDocuments
         $this->documents = $documents;
     }
 
-    public function load(string $url, RemoteRefsSettings $settings, bool $fetch): Document
+    public function load(string $url, string $cacheDir, int $timeout, bool $fetch): Document
     {
         $this->loads[] = [$url, $fetch];
         $document = $this->documents[$url] ?? DocumentLoadFailed::remote($url, 'is not here.');
