@@ -212,7 +212,7 @@ final class ClassBuilder
      *
      * @param list<array{string, Schema}> $sources
      *
-     * @return array<string, string>
+     * @return array<array-key, string> wire name → wire name; a numeric one is an integer key
      */
     private static function skippedWireNames(array $sources): array
     {

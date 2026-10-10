@@ -246,6 +246,17 @@ final class BuildViewsTest extends TestCase
         self::assertSame([], ModelFixture::messages($output));
     }
 
+    public function testDeclaresNoInlineClassForAPropertyAnotherMemberSkips(): void
+    {
+        $schemas = ['Child' => ['allOf' => [
+            ['type' => 'object', 'properties' => ['x' => ['type' => 'object', 'x-php-skip' => true], 'n' => ['type' => 'string']]],
+            ['type' => 'object', 'properties' => ['x' => ['type' => 'object', 'properties' => ['id' => ['type' => 'string', 'readOnly' => true]]]]],
+        ]]];
+
+        self::assertSame(['App\Dto\Child' => ['n: string|null']], ModelFixture::classes(ModelFixture::build($schemas)));
+        self::assertSame(['App\Dto\Child' => ['n: string|null']], ModelFixture::classes(ModelFixture::build($schemas, [], ['*'], 'extends', true, new ViewSuffixes())));
+    }
+
     public function testKeepsOneClassPerSchemaWithoutDirectedProperties(): void
     {
         $schemas = ['Tag' => ['type' => 'object', 'properties' => ['label' => ['type' => 'string']]]];

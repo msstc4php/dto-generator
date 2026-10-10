@@ -285,13 +285,17 @@ final class Action
     {
         /** @var list<array{Schema, ?string, string}> $candidates schema, `<Parent><Property>` (null without usable characters), wire name */
         $candidates = [];
-        // The other view's properties hold no class of this view.
+        // A property skipped by any member of the composition, or of the other view, holds no class of this build.
+        $kept = [];
+        foreach (ClassBuilder::kept($composition->propertySources()) as [$wireName]) {
+            $kept[$wireName] = true;
+        }
+
         $excluded = $registry->excluded($composition);
         foreach ($composition->ownParts() as $part) {
             foreach ($part->propertyNames() as $wireName) {
                 $property = $part->requireProperty($wireName);
-                // The class builder reports a malformed x-php-skip; here it only decides whether to look further.
-                if (!isset($excluded[$wireName]) && !ClassBuilder::isSkipped($property, new Diagnostics())) {
+                if (($kept[$wireName] ?? false) && !isset($excluded[$wireName])) {
                     $base = $this->names->className($wireName);
                     $candidates[] = [$property, $base === null ? null : $registry->baseOf($ownerName) . $base, $wireName];
                 }
