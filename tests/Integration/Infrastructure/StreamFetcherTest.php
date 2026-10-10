@@ -199,6 +199,30 @@ final class StreamFetcherTest extends TestCase
         }
     }
 
+    public function testReadsHeadersWithAnyTokenCharactersInTheirNames(): void
+    {
+        $server = RawServer::answering("HTTP/1.0 200 OK\r\nX_Backend: a\r\nX.Cache!#\$%&'*+^`|~: hit\r\nContent-Length: 5\r\n\r\nA: {}");
+
+        try {
+            self::assertSame('A: {}', (new StreamFetcher())->get($server->url('/a.yaml'), 5, 1024)->body());
+        } finally {
+            $server->stop();
+        }
+    }
+
+    public function testKeepsTheStatusOfAMovedAnswerWithTransferEncoding(): void
+    {
+        $server = RawServer::answering("HTTP/1.0 301 Moved\r\nLocation: /b.yaml\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\n");
+
+        try {
+            $response = (new StreamFetcher())->get($server->url('/a.yaml'), 5, 1024);
+            self::assertSame(301, $response->status());
+            self::assertSame('/b.yaml', $response->location());
+        } finally {
+            $server->stop();
+        }
+    }
+
     public function testKeepsTheStatusOfAnAnswerItDoesNotRead(): void
     {
         $server = RawServer::answering("HTTP/1.0 404 Not Found\r\nContent-Length: 99999\r\n\r\nnope");
@@ -212,9 +236,10 @@ final class StreamFetcherTest extends TestCase
         }
     }
 
-    public function testGivesUpOnAHandshakeThatTakesTooLong(): void
+    public function testBoundsTheHandshakeByTheDeadline(): void
     {
-        // Accepts and stays silent: a TLS client waits for the server's hello.
+        // Accepts and stays silent: a TLS client waits for the server's hello. A local connect is instant, so this
+        // bounds the handshake rather than telling it from the connect timeout.
         $server = RawServer::answering('', 3);
         $started = microtime(true);
 

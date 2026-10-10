@@ -30,6 +30,7 @@ final class StreamFetcher implements Fetcher
         try {
             $target = ($parts['path'] ?? '/') . (isset($parts['query']) ? '?' . $parts['query'] : '');
             $host = $parts['host'] . (isset($parts['port']) ? ':' . $port : '');
+            $this->limit($stream, $deadline, $timeout);
             fwrite($stream, "GET {$target} HTTP/1.0\r\nHost: {$host}\r\nAccept: application/json, application/yaml;q=0.9, */*;q=0.5\r\nUser-Agent: msstc4php-dto-generator\r\nConnection: close\r\n\r\n");
 
             return $this->response($stream, $deadline, $timeout, $maxBytes);
@@ -68,12 +69,17 @@ final class StreamFetcher implements Fetcher
         });
         try {
             $stream = stream_socket_client('tcp://' . $host . ':' . $port, $errno, $error, max(0.001, $deadline - microtime(true)), STREAM_CLIENT_CONNECT, $context);
-            if (is_resource($stream) && $secure && !$this->handshake($stream, $deadline, $timeout)) {
+            $secured = is_resource($stream) && $secure ? $this->handshake($stream, $deadline) : true;
+            if ($secured !== true) {
                 fclose($stream);
-                $stream = false;
+                $stream = $secured;
             }
         } finally {
             restore_error_handler();
+        }
+
+        if ($stream === null) {
+            throw new FetchFailed(sprintf('it took longer than %d seconds', $timeout));
         }
 
         if (!is_resource($stream)) {
@@ -87,9 +93,13 @@ final class StreamFetcher implements Fetcher
      * Non-blocking under the deadline: a blocking handshake is bounded by the connect timeout instead, a second one.
      * Without a method the context's crypto_method applies: TLS 1.2 or newer.
      *
+     * Only the read side is awaited: a handshake's writes fit the socket buffer.
+     *
      * @param resource $stream
+     *
+     * @return bool|null null when the deadline passed
      */
-    private function handshake($stream, float $deadline, int $timeout): bool
+    private function handshake($stream, float $deadline): ?bool
     {
         stream_set_blocking($stream, false);
         try {
@@ -101,7 +111,7 @@ final class StreamFetcher implements Fetcher
 
                 $left = $deadline - microtime(true);
                 if ($left <= 0) {
-                    throw new FetchFailed(sprintf('it took longer than %d seconds', $timeout));
+                    return null;
                 }
 
                 $read = [$stream];
@@ -126,6 +136,7 @@ final class StreamFetcher implements Fetcher
         $location = null;
         $lengths = [];
         $headerBytes = 0;
+        $transferEncoding = null;
         for ($first = true; ($line = $this->line($stream, $deadline, $timeout)) !== ''; $first = false) {
             $headerBytes += strlen($line);
             if ($headerBytes > self::MAX_HEADER_BYTES) {
@@ -143,8 +154,8 @@ final class StreamFetcher implements Fetcher
                 }
 
                 $status = (int) $matches[1];
-            } elseif (preg_match('#^([A-Za-z0-9-]+):[ \t]*(.*?)[ \t]*$#', $line, $matches) !== 1) {
-                // "Transfer-Encoding : chunked" would otherwise pass unseen (RFC 9112 §5.1).
+            } elseif (preg_match('#^([!\#$%&\'*+.^_`|~0-9A-Za-z-]+):[ \t]*(.*?)[ \t]*$#', $line, $matches) !== 1) {
+                // "Transfer-Encoding : chunked" would otherwise pass unseen (RFC 9112 §5.1); folded lines are refused too.
                 throw new FetchFailed('its headers are malformed');
             } else {
                 $header = strtolower($matches[1]);
@@ -155,7 +166,7 @@ final class StreamFetcher implements Fetcher
                 } elseif ($header === 'content-length') {
                     $lengths[$matches[2]] = true;
                 } elseif ($header === 'transfer-encoding') {
-                    throw new FetchFailed(sprintf('it answered an HTTP/1.0 request with Transfer-Encoding %s', $matches[2]));
+                    $transferEncoding = $matches[2];
                 }
             }
         }
@@ -163,6 +174,10 @@ final class StreamFetcher implements Fetcher
         // Only a 200 body is used; the length checks of another would hide what the server answered.
         if ($status !== 200) {
             return new Response($status, $contentType, $location, '');
+        }
+
+        if ($transferEncoding !== null) {
+            throw new FetchFailed(sprintf('it answered an HTTP/1.0 request with Transfer-Encoding %s', $transferEncoding));
         }
 
         $length = $this->length(array_keys($lengths), $maxBytes);
