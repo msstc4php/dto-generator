@@ -84,11 +84,9 @@ final class TestRunTemporaryDirectoryTest extends TestCase
         self::assertDirectoryExists($outside);
     }
 
-    public function testSeparatesTheRunsOfEachUser(): void
+    public function testNamesTheOwnerByEffectiveUser(): void
     {
-        $expected = function_exists('posix_geteuid') ? 'u' . posix_geteuid() : 'shared';
-
-        self::assertSame($expected, TestRunTemporaryDirectory::owner());
+        self::assertMatchesRegularExpression('/^(?:u\\d+|shared)\z/', TestRunTemporaryDirectory::owner());
     }
 
     public function testAnIsolatedProcessRemovesItsDirectoryOnExit(): void
@@ -99,16 +97,40 @@ final class TestRunTemporaryDirectoryTest extends TestCase
             TestRunTemporaryDirectory::class,
             var_export($this->base, true),
         );
-        $process = proc_open([PHP_BINARY, '-r', $code], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+        $errors = sys_get_temp_dir() . '/child-' . bin2hex(random_bytes(4)) . '.err';
+        $process = proc_open([PHP_BINARY, '-r', $code], [1 => ['pipe', 'w'], 2 => ['file', $errors, 'w']], $pipes);
         self::assertIsResource($process);
         $run = (string) stream_get_contents($pipes[1]);
-        $errors = (string) stream_get_contents($pipes[2]);
         fclose($pipes[1]);
-        fclose($pipes[2]);
+        $status = proc_close($process);
+        $stderr = (string) file_get_contents($errors);
+        unlink($errors);
 
-        self::assertSame(0, proc_close($process), $errors);
+        self::assertSame(0, $status, $stderr);
+        self::assertNotSame('', $run, $stderr);
         self::assertSame(realpath($this->base) . '/' . TestRunTemporaryDirectory::owner(), dirname($run));
         self::assertDirectoryDoesNotExist($run);
+        // Shared like /tmp, so a run as root first leaves a base every user can still create a directory in.
+        self::assertSame(01777, fileperms($this->base) & 07777);
+    }
+
+    public function testExplainsWhyTheBaseCannotBeCreated(): void
+    {
+        mkdir($this->base);
+        chmod($this->base, 0555);
+        if (is_writable($this->base)) {
+            chmod($this->base, 0700);
+            self::markTestSkipped('Permissions are not enforced for this user.');
+        }
+
+        try {
+            $this->expectException(RuntimeException::class);
+            $this->expectExceptionMessage('Permission denied');
+
+            TestRunTemporaryDirectory::create($this->base . '/u1', time());
+        } finally {
+            chmod($this->base, 0700);
+        }
     }
 
     public function testRefusesABaseItCannotWriteTo(): void

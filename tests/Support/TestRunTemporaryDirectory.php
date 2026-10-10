@@ -28,6 +28,7 @@ final class TestRunTemporaryDirectory
     public static function isolate(string $base): void
     {
         $previous = getenv('TMPDIR');
+        self::createShared($base);
         $run = self::create($base . '/' . self::owner(), time());
         putenv('TMPDIR=' . $run);
         if (sys_get_temp_dir() !== $run) {
@@ -56,11 +57,11 @@ final class TestRunTemporaryDirectory
 
     public static function create(string $base, int $now): string
     {
-        // Parallel processes race to create the base; the loser's warning means nothing.
-        self::quietly(static fn (): bool => is_dir($base) || mkdir($base, 0777, true));
+        // Parallel processes race to create the base; the loser's warning means nothing, any other one is the cause.
+        $error = self::quietly(static fn (): bool => is_dir($base) || mkdir($base, 0777, true));
         $real = realpath($base);
         if ($real === false || !is_dir($real)) {
-            throw new RuntimeException('Cannot create ' . $base . '.');
+            throw new RuntimeException(sprintf('Cannot create %s: %s; a parent owned by another user (a container run as root) is the usual cause.', $base, $error ?? 'unknown error'));
         }
 
         if (!is_writable($real)) {
@@ -75,6 +76,14 @@ final class TestRunTemporaryDirectory
         }
 
         return $run;
+    }
+
+    /**
+     * Sticky and world-writable like /tmp, so whichever user creates it first, every user can keep a directory in it.
+     */
+    private static function createShared(string $directory): void
+    {
+        self::quietly(static fn (): bool => is_dir($directory) || (mkdir($directory, 0777, true) && chmod($directory, 01777)));
     }
 
     public static function remove(string $path): void
@@ -105,8 +114,13 @@ final class TestRunTemporaryDirectory
      */
     private static function sweepStale(string $base, int $now): void
     {
-        $runs = glob($base . '/run-*');
-        foreach ($runs === false ? [] : $runs as $run) {
+        // Not glob(): the project path may contain its metacharacters.
+        foreach (new FilesystemIterator($base, FilesystemIterator::SKIP_DOTS) as $entry) {
+            if (!$entry instanceof SplFileInfo || strncmp($entry->getFilename(), 'run-', 4) !== 0) {
+                continue;
+            }
+
+            $run = $entry->getPathname();
             self::quietly(static function () use ($run, $now): void {
                 $modified = filemtime($run);
                 if ($modified !== false && $modified < $now - self::STALE_AFTER_SECONDS) {
@@ -118,10 +132,17 @@ final class TestRunTemporaryDirectory
 
     /**
      * @param Closure(): (bool|void) $action
+     *
+     * @return string|null the last warning the action raised
      */
-    private static function quietly(Closure $action): void
+    private static function quietly(Closure $action): ?string
     {
-        set_error_handler(static fn (): bool => true);
+        $last = null;
+        set_error_handler(static function (int $level, string $message) use (&$last): bool {
+            $last = $message;
+
+            return true;
+        });
 
         try {
             $action();
@@ -130,5 +151,7 @@ final class TestRunTemporaryDirectory
         } finally {
             restore_error_handler();
         }
+
+        return $last;
     }
 }
