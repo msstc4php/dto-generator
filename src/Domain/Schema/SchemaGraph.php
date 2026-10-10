@@ -74,18 +74,32 @@ final class SchemaGraph
      */
     public function chain(Schema $schema): array
     {
+        return $this->walk($schema)[0];
+    }
+
+    /**
+     * The chain, and the schema its last reference leads back to when it closes a cycle.
+     *
+     * @return array{non-empty-list<Schema>, ?Schema}
+     */
+    public function walk(Schema $schema): array
+    {
         $chain = [$schema];
         for ($current = $schema; $current->ref() !== null; $current = $next) {
             $target = $this->resolve(new ReferenceUse($current->ref(), $current->location()));
-            if (!$target instanceof ResolvedSchema || $this->listed($target->schema(), $chain)) {
+            if (!$target instanceof ResolvedSchema) {
                 break;
             }
 
             $next = $target->schema();
+            if ($this->listed($next, $chain)) {
+                return [$chain, $next];
+            }
+
             $chain[] = $next;
         }
 
-        return $chain;
+        return [$chain, null];
     }
 
     /**

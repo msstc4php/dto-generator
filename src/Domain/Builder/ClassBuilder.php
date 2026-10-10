@@ -81,7 +81,7 @@ final class ClassBuilder
         $byWireName = [];
         $sources = $composition->propertySources();
         // The other view's properties are left out quietly, unlike x-php-skip.
-        $skipped = $this->skippedWireNames($sources) + ($this->view instanceof PropertyView ? $this->view->excluded($sources) : []);
+        $skipped = self::skippedWireNames($sources) + ($this->view instanceof PropertyView ? $this->view->excluded(self::kept($sources)) : []);
         foreach ($sources as [$wireName, $propertySchema]) {
             ExtensionVocabulary::checkProperty($propertySchema, $diagnostics, $this->aliases);
             if (self::isSkipped($propertySchema, $diagnostics) && $composition->isRequired($wireName)) {
@@ -188,13 +188,33 @@ final class ClassBuilder
     }
 
     /**
+     * The declarations of the properties no member of the composition excludes with x-php-skip.
+     *
+     * @param list<array{string, Schema}> $sources
+     *
+     * @return list<array{string, Schema}>
+     */
+    public static function kept(array $sources): array
+    {
+        $skipped = self::skippedWireNames($sources);
+        $kept = [];
+        foreach ($sources as $source) {
+            if (!isset($skipped[$source[0]])) {
+                $kept[] = $source;
+            }
+        }
+
+        return $kept;
+    }
+
+    /**
      * A property any merged member excludes stays excluded, whichever member declares it first.
      *
      * @param list<array{string, Schema}> $sources
      *
      * @return array<string, string>
      */
-    private function skippedWireNames(array $sources): array
+    private static function skippedWireNames(array $sources): array
     {
         $skipped = [];
         foreach ($sources as [$wireName, $propertySchema]) {

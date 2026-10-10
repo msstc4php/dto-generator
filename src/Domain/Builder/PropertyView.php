@@ -38,7 +38,7 @@ final class PropertyView
      *
      * @param list<array{string, Schema}> $sources wire name and schema of each declaration
      *
-     * @return array<string, string> wire name → wire name
+     * @return array<array-key, string> wire name → wire name; a numeric one is an integer key
      */
     public function excluded(array $sources): array
     {

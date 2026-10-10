@@ -135,7 +135,7 @@ final class BuildViewsTest extends TestCase
             'App\Dto\ChildRead' => ['x: string|null', 'y: string|null', 'z: string|null'],
             'App\Dto\ChildWrite' => ['x: string|null', 'y: string|null'],
         ], ModelFixture::classes($output));
-        self::assertSame(['warning /project/api/openapi.yaml#/components/schemas/Child/allOf/0/properties/x: "readOnly" and "writeOnly" are both true; the property is in both views.'], ModelFixture::messages($output));
+        self::assertSame(['warning /project/api/openapi.yaml#/components/schemas/Child/allOf/1/properties/x: "readOnly" and "writeOnly" are both true; the property is in both views.'], ModelFixture::messages($output));
     }
 
     public function testSplitsASchemaWhoseNameAnotherTook(): void
@@ -204,6 +204,46 @@ final class BuildViewsTest extends TestCase
             'App\Dto\PetRead' => ['name: string|null', 'additionalProperties: array<array-key, string>'],
             'App\Dto\PetWrite' => ['name: string|null'],
         ], ModelFixture::classes($output));
+    }
+
+    public function testReportsANameTakenFromASchemaWhoseTakerDoesNotDependOnTheDirection(): void
+    {
+        $named = ModelFixture::build([
+            'Pet' => ['type' => 'object', 'properties' => ['name' => ['type' => 'string']]],
+            'pet' => ['type' => 'object', 'properties' => [
+                'id' => ['type' => 'integer', 'readOnly' => true],
+                'flag' => ['type' => 'string', 'writeOnly' => 'yes'],
+            ]],
+            'Holder' => ['type' => 'object', 'properties' => ['p' => ['$ref' => '#/components/schemas/pet']]],
+            'Other' => ['type' => 'object', 'properties' => ['o' => ['type' => 'string', 'readOnly' => true]]],
+        ], [], ['*'], 'extends', true, new ViewSuffixes());
+        $inline = ModelFixture::build([
+            'PetOwner' => ['type' => 'object', 'properties' => ['x' => ['type' => 'string']]],
+            'Pet' => ['type' => 'object', 'properties' => ['owner' => ['type' => 'object', 'properties' => ['since' => ['type' => 'string', 'readOnly' => true]]]]],
+        ], [], ['*'], 'extends', true, new ViewSuffixes());
+
+        self::assertSame(['App\Dto\Pet', 'App\Dto\Holder', 'App\Dto\OtherRead', 'App\Dto\OtherWrite'], array_keys(ModelFixture::classes($named)));
+        self::assertSame([
+            'error /project/api/openapi.yaml#/components/schemas/pet: Class App\Dto\Pet is already generated from /project/api/openapi.yaml#/components/schemas/Pet; set "x-php-class-name" on one of them.',
+            'warning /project/api/openapi.yaml#/components/schemas/pet/properties/flag/writeOnly: "writeOnly" must be true or false; it is ignored.',
+        ], ModelFixture::messages($named));
+        self::assertSame([
+            'error /project/api/openapi.yaml#/components/schemas/Pet/properties/owner: Class App\Dto\PetOwner is already generated from /project/api/openapi.yaml#/components/schemas/PetOwner; set "x-php-class-name" on one of them.',
+        ], ModelFixture::messages($inline));
+    }
+
+    public function testIgnoresTheDirectionOfASkippedProperty(): void
+    {
+        $output = ModelFixture::build([
+            'Pet' => ['type' => 'object', 'properties' => [
+                'name' => ['type' => 'string'],
+                'internal' => ['type' => 'string', 'readOnly' => true, 'writeOnly' => true, 'x-php-skip' => true],
+                'hidden' => ['type' => 'string', 'readOnly' => true, 'x-php-skip' => true],
+            ]],
+        ], [], ['*'], 'extends', true, new ViewSuffixes());
+
+        self::assertSame(['App\Dto\Pet' => ['name: string|null']], ModelFixture::classes($output));
+        self::assertSame([], ModelFixture::messages($output));
     }
 
     public function testKeepsOneClassPerSchemaWithoutDirectedProperties(): void

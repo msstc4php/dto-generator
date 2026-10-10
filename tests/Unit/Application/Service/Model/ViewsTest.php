@@ -93,6 +93,23 @@ final class ViewsTest extends TestCase
         self::assertSame(['App\Dto\Red', 'App\Dto\Blue'], ModelFixture::enums($merged));
     }
 
+    public function testNamesAProblemOfAWriteViewAfterItsReadViewByWholeNames(): void
+    {
+        $conflict = static fn (string $class): array => ['x-php-class-name' => $class, 'allOf' => [
+            ['type' => 'object', 'properties' => ['a' => ['type' => 'string']]],
+            ['type' => 'object', 'properties' => ['a' => ['type' => 'integer']]],
+        ]];
+        $read = ModelFixture::build(['Pet' => $conflict('PetRead')]);
+        $write = ModelFixture::build(['Pet' => $conflict('PetWrite'), 'Log' => $conflict('PetWriteLog')]);
+
+        $merged = (new Views(new SchemaGraph([]), new ViewSuffixes()))->merge($read, $write);
+
+        self::assertSame([
+            'error /project/api/openapi.yaml#/components/schemas/Pet/allOf/1/properties/a: Property "a" of App\Dto\PetRead is int|null here, but string|null in an earlier allOf member.',
+            'error /project/api/openapi.yaml#/components/schemas/Log/allOf/1/properties/a: Property "a" of App\Dto\PetWriteLog is int|null here, but string|null in an earlier allOf member.',
+        ], ModelFixture::messages($merged));
+    }
+
     public function testKeepsASharedClassBothBuildsAgreeOn(): void
     {
         $tag = [

@@ -162,12 +162,12 @@ final class Action
         RequiredCycles::check($models, $diagnostics, $inherited);
         $classSchemas = [];
         foreach ($registry->planned() as $index => [$schema]) {
-            $classSchemas[] = [$schema, $compositions[$index]];
+            $classSchemas[] = new ClassSchema($schema, $compositions[$index]);
         }
 
-        foreach ($registry->rejected() as $schema) {
+        foreach ($registry->rejected() as [$schema, $taker]) {
             // Reported where its name was refused; a split still needs to know whether it depends on the direction.
-            $classSchemas[] = [$schema, $allOf->compose($schema, new Diagnostics())];
+            $classSchemas[] = new ClassSchema($schema, $allOf->compose($schema, new Diagnostics()), $taker);
         }
 
         return new Run($output, $classSchemas);

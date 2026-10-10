@@ -6,6 +6,7 @@ namespace MSSTC4PHP\DtoGenerator\Application\Service\Model\Build;
 
 use Closure;
 use MSSTC4PHP\DtoGenerator\Application\Config\ViewSuffixes;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\ClassBuilder;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\Direction;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\Directions;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\ViewDependence;
@@ -40,15 +41,12 @@ final class Views
     public function build(Closure $build): Output
     {
         $single = $build(null);
+        // What the analysis reads of the flags is reported once whichever way the run goes: the views repeat it only
+        // for the schemas that got a class.
         $found = new Diagnostics();
         $dependent = $this->dependent($single, new Directions($this->graph, $found));
         if ($dependent === []) {
-            // The views would repeat this build; only what the analysis found about the flags is new.
-            $diagnostics = new Diagnostics();
-            $diagnostics->merge($single->output()->diagnostics());
-            $diagnostics->merge($found);
-
-            return new Output($single->output()->classes(), $diagnostics, $single->output()->enums());
+            return $this->with($single->output(), $found);
         }
 
         $views = [];
@@ -57,7 +55,7 @@ final class Views
             $views[] = $build(new View($direction, $this->suffixes->of($direction), $dependent))->output();
         }
 
-        return $this->merge($views[0], $views[1]);
+        return $this->with($this->merge($views[0], $views[1]), $found);
     }
 
     /**
@@ -100,7 +98,7 @@ final class Views
         }
 
         foreach ($write->diagnostics()->all() as $diagnostic) {
-            $translated = new Diagnostic($diagnostic->severity(), strtr($diagnostic->message(), $renamed), $diagnostic->location());
+            $translated = new Diagnostic($diagnostic->severity(), $this->renamed($diagnostic->message(), $renamed), $diagnostic->location());
             if (!($known[$translated->toString()] ?? false)) {
                 $diagnostics->add($diagnostic);
             }
@@ -123,37 +121,74 @@ final class Views
 
     /**
      * Locations of the object schemas whose classes depend on the direction: those with a directed property in any
-     * member of their composition, including schemas whose name another schema took, and those that hold, extend or
-     * list them.
+     * member of their composition, those that hold, extend or list them, and a schema whose name another took when that
+     * one depends on it, so the views refuse the name again.
      *
      * @return array<string, bool>
      */
     private function dependent(Run $single, Directions $directions): array
     {
         $dependent = [];
-        foreach ($single->classSchemas() as [$schema, $composition]) {
+        $rejected = [];
+        foreach ($single->classSchemas() as $classSchema) {
+            $schema = $classSchema->schema();
             $additional = $schema->additionalProperties();
-            if ($directions->ofSources($composition->propertySources()) !== [] || ($additional instanceof Schema && $directions->of($additional) instanceof Direction)) {
+            $directed = $directions->ofSources(ClassBuilder::kept($classSchema->composition()->propertySources())) !== []
+                || ($additional instanceof Schema && $directions->of($additional) instanceof Direction);
+            $taker = $classSchema->taker();
+            if ($taker !== null) {
+                $rejected[$schema->location()->toString()] = $taker;
+            } elseif ($directed) {
                 $dependent[$schema->location()->toString()] = true;
             }
         }
 
         $models = [];
-        $directed = [];
+        $seeds = [];
         foreach ($single->output()->classes() as $class) {
             $model = $class->model();
             $models[] = $model;
-            $directed[$model->name()->fqcn()] = $dependent[$model->source()->toString()] ?? false;
+            $seeds[$model->name()->fqcn()] = $dependent[$model->source()->toString()] ?? false;
         }
 
-        $classes = ViewDependence::of($models, $directed);
+        $classes = ViewDependence::of($models, $seeds);
         foreach ($models as $model) {
             if ($classes[$model->name()->fqcn()] ?? false) {
                 $dependent[$model->source()->toString()] = true;
             }
         }
 
+        foreach ($rejected as $location => $taker) {
+            if ($dependent[$taker] ?? false) {
+                $dependent[$location] = true;
+            }
+        }
+
         return $dependent;
+    }
+
+    /**
+     * The message with each write view's class named as its read view, whole names only (`PetWrite`, not inside
+     * `PetWriteLog`).
+     *
+     * @param array<string, string> $renamed
+     */
+    private function renamed(string $message, array $renamed): string
+    {
+        return (string) preg_replace_callback(
+            '~[A-Za-z_\\x80-\\xff\\\\][A-Za-z0-9_\\x80-\\xff\\\\]*~',
+            static fn (array $name): string => $renamed[$name[0]] ?? $name[0],
+            $message,
+        );
+    }
+
+    private function with(Output $output, Diagnostics $more): Output
+    {
+        $diagnostics = new Diagnostics();
+        $diagnostics->merge($output->diagnostics());
+        $diagnostics->merge($more);
+
+        return new Output($output->classes(), $diagnostics, $output->enums());
     }
 
     /**

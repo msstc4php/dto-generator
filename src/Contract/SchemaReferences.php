@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Contract;
 
-use MSSTC4PHP\DtoGenerator\Domain\Schema\ReferenceUse;
-use MSSTC4PHP\DtoGenerator\Domain\Schema\ResolvedSchema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaGraph;
 
@@ -63,11 +61,8 @@ final class SchemaReferences
             return [[$schema], $schema];
         }
 
-        $chain = $this->graph->chain($schema);
-        $last = $chain[count($chain) - 1];
-        // A chain stops at a reference that does not resolve or that closes a cycle; only the latter has a target.
-        $target = $last->ref() === null ? null : $this->graph->resolve(new ReferenceUse($last->ref(), $last->location()));
+        [$chain, $cycle] = $this->graph->walk($schema);
 
-        return [$chain, $target instanceof ResolvedSchema ? $target->schema() : $last];
+        return [$chain, $cycle ?? $chain[count($chain) - 1]];
     }
 }

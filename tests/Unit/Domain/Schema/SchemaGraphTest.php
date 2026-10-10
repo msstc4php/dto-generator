@@ -7,9 +7,11 @@ namespace MSSTC4PHP\DtoGenerator\Tests\Unit\Domain\Schema;
 use MSSTC4PHP\DtoGenerator\Domain\Exception\InvalidModel;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\ReferenceUse;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\ResolvedSchema;
+use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaBuilder;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaGraph;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
+use MSSTC4PHP\DtoGenerator\Tests\Support\GraphFixture;
 use PHPUnit\Framework\TestCase;
 
 final class SchemaGraphTest extends TestCase
@@ -68,5 +70,41 @@ final class SchemaGraphTest extends TestCase
     private function resolved(string $file, string $pointer, string $name, ?int $source): ResolvedSchema
     {
         return new ResolvedSchema((new SchemaBuilder(new SchemaLocation($file, $pointer)))->build(), $source, $name, $source !== null);
+    }
+
+    public function testWalksAChainOfReferencesUntilItEndsOrClosesACycle(): void
+    {
+        $graph = GraphFixture::load([
+            'A' => ['$ref' => '#/components/schemas/B'],
+            'B' => ['$ref' => '#/components/schemas/C'],
+            'C' => ['type' => 'string'],
+            'Loop' => ['$ref' => '#/components/schemas/Back'],
+            'Back' => ['$ref' => '#/components/schemas/Loop'],
+            'Self' => ['$ref' => '#/components/schemas/Self'],
+        ]);
+        $schemas = [];
+        foreach ($graph->all() as $resolved) {
+            $schemas[$resolved->name()] = $resolved->schema();
+        }
+
+        $names = static function (array $chain): array {
+            $pointers = [];
+            foreach ($chain as $schema) {
+                self::assertInstanceOf(Schema::class, $schema);
+                $pointers[] = $schema->location()->pointer();
+            }
+
+            return $pointers;
+        };
+        [$chain, $cycle] = $graph->walk($schemas['Loop']);
+
+        self::assertSame(['/components/schemas/A', '/components/schemas/B', '/components/schemas/C'], $names($graph->chain($schemas['A'])));
+        self::assertNull($graph->walk($schemas['A'])[1]);
+        self::assertSame(['/components/schemas/Loop', '/components/schemas/Back'], $names($chain));
+        self::assertNotNull($cycle);
+        self::assertSame('/components/schemas/Loop', $cycle->location()->pointer());
+        self::assertSame(['/components/schemas/Self'], $names($graph->chain($schemas['Self'])));
+        self::assertSame(['/components/schemas/C'], $names((new SchemaGraph([]))->chain($schemas['C'])));
+        self::assertSame(['/components/schemas/A'], $names((new SchemaGraph([]))->chain($schemas['A'])));
     }
 }

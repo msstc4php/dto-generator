@@ -75,10 +75,11 @@ final class DirectionsTest extends TestCase
         $id = $holder->requireProperty('id');
         $password = $holder->requireProperty('password');
         $diagnostics = new Diagnostics();
-        $directed = (new Directions($graph, $diagnostics))->ofSources([['x', $plain], ['x', $id], ['y', $id], ['y', $password], ['z', $password], ['z', $plain]]);
+        $directed = (new Directions($graph, $diagnostics))->ofSources([['x', $plain], ['x', $id], ['y', $id], ['y', $password], ['y', $plain], ['z', $password], ['z', $plain]]);
 
         self::assertSame([['x', 'read'], ['z', 'write']], array_map(static fn (array $pair): array => [$pair[0], $pair[1]->value()], $directed));
-        self::assertSame(['warning /project/api/openapi.yaml#/components/schemas/Holder/properties/id: "readOnly" and "writeOnly" are both true; the property is in both views.'], array_map(static fn (Diagnostic $diagnostic): string => $diagnostic->toString(), $diagnostics->all()));
+        // Reported where the second flag comes in.
+        self::assertSame(['warning /project/api/openapi.yaml#/components/schemas/Holder/properties/password: "readOnly" and "writeOnly" are both true; the property is in both views.'], array_map(static fn (Diagnostic $diagnostic): string => $diagnostic->toString(), $diagnostics->all()));
     }
 
     /**

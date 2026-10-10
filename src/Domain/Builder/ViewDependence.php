@@ -43,11 +43,14 @@ final class ViewDependence
 
         $dependent = [];
         $pending = array_keys(array_filter($directed));
-        while ($pending !== []) {
-            $fqcn = array_shift($pending);
+        // The queue grows while it is read.
+        for ($next = 0; isset($pending[$next]); $next++) {
+            $fqcn = $pending[$next];
             if (!($dependent[$fqcn] ?? false)) {
                 $dependent[$fqcn] = true;
-                $pending = array_merge($pending, $followers[$fqcn] ?? []);
+                foreach ($followers[$fqcn] ?? [] as $follower) {
+                    $pending[] = $follower;
+                }
             }
         }
 

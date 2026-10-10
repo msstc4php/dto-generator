@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Application\Service\Model\Build;
 
+use MSSTC4PHP\DtoGenerator\Domain\Builder\ClassBuilder;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\Composition;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\Declarations;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\PropertyView;
@@ -54,7 +55,7 @@ final class Registry
     /** @var array<string, string> FQCN of a name not claimed yet → its short name without the view's suffix */
     private array $unclaimed = [];
 
-    /** @var list<Schema> */
+    /** @var list<array{Schema, string}> */
     private array $rejected = [];
 
     public function __construct(?View $view = null, ?PropertyView $properties = null)
@@ -79,11 +80,11 @@ final class Registry
     /**
      * The properties of a composition that belong to the other view.
      *
-     * @return array<string, string>
+     * @return array<array-key, string>
      */
     public function excluded(Composition $composition): array
     {
-        return $this->properties instanceof PropertyView ? $this->properties->excluded($composition->propertySources()) : [];
+        return $this->properties instanceof PropertyView ? $this->properties->excluded(ClassBuilder::kept($composition->propertySources())) : [];
     }
 
     /**
@@ -107,9 +108,9 @@ final class Registry
     }
 
     /**
-     * The object schemas whose class name another schema took.
+     * The object schemas whose class name another schema took, with the location of that schema.
      *
-     * @return list<Schema>
+     * @return list<array{Schema, string}>
      */
     public function rejected(): array
     {
@@ -126,7 +127,7 @@ final class Registry
         $suffixed = $base !== $name->shortName();
         if (isset($this->taken[$lower])) {
             if (SchemaShape::isClass($schema)) {
-                $this->rejected[] = $schema;
+                $this->rejected[] = [$schema, $this->taken[$lower]];
             }
 
             $diagnostics->error(

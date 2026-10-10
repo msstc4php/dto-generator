@@ -52,14 +52,15 @@ final class Directions
         $properties = [];
         foreach ($sources as [$wireName, $schema]) {
             [$read, $write] = $this->flagsOf($schema);
-            $earlier = $properties[$wireName] ?? [$wireName, false, false, $schema];
-            $properties[$wireName] = [$wireName, $earlier[1] || $read, $earlier[2] || $write, $earlier[3]];
+            [, $readBefore, $writeBefore, $where] = $properties[$wireName] ?? [$wireName, false, false, $schema];
+            // Reported where the second flag comes in: the place moves with each declaration until both are set.
+            $properties[$wireName] = [$wireName, $readBefore || $read, $writeBefore || $write, $readBefore && $writeBefore ? $where : $schema];
         }
 
         $directed = [];
-        foreach ($properties as [$wireName, $read, $write, $first]) {
+        foreach ($properties as [$wireName, $read, $write, $where]) {
             if ($read && $write) {
-                $this->diagnostics->warning('"readOnly" and "writeOnly" are both true; the property is in both views.', $first->location());
+                $this->diagnostics->warning('"readOnly" and "writeOnly" are both true; the property is in both views.', $where->location());
             } elseif ($read || $write) {
                 $directed[] = [$wireName, Direction::from($read ? Direction::READ : Direction::WRITE)];
             }
