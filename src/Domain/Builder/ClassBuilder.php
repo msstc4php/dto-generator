@@ -39,15 +39,19 @@ final class ClassBuilder
     /** @var list<string> */
     private array $aliases;
 
+    private ?PropertyView $view;
+
     /**
      * @param list<string> $aliases keys of attributeAliases, which properties may carry
+     * @param PropertyView|null $view the view of a direction-dependent class; null keeps every property
      */
-    public function __construct(NameResolver $names, TypeMapper $types, TargetProfile $target, array $aliases = [])
+    public function __construct(NameResolver $names, TypeMapper $types, TargetProfile $target, array $aliases = [], ?PropertyView $view = null)
     {
         $this->names = $names;
         $this->types = $types;
         $this->target = $target;
         $this->aliases = $aliases;
+        $this->view = $view;
     }
 
     public static function isSkipped(Schema $schema, Diagnostics $diagnostics): bool
@@ -76,7 +80,7 @@ final class ClassBuilder
         $taken = [];
         $byWireName = [];
         $sources = $this->sources($composition);
-        $skipped = $this->skippedWireNames($sources);
+        $skipped = $this->skippedWireNames($sources) + $this->otherViewsWireNames($sources, $diagnostics);
         foreach ($sources as [$wireName, $propertySchema]) {
             ExtensionVocabulary::checkProperty($propertySchema, $diagnostics, $this->aliases);
             if (self::isSkipped($propertySchema, $diagnostics) && $composition->isRequired($wireName)) {
@@ -156,7 +160,7 @@ final class ClassBuilder
     private function additionalProperties(Schema $schema, bool $nameTaken, Diagnostics $diagnostics): ?PropertyModel
     {
         $additional = $schema->additionalProperties();
-        if (!$additional instanceof Schema) {
+        if (!$additional instanceof Schema || ($this->view instanceof PropertyView && !$this->view->admits($additional, $diagnostics))) {
             return null;
         }
 
@@ -200,6 +204,30 @@ final class ClassBuilder
         }
 
         return $skipped;
+    }
+
+    /**
+     * The properties of the other view, which no merged member brings back either; quietly, unlike x-php-skip.
+     *
+     * @param list<array{string, Schema}> $sources
+     *
+     * @return array<string, string>
+     */
+    private function otherViewsWireNames(array $sources, Diagnostics $diagnostics): array
+    {
+        $view = $this->view;
+        if (!$view instanceof PropertyView) {
+            return [];
+        }
+
+        $excluded = [];
+        foreach ($sources as [$wireName, $propertySchema]) {
+            if (!$view->admits($propertySchema, $diagnostics)) {
+                $excluded[$wireName] = $wireName;
+            }
+        }
+
+        return $excluded;
     }
 
     /**

@@ -8,16 +8,20 @@ use MSSTC4PHP\DtoGenerator\Domain\Builder\AllOfResolver;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\ClassBuilder;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\ClassLookup;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\Composition;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\Direction;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\Directions;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\EnumBuilder;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\ExtensionVocabulary;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\Hierarchy;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\NamedClass;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\NameResolver;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\PropertyView;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\RequiredCycles;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\SchemaShape;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\TypeMapper;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\VariantResolver;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\Variants;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\ViewDependence;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumModel;
@@ -25,6 +29,8 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\Identifier;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Discriminator;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\ResolvedSchema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
+use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaGraph;
+use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaIndex;
 
 /**
  * Turns the schema graph into the IR: one class per object schema and one enum per enum schema, including schemas
@@ -42,9 +48,83 @@ final class Action
 
     public function __invoke(Input $input): Output
     {
+        $single = $this->build($input, null);
+        $dto = $input->config()->dto();
+        if (!$dto->splitsReadAndWrite()) {
+            return $single;
+        }
+
+        $dependent = $this->dependent($single, $input->graph());
+        $views = [];
+        foreach ([Direction::READ, Direction::WRITE] as $value) {
+            $direction = Direction::from($value);
+            $views[] = $this->build($input, new View(new PropertyView($direction, $input->graph()), $dto->viewSuffixes()->of($direction), $dependent));
+        }
+
+        return $this->merge(...$views);
+    }
+
+    /**
+     * Locations of the schemas whose classes depend on the direction, read off the build that keeps every property.
+     *
+     * @return array<string, true>
+     */
+    private function dependent(Output $single, SchemaGraph $graph): array
+    {
+        $index = SchemaIndex::of($graph);
+        $models = [];
+        $directed = [];
+        foreach ($single->classes() as $class) {
+            $model = $class->model();
+            $models[] = $model;
+            foreach ($model->properties() as $property) {
+                $schema = $index->get($property->source());
+                // Reported by the views' builds, which read the same flags.
+                if ($schema instanceof Schema && Directions::of($schema, $graph, new Diagnostics()) instanceof Direction) {
+                    $directed[$model->name()->fqcn()] = true;
+                }
+            }
+        }
+
+        $dependent = [];
+        $classes = ViewDependence::of($models, $directed);
+        foreach ($models as $model) {
+            if (isset($classes[$model->name()->fqcn()])) {
+                $dependent[$model->source()->toString()] = true;
+            }
+        }
+
+        return $dependent;
+    }
+
+    /**
+     * Both views of every dependent class, and once each the classes and enums the views share.
+     */
+    private function merge(Output $read, Output $write): Output
+    {
+        $classes = [];
+        $enums = [];
+        $diagnostics = new Diagnostics();
+        foreach ([$read, $write] as $view) {
+            foreach ($view->classes() as $class) {
+                $classes[$class->model()->name()->fqcn()] ??= $class;
+            }
+
+            foreach ($view->enums() as $enum) {
+                $enums[$enum->model()->name()->fqcn()] ??= $enum;
+            }
+
+            $diagnostics->merge($view->diagnostics());
+        }
+
+        return new Output(array_values($classes), $diagnostics, array_values($enums));
+    }
+
+    private function build(Input $input, ?View $view): Output
+    {
         $diagnostics = new Diagnostics();
         $config = $input->config();
-        $registry = new Registry();
+        $registry = new Registry($view);
         $enums = new EnumBuilder($this->names);
         /** @var list<array{Schema, string, int}> $aliases named non-object schemas with their name and source */
         $aliases = [];
@@ -89,7 +169,7 @@ final class Action
             }
 
             $short = $this->shortName($schema, $resolved->name(), $diagnostics);
-            $name = $short === null ? null : ClassName::fromFqcn($config->sources()[$source]->namespace() . '\\' . $short);
+            $name = $short === null ? null : $registry->className($config->sources()[$source]->namespace(), $short, $schema);
             if ($name instanceof ClassName && $registry->claim($name, $schema, $diagnostics)) {
                 $this->declare($schema, $name, $source, $isEnum, $registry, $enums, $diagnostics);
             }
@@ -115,6 +195,7 @@ final class Action
             new TypeMapper($input->graph(), $declarations, $input->target(), $input->formats()),
             $input->target(),
             $input->aliases(),
+            $view instanceof View ? $view->properties() : null,
         );
         $models = [];
         $children = [];
@@ -269,14 +350,14 @@ final class Action
                 // The class builder reports a malformed x-php-skip; here it only decides whether to look further.
                 if (!ClassBuilder::isSkipped($property, new Diagnostics())) {
                     $base = $this->names->className($wireName);
-                    $candidates[] = [$property, $base === null ? null : $ownerName->shortName() . $base, $wireName];
+                    $candidates[] = [$property, $base === null ? null : $registry->baseOf($ownerName) . $base, $wireName];
                 }
             }
         }
 
         $additional = $owner->additionalProperties();
         if ($additional instanceof Schema) {
-            $candidates[] = [$additional, $ownerName->shortName() . 'AdditionalProperty', 'additionalProperties'];
+            $candidates[] = [$additional, $registry->baseOf($ownerName) . 'AdditionalProperty', 'additionalProperties'];
         }
 
         $namespace = $ownerName->namespace();
@@ -310,7 +391,7 @@ final class Action
         }
 
         $short = $this->inlineName($candidate, $derived, $wireName, $diagnostics);
-        $name = $short === null ? null : ClassName::fromFqcn(($namespace === '' ? '' : $namespace . '\\') . $short);
+        $name = $short === null ? null : $registry->className($namespace, $short, $candidate);
         if (!$name instanceof ClassName || !$registry->claim($name, $candidate, $diagnostics) || !$this->declare($candidate, $name, $source, SchemaShape::isEnum($candidate), $registry, $enums, $diagnostics)) {
             $registry->abandon($candidate);
         }

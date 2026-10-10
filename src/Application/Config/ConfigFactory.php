@@ -99,7 +99,7 @@ final class ConfigFactory
 
     private function dto(RawSection $section): DtoSettings
     {
-        $section->rejectUnknownKeys(['mutability', 'accessors', 'dateTimeClass', 'allOfStrategy', 'withers']);
+        $section->rejectUnknownKeys(['mutability', 'accessors', 'dateTimeClass', 'allOfStrategy', 'withers', 'readWriteModels', 'readWriteSuffixes']);
 
         $mutability = Mutability::from($section->choice('mutability', Mutability::IMMUTABLE, $this->values(Mutability::cases())));
         $withers = $section->bool('withers', true);
@@ -113,7 +113,32 @@ final class ConfigFactory
             DateTimeClass::from($section->choice('dateTimeClass', DateTimeClass::IMMUTABLE, $this->values(DateTimeClass::cases()))),
             AllOfStrategy::from($section->choice('allOfStrategy', AllOfStrategy::EXTENDS, $this->values(AllOfStrategy::cases()))),
             $withers,
+            $section->choice('readWriteModels', 'single', ['single', 'split']) === 'split',
+            $this->viewSuffixes($section->section('readWriteSuffixes')),
         );
+    }
+
+    private function viewSuffixes(RawSection $section): ViewSuffixes
+    {
+        $section->rejectUnknownKeys(['read', 'write']);
+        $suffixes = [];
+        foreach (['read' => ViewSuffixes::READ, 'write' => ViewSuffixes::WRITE] as $key => $default) {
+            $value = $section->has($key) ? $section->raw($key) : $default;
+            if (!is_string($value) || !Identifier::isValid($value)) {
+                $section->error($key, 'must be a PHP identifier');
+                $value = $default;
+            }
+
+            $suffixes[$key] = $value;
+        }
+
+        if ($suffixes['read'] === $suffixes['write']) {
+            $section->report('The read and write suffixes must differ.');
+
+            return new ViewSuffixes();
+        }
+
+        return new ViewSuffixes($suffixes['read'], $suffixes['write']);
     }
 
     /**

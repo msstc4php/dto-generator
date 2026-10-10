@@ -167,6 +167,11 @@ final class ConfigFactoryTest extends TestCase
             'bad namespace' => [['version' => 1, 'sources' => [['namespace' => 'App\1Dto'] + $source]], 'is not a valid namespace', '/sources/0/namespace'],
             'empty include' => [['version' => 1, 'sources' => [$source + ['include' => []]]], '"include" must not be empty', '/sources/0/include'],
             'include not strings' => [['version' => 1, 'sources' => [$source + ['include' => [1]]]], 'Expected a non-empty string', '/sources/0/include/0'],
+            'readWriteModels' => [['version' => 1, 'dto' => ['readWriteModels' => 'both'], 'sources' => [$source]], '"readWriteModels" must be one of', '/dto/readWriteModels'],
+            'readWriteSuffixes key' => [['version' => 1, 'dto' => ['readWriteSuffixes' => ['in' => 'In']], 'sources' => [$source]], 'Unknown key "in"', '/dto/readWriteSuffixes/in'],
+            'readWriteSuffixes not identifier' => [['version' => 1, 'dto' => ['readWriteSuffixes' => ['read' => 'Read-Model']], 'sources' => [$source]], '"read" must be a PHP identifier', '/dto/readWriteSuffixes/read'],
+            'readWriteSuffixes empty' => [['version' => 1, 'dto' => ['readWriteSuffixes' => ['write' => '']], 'sources' => [$source]], '"write" must be a PHP identifier', '/dto/readWriteSuffixes/write'],
+            'readWriteSuffixes same' => [['version' => 1, 'dto' => ['readWriteSuffixes' => ['read' => 'Model', 'write' => 'Model']], 'sources' => [$source]], 'The read and write suffixes must differ', '/dto/readWriteSuffixes'],
             'withers not bool' => [['version' => 1, 'dto' => ['withers' => 'no'], 'sources' => [$source]], '"withers" must be true or false', '/dto/withers'],
             'unknown dto key' => [['version' => 1, 'dto' => ['mutable' => true], 'sources' => [$source]], 'Unknown key "mutable"', '/dto/mutable'],
             'unknown format key' => [['version' => 1, 'formats' => ['uuid' => ['type' => 'App\Uuid', 'kind' => 1]], 'sources' => [$source]], 'Unknown key "kind"', '/formats/uuid/kind'],
@@ -212,6 +217,20 @@ final class ConfigFactoryTest extends TestCase
             'empty' => [[]],
             'map' => [['main' => 'a.yaml']],
         ];
+    }
+
+    public function testReadsTheReadAndWriteModels(): void
+    {
+        $source = ['spec' => '/abs/openapi.yaml', 'namespace' => 'App\Dto', 'outputDir' => 'src/Dto'];
+        $default = $this->valid(['version' => 1, 'sources' => [$source]]);
+        $split = $this->valid(['version' => 1, 'dto' => ['readWriteModels' => 'split', 'readWriteSuffixes' => ['read' => 'Response', 'write' => 'Request']], 'sources' => [$source]]);
+        $partly = $this->valid(['version' => 1, 'dto' => ['readWriteSuffixes' => ['write' => 'Input']], 'sources' => [$source]]);
+
+        self::assertFalse($default->dto()->splitsReadAndWrite());
+        self::assertSame(['Read', 'Write'], [$default->dto()->viewSuffixes()->read(), $default->dto()->viewSuffixes()->write()]);
+        self::assertTrue($split->dto()->splitsReadAndWrite());
+        self::assertSame(['Response', 'Request'], [$split->dto()->viewSuffixes()->read(), $split->dto()->viewSuffixes()->write()]);
+        self::assertSame(['Read', 'Input'], [$partly->dto()->viewSuffixes()->read(), $partly->dto()->viewSuffixes()->write()]);
     }
 
     public function testReadsWithersOff(): void

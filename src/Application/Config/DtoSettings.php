@@ -21,13 +21,26 @@ final class DtoSettings
 
     private bool $withers;
 
-    public function __construct(Mutability $mutability, AccessorStyle $accessors, DateTimeClass $dateTimeClass, AllOfStrategy $allOfStrategy, bool $withers = true)
-    {
+    private bool $splitsReadAndWrite;
+
+    private ViewSuffixes $viewSuffixes;
+
+    public function __construct(
+        Mutability $mutability,
+        AccessorStyle $accessors,
+        DateTimeClass $dateTimeClass,
+        AllOfStrategy $allOfStrategy,
+        bool $withers = true,
+        bool $splitsReadAndWrite = false,
+        ?ViewSuffixes $viewSuffixes = null
+    ) {
         $this->mutability = $mutability;
         $this->accessors = $accessors;
         $this->dateTimeClass = $dateTimeClass;
         $this->allOfStrategy = $allOfStrategy;
         $this->withers = $withers;
+        $this->splitsReadAndWrite = $splitsReadAndWrite;
+        $this->viewSuffixes = $viewSuffixes ?? new ViewSuffixes();
     }
 
     public function mutability(): Mutability
@@ -53,5 +66,18 @@ final class DtoSettings
     public function hasWithers(): bool
     {
         return $this->withers;
+    }
+
+    /**
+     * Whether a class whose model depends on readOnly/writeOnly gets a read and a write view (`readWriteModels: split`).
+     */
+    public function splitsReadAndWrite(): bool
+    {
+        return $this->splitsReadAndWrite;
+    }
+
+    public function viewSuffixes(): ViewSuffixes
+    {
+        return $this->viewSuffixes;
     }
 }

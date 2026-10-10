@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Tests\Support;
 
+use MSSTC4PHP\DtoGenerator\Application\Config\ViewSuffixes;
 use MSSTC4PHP\DtoGenerator\Application\Service\Model\Build\Action;
 use MSSTC4PHP\DtoGenerator\Application\Service\Model\Build\BuiltClass;
 use MSSTC4PHP\DtoGenerator\Application\Service\Model\Build\BuiltEnum;
@@ -29,7 +30,7 @@ final class ModelFixture
      * @param array<string, array<array-key, mixed>> $extraDocuments
      * @param list<string> $include
      */
-    public static function build(array $schemas, array $extraDocuments = [], array $include = ['*'], string $allOfStrategy = AllOfStrategy::EXTENDS, bool $failOnLoadErrors = true): Output
+    public static function build(array $schemas, array $extraDocuments = [], array $include = ['*'], string $allOfStrategy = AllOfStrategy::EXTENDS, bool $failOnLoadErrors = true, ?ViewSuffixes $split = null): Output
     {
         $source = ConfigMother::source(GraphFixture::SPEC, $include);
         $graph = GraphFixture::load($schemas, $extraDocuments, $source, $failOnLoadErrors);
@@ -42,7 +43,9 @@ final class ModelFixture
             true,
         );
 
-        return (new Action(new NameResolver()))(new Input(ConfigMother::configWith(AllOfStrategy::from($allOfStrategy), $source), $target, $graph, []));
+        $config = $split instanceof ViewSuffixes ? ConfigMother::split($source, $split) : ConfigMother::configWith(AllOfStrategy::from($allOfStrategy), $source);
+
+        return (new Action(new NameResolver()))(new Input($config, $target, $graph, []));
     }
 
     /**

@@ -32,11 +32,44 @@ final class Registry
     /** @var array<string, string> lower-cased FQCN → location that claimed it */
     private array $taken = [];
 
+    /** @var array<string, true> lower-cased FQCN of the views' names claimed */
+    private array $views = [];
+
     /** @var list<array{Schema, ClassName, int}> */
     private array $planned = [];
 
     /** @var list<BuiltEnum> */
     private array $builtEnums = [];
+
+    private ?View $view;
+
+    /** @var array<string, string> FQCN of a class → its short name without the view's suffix */
+    private array $bases = [];
+
+    public function __construct(?View $view = null)
+    {
+        $this->view = $view;
+    }
+
+    /**
+     * The class a schema gives in this build's view. The short name without the suffix is remembered, so the classes
+     * of its inline schemas are named after the schema, not the view (`PetOwnerRead`, not `PetReadOwner`).
+     */
+    public function className(string $namespace, string $short, Schema $schema): ClassName
+    {
+        $name = ClassName::fromFqcn(($namespace === '' ? '' : $namespace . '\\') . ($this->view instanceof View ? $this->view->name($short, $schema) : $short));
+        $this->bases[$name->fqcn()] = $short;
+
+        return $name;
+    }
+
+    /**
+     * The short name of a class without the view's suffix.
+     */
+    public function baseOf(ClassName $class): string
+    {
+        return $this->bases[$class->fqcn()] ?? $class->shortName();
+    }
 
     /**
      * Claims a class or enum name; a second schema claiming it (letter case ignored) is an error.
@@ -44,9 +77,15 @@ final class Registry
     public function claim(ClassName $name, Schema $schema, Diagnostics $diagnostics): bool
     {
         $lower = Identifier::asciiLower($name->fqcn());
+        $suffixed = $this->baseOf($name) !== $name->shortName();
         if (isset($this->taken[$lower])) {
             $diagnostics->error(
-                sprintf('Class %s is already generated from %s; set "x-php-class-name" on one of them.', $name->fqcn(), $this->taken[$lower]),
+                sprintf(
+                    'Class %s is already generated from %s; set "x-php-class-name" on one of them%s.',
+                    $name->fqcn(),
+                    $this->taken[$lower],
+                    $suffixed || isset($this->views[$lower]) ? ', or change dto.readWriteSuffixes' : '',
+                ),
                 $schema->location(),
             );
 
@@ -54,6 +93,9 @@ final class Registry
         }
 
         $this->taken[$lower] = $schema->location()->toString();
+        if ($suffixed) {
+            $this->views[$lower] = true;
+        }
 
         return true;
     }
