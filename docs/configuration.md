@@ -33,6 +33,11 @@ extensions:                      # extension classes to load explicitly
 extensionConfig:                 # one section per extension, by its name()
   symfony: { validator: auto }
 
+remoteRefs:                      # remote $refs, off unless allowed
+  allow: [https://schemas.example.com/common/]
+  cacheDir: .dto-generator/remote
+  timeout: 10
+
 sources:                         # required, at least one
   - spec: openapi/public.yaml
     namespace: App\Dto\Api
@@ -164,6 +169,38 @@ extensions by package name. Attributes are written in that order.
   reached from two sources without belonging to either is an error: its namespace would be ambiguous.
 - `outputDir` must not be shared with files you write by hand: the generator deletes the classes whose schemas are
   gone.
+
+## `remoteRefs`
+
+| Key | Default | Values |
+|---|---|---|
+| `allow` | `[]` | URL prefixes (`http://` or `https://`, no query or fragment) |
+| `cacheDir` | `.dto-generator/remote` | a directory, relative to the config file |
+| `timeout` | `10` | seconds per document, 1 to 300 |
+
+```yaml
+remoteRefs:
+  allow:
+    - https://schemas.example.com/common/
+```
+
+A `$ref` to a URL (`https://schemas.example.com/common/v1/money.yaml#/Money`) is an error unless its URL starts with
+one of the `allow` prefixes; a prefix that ends in `/` covers everything below it, any other one that document. Scheme
+and host are compared letter case ignored, and default ports do not count. A relative `$ref` inside a remote document
+is resolved against its URL and must be allowed too; it can never reach a file of the project.
+
+- **Fetching.** A run that writes (`generate`) fetches a document it does not have yet with one `GET`: TLS
+  certificates are verified, redirects are not followed (a `3xx` is an error naming the new URL, which you then allow
+  and refer to), the body may be 10 MB at most, and any status but `200` is an error. JSON or YAML is told by the
+  extension of the URL, else by its `Content-Type`, else by its first character.
+- **Cache.** Fetched documents are kept in `cacheDir`, with `index.json` recording each URL, when it was fetched (UTC)
+  and the SHA-256 of what came back. Later runs read the cache and never go to the network; a cached copy that no
+  longer matches its SHA-256 is an error. Commit the directory: builds then need no network, and a change in a schema
+  you depend on shows in review. To fetch a document again, delete its file and its entry in `index.json` (or the
+  whole directory).
+- **Checks.** `--check` and `--dry-run` read the cache only: a document that is not there is an error asking to run
+  `generate`.
+- Credentials in URLs, other schemes (`file:`, `ftp:`) and specifications given by URL in `sources` are not supported.
 
 ## Environment variables
 

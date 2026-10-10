@@ -1,0 +1,6 @@
+Money:
+  type: object
+  required: [amount, currency]
+  properties:
+    amount: {type: integer}
+    currency: {$ref: 'currency.yaml#/Currency'}

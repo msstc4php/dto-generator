@@ -173,6 +173,15 @@ final class ConfigFactoryTest extends TestCase
             'readWriteSuffixes empty' => [['version' => 1, 'dto' => ['readWriteSuffixes' => ['write' => '']], 'sources' => [$source]], '"write" must be a PHP identifier', '/dto/readWriteSuffixes/write'],
             'readWriteSuffixes same' => [['version' => 1, 'dto' => ['readWriteSuffixes' => ['read' => 'Model', 'write' => 'Model']], 'sources' => [$source]], 'The read and write suffixes must differ', '/dto/readWriteSuffixes'],
             'readWriteSuffixes same but case' => [['version' => 1, 'dto' => ['readWriteModels' => 'split', 'readWriteSuffixes' => ['read' => 'Dto', 'write' => 'DTO']], 'sources' => [$source]], 'The read and write suffixes must differ', '/dto/readWriteSuffixes'],
+            'remoteRefs key' => [['version' => 1, 'remoteRefs' => ['deny' => []], 'sources' => [$source]], 'Unknown key "deny"', '/remoteRefs/deny'],
+            'remoteRefs prefix not a url' => [['version' => 1, 'remoteRefs' => ['allow' => ['schemas.example.com/']], 'sources' => [$source]], 'A remote $ref prefix must be an absolute http or https URL without query or fragment.', '/remoteRefs/allow/0'],
+            'remoteRefs prefix with query' => [['version' => 1, 'remoteRefs' => ['allow' => ['https://example.com/?v=1']], 'sources' => [$source]], 'A remote $ref prefix must be an absolute http or https URL without query or fragment.', '/remoteRefs/allow/0'],
+            'remoteRefs prefix with fragment' => [['version' => 1, 'remoteRefs' => ['allow' => ['https://example.com/#x']], 'sources' => [$source]], 'A remote $ref prefix must be an absolute http or https URL without query or fragment.', '/remoteRefs/allow/0'],
+            'remoteRefs prefix with credentials' => [['version' => 1, 'remoteRefs' => ['allow' => ['https://u:p@example.com/']], 'sources' => [$source]], 'credentials in a URL are not supported', '/remoteRefs/allow/0'],
+            'remoteRefs cacheDir' => [['version' => 1, 'remoteRefs' => ['cacheDir' => ''], 'sources' => [$source]], '"cacheDir" must be a non-empty string', '/remoteRefs/cacheDir'],
+            'remoteRefs timeout zero' => [['version' => 1, 'remoteRefs' => ['timeout' => 0], 'sources' => [$source]], '"timeout" must be a number of seconds from 1 to 300', '/remoteRefs/timeout'],
+            'remoteRefs timeout large' => [['version' => 1, 'remoteRefs' => ['timeout' => 301], 'sources' => [$source]], '"timeout" must be a number of seconds from 1 to 300', '/remoteRefs/timeout'],
+            'remoteRefs timeout text' => [['version' => 1, 'remoteRefs' => ['timeout' => '10'], 'sources' => [$source]], '"timeout" must be a number of seconds from 1 to 300', '/remoteRefs/timeout'],
             'withers not bool' => [['version' => 1, 'dto' => ['withers' => 'no'], 'sources' => [$source]], '"withers" must be true or false', '/dto/withers'],
             'unknown dto key' => [['version' => 1, 'dto' => ['mutable' => true], 'sources' => [$source]], 'Unknown key "mutable"', '/dto/mutable'],
             'unknown format key' => [['version' => 1, 'formats' => ['uuid' => ['type' => 'App\Uuid', 'kind' => 1]], 'sources' => [$source]], 'Unknown key "kind"', '/formats/uuid/kind'],
@@ -250,6 +259,22 @@ final class ConfigFactoryTest extends TestCase
             ['warning ' . self::PATH . '#/dto/readWriteSuffixes: "readWriteSuffixes" has no effect without "readWriteModels: split".'],
             array_map(static fn (Diagnostic $d): string => $d->toString(), $diagnostics->all()),
         );
+    }
+
+    public function testReadsTheRemoteRefs(): void
+    {
+        $source = ['spec' => '/abs/openapi.yaml', 'namespace' => 'App\\Dto', 'outputDir' => 'src/Dto'];
+        $default = $this->valid(['version' => 1, 'sources' => [$source]]);
+        $set = $this->valid(['version' => 1, 'remoteRefs' => ['allow' => ['HTTPS://Schemas.Example.com/common/', 'http://localhost:8080/'], 'cacheDir' => 'var/remote', 'timeout' => 1], 'sources' => [$source]]);
+        $longest = $this->valid(['version' => 1, 'remoteRefs' => ['timeout' => 300], 'sources' => [$source]]);
+
+        self::assertSame([], $default->remoteRefs()->allow());
+        self::assertSame(dirname(self::PATH) . '/.dto-generator/remote', $default->remoteRefs()->cacheDir());
+        self::assertSame(10, $default->remoteRefs()->timeout());
+        self::assertSame(['https://schemas.example.com/common/', 'http://localhost:8080/'], $set->remoteRefs()->allow());
+        self::assertSame(dirname(self::PATH) . '/var/remote', $set->remoteRefs()->cacheDir());
+        self::assertSame(1, $set->remoteRefs()->timeout());
+        self::assertSame(300, $longest->remoteRefs()->timeout());
     }
 
     public function testReadsWithersOff(): void
