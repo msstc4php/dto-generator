@@ -198,7 +198,7 @@ final class LoadTest extends TestCase
         return [
             'remote' => [
                 ['properties' => ['x' => ['$ref' => 'https://example.com/x.json']]],
-                $at . 'Remote $ref "https://example.com/x.json" is not supported; save the document next to the specification and refer to it by path.',
+                $at . 'Remote $ref "https://example.com/x.json" names https://example.com/x.json, which remoteRefs.allow does not cover; add its prefix there, or save the document next to the specification and refer to it by path.',
             ],
             'missing pointer' => [
                 ['properties' => ['x' => ['$ref' => '#/components/schemas/Nope']]],

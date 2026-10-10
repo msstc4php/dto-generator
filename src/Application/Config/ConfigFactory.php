@@ -16,6 +16,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\AbstractEnum;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\Path;
+use MSSTC4PHP\DtoGenerator\Domain\Shared\Url;
 use MSSTC4PHP\DtoGenerator\Domain\Target\AccessorStyle;
 use MSSTC4PHP\DtoGenerator\Domain\Target\AllOfStrategy;
 use MSSTC4PHP\DtoGenerator\Domain\Target\DateTimeClass;
@@ -31,7 +32,7 @@ final class ConfigFactory
 {
     private const ROOT_KEYS = [
         'version', 'target', 'dto', 'formats', 'attributeAliases', 'verifyClasses', 'discoverExtensions',
-        'extensions', 'extensionConfig', 'sources',
+        'extensions', 'extensionConfig', 'sources', 'remoteRefs',
     ];
 
     /**
@@ -58,12 +59,46 @@ final class ConfigFactory
         $formats = $this->formats($root->section('formats'));
         $extensions = $this->extensions($root);
         $sources = $this->sources($root, Path::directory($path));
+        $remoteRefs = $this->remoteRefs($root->section('remoteRefs'), Path::directory($path));
 
         if (count($diagnostics->errors()) > $errors || $sources === []) {
             return null;
         }
 
-        return new GeneratorConfig($path, $target, $dto, $formats, $extensions, $sources);
+        return new GeneratorConfig($path, $target, $dto, $formats, $extensions, $sources, $remoteRefs);
+    }
+
+    private function remoteRefs(RawSection $section, string $baseDir): RemoteRefsSettings
+    {
+        $section->rejectUnknownKeys(['allow', 'cacheDir', 'timeout']);
+        $allow = [];
+        foreach ($section->stringList('allow', []) as $index => $prefix) {
+            if (!Url::isUrl($prefix) || strpbrk($prefix, '?#') !== false) {
+                $section->report('A remote $ref prefix must be an absolute http or https URL without query or fragment.', 'allow', (string) $index);
+
+                continue;
+            }
+
+            try {
+                $allow[] = Url::normalize($prefix);
+            } catch (InvalidModel $exception) {
+                $section->report($exception->getMessage(), 'allow', (string) $index);
+            }
+        }
+
+        $cacheDir = $section->has('cacheDir') ? $section->raw('cacheDir') : RemoteRefsSettings::CACHE_DIR;
+        if (!is_string($cacheDir) || $cacheDir === '') {
+            $section->error('cacheDir', 'must be a non-empty string');
+            $cacheDir = RemoteRefsSettings::CACHE_DIR;
+        }
+
+        $timeout = $section->has('timeout') ? $section->raw('timeout') : RemoteRefsSettings::TIMEOUT;
+        if (!is_int($timeout) || $timeout < 1 || $timeout > 300) {
+            $section->error('timeout', 'must be a number of seconds from 1 to 300');
+            $timeout = RemoteRefsSettings::TIMEOUT;
+        }
+
+        return new RemoteRefsSettings($allow, Path::resolve($baseDir, $cacheDir), $timeout);
     }
 
     private function target(RawSection $section): TargetSettings

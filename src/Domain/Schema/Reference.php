@@ -6,6 +6,7 @@ namespace MSSTC4PHP\DtoGenerator\Domain\Schema;
 
 use MSSTC4PHP\DtoGenerator\Domain\Exception\InvalidModel;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\Path;
+use MSSTC4PHP\DtoGenerator\Domain\Shared\Url;
 
 /**
  * @api
@@ -17,16 +18,15 @@ final class Reference
     }
 
     /**
-     * Resolves a `$ref` against the location it appears in; null for remote references.
+     * Resolves a `$ref` against the location it appears in: a file path against the directory of a local document, a
+     * URL as it stands, and any reference in a remote document against its URL.
+     *
+     * @throws InvalidModel for a malformed reference or a URL that cannot be fetched
      */
-    public static function target(string $ref, SchemaLocation $from): ?SchemaLocation
+    public static function target(string $ref, SchemaLocation $from): SchemaLocation
     {
         if ($ref === '') {
             throw new InvalidModel('Empty $ref.');
-        }
-
-        if (preg_match('#^[A-Za-z][A-Za-z0-9+.\-]*://#', $ref) === 1) {
-            return null;
         }
 
         $hash = strpos($ref, '#');
@@ -37,8 +37,15 @@ final class Reference
         }
 
         JsonPointer::segments($fragment);
-        $path = $file === '' ? $from->file() : Path::resolve(Path::directory($from->file()), rawurldecode($file));
+        if ($file === '') {
+            return new SchemaLocation($from->file(), $fragment);
+        }
 
-        return new SchemaLocation($path, $fragment);
+        // A URL keeps its percent-encoding: it is how the server names the document.
+        if (Url::isUrl($file) || Url::isUrl($from->file())) {
+            return new SchemaLocation(Url::isUrl($file) ? Url::normalize($file) : Url::resolve($from->file(), $file), $fragment);
+        }
+
+        return new SchemaLocation(Path::resolve(Path::directory($from->file()), rawurldecode($file)), $fragment);
     }
 }

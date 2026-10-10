@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Application\Service\Schemas\Load;
 
+use MSSTC4PHP\DtoGenerator\Application\Config\RemoteRefsSettings;
 use MSSTC4PHP\DtoGenerator\Application\Port\Document;
 use MSSTC4PHP\DtoGenerator\Application\Port\DocumentLoader;
 use MSSTC4PHP\DtoGenerator\Application\Port\DocumentLoadFailed;
+use MSSTC4PHP\DtoGenerator\Application\Port\RemoteDocuments;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\SchemaParser;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
 use MSSTC4PHP\DtoGenerator\Domain\Exception\InvalidModel;
@@ -16,6 +18,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Schema\ReferenceUse;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\ResolvedSchema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
+use MSSTC4PHP\DtoGenerator\Domain\Shared\Url;
 
 /**
  * Loads every selected component schema of every source, then follows `$ref`s until the graph is closed.
@@ -28,10 +31,13 @@ final class Action
 
     private SchemaParser $parser;
 
-    public function __construct(DocumentLoader $loader, SchemaParser $parser)
+    private ?RemoteDocuments $remote;
+
+    public function __construct(DocumentLoader $loader, SchemaParser $parser, ?RemoteDocuments $remote = null)
     {
         $this->loader = $loader;
         $this->parser = $parser;
+        $this->remote = $remote;
     }
 
     public function __invoke(Input $input): Output
@@ -52,7 +58,7 @@ final class Action
                 continue;
             }
 
-            $document = $this->load($spec, $specAt, $diagnostics, $graph);
+            $document = $this->load($spec, $specAt, $input, $diagnostics, $graph);
             if (!$document instanceof Document) {
                 continue;
             }
@@ -74,7 +80,7 @@ final class Action
         while ($queue !== []) {
             $current = array_shift($queue);
             foreach ($current->schema()->references() as $use) {
-                $target = $this->target($use, $diagnostics);
+                $target = $this->target($use, $config->remoteRefs(), $diagnostics);
                 if (!$target instanceof SchemaLocation) {
                     continue;
                 }
@@ -84,7 +90,7 @@ final class Action
                     continue;
                 }
 
-                $resolved = $this->resolve($target, $use, $owners, $diagnostics, $graph);
+                $resolved = $this->resolve($target, $use, $owners, $input, $diagnostics, $graph);
                 if (!$resolved instanceof ResolvedSchema) {
                     $graph->markFailed($target);
 
@@ -102,14 +108,22 @@ final class Action
     /**
      * A file that failed once is reported once, however many sources or references point into it.
      */
-    private function load(string $path, SchemaLocation $requestedAt, Diagnostics $diagnostics, GraphBuilder $graph): ?Document
+    private function load(string $path, SchemaLocation $requestedAt, Input $input, Diagnostics $diagnostics, GraphBuilder $graph): ?Document
     {
         if ($graph->isUnloadable($path)) {
             return null;
         }
 
         try {
-            return $this->loader->load($path);
+            if (!Url::isUrl($path)) {
+                return $this->loader->load($path);
+            }
+
+            if (!$this->remote instanceof RemoteDocuments) {
+                throw DocumentLoadFailed::remote($path, 'cannot be loaded: this generator was built without remote documents.');
+            }
+
+            return $this->remote->load($path, $input->config()->remoteRefs(), $input->fetchesRemote());
         } catch (DocumentLoadFailed $exception) {
             $diagnostics->error($exception->getMessage(), $requestedAt);
             $graph->markUnloadable($path);
@@ -182,7 +196,7 @@ final class Action
         return $pairs;
     }
 
-    private function target(ReferenceUse $use, Diagnostics $diagnostics): ?SchemaLocation
+    private function target(ReferenceUse $use, RemoteRefsSettings $remote, Diagnostics $diagnostics): ?SchemaLocation
     {
         try {
             $target = Reference::target($use->ref(), $use->location());
@@ -192,11 +206,17 @@ final class Action
             return null;
         }
 
-        if (!$target instanceof SchemaLocation) {
+        if (Url::isUrl($target->file()) && !$remote->allows($target->file())) {
             $diagnostics->error(
-                sprintf('Remote $ref "%s" is not supported; save the document next to the specification and refer to it by path.', $use->ref()),
+                sprintf(
+                    'Remote $ref "%s" names %s, which remoteRefs.allow does not cover; add its prefix there, or save the document next to the specification and refer to it by path.',
+                    $use->ref(),
+                    $target->file(),
+                ),
                 $use->location(),
             );
+
+            return null;
         }
 
         return $target;
@@ -205,9 +225,9 @@ final class Action
     /**
      * @param array<string, int> $owners
      */
-    private function resolve(SchemaLocation $target, ReferenceUse $use, array $owners, Diagnostics $diagnostics, GraphBuilder $graph): ?ResolvedSchema
+    private function resolve(SchemaLocation $target, ReferenceUse $use, array $owners, Input $input, Diagnostics $diagnostics, GraphBuilder $graph): ?ResolvedSchema
     {
-        $document = $this->load($target->file(), $use->location(), $diagnostics, $graph);
+        $document = $this->load($target->file(), $use->location(), $input, $diagnostics, $graph);
         if (!$document instanceof Document) {
             return null;
         }
@@ -231,7 +251,8 @@ final class Action
         $segments = JsonPointer::segments($location->pointer());
         $name = $segments === [] ? '' : $segments[count($segments) - 1];
         if ($name === '') {
-            $name = pathinfo($location->file(), PATHINFO_FILENAME);
+            // A URL may carry a query, which is no part of the document's name.
+            $name = pathinfo(Url::isUrl($location->file()) ? (string) parse_url($location->file(), PHP_URL_PATH) : $location->file(), PATHINFO_FILENAME);
         }
 
         return $name === '' ? 'Schema' : $name;
