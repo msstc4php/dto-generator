@@ -49,10 +49,11 @@ final class AutoloadClassVerifier implements ClassVerifier
             return defined($name);
         }
 
-        // defined() evaluates the constant's expression, which may load more of the consumer's classes or fail.
-        $fqcn = $class->fqcn();
+        // defined() autoloads the class (an unknown one is just false, silently, on PHP 7.4–8.5) and evaluates the
+        // constant's expression, which may load more of the consumer's classes or fail.
+        $constant = $class->fqcn() . '::' . $name;
 
-        return $this->ask($fqcn . '::' . $name, static fn (): bool => (class_exists($fqcn) || interface_exists($fqcn) || trait_exists($fqcn)) && defined($fqcn . '::' . $name));
+        return $this->ask($constant, static fn (): bool => defined($constant));
     }
 
     /**
