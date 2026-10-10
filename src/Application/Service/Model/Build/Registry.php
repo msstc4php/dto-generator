@@ -32,7 +32,7 @@ final class Registry
     /** @var array<string, string> lower-cased FQCN → location that claimed it */
     private array $taken = [];
 
-    /** @var array<string, true> lower-cased FQCN of the views' names claimed */
+    /** @var array<string, bool> lower-cased FQCN of the views' names claimed */
     private array $views = [];
 
     /** @var list<array{Schema, ClassName, int}> */
@@ -84,7 +84,7 @@ final class Registry
                     'Class %s is already generated from %s; set "x-php-class-name" on one of them%s.',
                     $name->fqcn(),
                     $this->taken[$lower],
-                    $suffixed || isset($this->views[$lower]) ? ', or change dto.readWriteSuffixes' : '',
+                    $suffixed || ($this->views[$lower] ?? false) ? ', or change dto.readWriteSuffixes' : '',
                 ),
                 $schema->location(),
             );

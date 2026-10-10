@@ -225,12 +225,14 @@ final class ConfigFactoryTest extends TestCase
         $default = $this->valid(['version' => 1, 'sources' => [$source]]);
         $split = $this->valid(['version' => 1, 'dto' => ['readWriteModels' => 'split', 'readWriteSuffixes' => ['read' => 'Response', 'write' => 'Request']], 'sources' => [$source]]);
         $partly = $this->valid(['version' => 1, 'dto' => ['readWriteSuffixes' => ['write' => 'Input']], 'sources' => [$source]]);
+        $single = $this->valid(['version' => 1, 'dto' => ['readWriteModels' => 'single'], 'sources' => [$source]]);
 
         self::assertFalse($default->dto()->splitsReadAndWrite());
         self::assertSame(['Read', 'Write'], [$default->dto()->viewSuffixes()->read(), $default->dto()->viewSuffixes()->write()]);
         self::assertTrue($split->dto()->splitsReadAndWrite());
         self::assertSame(['Response', 'Request'], [$split->dto()->viewSuffixes()->read(), $split->dto()->viewSuffixes()->write()]);
         self::assertSame(['Read', 'Input'], [$partly->dto()->viewSuffixes()->read(), $partly->dto()->viewSuffixes()->write()]);
+        self::assertFalse($single->dto()->splitsReadAndWrite());
     }
 
     public function testReadsWithersOff(): void

@@ -67,7 +67,7 @@ final class Action
     /**
      * Locations of the schemas whose classes depend on the direction, read off the build that keeps every property.
      *
-     * @return array<string, true>
+     * @return array<string, bool>
      */
     private function dependent(Output $single, SchemaGraph $graph): array
     {
@@ -89,7 +89,7 @@ final class Action
         $dependent = [];
         $classes = ViewDependence::of($models, $directed);
         foreach ($models as $model) {
-            if (isset($classes[$model->name()->fqcn()])) {
+            if ($classes[$model->name()->fqcn()] ?? false) {
                 $dependent[$model->source()->toString()] = true;
             }
         }
@@ -104,20 +104,29 @@ final class Action
     {
         $classes = [];
         $enums = [];
+        $seen = [];
         $diagnostics = new Diagnostics();
         foreach ([$read, $write] as $view) {
             foreach ($view->classes() as $class) {
-                $classes[$class->model()->name()->fqcn()] ??= $class;
+                $fqcn = $class->model()->name()->fqcn();
+                if (!($seen[$fqcn] ?? false)) {
+                    $seen[$fqcn] = true;
+                    $classes[] = $class;
+                }
             }
 
             foreach ($view->enums() as $enum) {
-                $enums[$enum->model()->name()->fqcn()] ??= $enum;
+                $fqcn = $enum->model()->name()->fqcn();
+                if (!($seen[$fqcn] ?? false)) {
+                    $seen[$fqcn] = true;
+                    $enums[] = $enum;
+                }
             }
 
             $diagnostics->merge($view->diagnostics());
         }
 
-        return new Output(array_values($classes), $diagnostics, array_values($enums));
+        return new Output($classes, $diagnostics, $enums);
     }
 
     private function build(Input $input, ?View $view): Output

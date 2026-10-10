@@ -16,11 +16,11 @@ final class View
 
     private string $suffix;
 
-    /** @var array<string, true> */
+    /** @var array<string, bool> */
     private array $dependent;
 
     /**
-     * @param array<string, true> $dependent locations of the schemas whose classes depend on the direction
+     * @param array<string, bool> $dependent locations of the schemas whose classes depend on the direction
      */
     public function __construct(PropertyView $properties, string $suffix, array $dependent)
     {
@@ -39,6 +39,6 @@ final class View
      */
     public function name(string $short, Schema $schema): string
     {
-        return isset($this->dependent[$schema->location()->toString()]) ? $short . $this->suffix : $short;
+        return ($this->dependent[$schema->location()->toString()] ?? false) ? $short . $this->suffix : $short;
     }
 }

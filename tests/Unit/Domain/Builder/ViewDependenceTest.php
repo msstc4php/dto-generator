@@ -42,14 +42,35 @@ final class ViewDependenceTest extends TestCase
         self::assertSame([], ViewDependence::of($classes, []));
     }
 
+    public function testSpreadsAgainstTheOrderOfTheClasses(): void
+    {
+        $output = ModelFixture::build([
+            'First' => ['type' => 'object', 'properties' => ['second' => ['$ref' => '#/components/schemas/Second'], 'note' => ['type' => 'string']]],
+            'Second' => ['type' => 'object', 'properties' => ['third' => ['$ref' => '#/components/schemas/Third'], 'tag' => ['$ref' => '#/components/schemas/Tag']]],
+            'Third' => ['type' => 'object', 'properties' => ['id' => ['type' => 'integer']]],
+            'Tag' => ['type' => 'object', 'properties' => ['label' => ['type' => 'string']]],
+            'Base' => [
+                'type' => 'object',
+                'required' => ['kind'],
+                'properties' => ['kind' => ['type' => 'string'], 'third' => ['$ref' => '#/components/schemas/Third']],
+                'discriminator' => ['propertyName' => 'kind'],
+            ],
+            'Leaf' => ['allOf' => [['$ref' => '#/components/schemas/Base'], ['type' => 'object', 'properties' => ['n' => ['type' => 'integer']]]]],
+        ]);
+        $classes = array_map(static fn (BuiltClass $built): ClassModel => $built->model(), $output->classes());
+
+        self::assertSame(['App\Dto\Base', 'App\Dto\First', 'App\Dto\Leaf', 'App\Dto\Second', 'App\Dto\Third'], $this->sorted(ViewDependence::of($classes, ['App\Dto\Third' => true])));
+        self::assertSame([], $this->sorted(ViewDependence::of($classes, ['App\Dto\Third' => false])));
+    }
+
     /**
-     * @param array<string, true> $set
+     * @param array<string, bool> $set
      *
      * @return list<string>
      */
     private function sorted(array $set): array
     {
-        $names = array_keys($set);
+        $names = array_keys(array_filter($set));
         sort($names);
 
         return $names;

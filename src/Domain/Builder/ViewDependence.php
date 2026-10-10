@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Domain\Builder;
 
+use Generator;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassType;
@@ -26,9 +27,9 @@ final class ViewDependence
 
     /**
      * @param list<ClassModel> $classes
-     * @param array<string, true> $directed FQCN of the classes with a directed property of their own
+     * @param array<string, bool> $directed FQCN of the classes with a directed property of their own
      *
-     * @return array<string, true> FQCN of every class that depends on the direction
+     * @return array<string, bool> FQCN of every class that depends on the direction
      */
     public static function of(array $classes, array $directed): array
     {
@@ -37,7 +38,7 @@ final class ViewDependence
             $grown = false;
             foreach ($classes as $class) {
                 $fqcn = $class->name()->fqcn();
-                if (!isset($dependent[$fqcn]) && self::reachesAny(self::neighbours($class), $dependent)) {
+                if (!($dependent[$fqcn] ?? false) && self::reachesAny(self::neighbours($class), $dependent)) {
                     $dependent[$fqcn] = true;
                     $grown = true;
                 }
@@ -48,13 +49,13 @@ final class ViewDependence
     }
 
     /**
-     * @param list<ClassName> $names
-     * @param array<string, true> $dependent
+     * @param iterable<ClassName> $names
+     * @param array<string, bool> $dependent
      */
-    private static function reachesAny(array $names, array $dependent): bool
+    private static function reachesAny(iterable $names, array $dependent): bool
     {
         foreach ($names as $name) {
-            if (isset($dependent[$name->fqcn()])) {
+            if ($dependent[$name->fqcn()] ?? false) {
                 return true;
             }
         }
@@ -65,51 +66,42 @@ final class ViewDependence
     /**
      * The classes whose views this class must use: those its properties hold, its parent and its variants.
      *
-     * @return list<ClassName>
+     * @return Generator<int, ClassName, mixed, void>
      */
-    private static function neighbours(ClassModel $class): array
+    private static function neighbours(ClassModel $class): Generator
     {
-        $names = [];
         foreach ($class->properties() as $property) {
-            $names = array_merge($names, self::classesOf($property->type()));
+            yield from self::classesOf($property->type());
         }
 
         $parent = $class->parent();
         if ($parent instanceof ClassName) {
-            $names[] = $parent;
+            yield $parent;
         }
 
         $discriminator = $class->discriminator();
-
-        return $discriminator instanceof DiscriminatorModel ? array_merge($names, array_values($discriminator->mapping())) : $names;
+        foreach ($discriminator instanceof DiscriminatorModel ? $discriminator->mapping() : [] as $variant) {
+            yield $variant;
+        }
     }
 
     /**
-     * @return list<ClassName>
+     * @return Generator<int, ClassName, mixed, void>
      */
-    private static function classesOf(TypeModel $type): array
+    private static function classesOf(TypeModel $type): Generator
     {
         if ($type instanceof ClassType) {
-            return [$type->className()];
+            yield $type->className();
+        } elseif ($type instanceof ListType) {
+            yield from self::classesOf($type->item());
+        } elseif ($type instanceof MapType) {
+            yield from self::classesOf($type->value());
+        } elseif ($type instanceof NullableType) {
+            yield from self::classesOf($type->inner());
+        } elseif ($type instanceof UnionType) {
+            foreach ($type->members() as $member) {
+                yield from self::classesOf($member);
+            }
         }
-
-        if ($type instanceof ListType) {
-            return self::classesOf($type->item());
-        }
-
-        if ($type instanceof MapType) {
-            return self::classesOf($type->value());
-        }
-
-        if ($type instanceof NullableType) {
-            return self::classesOf($type->inner());
-        }
-
-        $names = [];
-        foreach ($type instanceof UnionType ? $type->members() : [] as $member) {
-            $names = array_merge($names, self::classesOf($member));
-        }
-
-        return $names;
     }
 }

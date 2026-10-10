@@ -72,17 +72,30 @@ final class Directions
     private static function chain(Schema $schema, SchemaGraph $graph): array
     {
         $chain = [$schema];
-        $seen = [$schema->location()->toString() => true];
-        for ($current = $schema; $current->ref() !== null; $current = $target->schema()) {
+        for ($current = $schema; $current->ref() !== null; $current = $next) {
             $target = $graph->resolve(new ReferenceUse($current->ref(), $current->location()));
-            if (!$target instanceof ResolvedSchema || isset($seen[$target->schema()->location()->toString()])) {
+            if (!$target instanceof ResolvedSchema || self::listed($target->schema(), $chain)) {
                 break;
             }
 
-            $seen[$target->schema()->location()->toString()] = true;
-            $chain[] = $target->schema();
+            $next = $target->schema();
+            $chain[] = $next;
         }
 
         return $chain;
+    }
+
+    /**
+     * @param list<Schema> $chain
+     */
+    private static function listed(Schema $schema, array $chain): bool
+    {
+        foreach ($chain as $listed) {
+            if ($listed->location()->toString() === $schema->location()->toString()) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
