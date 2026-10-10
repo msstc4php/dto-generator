@@ -192,7 +192,7 @@ is resolved against its URL and must be allowed too; it can never reach a file o
 - **Fetching.** A run that writes (`generate`) fetches a document it does not have yet with one `GET`: TLS
   certificates are verified, redirects are not followed (a `3xx` is an error naming the new URL, which you then allow
   and refer to), the body may be 10 MB at most, and any status but `200` is an error. JSON or YAML is told by the
-  extension of the URL, else by its `Content-Type`, else by its first character.
+  extension of the URL, else by a YAML `Content-Type`, else by whether it starts with `{`.
 - **Cache.** Fetched documents are kept in `cacheDir`, with `index.json` recording each URL, when it was fetched (UTC)
   and the SHA-256 of what came back. Later runs read the cache and never go to the network; a cached copy that no
   longer matches its SHA-256 is an error. Commit the directory: builds then need no network, and a change in a schema

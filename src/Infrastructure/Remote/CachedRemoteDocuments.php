@@ -124,7 +124,8 @@ final class CachedRemoteDocuments implements RemoteDocuments
     }
 
     /**
-     * By the extension of the URL's path, else by the content type, else by the first character JSON allows.
+     * By the extension of the URL's path, else a YAML content type, else by the first character: a JSON document is an
+     * object. Only YAML's flow style, which a server labels as YAML, starts with "{" as well.
      */
     private function isJson(string $url, ?string $contentType, string $body): bool
     {
@@ -132,10 +133,6 @@ final class CachedRemoteDocuments implements RemoteDocuments
         $extension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
         if (in_array($extension, ['json', 'yaml', 'yml'], true)) {
             return $extension === 'json';
-        }
-
-        if ($contentType !== null && preg_match('#[/+]json\b#i', $contentType) === 1) {
-            return true;
         }
 
         if ($contentType !== null && preg_match('#yaml#i', $contentType) === 1) {

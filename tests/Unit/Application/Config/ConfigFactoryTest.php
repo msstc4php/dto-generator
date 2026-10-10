@@ -261,6 +261,21 @@ final class ConfigFactoryTest extends TestCase
         );
     }
 
+    public function testReportsEveryPrefixItCannotUse(): void
+    {
+        $diagnostics = new Diagnostics();
+        (new ConfigFactory())->create(
+            ['version' => 1, 'remoteRefs' => ['allow' => ['b/', 'ftp://a/', 'https://ok.example.com/']], 'sources' => [['spec' => '/abs/openapi.yaml', 'namespace' => 'App\\Dto', 'outputDir' => 'src/Dto']]],
+            self::PATH,
+            $diagnostics,
+        );
+
+        self::assertSame([
+            'error ' . self::PATH . '#/remoteRefs/allow/0: A remote $ref prefix must be an absolute http or https URL without query or fragment.',
+            'error ' . self::PATH . '#/remoteRefs/allow/1: URL "ftp://a/": only http and https are supported.',
+        ], array_map(static fn (Diagnostic $d): string => $d->toString(), $diagnostics->all()));
+    }
+
     public function testReadsTheRemoteRefs(): void
     {
         $source = ['spec' => '/abs/openapi.yaml', 'namespace' => 'App\\Dto', 'outputDir' => 'src/Dto'];

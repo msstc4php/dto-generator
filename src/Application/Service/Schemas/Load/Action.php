@@ -252,7 +252,7 @@ final class Action
         $name = $segments === [] ? '' : $segments[count($segments) - 1];
         if ($name === '') {
             // A URL may carry a query, which is no part of the document's name.
-            $name = pathinfo(Url::isUrl($location->file()) ? (string) parse_url($location->file(), PHP_URL_PATH) : $location->file(), PATHINFO_FILENAME);
+            $name = pathinfo(Url::isUrl($location->file()) ? explode('?', $location->file())[0] : $location->file(), PATHINFO_FILENAME);
         }
 
         return $name === '' ? 'Schema' : $name;

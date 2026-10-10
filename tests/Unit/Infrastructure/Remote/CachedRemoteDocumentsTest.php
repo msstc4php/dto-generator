@@ -76,8 +76,8 @@ final class CachedRemoteDocumentsTest extends TestCase
         return [
             'json extension' => ['https://example.com/a.json', 'text/plain', '{"A": {}}', '.json'],
             'yml extension' => ['https://example.com/a.yml', 'application/json', 'A: {}', '.yaml'],
-            'json type' => ['https://example.com/a', 'application/schema+json; charset=utf-8', '{"A": {}}', '.json'],
-            'yaml type' => ['https://example.com/a', 'application/yaml', 'A: {}', '.yaml'],
+            'yaml type' => ['https://example.com/a', 'Application/YAML; charset=utf-8', '{A: {}}', '.yaml'],
+            'json labelled as text' => ['https://example.com/a', 'text/plain', '{"A": {}}', '.json'],
             'json content' => ['https://example.com/a?v=1', 'text/plain', ' {"A": {}}', '.json'],
             'yaml content' => ['https://example.com/a', null, 'A: {}', '.yaml'],
         ];
@@ -120,14 +120,16 @@ final class CachedRemoteDocumentsTest extends TestCase
      */
     public function testReportsADocumentItCannotFetch($answer, string $problem): void
     {
-        $this->expectException(DocumentLoadFailed::class);
-        $this->expectExceptionMessage('Remote document "' . self::URL . '" ' . $problem);
-
         try {
             $this->documents($answer)->load(self::URL, $this->settings(), true);
-        } finally {
-            self::assertFalse(is_file($this->cache . '/index.json'));
+            self::fail('No failure');
+        } catch (DocumentLoadFailed $exception) {
+            self::assertStringStartsWith('Remote document "' . self::URL . '" ' . $problem, $exception->getMessage());
+            self::assertStringEndsWith('.', $exception->getMessage());
+            self::assertStringEndsNotWith('..', $exception->getMessage());
         }
+
+        self::assertFalse(is_file($this->cache . '/index.json'));
     }
 
     public function testReadsNothingButTheCacheWhenItMayNotFetch(): void
@@ -189,7 +191,7 @@ final class CachedRemoteDocumentsTest extends TestCase
         file_put_contents($this->cache, 'a file where the directory should be');
 
         $this->expectException(DocumentLoadFailed::class);
-        $this->expectExceptionMessageMatches('~^Remote document "' . preg_quote(self::URL, '~') . '" could not be cached in ' . preg_quote($this->cache, '~') . ': .+\.$~');
+        $this->expectExceptionMessageMatches('~^Remote document "' . preg_quote(self::URL, '~') . '" could not be cached in ' . preg_quote($this->cache, '~') . ': mkdir\(\): File exists\.$~');
 
         $this->documents(new Response(200, null, null, 'A: {}'))->load(self::URL, $this->settings(), true);
     }
