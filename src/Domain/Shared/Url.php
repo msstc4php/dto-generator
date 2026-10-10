@@ -46,8 +46,9 @@ final class Url
      * case, no dot segments, no empty query, no fragment: one spelling per document, the one the allow list checks and
      * the one fetched.
      *
-     * @throws InvalidModel unless it is an absolute http(s) URL without credentials, of RFC 3986 characters only and
-     *                      without an encoded "/" or "\" in its path
+     * @throws InvalidModel unless it is an absolute http(s) URL without credentials, of RFC 3986 characters only, with a
+     *                      reg-name or IP literal for a host, and without an encoded "/", "\\" or "%", NUL, ";" or bytes
+     *                      that are not UTF-8 in its path
      */
     public static function normalize(string $url): string
     {

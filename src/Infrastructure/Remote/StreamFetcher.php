@@ -67,14 +67,10 @@ final class StreamFetcher implements Fetcher
             return true;
         });
         try {
-            $stream = stream_socket_client('tcp://' . $host . ':' . $port, $errno, $error, $timeout, STREAM_CLIENT_CONNECT, $context);
-            if (is_resource($stream) && $secure) {
-                $this->limit($stream, $deadline, $timeout);
-                // Without a method the context's crypto_method applies: TLS 1.2 or newer.
-                if (stream_socket_enable_crypto($stream, true) !== true) {
-                    fclose($stream);
-                    $stream = false;
-                }
+            $stream = stream_socket_client('tcp://' . $host . ':' . $port, $errno, $error, max(0.001, $deadline - microtime(true)), STREAM_CLIENT_CONNECT, $context);
+            if (is_resource($stream) && $secure && !$this->handshake($stream, $deadline, $timeout)) {
+                fclose($stream);
+                $stream = false;
             }
         } finally {
             restore_error_handler();
@@ -85,6 +81,37 @@ final class StreamFetcher implements Fetcher
         }
 
         return $stream;
+    }
+
+    /**
+     * Non-blocking under the deadline: a blocking handshake is bounded by the connect timeout instead, a second one.
+     * Without a method the context's crypto_method applies: TLS 1.2 or newer.
+     *
+     * @param resource $stream
+     */
+    private function handshake($stream, float $deadline, int $timeout): bool
+    {
+        stream_set_blocking($stream, false);
+        try {
+            while (true) {
+                $done = stream_socket_enable_crypto($stream, true);
+                if ($done !== 0) {
+                    return $done;
+                }
+
+                $left = $deadline - microtime(true);
+                if ($left <= 0) {
+                    throw new FetchFailed(sprintf('it took longer than %d seconds', $timeout));
+                }
+
+                $read = [$stream];
+                $write = null;
+                $except = null;
+                stream_select($read, $write, $except, (int) $left, (int) (($left - (int) $left) * 1000000));
+            }
+        } finally {
+            stream_set_blocking($stream, true);
+        }
     }
 
     /**
@@ -116,7 +143,10 @@ final class StreamFetcher implements Fetcher
                 }
 
                 $status = (int) $matches[1];
-            } elseif (preg_match('#^([A-Za-z0-9-]+):\s*(.*)$#', $line, $matches) === 1) {
+            } elseif (preg_match('#^([A-Za-z0-9-]+):[ \t]*(.*?)[ \t]*$#', $line, $matches) !== 1) {
+                // "Transfer-Encoding : chunked" would otherwise pass unseen (RFC 9112 §5.1).
+                throw new FetchFailed('its headers are malformed');
+            } else {
                 $header = strtolower($matches[1]);
                 if ($header === 'content-type') {
                     $contentType = $matches[2];
@@ -128,6 +158,11 @@ final class StreamFetcher implements Fetcher
                     throw new FetchFailed(sprintf('it answered an HTTP/1.0 request with Transfer-Encoding %s', $matches[2]));
                 }
             }
+        }
+
+        // Only a 200 body is used; the length checks of another would hide what the server answered.
+        if ($status !== 200) {
+            return new Response($status, $contentType, $location, '');
         }
 
         $length = $this->length(array_keys($lengths), $maxBytes);

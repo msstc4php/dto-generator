@@ -50,7 +50,6 @@ final class StreamFetcherTest extends TestCase
         $response = (new StreamFetcher())->get($this->url('/docs/none.yaml'), 5, 1024);
 
         self::assertSame(404, $response->status());
-        self::assertSame('not found', $response->body());
     }
 
     public function testRefusesABodyOverTheLimit(): void
@@ -155,6 +154,7 @@ final class StreamFetcherTest extends TestCase
             'chunked' => ["HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nA: {}\r\n0\r\n\r\n", 'it answered an HTTP/1.0 request with Transfer-Encoding chunked'],
             'control characters' => ["HTTP/1.0 301 Moved\r\nLocation: http://x/\x1b[31mred\r\n\r\n", 'its headers hold control characters'],
             'not http' => ["SSH-2.0-OpenSSH\r\n\r\n", 'the server did not answer in HTTP'],
+            'space before the colon' => ["HTTP/1.0 200 OK\r\nTransfer-Encoding : chunked\r\n\r\n5\r\nA: {}\r\n0\r\n\r\n", 'its headers are malformed'],
         ];
     }
 
@@ -183,6 +183,49 @@ final class StreamFetcherTest extends TestCase
             self::assertSame('A: {}', (new StreamFetcher())->get($server->url('/a.yaml'), 5, 1024)->body());
         } finally {
             $server->stop();
+        }
+    }
+
+    public function testTakesTheSpacesAroundAHeaderValueOff(): void
+    {
+        $server = RawServer::answering("HTTP/1.0 200 OK\r\nContent-Length: 5 \r\nContent-Length:\t5\r\nContent-Type:  application/yaml \r\n\r\nA: {}");
+
+        try {
+            $response = (new StreamFetcher())->get($server->url('/a.yaml'), 5, 1024);
+            self::assertSame('A: {}', $response->body());
+            self::assertSame('application/yaml', $response->contentType());
+        } finally {
+            $server->stop();
+        }
+    }
+
+    public function testKeepsTheStatusOfAnAnswerItDoesNotRead(): void
+    {
+        $server = RawServer::answering("HTTP/1.0 404 Not Found\r\nContent-Length: 99999\r\n\r\nnope");
+
+        try {
+            $response = (new StreamFetcher())->get($server->url('/a.yaml'), 5, 1024);
+            self::assertSame(404, $response->status());
+            self::assertSame('', $response->body());
+        } finally {
+            $server->stop();
+        }
+    }
+
+    public function testGivesUpOnAHandshakeThatTakesTooLong(): void
+    {
+        // Accepts and stays silent: a TLS client waits for the server's hello.
+        $server = RawServer::answering('', 3);
+        $started = microtime(true);
+
+        try {
+            $this->expectException(FetchFailed::class);
+            $this->expectExceptionMessage('it took longer than 1 seconds');
+
+            (new StreamFetcher())->get(str_replace('http://', 'https://', $server->url('/a.yaml')), 1, 1024);
+        } finally {
+            $server->stop();
+            self::assertLessThan(1.5, microtime(true) - $started);
         }
     }
 

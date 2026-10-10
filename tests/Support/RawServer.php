@@ -25,7 +25,10 @@ final class RawServer
         $this->port = $port;
     }
 
-    public static function answering(string $answer): self
+    /**
+     * @param int $silence seconds to wait before answering
+     */
+    public static function answering(string $answer, int $silence = 0): self
     {
         $socket = stream_socket_server('tcp://127.0.0.1:0');
         if ($socket === false) {
@@ -36,8 +39,9 @@ final class RawServer
         fclose($socket);
         $port = (int) substr($name, (int) strrpos($name, ':') + 1);
         $code = sprintf(
-            '$s = stream_socket_server("tcp://127.0.0.1:%d"); $c = stream_socket_accept($s, 10); fread($c, 4096); fwrite($c, base64_decode("%s")); fclose($c);',
+            '$s = stream_socket_server("tcp://127.0.0.1:%d"); $c = stream_socket_accept($s, 10); sleep(%d); fread($c, 4096); fwrite($c, base64_decode("%s")); fclose($c);',
             $port,
+            $silence,
             base64_encode($answer),
         );
         $process = proc_open([PHP_BINARY, '-r', $code], [1 => ['file', '/dev/null', 'w'], 2 => ['file', '/dev/null', 'w']], $pipes);
