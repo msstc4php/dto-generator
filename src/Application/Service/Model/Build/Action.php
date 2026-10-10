@@ -8,11 +8,13 @@ use MSSTC4PHP\DtoGenerator\Domain\Builder\AllOfResolver;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\ClassBuilder;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\ClassLookup;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\Composition;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\Directions;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\EnumBuilder;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\ExtensionVocabulary;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\Hierarchy;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\NamedClass;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\NameResolver;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\PropertyView;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\RequiredCycles;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\SchemaShape;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\TypeMapper;
@@ -42,9 +44,19 @@ final class Action
 
     public function __invoke(Input $input): Output
     {
+        $dto = $input->config()->dto();
+        if (!$dto->splitsReadAndWrite()) {
+            return $this->build($input, null)->output();
+        }
+
+        return (new Views($input->graph(), $dto->viewSuffixes()))->build(fn (?View $view): Run => $this->build($input, $view));
+    }
+
+    private function build(Input $input, ?View $view): Run
+    {
         $diagnostics = new Diagnostics();
         $config = $input->config();
-        $registry = new Registry();
+        $registry = new Registry($view, $view instanceof View ? new PropertyView($view->direction(), new Directions($input->graph(), $diagnostics)) : null);
         $enums = new EnumBuilder($this->names);
         /** @var list<array{Schema, string, int}> $aliases named non-object schemas with their name and source */
         $aliases = [];
@@ -89,7 +101,7 @@ final class Action
             }
 
             $short = $this->shortName($schema, $resolved->name(), $diagnostics);
-            $name = $short === null ? null : ClassName::fromFqcn($config->sources()[$source]->namespace() . '\\' . $short);
+            $name = $short === null ? null : $registry->className($config->sources()[$source]->namespace(), $short, $schema);
             if ($name instanceof ClassName && $registry->claim($name, $schema, $diagnostics)) {
                 $this->declare($schema, $name, $source, $isEnum, $registry, $enums, $diagnostics);
             }
@@ -115,6 +127,7 @@ final class Action
             new TypeMapper($input->graph(), $declarations, $input->target(), $input->formats()),
             $input->target(),
             $input->aliases(),
+            $registry->properties(),
         );
         $models = [];
         $children = [];
@@ -147,8 +160,17 @@ final class Action
         }
 
         RequiredCycles::check($models, $diagnostics, $inherited);
+        $classSchemas = [];
+        foreach ($registry->planned() as $index => [$schema]) {
+            $classSchemas[] = new ClassSchema($schema, $compositions[$index]);
+        }
 
-        return $output;
+        foreach ($registry->rejected() as [$schema, $taker]) {
+            // Reported where its name was refused; a split still needs to know whether it depends on the direction.
+            $classSchemas[] = new ClassSchema($schema, $allOf->compose($schema, new Diagnostics()), $taker);
+        }
+
+        return new Run($output, $classSchemas);
     }
 
     /**
@@ -263,20 +285,26 @@ final class Action
     {
         /** @var list<array{Schema, ?string, string}> $candidates schema, `<Parent><Property>` (null without usable characters), wire name */
         $candidates = [];
+        // A property skipped by any member of the composition, or of the other view, holds no class of this build.
+        $kept = [];
+        foreach (ClassBuilder::kept($composition->propertySources()) as [$wireName]) {
+            $kept[$wireName] = true;
+        }
+
+        $excluded = $registry->excluded($composition);
         foreach ($composition->ownParts() as $part) {
             foreach ($part->propertyNames() as $wireName) {
                 $property = $part->requireProperty($wireName);
-                // The class builder reports a malformed x-php-skip; here it only decides whether to look further.
-                if (!ClassBuilder::isSkipped($property, new Diagnostics())) {
+                if (($kept[$wireName] ?? false) && !isset($excluded[$wireName])) {
                     $base = $this->names->className($wireName);
-                    $candidates[] = [$property, $base === null ? null : $ownerName->shortName() . $base, $wireName];
+                    $candidates[] = [$property, $base === null ? null : $registry->baseOf($ownerName) . $base, $wireName];
                 }
             }
         }
 
         $additional = $owner->additionalProperties();
-        if ($additional instanceof Schema) {
-            $candidates[] = [$additional, $ownerName->shortName() . 'AdditionalProperty', 'additionalProperties'];
+        if ($additional instanceof Schema && $registry->admits($additional)) {
+            $candidates[] = [$additional, $registry->baseOf($ownerName) . 'AdditionalProperty', 'additionalProperties'];
         }
 
         $namespace = $ownerName->namespace();
@@ -310,7 +338,7 @@ final class Action
         }
 
         $short = $this->inlineName($candidate, $derived, $wireName, $diagnostics);
-        $name = $short === null ? null : ClassName::fromFqcn(($namespace === '' ? '' : $namespace . '\\') . $short);
+        $name = $short === null ? null : $registry->className($namespace, $short, $candidate);
         if (!$name instanceof ClassName || !$registry->claim($name, $candidate, $diagnostics) || !$this->declare($candidate, $name, $source, SchemaShape::isEnum($candidate), $registry, $enums, $diagnostics)) {
             $registry->abandon($candidate);
         }

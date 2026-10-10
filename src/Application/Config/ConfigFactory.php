@@ -22,6 +22,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Target\DateTimeClass;
 use MSSTC4PHP\DtoGenerator\Domain\Target\MetadataMode;
 use MSSTC4PHP\DtoGenerator\Domain\Target\Mutability;
 use MSSTC4PHP\DtoGenerator\Domain\Target\PhpVersion;
+use MSSTC4PHP\DtoGenerator\Domain\Target\ReadWriteModels;
 
 /**
  * Validates a decoded `dto-generator.yaml` (spec §4) into a {@see GeneratorConfig}.
@@ -99,10 +100,15 @@ final class ConfigFactory
 
     private function dto(RawSection $section): DtoSettings
     {
-        $section->rejectUnknownKeys(['mutability', 'accessors', 'dateTimeClass', 'allOfStrategy', 'withers']);
+        $section->rejectUnknownKeys(['mutability', 'accessors', 'dateTimeClass', 'allOfStrategy', 'withers', 'readWriteModels', 'readWriteSuffixes']);
 
         $mutability = Mutability::from($section->choice('mutability', Mutability::IMMUTABLE, $this->values(Mutability::cases())));
         $withers = $section->bool('withers', true);
+        $readWriteModels = ReadWriteModels::from($section->choice('readWriteModels', ReadWriteModels::SINGLE, $this->values(ReadWriteModels::cases())));
+        if ($section->has('readWriteSuffixes') && !$readWriteModels->isSplit()) {
+            $section->warn('"readWriteSuffixes" has no effect without "readWriteModels: split".', 'readWriteSuffixes');
+        }
+
         if (!$withers && !$mutability->isImmutable()) {
             $section->warn('"withers: false" has no effect on mutable DTOs, which keep their setters; it applies to schemas made immutable with x-dto-mutable: false.', 'withers');
         }
@@ -113,7 +119,33 @@ final class ConfigFactory
             DateTimeClass::from($section->choice('dateTimeClass', DateTimeClass::IMMUTABLE, $this->values(DateTimeClass::cases()))),
             AllOfStrategy::from($section->choice('allOfStrategy', AllOfStrategy::EXTENDS, $this->values(AllOfStrategy::cases()))),
             $withers,
+            $readWriteModels,
+            $this->viewSuffixes($section->section('readWriteSuffixes')),
         );
+    }
+
+    private function viewSuffixes(RawSection $section): ViewSuffixes
+    {
+        $section->rejectUnknownKeys(['read', 'write']);
+        $suffixes = [];
+        foreach (['read' => ViewSuffixes::READ, 'write' => ViewSuffixes::WRITE] as $key => $default) {
+            $value = $section->has($key) ? $section->raw($key) : $default;
+            if (!is_string($value) || !Identifier::isValid($value)) {
+                $section->error($key, 'must be a PHP identifier');
+                $value = $default;
+            }
+
+            $suffixes[$key] = $value;
+        }
+
+        // File names compare letter case ignored on many systems, and PHP class names always.
+        if (Identifier::asciiLower($suffixes['read']) === Identifier::asciiLower($suffixes['write'])) {
+            $section->report('The read and write suffixes must differ.');
+
+            return new ViewSuffixes();
+        }
+
+        return new ViewSuffixes($suffixes['read'], $suffixes['write']);
     }
 
     /**

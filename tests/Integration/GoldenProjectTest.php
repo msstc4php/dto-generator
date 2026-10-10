@@ -51,11 +51,15 @@ final class GoldenProjectTest extends TestCase
         self::assertSame($generated, array_map(static fn (string $path): string => basename($path), $expected));
     }
 
-    public function testGeneratesTheSameFilesOnEveryRun(): void
+    /**
+     * @testWith ["8.2"]
+     *           ["8.2-views"]
+     */
+    public function testGeneratesTheSameFilesOnEveryRun(string $php): void
     {
         $contents = static fn (Output $output): array => array_map(static fn (GeneratedFile $file): string => $file->contents(), $output->files());
 
-        self::assertSame($contents($this->generate('8.2')), $contents($this->generate('8.2')));
+        self::assertSame($contents($this->generate($php)), $contents($this->generate($php)));
     }
 
     /**
@@ -63,7 +67,8 @@ final class GoldenProjectTest extends TestCase
      */
     public static function targets(): array
     {
-        return ['7.4' => ['7.4'], '8.0' => ['8.0'], '8.1' => ['8.1'], '8.2' => ['8.2'], '8.5' => ['8.5']];
+        // `-views`: the read and write models of readOnly/writeOnly (readWriteModels: split).
+        return ['7.4' => ['7.4'], '8.0' => ['8.0'], '8.1' => ['8.1'], '8.2' => ['8.2'], '8.5' => ['8.5'], '7.4-views' => ['7.4-views'], '8.2-views' => ['8.2-views']];
     }
 
     private function generate(string $php): Output

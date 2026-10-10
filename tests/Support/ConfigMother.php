@@ -9,10 +9,12 @@ use MSSTC4PHP\DtoGenerator\Application\Config\ExtensionSettings;
 use MSSTC4PHP\DtoGenerator\Application\Config\GeneratorConfig;
 use MSSTC4PHP\DtoGenerator\Application\Config\SourceConfig;
 use MSSTC4PHP\DtoGenerator\Application\Config\TargetSettings;
+use MSSTC4PHP\DtoGenerator\Application\Config\ViewSuffixes;
 use MSSTC4PHP\DtoGenerator\Domain\Target\AccessorStyle;
 use MSSTC4PHP\DtoGenerator\Domain\Target\AllOfStrategy;
 use MSSTC4PHP\DtoGenerator\Domain\Target\DateTimeClass;
 use MSSTC4PHP\DtoGenerator\Domain\Target\Mutability;
+use MSSTC4PHP\DtoGenerator\Domain\Target\ReadWriteModels;
 
 final class ConfigMother
 {
@@ -36,6 +38,26 @@ final class ConfigMother
             ),
             [],
             $extensions,
+            [$source],
+        );
+    }
+
+    public static function split(SourceConfig $source, ?ViewSuffixes $suffixes = null): GeneratorConfig
+    {
+        return new GeneratorConfig(
+            self::PATH,
+            new TargetSettings(null, null, true),
+            new DtoSettings(
+                Mutability::from(Mutability::IMMUTABLE),
+                AccessorStyle::from(AccessorStyle::AUTO),
+                DateTimeClass::from(DateTimeClass::IMMUTABLE),
+                AllOfStrategy::from(AllOfStrategy::EXTENDS),
+                true,
+                ReadWriteModels::from(ReadWriteModels::SPLIT),
+                $suffixes,
+            ),
+            [],
+            new ExtensionSettings([], true, [], [], null),
             [$source],
         );
     }

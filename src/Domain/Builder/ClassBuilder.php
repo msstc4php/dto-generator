@@ -39,15 +39,19 @@ final class ClassBuilder
     /** @var list<string> */
     private array $aliases;
 
+    private ?PropertyView $view;
+
     /**
      * @param list<string> $aliases keys of attributeAliases, which properties may carry
+     * @param PropertyView|null $view the view of a direction-dependent class; null keeps every property
      */
-    public function __construct(NameResolver $names, TypeMapper $types, TargetProfile $target, array $aliases = [])
+    public function __construct(NameResolver $names, TypeMapper $types, TargetProfile $target, array $aliases = [], ?PropertyView $view = null)
     {
         $this->names = $names;
         $this->types = $types;
         $this->target = $target;
         $this->aliases = $aliases;
+        $this->view = $view;
     }
 
     public static function isSkipped(Schema $schema, Diagnostics $diagnostics): bool
@@ -75,8 +79,9 @@ final class ClassBuilder
         $properties = [];
         $taken = [];
         $byWireName = [];
-        $sources = $this->sources($composition);
-        $skipped = $this->skippedWireNames($sources);
+        $sources = $composition->propertySources();
+        // The other view's properties are left out quietly, unlike x-php-skip.
+        $skipped = self::skippedWireNames($sources) + ($this->view instanceof PropertyView ? $this->view->excluded(self::kept($sources)) : []);
         foreach ($sources as [$wireName, $propertySchema]) {
             ExtensionVocabulary::checkProperty($propertySchema, $diagnostics, $this->aliases);
             if (self::isSkipped($propertySchema, $diagnostics) && $composition->isRequired($wireName)) {
@@ -156,7 +161,7 @@ final class ClassBuilder
     private function additionalProperties(Schema $schema, bool $nameTaken, Diagnostics $diagnostics): ?PropertyModel
     {
         $additional = $schema->additionalProperties();
-        if (!$additional instanceof Schema) {
+        if (!$additional instanceof Schema || ($this->view instanceof PropertyView && !$this->view->admits($additional))) {
             return null;
         }
 
@@ -183,13 +188,33 @@ final class ClassBuilder
     }
 
     /**
+     * The declarations of the properties no member of the composition excludes with x-php-skip.
+     *
+     * @param list<array{string, Schema}> $sources
+     *
+     * @return list<array{string, Schema}>
+     */
+    public static function kept(array $sources): array
+    {
+        $skipped = self::skippedWireNames($sources);
+        $kept = [];
+        foreach ($sources as $source) {
+            if (!isset($skipped[$source[0]])) {
+                $kept[] = $source;
+            }
+        }
+
+        return $kept;
+    }
+
+    /**
      * A property any merged member excludes stays excluded, whichever member declares it first.
      *
      * @param list<array{string, Schema}> $sources
      *
-     * @return array<string, string>
+     * @return array<array-key, string> wire name → wire name; a numeric one is an integer key
      */
-    private function skippedWireNames(array $sources): array
+    private static function skippedWireNames(array $sources): array
     {
         $skipped = [];
         foreach ($sources as [$wireName, $propertySchema]) {
@@ -210,21 +235,6 @@ final class ClassBuilder
         $default = $property->default();
 
         return $default instanceof DefaultValue ? $default->toJson() : '';
-    }
-
-    /**
-     * @return list<array{string, Schema}> wire name and schema of every property, part by part
-     */
-    private function sources(Composition $composition): array
-    {
-        $sources = [];
-        foreach ($composition->parts() as $part) {
-            foreach ($part->propertyNames() as $wireName) {
-                $sources[] = [$wireName, $part->requireProperty($wireName)];
-            }
-        }
-
-        return $sources;
     }
 
     private function property(string $wireName, Schema $schema, bool $required, Diagnostics $diagnostics): ?PropertyModel

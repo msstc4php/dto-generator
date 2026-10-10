@@ -65,4 +65,54 @@ final class SchemaGraph
     {
         return array_values($this->schemas);
     }
+
+    /**
+     * The schema and every schema its `$ref` chain passes through, until a reference does not resolve or leads back to
+     * a schema already listed (no schema repeats).
+     *
+     * @return non-empty-list<Schema>
+     */
+    public function chain(Schema $schema): array
+    {
+        return $this->walk($schema)[0];
+    }
+
+    /**
+     * The chain, and the schema its last reference leads back to when it closes a cycle.
+     *
+     * @return array{non-empty-list<Schema>, ?Schema}
+     */
+    public function walk(Schema $schema): array
+    {
+        $chain = [$schema];
+        for ($current = $schema; $current->ref() !== null; $current = $next) {
+            $target = $this->resolve(new ReferenceUse($current->ref(), $current->location()));
+            if (!$target instanceof ResolvedSchema) {
+                break;
+            }
+
+            $next = $target->schema();
+            if ($this->listed($next, $chain)) {
+                return [$chain, $next];
+            }
+
+            $chain[] = $next;
+        }
+
+        return [$chain, null];
+    }
+
+    /**
+     * @param list<Schema> $chain
+     */
+    private function listed(Schema $schema, array $chain): bool
+    {
+        foreach ($chain as $listed) {
+            if ($listed->location()->toString() === $schema->location()->toString()) {
+                return true;
+            }
+        }
+
+        return false;
+    }
 }

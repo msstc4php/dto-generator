@@ -30,5 +30,5 @@ for profile in tests/Fixtures/Emitter/*/; do
 done
 
 for expected in tests/Fixtures/Projects/golden/expected/*/; do
-    check "$expected" "$(basename "$expected")" 'echo "ok $1"'
+    check "$expected" "$(basename "$expected" | cut -d- -f1)" 'echo "ok $1"'
 done

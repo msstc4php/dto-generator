@@ -1,0 +1,10 @@
+version: 1
+verifyClasses: false
+target:
+  php: '8.2'
+dto:
+  readWriteModels: split
+sources:
+  - spec: api/views.yaml
+    namespace: App\Views
+    outputDir: generated/8.2-views

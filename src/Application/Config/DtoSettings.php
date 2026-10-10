@@ -8,6 +8,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Target\AccessorStyle;
 use MSSTC4PHP\DtoGenerator\Domain\Target\AllOfStrategy;
 use MSSTC4PHP\DtoGenerator\Domain\Target\DateTimeClass;
 use MSSTC4PHP\DtoGenerator\Domain\Target\Mutability;
+use MSSTC4PHP\DtoGenerator\Domain\Target\ReadWriteModels;
 
 final class DtoSettings
 {
@@ -21,13 +22,26 @@ final class DtoSettings
 
     private bool $withers;
 
-    public function __construct(Mutability $mutability, AccessorStyle $accessors, DateTimeClass $dateTimeClass, AllOfStrategy $allOfStrategy, bool $withers = true)
-    {
+    private ReadWriteModels $readWriteModels;
+
+    private ViewSuffixes $viewSuffixes;
+
+    public function __construct(
+        Mutability $mutability,
+        AccessorStyle $accessors,
+        DateTimeClass $dateTimeClass,
+        AllOfStrategy $allOfStrategy,
+        bool $withers = true,
+        ?ReadWriteModels $readWriteModels = null,
+        ?ViewSuffixes $viewSuffixes = null
+    ) {
         $this->mutability = $mutability;
         $this->accessors = $accessors;
         $this->dateTimeClass = $dateTimeClass;
         $this->allOfStrategy = $allOfStrategy;
         $this->withers = $withers;
+        $this->readWriteModels = $readWriteModels ?? ReadWriteModels::from(ReadWriteModels::SINGLE);
+        $this->viewSuffixes = $viewSuffixes ?? new ViewSuffixes();
     }
 
     public function mutability(): Mutability
@@ -53,5 +67,23 @@ final class DtoSettings
     public function hasWithers(): bool
     {
         return $this->withers;
+    }
+
+    /**
+     * Whether a class whose model depends on readOnly/writeOnly gets a read and a write view (`readWriteModels: split`).
+     */
+    public function splitsReadAndWrite(): bool
+    {
+        return $this->readWriteModels->isSplit();
+    }
+
+    public function readWriteModels(): ReadWriteModels
+    {
+        return $this->readWriteModels;
+    }
+
+    public function viewSuffixes(): ViewSuffixes
+    {
+        return $this->viewSuffixes;
     }
 }

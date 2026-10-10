@@ -17,6 +17,8 @@ dto:
   dateTimeClass: DateTimeImmutable   # DateTimeImmutable | DateTime
   allOfStrategy: extends         # extends | merge
   withers: true                  # false: immutable DTOs get no with*()
+  readWriteModels: single        # single | split — read and write models for readOnly/writeOnly
+  readWriteSuffixes: { read: Read, write: Write }
 
 formats:                         # your own string formats → PHP classes
   money: { type: App\Money\Money }
@@ -69,6 +71,8 @@ Required; must be `1`.
 | `dateTimeClass` | `DateTimeImmutable` | `DateTimeImmutable`, `DateTime` |
 | `allOfStrategy` | `extends` | `extends`, `merge` |
 | `withers` | `true` | `true`, `false` |
+| `readWriteModels` | `single` | `single`, `split` |
+| `readWriteSuffixes` | `{read: Read, write: Write}` | two different PHP identifiers |
 
 - **`mutability`.** Immutable DTOs have `with*()` methods returning a copy; mutable ones have setters. A schema can
   override it with `x-dto-mutable`.
@@ -82,6 +86,22 @@ Required; must be `1`.
 - **`withers`**: `false` leaves the `with*()` methods out of immutable DTOs (half of the output on a large spec);
   setters of mutable DTOs stay. With `mutability: mutable` it only affects schemas made immutable with
   `x-dto-mutable: false`, and the config gets a warning.
+- **`readWriteModels`**: `single` gives one class per schema and ignores `readOnly`/`writeOnly`. `split` gives a
+  class whose model depends on them two: a **read** model (`PetRead`, for responses: without `writeOnly` properties)
+  and a **write** model (`PetWrite`, for requests: without `readOnly` ones). A class depends on them when it has a
+  `readOnly`/`writeOnly` property (on the property or anywhere along its `$ref` chain, in any member of its `allOf`),
+  or holds, extends or lists as a discriminated variant a class that does — so the variants and subclasses of such a
+  base are split too, even when their own properties are the same; every other class stays one shared class. The
+  suffix also goes after an `x-php-class-name`, and inline classes keep their base name before it (`PetOwnerRead`).
+  Switching to `split` renames the dependent classes; the writer deletes the old files.
+  - A property marked `readOnly` and `writeOnly`, also in two `allOf` members, is in both models, with a warning.
+  - Only properties are directed: `readOnly` on the `items` of an array leaves the item in both models.
+  - Do not mark a discriminator property `readOnly`: the write model would lose it, and a request could not select
+    its variant.
+  - A problem of a split class is reported once, naming its read model.
+- **`readWriteSuffixes`**: what the two models add to the class name, for example `{read: Response, write: Request}`.
+  The two must differ, letter case ignored; without `readWriteModels: split` they have no effect (a warning). A model
+  named like another class is an error.
 
 ## `formats`
 

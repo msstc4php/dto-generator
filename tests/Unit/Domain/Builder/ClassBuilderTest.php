@@ -6,7 +6,10 @@ namespace MSSTC4PHP\DtoGenerator\Tests\Unit\Domain\Builder;
 
 use MSSTC4PHP\DtoGenerator\Domain\Builder\ClassBuilder;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\Declarations;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\Direction;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\Directions;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\NameResolver;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\PropertyView;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\TypeMapper;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostic;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
@@ -314,12 +317,52 @@ final class ClassBuilderTest extends TestCase
         self::assertSame([], $diagnostics->all());
     }
 
+    public function testKeepsThePropertiesOfAView(): void
+    {
+        $schema = ['type' => 'object', 'required' => ['id', 'password', 'name'], 'properties' => [
+            'id' => ['type' => 'integer', 'readOnly' => true],
+            'password' => ['type' => 'string', 'writeOnly' => true],
+            'name' => ['type' => 'string'],
+            'both' => ['type' => 'string', 'readOnly' => true, 'writeOnly' => true],
+        ], 'additionalProperties' => ['type' => 'string', 'readOnly' => true]];
+
+        [$read, $readMessages] = $this->build($schema, null, 'read');
+        [$write] = $this->build($schema, null, 'write');
+        [$all] = $this->build($schema);
+
+        self::assertSame(['id', 'name', 'both', 'additionalProperties'], $this->wireNames($read));
+        self::assertSame(['password', 'name', 'both'], $this->wireNames($write));
+        self::assertSame(['id', 'password', 'name', 'both', 'additionalProperties'], $this->wireNames($all));
+        self::assertSame(['warning /project/api/openapi.yaml#/components/schemas/User/properties/both: "readOnly" and "writeOnly" are both true; the property is in both views.'], $readMessages);
+    }
+
+    public function testExcludesAPropertyOfAnotherViewFromEveryMergedMember(): void
+    {
+        $schema = ['allOf' => [
+            ['type' => 'object', 'properties' => ['id' => ['type' => 'integer']]],
+            ['type' => 'object', 'properties' => ['id' => ['type' => 'integer', 'readOnly' => true]]],
+        ]];
+
+        [$write] = $this->build($schema, null, 'write');
+
+        self::assertSame([], $this->wireNames($write));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function wireNames(ClassModel $class): array
+    {
+        return array_map(static fn (PropertyModel $property): string => $property->wireName(), $class->properties());
+    }
+
     /**
      * @param array<array-key, mixed> $schema
+     * @param 'read'|'write'|null $view
      *
      * @return array{ClassModel, list<string>}
      */
-    private function build(array $schema, ?TargetProfile $target = null): array
+    private function build(array $schema, ?TargetProfile $target = null, ?string $view = null): array
     {
         $graph = GraphFixture::load(['User' => $schema]);
         $target ??= new TargetProfile(
@@ -330,8 +373,8 @@ final class ClassBuilderTest extends TestCase
             DateTimeClass::from(DateTimeClass::IMMUTABLE),
             true,
         );
-        $builder = new ClassBuilder(new NameResolver(), new TypeMapper($graph, new Declarations(), $target, []), $target);
         $diagnostics = new Diagnostics();
+        $builder = new ClassBuilder(new NameResolver(), new TypeMapper($graph, new Declarations(), $target, []), $target, [], $view === null ? null : new PropertyView(Direction::from($view), new Directions($graph, $diagnostics)));
         $class = $builder->build(ClassName::fromFqcn('App\Dto\User'), $graph->all()[0]->schema(), $diagnostics);
 
         return [$class, array_map(static fn (Diagnostic $d): string => $d->toString(), $diagnostics->all())];

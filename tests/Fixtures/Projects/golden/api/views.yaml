@@ -1,0 +1,56 @@
+openapi: 3.1.0
+info: {title: Views, version: '1'}
+paths: {}
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [id, name, password]
+      properties:
+        id: {type: integer, readOnly: true}
+        name: {type: string}
+        password: {type: string, writeOnly: true}
+        createdAt: {$ref: '#/components/schemas/Timestamp'}
+        owner:
+          type: object
+          properties:
+            name: {type: string}
+            since: {type: string, format: date, readOnly: true}
+        tag: {$ref: '#/components/schemas/Tag'}
+    Timestamp: {type: string, format: date-time, readOnly: true}
+    Tag:
+      type: object
+      properties:
+        label: {type: string}
+    Cat:
+      allOf:
+        - $ref: '#/components/schemas/Pet'
+        - type: object
+          properties:
+            lives: {type: integer}
+    Kennel:
+      type: object
+      properties:
+        pets:
+          type: array
+          items: {$ref: '#/components/schemas/Pet'}
+    Animal:
+      oneOf:
+        - $ref: '#/components/schemas/Fish'
+        - $ref: '#/components/schemas/Bird'
+      discriminator:
+        propertyName: kind
+        mapping:
+          fish: '#/components/schemas/Fish'
+          bird: '#/components/schemas/Bird'
+    Fish:
+      type: object
+      required: [kind]
+      properties:
+        kind: {type: string}
+        caught: {type: string, format: date-time, readOnly: true}
+    Bird:
+      type: object
+      required: [kind]
+      properties:
+        kind: {type: string}

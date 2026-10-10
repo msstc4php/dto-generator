@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Contract;
 
-use MSSTC4PHP\DtoGenerator\Domain\Schema\ReferenceUse;
-use MSSTC4PHP\DtoGenerator\Domain\Schema\ResolvedSchema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaGraph;
 
@@ -59,24 +57,12 @@ final class SchemaReferences
      */
     private function walk(Schema $schema): array
     {
-        $chain = [$schema];
-        $seen = [];
-        $current = $schema;
-        while ($this->graph instanceof SchemaGraph && $current->ref() !== null) {
-            $seen[] = $current->location()->toString();
-            $target = $this->graph->resolve(new ReferenceUse($current->ref(), $current->location()));
-            if (!$target instanceof ResolvedSchema) {
-                break;
-            }
-
-            if (in_array($target->schema()->location()->toString(), $seen, true)) {
-                return [$chain, $target->schema()];
-            }
-
-            $current = $target->schema();
-            $chain[] = $current;
+        if (!$this->graph instanceof SchemaGraph) {
+            return [[$schema], $schema];
         }
 
-        return [$chain, $current];
+        [$chain, $cycle] = $this->graph->walk($schema);
+
+        return [$chain, $cycle ?? $chain[count($chain) - 1]];
     }
 }

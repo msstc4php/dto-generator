@@ -110,8 +110,10 @@ Classes are `final`, except the bases of `allOf` and of discriminated unions. At
   `dependentRequired`, `unevaluatedProperties`, `unevaluatedItems`, `contains`, `minContains`, `maxContains`,
   `propertyNames`, `additionalItems`, `dependencies`, `$dynamicRef`. Each gives a warning, except in a schema with
   `x-php-type` or `x-php-skip`;
-  the PHP type ignores them. `readOnly`/`writeOnly` are ignored without a warning: they describe requests and
-  responses, which one DTO does not tell apart.
+  the PHP type ignores them. `readOnly`/`writeOnly` are ignored without a warning by default: they describe requests
+  and responses, which one DTO does not tell apart. `dto.readWriteModels: split` gives such classes a read and a write
+  model ([configuration](configuration.md#dto)); the keywords count on properties only, not on the `items` of an
+  array.
 - **OpenAPI 3.0 `nullable: true` has no effect** and gives a warning; use `type: [T, 'null']`.
 - **`const`** keeps a date or a `formats` class when `format` names one, and keeps the declared `type` (with a
   warning) when the constant does not fit it. A bare `const` member of `allOf` (`allOf: [{$ref: Code}, {const: x}]`)
