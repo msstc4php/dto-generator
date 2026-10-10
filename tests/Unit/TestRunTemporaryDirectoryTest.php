@@ -125,7 +125,7 @@ final class TestRunTemporaryDirectoryTest extends TestCase
 
         try {
             $this->expectException(RuntimeException::class);
-            $this->expectExceptionMessage('Permission denied');
+            $this->expectExceptionMessage('Permission denied; a parent owned by another user');
 
             TestRunTemporaryDirectory::create($this->base . '/u1', time());
         } finally {

@@ -61,7 +61,9 @@ final class TestRunTemporaryDirectory
         $error = self::quietly(static fn (): bool => is_dir($base) || mkdir($base, 0777, true));
         $real = realpath($base);
         if ($real === false || !is_dir($real)) {
-            throw new RuntimeException(sprintf('Cannot create %s: %s; a parent owned by another user (a container run as root) is the usual cause.', $base, $error ?? 'unknown error'));
+            $hint = $error !== null && strpos($error, 'Permission denied') !== false ? '; a parent owned by another user (a container run as root) is the usual cause' : '';
+
+            throw new RuntimeException(sprintf('Cannot create %s: %s%s.', $base, $error ?? 'unknown error', $hint));
         }
 
         if (!is_writable($real)) {
