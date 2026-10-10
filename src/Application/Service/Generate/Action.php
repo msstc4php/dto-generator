@@ -91,7 +91,7 @@ final class Action
             return new Output(Status::from(Status::CONFIG_FAILED), $diagnostics, null, []);
         }
 
-        $files = $this->files($config, $target, $verifier, $diagnostics);
+        $files = $this->files($config, $target, $verifier, $input->mode()->value() === Mode::WRITE, $diagnostics);
         if ($files === null) {
             return new Output(Status::from(Status::GENERATION_FAILED), $diagnostics, null, []);
         }
@@ -177,14 +177,17 @@ final class Action
     /**
      * Null when the schemas or the model have errors, since emitting them would be wasted work.
      *
+     * @param bool $writes whether the run writes, which alone may fetch remote documents
+     *
      * @return list<GeneratedFile>|null
      */
-    private function files(GeneratorConfig $config, TargetProfile $target, ?ClassVerifier $verifier, Diagnostics $diagnostics): ?array
+    private function files(GeneratorConfig $config, TargetProfile $target, ?ClassVerifier $verifier, bool $writes, Diagnostics $diagnostics): ?array
     {
         $extensions = ($this->loadExtensions)(new ExtensionsInput($config));
         $diagnostics->merge($extensions->diagnostics());
         $registry = $extensions->registry();
-        $schemas = ($this->loadSchemas)(new SchemasInput($config));
+        // Only a run that writes fetches remote documents into the cache; checks read what the cache holds.
+        $schemas = ($this->loadSchemas)(new SchemasInput($config, $writes));
         $diagnostics->merge($schemas->diagnostics());
         $formats = $registry->formats(array_map(static fn (ClassName $class): TypeModel => new ClassType($class), $config->formats()));
         $aliases = array_keys($config->extensions()->aliases());

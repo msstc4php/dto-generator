@@ -13,6 +13,18 @@ All notable changes to this package are documented here. The format follows
   by default). A class depends on them through its own properties (the keyword on the property or along its `$ref`
   chain) and through the classes it holds, extends or lists as discriminated variants; the rest stay shared.
   `single`, the default, keeps the previous output.
+- `remoteRefs.allow` lets a `$ref` name an `http(s)` URL under one of its prefixes, including relative `$ref`s inside
+  a remote document. A run that writes fetches each document once into `remoteRefs.cacheDir`
+  (`.dto-generator/remote`, with an `index.json` of URLs, fetch times and SHA-256 sums); later runs, `--check` and
+  `--dry-run` read the cache only. No redirects, verified TLS, 64 KB of headers, 10 MB of body,
+  `remoteRefs.timeout` seconds for the whole answer. Escaped dot segments count as dots; an encoded `/` or `\` and
+  characters a URL cannot hold are refused; an invalid `index.json` stops the run.
+
+### Changed
+
+- A remote `$ref` outside `remoteRefs.allow` reports what to allow ("… which remoteRefs.allow does not cover") instead
+  of "is not supported". `Domain\Schema\Reference::target()` returns the location of a URL too, never `null`.
+
 
 ## [1.2.0] - 2026-10-09
 

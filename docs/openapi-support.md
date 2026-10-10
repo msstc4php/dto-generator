@@ -126,7 +126,8 @@ Classes are `final`, except the bases of `allOf` and of discriminated unions. At
   or non-ASCII characters keeps the type `string` without the literal.
 - **Hoisted names give way to named schemas.** An inline member whose title or derived name equals a schema in
   `components/schemas` gets a collision error; the named schema keeps its class.
-- **Remote `$ref`** (`https://…`) and anchors (`$anchor`, `#Name`) are not supported.
+- **Remote `$ref`** (`https://…`) works only for the URLs [`remoteRefs.allow`](configuration.md#remoterefs) names;
+  anchors (`$anchor`, `#Name`) are not supported.
 - **A bare name in `discriminator.mapping`** is resolved against the file holding the discriminator, not the root
   document.
 - **A mutable DTO with `accessors: public-properties`** still lets code assign the discriminator directly.

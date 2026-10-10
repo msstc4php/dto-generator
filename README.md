@@ -34,6 +34,7 @@ when it is out of date.
 - **Extensions** add attributes and formats through a small SPI; the
   [Symfony bridge](https://github.com/msstc4symfony/dto-generator-bridge) writes Validator constraints and Serializer
   attributes.
+- **Remote `$ref`s** to the URLs you allow, fetched once into a cache you can commit.
 - **Safe writes:** a manifest per output directory, deletion of classes whose schemas are gone, and no overwriting of
   files the generator did not write.
 - **Three ways to run:** the CLI, a Composer plugin that regenerates after `composer install`/`update`, and a Docker

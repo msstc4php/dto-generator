@@ -25,12 +25,14 @@ final class GeneratorConfig
     /** @var non-empty-list<SourceConfig> */
     private array $sources;
 
+    private RemoteRefsSettings $remoteRefs;
+
     /**
      * @param string $path absolute path of the config file; relative paths inside it were resolved against its directory
      * @param array<int|string, ClassName> $formats custom format → PHP type
      * @param non-empty-list<SourceConfig> $sources
      */
-    public function __construct(string $path, TargetSettings $target, DtoSettings $dto, array $formats, ExtensionSettings $extensions, array $sources)
+    public function __construct(string $path, TargetSettings $target, DtoSettings $dto, array $formats, ExtensionSettings $extensions, array $sources, ?RemoteRefsSettings $remoteRefs = null)
     {
         if (!Path::isAbsolute($path)) {
             throw new InvalidArgumentException(sprintf('Config path "%s" must be absolute.', $path));
@@ -42,6 +44,15 @@ final class GeneratorConfig
         $this->formats = $formats;
         $this->extensions = $extensions;
         $this->sources = $sources;
+        $this->remoteRefs = $remoteRefs ?? new RemoteRefsSettings([], Path::resolve(Path::directory($this->path), RemoteRefsSettings::CACHE_DIR));
+    }
+
+    /**
+     * Remote $refs: none allowed unless the config names their prefixes.
+     */
+    public function remoteRefs(): RemoteRefsSettings
+    {
+        return $this->remoteRefs;
     }
 
     public function path(): string

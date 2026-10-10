@@ -7,6 +7,7 @@ namespace MSSTC4PHP\DtoGenerator\Tests\Support;
 use MSSTC4PHP\DtoGenerator\Application\Config\DtoSettings;
 use MSSTC4PHP\DtoGenerator\Application\Config\ExtensionSettings;
 use MSSTC4PHP\DtoGenerator\Application\Config\GeneratorConfig;
+use MSSTC4PHP\DtoGenerator\Application\Config\RemoteRefsSettings;
 use MSSTC4PHP\DtoGenerator\Application\Config\SourceConfig;
 use MSSTC4PHP\DtoGenerator\Application\Config\TargetSettings;
 use MSSTC4PHP\DtoGenerator\Application\Config\ViewSuffixes;
@@ -59,6 +60,27 @@ final class ConfigMother
             [],
             new ExtensionSettings([], true, [], [], null),
             [$source],
+        );
+    }
+
+    /**
+     * @param list<string> $allow
+     */
+    public static function remote(SourceConfig $source, array $allow): GeneratorConfig
+    {
+        return new GeneratorConfig(
+            self::PATH,
+            new TargetSettings(null, null, true),
+            new DtoSettings(
+                Mutability::from(Mutability::IMMUTABLE),
+                AccessorStyle::from(AccessorStyle::AUTO),
+                DateTimeClass::from(DateTimeClass::IMMUTABLE),
+                AllOfStrategy::from(AllOfStrategy::EXTENDS),
+            ),
+            [],
+            new ExtensionSettings([], true, [], [], null),
+            [$source],
+            new RemoteRefsSettings($allow, '/project/.dto-generator/remote'),
         );
     }
 

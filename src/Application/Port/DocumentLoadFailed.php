@@ -43,6 +43,14 @@ final class DocumentLoadFailed extends RuntimeException
         return self::at($path, sprintf('File "%s" is not valid: %s', $path, $reason));
     }
 
+    /**
+     * @param string $problem what is wrong, phrased to follow the document's URL
+     */
+    public static function remote(string $url, string $problem): self
+    {
+        return self::at($url, sprintf('Remote document "%s" %s', $url, $problem));
+    }
+
     public static function notAnObject(string $path): self
     {
         return self::at($path, sprintf('File "%s" must contain an object at the top level.', $path));

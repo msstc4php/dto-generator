@@ -19,7 +19,6 @@ final class ReferenceTest extends TestCase
         $from = new SchemaLocation('/spec/api/openapi.yaml', '/components/schemas/User/properties/tag');
         $target = Reference::target($ref, $from);
 
-        self::assertNotNull($target);
         self::assertSame($expected, $target->toString());
     }
 
@@ -45,13 +44,40 @@ final class ReferenceTest extends TestCase
     {
         $target = Reference::target('other.yaml#/X', new SchemaLocation('/spec.yaml'));
 
-        self::assertNotNull($target);
         self::assertSame('/other.yaml#/X', $target->toString());
     }
 
-    public function testRemoteReferencesYieldNull(): void
+    public function testResolvesRemoteReferences(): void
     {
-        self::assertNull(Reference::target('https://example.com/schemas.json#/X', new SchemaLocation('/a.yaml')));
+        $remote = new SchemaLocation('https://example.com/common/v1/api.yaml');
+
+        self::assertSame('https://example.com/schemas.json#/X', Reference::target('HTTPS://Example.com:443/schemas.json#/X', new SchemaLocation('/a.yaml'))->toString());
+        self::assertSame('https://example.com/common/v1/money.yaml#/Money', Reference::target('money.yaml#/Money', $remote)->toString());
+        self::assertSame('https://example.com/common/v2/money.yaml#', Reference::target('../v2/money.yaml', $remote)->toString());
+        self::assertSame('https://example.com/common/v1/api.yaml#/components/schemas/A', Reference::target('#/components/schemas/A', $remote)->toString());
+        self::assertSame('https://example.com/a%20b.yaml#', Reference::target('/a%20b.yaml', $remote)->toString());
+    }
+
+    /**
+     * @return array<string, array{string, string}>
+     */
+    public static function unfetchable(): array
+    {
+        return [
+            'scheme' => ['file:///etc/passwd', 'URL "file:///etc/passwd": only http and https are supported.'],
+            'credentials' => ['https://u:p@example.com/a.yaml', 'URL "https://u:p@example.com/a.yaml": credentials in a URL are not supported.'],
+        ];
+    }
+
+    /**
+     * @dataProvider unfetchable
+     */
+    public function testRefusesAReferenceItCannotFetch(string $ref, string $message): void
+    {
+        $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage($message);
+
+        Reference::target($ref, new SchemaLocation('https://example.com/api.yaml'));
     }
 
     /**

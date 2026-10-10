@@ -1,0 +1,3 @@
+Currency:
+  type: string
+  enum: [EUR, USD]

@@ -24,6 +24,8 @@ use MSSTC4PHP\DtoGenerator\Infrastructure\Environment\ComposerJsonPhpConstraint;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Environment\ComposerLockPackages;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Environment\InstalledJsonExtensionDiscovery;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Extension\ClassExtensionLoader;
+use MSSTC4PHP\DtoGenerator\Infrastructure\Remote\CachedRemoteDocuments;
+use MSSTC4PHP\DtoGenerator\Infrastructure\Remote\StreamFetcher;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Writer\FilesystemWriter;
 use MSSTC4PHP\DtoGenerator\Presentation\Cli\ErrorOutput;
 use MSSTC4PHP\DtoGenerator\Presentation\Cli\GenerateCommand;
@@ -64,7 +66,7 @@ final class DtoGenerator
             new AutoloadClassVerifierLocator(),
             new ComposerLockPackages(),
             new LoadExtensions(new ClassExtensionLoader(), static fn (array $aliases): array => [new CustomAttributes($aliases)], new InstalledJsonExtensionDiscovery()),
-            new LoadSchemas($loader, new SchemaParser()),
+            new LoadSchemas($loader, new SchemaParser(), new CachedRemoteDocuments(new StreamFetcher())),
             new BuildModel(new NameResolver()),
             new EnrichModel(),
             new PhpParserEmitter(),

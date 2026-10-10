@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace MSSTC4PHP\DtoGenerator\Application\Port;
 
 use InvalidArgumentException;
+use MSSTC4PHP\DtoGenerator\Domain\Exception\InvalidModel;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\Path;
+use MSSTC4PHP\DtoGenerator\Domain\Shared\Url;
 
 final class Document
 {
@@ -15,12 +17,13 @@ final class Document
     private array $root;
 
     /**
-     * @param string $path absolute and normalized; it is the document's identity in locations
+     * @param string $path absolute and normalized, or a normalized URL; it is the document's identity in locations
      * @param array<array-key, mixed> $root the decoded top-level object
      */
     public function __construct(string $path, array $root)
     {
-        if (!Path::isAbsolute($path) || Path::normalize($path) !== $path) {
+        $normalized = Url::isUrl($path) ? $this->normalizedUrl($path) : (Path::isAbsolute($path) ? Path::normalize($path) : null);
+        if ($normalized !== $path) {
             throw new InvalidArgumentException(sprintf('Document path "%s" must be absolute and normalized.', $path));
         }
 
@@ -39,5 +42,14 @@ final class Document
     public function root(): array
     {
         return $this->root;
+    }
+
+    private function normalizedUrl(string $url): ?string
+    {
+        try {
+            return Url::normalize($url);
+        } catch (InvalidModel $exception) {
+            return null;
+        }
     }
 }

@@ -33,6 +33,11 @@ extensions:                      # extension classes to load explicitly
 extensionConfig:                 # one section per extension, by its name()
   symfony: { validator: auto }
 
+remoteRefs:                      # remote $refs, off unless allowed
+  allow: [https://schemas.example.com/common/]
+  cacheDir: .dto-generator/remote
+  timeout: 10
+
 sources:                         # required, at least one
   - spec: openapi/public.yaml
     namespace: App\Dto\Api
@@ -164,6 +169,48 @@ extensions by package name. Attributes are written in that order.
   reached from two sources without belonging to either is an error: its namespace would be ambiguous.
 - `outputDir` must not be shared with files you write by hand: the generator deletes the classes whose schemas are
   gone.
+
+## `remoteRefs`
+
+| Key | Default | Values |
+|---|---|---|
+| `allow` | `[]` | URL prefixes (`http://` or `https://`, no query or fragment) |
+| `cacheDir` | `.dto-generator/remote` | a directory, relative to the config file |
+| `timeout` | `10` | seconds per document, 1 to 300 |
+
+```yaml
+remoteRefs:
+  allow:
+    - https://schemas.example.com/common/
+```
+
+A `$ref` to a URL (`https://schemas.example.com/common/v1/money.yaml#/Money`) is an error unless its URL starts with
+one of the `allow` prefixes: a prefix that ends in `/` covers everything below it; any other one covers that URL and
+everything below it plus `/`. Scheme and host are compared letter case ignored and default ports do not count, but a
+host must be spelled as in `allow` (a trailing dot or a Unicode name instead of its punycode is refused). Escapes of
+unreserved characters are decoded before the check, so `%2e%2e` is `..`; a path holding an encoded `/`, `\` or `%`,
+`%00`, a `;` or bytes that are not UTF-8, a backslash, a space or another character a URL cannot hold is an error:
+servers turn them into separators or dot segments. A relative `$ref` inside a remote document is resolved
+against its URL and must be allowed too; another scheme (`file:`) is an error, so it can never reach a file of the
+project.
+
+- **Fetching.** A run that writes (`generate`) fetches a document it does not have yet with one HTTP/1.0 `GET`: TLS
+  certificates are verified, redirects are not followed (a `3xx` is an error naming the new URL, which you then allow
+  and refer to), TLS 1.2 or newer is required, headers may take 64 KB and the body 10 MB, a body shorter than its
+  `Content-Length` or one sent in chunks is an error, the whole answer must arrive within `timeout` seconds
+  (resolving the host name is not counted), and any status but `200` is an error. Proxies (`HTTP_PROXY`,
+  `HTTPS_PROXY`) are not used. JSON or YAML is told by the
+  extension of the URL, else by a YAML `Content-Type`, else by whether it starts with `{`.
+- **Cache.** Fetched documents are kept in `cacheDir`, with `index.json` recording each URL, when it was fetched (UTC)
+  and the SHA-256 of what came back. Later runs read the cache and never go to the network; a cached copy that no
+  longer matches its SHA-256, a symbolic link, and an `index.json` that is not valid (say, after a merge conflict) are
+  errors. Commit the directory: builds then need no network, and a change in a schema you depend on shows in review.
+  The SHA-256 catches accidents, not someone who may commit both a file and its hash: review the directory like code.
+  The empty `.index.lock` serializes runs that share the cache and need not be committed. To fetch a document again,
+  delete its file and its entry in `index.json` (or the whole directory).
+- **Checks.** `--check` and `--dry-run` read the cache only: a document that is not there is an error asking to run
+  `generate`.
+- Credentials in URLs, other schemes (`file:`, `ftp:`) and specifications given by URL in `sources` are not supported.
 
 ## Environment variables
 
