@@ -6,6 +6,14 @@ All notable changes to this package are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `dto.readWriteModels: split` gives every class whose model depends on `readOnly`/`writeOnly` a read model (no
+  `writeOnly` properties) and a write model (no `readOnly` ones), named with `dto.readWriteSuffixes` (`Read`/`Write`
+  by default). A class depends on them through its own properties (the keyword on the property or along its `$ref`
+  chain) and through the classes it holds, extends or lists as discriminated variants; the rest stay shared.
+  `single`, the default, keeps the previous output.
+
 ## [1.2.0] - 2026-10-09
 
 ### Added

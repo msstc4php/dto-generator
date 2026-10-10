@@ -63,7 +63,8 @@ final class GoldenProjectTest extends TestCase
      */
     public static function targets(): array
     {
-        return ['7.4' => ['7.4'], '8.0' => ['8.0'], '8.1' => ['8.1'], '8.2' => ['8.2'], '8.5' => ['8.5']];
+        // `-views`: the read and write models of readOnly/writeOnly (readWriteModels: split).
+        return ['7.4' => ['7.4'], '8.0' => ['8.0'], '8.1' => ['8.1'], '8.2' => ['8.2'], '8.5' => ['8.5'], '7.4-views' => ['7.4-views'], '8.2-views' => ['8.2-views']];
     }
 
     private function generate(string $php): Output

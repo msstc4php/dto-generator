@@ -21,6 +21,8 @@ when it is out of date.
   clone-based withers on 7.4, and the shapes in between. `target.php: auto` reads the version from your
   `composer.json`.
 - **Immutable or mutable** DTOs, per project or per schema; getters or public properties.
+- **Read and write models** for `readOnly`/`writeOnly` on request: `PetRead` without the write-only properties,
+  `PetWrite` without the read-only ones; classes that do not depend on them stay shared.
 - **OpenAPI 3.1 / JSON Schema 2020-12:** objects, arrays, maps (`additionalProperties`), enums, nullable types,
   defaults, `format`, internal and cross-file `$ref` (recursive types included), `allOf` as inheritance or merge,
   `oneOf`/`anyOf` with a discriminator (abstract base class) or as a union type, inline property schemas lifted into

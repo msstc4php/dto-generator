@@ -1,0 +1,10 @@
+version: 1
+verifyClasses: false
+target:
+  php: '7.4'
+dto:
+  readWriteModels: split
+sources:
+  - spec: api/views.yaml
+    namespace: App\Views
+    outputDir: generated/7.4-views
