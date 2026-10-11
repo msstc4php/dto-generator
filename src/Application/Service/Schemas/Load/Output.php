@@ -13,10 +13,25 @@ final class Output
 
     private Diagnostics $diagnostics;
 
-    public function __construct(SchemaGraph $graph, Diagnostics $diagnostics)
+    /** @var list<string> */
+    private array $documents;
+
+    /**
+     * @param list<string> $documents the local documents read and, when remote ones were, the cache directory
+     */
+    public function __construct(SchemaGraph $graph, Diagnostics $diagnostics, array $documents = [])
     {
         $this->graph = $graph;
         $this->diagnostics = $diagnostics;
+        $this->documents = $documents;
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function documents(): array
+    {
+        return $this->documents;
     }
 
     public function graph(): SchemaGraph

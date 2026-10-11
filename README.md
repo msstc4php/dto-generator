@@ -206,7 +206,22 @@ $output->status()->value();   // ok | out-of-date | generation-failed | config-f
 $output->diagnostics()->all();
 ```
 
-`Mode::CHECK` and `Mode::DRY_RUN` match `--check` and `--dry-run`. For a console command that wraps the generator,
+`Mode::CHECK` and `Mode::DRY_RUN` match `--check` and `--dry-run`.
+
+To build the DTOs somewhere the project's sources never see, such as a framework's build directory, move every
+output directory under one root and keep the network out of the build:
+
+```php
+$output = DtoGenerator::generator()(
+    (new Input($config, Mode::from(Mode::WRITE)))
+        ->withOutputRoot('/app/var/build/dto')   // src/Dto in the config's directory becomes /app/var/build/dto/src/Dto
+        ->withoutFetching(),                     // remote documents from remoteRefs.cacheDir only
+);
+$output->classes();     // fully qualified class name => file, for an autoloader
+$output->documents();   // the config, every local document read and, for remote ones, the cache directory
+```
+
+An output directory outside the config's directory cannot move: that is a config error. For a console command that wraps the generator,
 `DtoGenerator::guard($input, $output, $run)` maps exceptions to the CLI's exit codes (`3` for invalid options, `2`
 otherwise); the Symfony bundle uses it. Call `DtoGenerator::prepareProcess($output)` first to give the command the CLI's
 process settings: `memory_limit` (raised to at least 1G, or `DTO_GENERATOR_MEMORY_LIMIT`), errors on stderr and exit code `2` on a PHP

@@ -48,6 +48,14 @@ final class GeneratorConfig
     }
 
     /**
+     * @param non-empty-list<SourceConfig> $sources
+     */
+    public function withSources(array $sources): self
+    {
+        return new self($this->path, $this->target, $this->dto, $this->formats, $this->extensions, $sources, $this->remoteRefs);
+    }
+
+    /**
      * Remote $refs: none allowed unless the config names their prefixes.
      */
     public function remoteRefs(): RemoteRefsSettings

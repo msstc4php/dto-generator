@@ -50,6 +50,22 @@ final class Path
         return $prefix . implode('/', self::segments((string) substr($path, strlen($prefix)), $prefix !== ''));
     }
 
+    /**
+     * The path of $path inside $directory, "" for the directory itself; null when it lies elsewhere.
+     */
+    public static function within(string $directory, string $path): ?string
+    {
+        $directory = self::normalize($directory);
+        $path = self::normalize($path);
+        if ($path === $directory) {
+            return '';
+        }
+
+        $prefix = rtrim($directory, '/') . '/';
+
+        return strncmp($path, $prefix, strlen($prefix)) === 0 ? (string) substr($path, strlen($prefix)) : null;
+    }
+
     public static function directory(string $path): string
     {
         $normalized = self::normalize($path);

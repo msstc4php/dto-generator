@@ -45,6 +45,11 @@ final class SourceConfig
     /**
      * Absolute and normalized, so it can be compared with document paths directly.
      */
+    public function withOutputDir(string $outputDir): self
+    {
+        return new self($this->spec, $this->namespace, $outputDir, $this->include, $this->exclude);
+    }
+
     public function spec(): string
     {
         return $this->spec;

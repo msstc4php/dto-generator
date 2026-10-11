@@ -19,7 +19,13 @@ final class GeneratedFile
 
     private string $contents;
 
-    public function __construct(string $outputDir, string $relativePath, string $contents)
+    private ?string $className;
+
+    /**
+     * @param string|null $className the fully qualified name of the class the file declares; it does not
+     *                               exist before the file is loaded
+     */
+    public function __construct(string $outputDir, string $relativePath, string $contents, ?string $className = null)
     {
         if (!self::isSafeRelativePath($relativePath)) {
             throw new InvalidArgumentException(sprintf('"%s" must be a relative path inside the output directory.', $relativePath));
@@ -28,6 +34,12 @@ final class GeneratedFile
         $this->outputDir = $outputDir;
         $this->relativePath = $relativePath;
         $this->contents = $contents;
+        $this->className = $className;
+    }
+
+    public function className(): ?string
+    {
+        return $this->className;
     }
 
     public function outputDir(): string

@@ -20,6 +20,12 @@ All notable changes to this package are documented here. The format follows
   `remoteRefs.timeout` seconds for the whole answer. Escaped dot segments count as dots; an encoded `/` or `\` and
   characters a URL cannot hold are refused; an invalid `index.json` stops the run.
 
+- `Generate\Input::withOutputRoot()` writes every source's output directory under one root, at its path relative to
+  the config's directory, and `withoutFetching()` reads remote documents from the cache only, also when the run
+  writes. `Generate\Output::classes()` maps each generated class to its file and `documents()` lists what the run read
+  (the config, the local documents, the remote cache directory), for a framework that builds the DTOs on deploy.
+  `GeneratedFile` names the class it declares (`className()`).
+
 ### Changed
 
 - A remote `$ref` outside `remoteRefs.allow` reports what to allow ("… which remoteRefs.allow does not cover") instead

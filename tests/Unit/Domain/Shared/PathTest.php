@@ -91,6 +91,17 @@ final class PathTest extends TestCase
         ];
     }
 
+    public function testFindsAPathWithinADirectory(): void
+    {
+        self::assertSame('src/Dto', Path::within('/project', '/project/src/Dto'));
+        self::assertSame('src/Dto', Path::within('/project/', '/project/./src/Dto/'));
+        self::assertSame('', Path::within('/project', '/project/'));
+        self::assertSame('a/b', Path::within('/', '/a/b'));
+        self::assertSame('a', Path::within('C:/', 'c:/a'));
+        self::assertNull(Path::within('/project', '/project-b/src'));
+        self::assertNull(Path::within('/project', '/'));
+    }
+
     public function testRecognisesAbsolutePaths(): void
     {
         self::assertTrue(Path::isAbsolute('/a'));

@@ -48,6 +48,8 @@ final class Action
         /** @var array<string, int> $owners spec path → source index */
         $owners = [];
         $queue = [];
+        /** @var array<string, true> $documents */
+        $documents = [];
 
         foreach ($config->sources() as $index => $source) {
             $specAt = $config->location()->child('sources', (string) $index, 'spec');
@@ -58,7 +60,7 @@ final class Action
                 continue;
             }
 
-            $document = $this->load($spec, $specAt, $input, $diagnostics, $graph);
+            $document = $this->load($spec, $specAt, $input, $diagnostics, $graph, $documents);
             if (!$document instanceof Document) {
                 continue;
             }
@@ -90,7 +92,7 @@ final class Action
                     continue;
                 }
 
-                $resolved = $this->resolve($target, $use, $owners, $input, $diagnostics, $graph);
+                $resolved = $this->resolve($target, $use, $owners, $input, $diagnostics, $graph, $documents);
                 if (!$resolved instanceof ResolvedSchema) {
                     $graph->markFailed($target);
 
@@ -102,13 +104,15 @@ final class Action
             }
         }
 
-        return new Output($graph->build($diagnostics), $diagnostics);
+        return new Output($graph->build($diagnostics), $diagnostics, array_keys($documents));
     }
 
     /**
      * A file that failed once is reported once, however many sources or references point into it.
+     *
+     * @param array<string, true> $documents what was read, by path; a remote document adds the cache directory
      */
-    private function load(string $path, SchemaLocation $requestedAt, Input $input, Diagnostics $diagnostics, GraphBuilder $graph): ?Document
+    private function load(string $path, SchemaLocation $requestedAt, Input $input, Diagnostics $diagnostics, GraphBuilder $graph, array &$documents): ?Document
     {
         if ($graph->isUnloadable($path)) {
             return null;
@@ -116,7 +120,10 @@ final class Action
 
         try {
             if (!Url::isUrl($path)) {
-                return $this->loader->load($path);
+                $document = $this->loader->load($path);
+                $documents[$document->path()] = true;
+
+                return $document;
             }
 
             if (!$this->remote instanceof RemoteDocuments) {
@@ -125,7 +132,10 @@ final class Action
 
             $settings = $input->config()->remoteRefs();
 
-            return $this->remote->load($path, $settings->cacheDir(), $settings->timeout(), $input->fetchesRemote());
+            $document = $this->remote->load($path, $settings->cacheDir(), $settings->timeout(), $input->fetchesRemote());
+            $documents[$settings->cacheDir()] = true;
+
+            return $document;
         } catch (DocumentLoadFailed $exception) {
             $diagnostics->error($exception->getMessage(), $requestedAt);
             $graph->markUnloadable($path);
@@ -226,10 +236,11 @@ final class Action
 
     /**
      * @param array<string, int> $owners
+     * @param array<string, true> $documents
      */
-    private function resolve(SchemaLocation $target, ReferenceUse $use, array $owners, Input $input, Diagnostics $diagnostics, GraphBuilder $graph): ?ResolvedSchema
+    private function resolve(SchemaLocation $target, ReferenceUse $use, array $owners, Input $input, Diagnostics $diagnostics, GraphBuilder $graph, array &$documents): ?ResolvedSchema
     {
-        $document = $this->load($target->file(), $use->location(), $input, $diagnostics, $graph);
+        $document = $this->load($target->file(), $use->location(), $input, $diagnostics, $graph, $documents);
         if (!$document instanceof Document) {
             return null;
         }

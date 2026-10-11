@@ -251,6 +251,73 @@ final class GenerateTest extends TestCase
         self::assertSame(['/project/shared', '/project/own'], $writer->outputDirs);
     }
 
+    public function testMovesEveryOutputDirUnderTheOutputRoot(): void
+    {
+        $writer = new RecordingWriter(new WritePlan([], [], []));
+
+        $output = $this->generate($writer, Mode::WRITE, [], [], null, null, '/build/dto');
+
+        self::assertSame('ok', $output->status()->value());
+        self::assertSame(['/build/dto/src/Dto', '/build/dto/other'], $writer->outputDirs);
+        self::assertSame('/build/dto/other', $output->files()[2]->outputDir());
+    }
+
+    public function testMovesAnOutputDirThatIsTheConfigDirectoryToTheRootItself(): void
+    {
+        $writer = new RecordingWriter(new WritePlan([], [], []));
+        $loader = new InMemoryDocumentLoader([
+            self::CONFIG => ['version' => 1, 'target' => ['php' => '8.2'], 'sources' => [['spec' => 'api/a.yaml', 'namespace' => 'App\A', 'outputDir' => '.']]],
+            '/project/api/a.yaml' => ['openapi' => '3.1.0'],
+        ]);
+
+        $this->action($loader, $writer)((new Input(self::CONFIG, Mode::from(Mode::WRITE)))->withOutputRoot('/build/dto/'));
+
+        self::assertSame(['/build/dto'], $writer->outputDirs);
+    }
+
+    public function testRefusesToMoveAnOutputDirOutsideTheConfigDirectory(): void
+    {
+        $writer = new RecordingWriter(new WritePlan([], [], []));
+        $loader = new InMemoryDocumentLoader([
+            self::CONFIG => ['version' => 1, 'target' => ['php' => '8.2'], 'sources' => [
+                ['spec' => 'api/a.yaml', 'namespace' => 'App\A', 'outputDir' => '/var/a'],
+                ['spec' => 'api/b.yaml', 'namespace' => 'App\B', 'outputDir' => '../project-b/src'],
+                ['spec' => 'api/c.yaml', 'namespace' => 'App\C', 'outputDir' => 'src/C'],
+            ]],
+            '/project/api/a.yaml' => ['openapi' => '3.1.0'],
+            '/project/api/b.yaml' => ['openapi' => '3.1.0'],
+            '/project/api/c.yaml' => ['openapi' => '3.1.0'],
+        ]);
+
+        $output = $this->action($loader, $writer)((new Input(self::CONFIG, Mode::from(Mode::WRITE)))->withOutputRoot('/build/dto'));
+
+        self::assertSame('config-failed', $output->status()->value());
+        self::assertSame([
+            'error /project/dto-generator.yaml#/sources/0/outputDir: The output directory /var/a is outside the directory of the config, so it cannot move under /build/dto.',
+            'error /project/dto-generator.yaml#/sources/1/outputDir: The output directory /project-b/src is outside the directory of the config, so it cannot move under /build/dto.',
+        ], $this->messages($output));
+        self::assertNull($writer->outputDirs);
+    }
+
+    public function testMapsEveryGeneratedClassToItsFile(): void
+    {
+        $output = $this->generate(new RecordingWriter(new WritePlan([], [], [])), Mode::CHECK);
+
+        self::assertSame([
+            'App\Dto\User' => '/project/src/Dto/User.php',
+            'App\Dto\Tag' => '/project/src/Dto/Tag.php',
+            'App\Pets\Pet' => '/project/other/Pet.php',
+            'App\Dto\Currency' => '/project/src/Dto/Currency.php',
+        ], $output->classes());
+    }
+
+    public function testListsTheDocumentsItRead(): void
+    {
+        $output = $this->generate(new RecordingWriter(new WritePlan([], [], [])), Mode::CHECK);
+
+        self::assertSame(['/project/dto-generator.yaml', '/project/api/openapi.yaml', '/project/api/pets.yaml'], $output->documents());
+    }
+
     public function testReleasesTheWriterWhenPlanningFails(): void
     {
         $writer = new RecordingWriter(new WritePlan([], [], []), null, new RuntimeException('Disk gone.'));
@@ -300,7 +367,7 @@ final class GenerateTest extends TestCase
      * @param array<string, array<array-key, mixed>> $extraSchemas
      * @param array<string, array<array-key, mixed>|bool> $extraConfig
      */
-    private function generate(RecordingWriter $writer, string $mode, array $extraSchemas = [], array $extraConfig = [], ?FixedClassVerifierLocator $verifiers = null, ?FixedProjectPackages $packages = null): Output
+    private function generate(RecordingWriter $writer, string $mode, array $extraSchemas = [], array $extraConfig = [], ?FixedClassVerifierLocator $verifiers = null, ?FixedProjectPackages $packages = null, ?string $outputRoot = null): Output
     {
         $loader = new InMemoryDocumentLoader([
             self::CONFIG => [
@@ -321,7 +388,9 @@ final class GenerateTest extends TestCase
             ]]],
         ]);
 
-        return $this->action($loader, $writer, $verifiers ?? new FixedClassVerifierLocator(), $packages)(new Input(self::CONFIG, Mode::from($mode)));
+        $input = new Input(self::CONFIG, Mode::from($mode));
+
+        return $this->action($loader, $writer, $verifiers ?? new FixedClassVerifierLocator(), $packages)($outputRoot === null ? $input : $input->withOutputRoot($outputRoot));
     }
 
     private function action(InMemoryDocumentLoader $loader, RecordingWriter $writer, ?FixedClassVerifierLocator $verifiers = null, ?FixedProjectPackages $packages = null): Action

@@ -60,6 +60,8 @@
         // preg_replace() only returns null on a regex error.
         "CastString": {
             "ignore": [
+                // Equivalent: substr() after a matching strncmp() of a shorter prefix returns a string on PHP 7.4 too.
+                "MSSTC4PHP\\DtoGenerator\\Domain\\Shared\\Path::within",
                 "MSSTC4PHP\\DtoGenerator\\Domain\\Model\\ClassName::fromFqcn",
                 // Equivalent: preg_replace_callback() on a valid pattern and UTF-8 subject returns a string.
                 "MSSTC4PHP\\DtoGenerator\\Extension\\CustomAttributes\\AliasExpander::expand",
