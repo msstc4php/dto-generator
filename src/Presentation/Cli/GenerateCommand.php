@@ -58,6 +58,7 @@ final class GenerateCommand extends Command
             ->addOption('check', null, InputOption::VALUE_NONE, 'Write nothing; exit 1 when the output is out of date')
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Write nothing; show what would change')
             ->addOption('format', null, InputOption::VALUE_REQUIRED, 'text (default) or json')
+            ->addOption('output-root', null, InputOption::VALUE_REQUIRED, 'Write every output directory under this one, at its path relative to the config')
         ;
     }
 
@@ -82,8 +83,14 @@ final class GenerateCommand extends Command
             return $this->usageError($output, $json, 'No dto-generator.yaml or dto-generator.json here; pass --config.');
         }
 
+        $outputRoot = $options['output-root'] ?? null;
+        if ($outputRoot === '') {
+            return $this->usageError($output, $json, '--output-root must name a directory.');
+        }
+
         $mode = Mode::from($check ? Mode::CHECK : ($dryRun ? Mode::DRY_RUN : Mode::WRITE));
-        $result = ($this->generate)(new Input($config, $mode));
+        $generateInput = new Input($config, $mode);
+        $result = ($this->generate)(is_string($outputRoot) ? $generateInput->withOutputRoot(Path::resolve($this->workingDirectory, $outputRoot)) : $generateInput);
         if ($json) {
             // Raw: the console formatter would strip anything that looks like a <tag> from the JSON.
             $output->writeln(JsonReport::encode(['status' => $result->status()->value(), 'diagnostics' => $this->diagnostics($result), 'changes' => $this->changes($result->plan())]), OutputInterface::OUTPUT_RAW);

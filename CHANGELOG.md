@@ -25,6 +25,8 @@ All notable changes to this package are documented here. The format follows
   writes. `Generate\Output::classes()` maps each generated class to its file and `documents()` lists what the run read
   (the config, the local documents, the remote cache directory), for a framework that builds the DTOs on deploy.
   `GeneratedFile` names the class it declares (`className()`).
+- `generate --output-root=DIR` does the same from the command line; a relative `DIR` is resolved against the working
+  directory.
 
 ### Changed
 
