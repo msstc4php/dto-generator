@@ -219,10 +219,15 @@ $output = DtoGenerator::generator()(
         ->withoutFetching(),                     // remote documents from remoteRefs.cacheDir only
 );
 $output->classes();     // fully qualified class name => file, for an autoloader
-$output->documents();   // the config, every local document read and, for remote ones, the cache directory
+$output->documents();   // the config and every local document the run read
+$output->remoteCache(); // remoteRefs.cacheDir when remote documents were read, else null
 ```
 
-An output directory outside the config's directory cannot move: that is a config error. For a console command that wraps the generator,
+An output directory outside the config's directory cannot move, nor can one hold the root: both are config errors.
+Paths are compared as written, so reach the config by the same path as its output directories (no symbolic link in
+between).
+
+For a console command that wraps the generator,
 `DtoGenerator::guard($input, $output, $run)` maps exceptions to the CLI's exit codes (`3` for invalid options, `2`
 otherwise); the Symfony bundle uses it. Call `DtoGenerator::prepareProcess($output)` first to give the command the CLI's
 process settings: `memory_limit` (raised to at least 1G, or `DTO_GENERATOR_MEMORY_LIMIT`), errors on stderr and exit code `2` on a PHP

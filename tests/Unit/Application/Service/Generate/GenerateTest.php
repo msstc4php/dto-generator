@@ -316,6 +316,61 @@ final class GenerateTest extends TestCase
         $output = $this->generate(new RecordingWriter(new WritePlan([], [], [])), Mode::CHECK);
 
         self::assertSame(['/project/dto-generator.yaml', '/project/api/openapi.yaml', '/project/api/pets.yaml'], $output->documents());
+        self::assertNull($output->remoteCache());
+    }
+
+    public function testListsTheConfigWhenItFails(): void
+    {
+        $output = $this->action(new InMemoryDocumentLoader([self::CONFIG => ['version' => 1]]), new RecordingWriter(new WritePlan([], [], [])))(new Input('/project/./dto-generator.yaml', Mode::from(Mode::CHECK)));
+
+        self::assertSame('config-failed', $output->status()->value());
+        self::assertSame([self::CONFIG], $output->documents());
+    }
+
+    public function testListsTheDocumentsOfAFailedGeneration(): void
+    {
+        $output = $this->generate(new RecordingWriter(new WritePlan([], [], [])), Mode::CHECK, ['Bad' => ['type' => 'object', 'x-php-attributes' => 'App\Attr', 'properties' => ['id' => ['type' => 'string']]]]);
+
+        self::assertSame('generation-failed', $output->status()->value());
+        self::assertSame(['/project/dto-generator.yaml', '/project/api/openapi.yaml', '/project/api/pets.yaml'], $output->documents());
+    }
+
+    public function testRefusesAnOutputRootInsideAnOutputDirectory(): void
+    {
+        $writer = new RecordingWriter(new WritePlan([], [], []));
+        $loader = new InMemoryDocumentLoader([
+            self::CONFIG => ['version' => 1, 'target' => ['php' => '8.2'], 'sources' => [
+                ['spec' => 'api/a.yaml', 'namespace' => 'App\A', 'outputDir' => 'src'],
+                ['spec' => 'api/b.yaml', 'namespace' => 'App\B', 'outputDir' => 'src/Dto'],
+            ]],
+            '/project/api/a.yaml' => ['openapi' => '3.1.0'],
+            '/project/api/b.yaml' => ['openapi' => '3.1.0'],
+        ]);
+
+        $output = $this->action($loader, $writer)((new Input(self::CONFIG, Mode::from(Mode::WRITE)))->withOutputRoot('/project/src/Dto/built'));
+
+        self::assertSame('config-failed', $output->status()->value());
+        self::assertSame([
+            'error /project/dto-generator.yaml#/sources/0/outputDir: The output root /project/src/Dto/built lies in the output directory /project/src, where the moved classes would meet the ones written there.',
+            'error /project/dto-generator.yaml#/sources/1/outputDir: The output root /project/src/Dto/built lies in the output directory /project/src/Dto, where the moved classes would meet the ones written there.',
+        ], $this->messages($output));
+    }
+
+    public function testKeepsTwoSourcesOfOneOutputDirTogetherWhenMoved(): void
+    {
+        $writer = new RecordingWriter(new WritePlan([], [], []));
+        $loader = new InMemoryDocumentLoader([
+            self::CONFIG => ['version' => 1, 'target' => ['php' => '8.2'], 'sources' => [
+                ['spec' => 'api/a.yaml', 'namespace' => 'App\A', 'outputDir' => 'shared'],
+                ['spec' => 'api/b.yaml', 'namespace' => 'App\B', 'outputDir' => 'shared'],
+            ]],
+            '/project/api/a.yaml' => ['openapi' => '3.1.0'],
+            '/project/api/b.yaml' => ['openapi' => '3.1.0'],
+        ]);
+
+        $this->action($loader, $writer)((new Input(self::CONFIG, Mode::from(Mode::WRITE)))->withOutputRoot('/'));
+
+        self::assertSame(['/shared'], $writer->outputDirs);
     }
 
     public function testReleasesTheWriterWhenPlanningFails(): void

@@ -43,13 +43,22 @@ final class LoadRemoteTest extends TestCase
         self::assertSame([[self::MONEY, true], ['https://schemas.example.com/common/v1/currency.yaml', true]], $remote->loads());
     }
 
-    public function testListsTheDocumentsItReadWithTheCacheForRemoteOnes(): void
+    public function testNamesTheCacheOfTheRemoteDocumentsItRead(): void
     {
         $remote = new InMemoryRemoteDocuments([self::MONEY => ['Money' => ['type' => 'string']]]);
 
         $output = $this->load($remote, ['https://schemas.example.com/'], true, ['price' => ['$ref' => self::MONEY . '#/Money']]);
 
-        self::assertSame([self::SPEC, ConfigMother::remote(ConfigMother::source(self::SPEC), [])->remoteRefs()->cacheDir()], $output->documents());
+        self::assertSame([self::SPEC], $output->documents());
+        self::assertSame(ConfigMother::remote(ConfigMother::source(self::SPEC), [])->remoteRefs()->cacheDir(), $output->remoteCache());
+    }
+
+    public function testNamesNoCacheWithoutRemoteDocuments(): void
+    {
+        $output = $this->load(new InMemoryRemoteDocuments([]), ['https://schemas.example.com/'], true, ['id' => ['type' => 'integer']]);
+
+        self::assertSame([self::SPEC], $output->documents());
+        self::assertNull($output->remoteCache());
     }
 
     public function testNamesAWholeRemoteDocumentAfterItsPath(): void

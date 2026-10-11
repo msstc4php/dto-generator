@@ -22,9 +22,11 @@ All notable changes to this package are documented here. The format follows
 
 - `Generate\Input::withOutputRoot()` writes every source's output directory under one root, at its path relative to
   the config's directory, and `withoutFetching()` reads remote documents from the cache only, also when the run
-  writes. `Generate\Output::classes()` maps each generated class to its file and `documents()` lists what the run read
-  (the config, the local documents, the remote cache directory), for a framework that builds the DTOs on deploy.
-  `GeneratedFile` names the class it declares (`className()`).
+  writes. `Generate\Output::classes()` maps each generated class to its file, `documents()` lists the config and the local
+  documents the run read and `remoteCache()` the cache directory of remote ones, for a framework that builds the DTOs
+  on deploy.
+  `GeneratedFile` names the class it declares (`className()`). `Path::within()` tells where a path lies in a directory.
+- `Path::resolve()` against a root (`/`, `C:/`) no longer doubles the slash, which read as a UNC share.
 - `generate --output-root=DIR` does the same from the command line; a relative `DIR` is resolved against the working
   directory.
 

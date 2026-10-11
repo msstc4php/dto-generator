@@ -27,7 +27,8 @@ final class Path
 
     public static function resolve(string $baseDir, string $path): string
     {
-        return self::normalize(self::isAbsolute($path) ? $path : $baseDir . '/' . $path);
+        // A root such as "/" or "C:/" must not double its slash: "//x/y" would read as a UNC share.
+        return self::normalize(self::isAbsolute($path) ? $path : rtrim(str_replace('\\', '/', $baseDir), '/') . '/' . $path);
     }
 
     public static function normalize(string $path): string
@@ -51,10 +52,15 @@ final class Path
     }
 
     /**
-     * The path of $path inside $directory, "" for the directory itself; null when it lies elsewhere.
+     * The path of $path inside $directory, "" for the directory itself; null when it lies elsewhere. The paths are
+     * compared as written, so a symbolic link or another case of a case-insensitive file system counts as elsewhere.
      */
     public static function within(string $directory, string $path): ?string
     {
+        if (self::isAbsolute($directory) !== self::isAbsolute($path)) {
+            return null;
+        }
+
         $directory = self::normalize($directory);
         $path = self::normalize($path);
         if ($path === $directory) {
