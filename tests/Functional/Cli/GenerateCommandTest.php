@@ -136,6 +136,21 @@ final class GenerateCommandTest extends TestCase
         self::assertFileExists($this->dir . '/src/Dto/User.php');
     }
 
+    public function testWritesUnderAnOutputRootRelativeToTheWorkingDirectory(): void
+    {
+        self::assertSame([0, "Written: 2, deleted: 0, unchanged: 0.\n", ''], $this->execute(['--output-root' => 'var/build/dto']));
+        self::assertFileExists($this->dir . '/var/build/dto/src/Dto/User.php');
+        self::assertFileDoesNotExist($this->dir . '/src/Dto/User.php');
+        self::assertFileExists($this->dir . '/var/build/dto/src/Dto/.dto-generator.manifest.json');
+        self::assertDirectoryDoesNotExist($this->dir . '/src');
+        self::assertSame(0, $this->execute(['--output-root' => $this->dir . '/var/build/dto', '--check' => true])[0]);
+    }
+
+    public function testRejectsAnEmptyOutputRoot(): void
+    {
+        self::assertSame([3, '', "error: --output-root must name a directory.\n"], $this->execute(['--output-root' => '']));
+    }
+
     public function testRejectsCheckTogetherWithDryRun(): void
     {
         self::assertSame([3, '', "error: --check and --dry-run cannot be combined.\n"], $this->execute(['--check' => true, '--dry-run' => true]));

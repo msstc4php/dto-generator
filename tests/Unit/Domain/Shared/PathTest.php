@@ -61,6 +61,10 @@ final class PathTest extends TestCase
             'absolute' => ['/base', '/abs/x.yaml', '/abs/x.yaml'],
             'filesystem root' => ['/', 'a.yaml', '/a.yaml'],
             'drive root' => ['C:/', 'a.yaml', 'C:/a.yaml'],
+            'two segments under the filesystem root' => ['/', 'src/Dto', '/src/Dto'],
+            'two segments under a backslashed root' => ['\\', 'src/Dto', '/src/Dto'],
+            'two segments under a drive root' => ['C:\\', 'src/Dto', 'C:/src/Dto'],
+            'unc share' => ['\\\\server\\share\\build', 'src/Dto', '//server/share/build/src/Dto'],
             'windows absolute' => ['/base', 'C:/abs/x.yaml', 'C:/abs/x.yaml'],
         ];
     }
@@ -89,6 +93,21 @@ final class PathTest extends TestCase
             'windows drive' => ['C:/b.yaml', 'C:/'],
             'drive-like directory name' => ['/xC:/b.yaml', '/xC:'],
         ];
+    }
+
+    public function testFindsAPathWithinADirectory(): void
+    {
+        self::assertSame('src/Dto', Path::within('/project', '/project/src/Dto'));
+        self::assertSame('src/Dto', Path::within('/project/', '/project/./src/Dto/'));
+        self::assertSame('', Path::within('/project', '/project/'));
+        self::assertSame('a/b', Path::within('/', '/a/b'));
+        self::assertSame('a', Path::within('C:/', 'c:/a'));
+        self::assertNull(Path::within('/project', '/project-b/src'));
+        self::assertNull(Path::within('/project', '/'));
+        self::assertNull(Path::within('', '/etc/x'));
+        self::assertNull(Path::within('.', '/etc'));
+        self::assertNull(Path::within('/etc', 'etc/x'));
+        self::assertSame('b', Path::within('a', 'a/b'));
     }
 
     public function testRecognisesAbsolutePaths(): void

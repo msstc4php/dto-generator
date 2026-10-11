@@ -89,3 +89,14 @@ F2 (2026-10-10 UTC, `docs/internal/specs/2026-10-10-f2-remote-refs-design.md`): 
 - `Infrastructure/Remote/CachedRemoteDocuments`: `index.json` {url: {file: sha256(url).json|yaml, fetchedAt UTC, sha256 тела}}, перед чтением кэша — сверка SHA-256; без кэша и без `fetch` — «is not cached …; run generate»; 3xx — «redirects to …», не 200 — «server answered N»; формат — расширение URL → Content-Type → первый символ; запись — временный файл + rename. `Fetcher`/`StreamFetcher` — stream wrapper (`follow_location 0`, `ignore_errors`, `verify_peer`, лимит `maxlen+1`). Декодер JSON/YAML (BOM, алиас-бомбы) — общий `Infrastructure/Document/DocumentDecoder` (+ `UndecodableDocument`), `FileDocumentLoader` им пользуется.
 - Ревью F2 (CR-001…CR-018): `Url::normalize()` — только символы RFC 3986 (иначе «has characters a URL cannot hold»), экранирования unreserved декодируются (`%2e%2e` → `..`) до удаления dot-сегментов, `%2F`/`%5C` в пути — ошибка, путь выше корня — `/` (идемпотентность — тест), пустой query отброшен (PHP 7.4 и 8 разбирают `?` по-разному); `Url::hasScheme()` — любая схема в ссылке удалённого документа (`file:/…`) — ошибка. `StreamFetcher` — свой HTTP/1.0-клиент на `stream_socket_client` (срок на весь ответ через `stream_set_timeout` перед каждым чтением, заголовки ≤ 64 КБ, причина отказа TLS — из предупреждения). Порт `RemoteDocuments::load(url, cacheDir, timeout, fetch)`. Кэш: `index.json` проверяется целиком (невалидный JSON или запись не `{file: <64 hex>.json|yaml, fetchedAt, sha256: 64 hex}` — ошибка, не пустой кэш), запись индекса — под `flock` на `.index.lock` с перечитыванием, `JSON_THROW_ON_ERROR`, символические ссылки отвергаются, память — по `cacheDir + url`.
 - Тесты: `tests/Support/{InMemoryRemoteDocuments,RecordingFetcher,RemoteServer}` (`php -S` на свободном порту с `tests/Fixtures/Remote/router.php`), `tests/Integration/{RemoteRefsTest,Infrastructure/StreamFetcherTest}`.
+
+## Сборка вне исходников (2026-10-11 UTC, для режима build моста)
+
+- `Generate\Input::withOutputRoot($abs)` — каждый `outputDir` переносится под корень по пути относительно каталога
+  конфига (`Path::within()`); вне каталога конфига или корень внутри `outputDir` — ошибка конфигурации на
+  `sources/N/outputDir`. Сравнение путей текстовое (симлинк = «вне»). CLI: `generate --output-root=DIR`.
+- `withoutFetching()` — `fetchesRemote()` = `fetches && WRITE`; удалённые документы только из кэша.
+- `Output::classes()` (FQCN → файл; из `GeneratedFile::className()`, есть и в CHECK/DRY_RUN — описывает план),
+  `documents()` — конфиг + прочитанные локальные документы (`Schemas\Load\Reads`), `remoteCache()` — каталог кэша,
+  если читались удалённые. Не перечисляются: composer.json/lock, installed.json, классы расширений и `x-php-type`
+  (Symfony сам следит за vendor через `ComposerResource`). При CONFIG_FAILED — только путь конфига.

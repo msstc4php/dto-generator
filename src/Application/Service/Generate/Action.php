@@ -23,12 +23,14 @@ use MSSTC4PHP\DtoGenerator\Application\Service\Model\Enrich\Action as EnrichMode
 use MSSTC4PHP\DtoGenerator\Application\Service\Model\Enrich\Input as EnrichInput;
 use MSSTC4PHP\DtoGenerator\Application\Service\Schemas\Load\Action as LoadSchemas;
 use MSSTC4PHP\DtoGenerator\Application\Service\Schemas\Load\Input as SchemasInput;
+use MSSTC4PHP\DtoGenerator\Application\Service\Schemas\Load\Output as SchemasOutput;
 use MSSTC4PHP\DtoGenerator\Contract\InstalledPackages;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\TypeModel;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
+use MSSTC4PHP\DtoGenerator\Domain\Shared\Path;
 use MSSTC4PHP\DtoGenerator\Domain\Target\TargetProfile;
 
 /**
@@ -86,19 +88,25 @@ final class Action
         $diagnostics->merge($loaded->diagnostics());
         $config = $loaded->config();
         $target = $loaded->target();
-        $verifier = $config instanceof GeneratorConfig ? $this->verifier($config, $diagnostics) : null;
-        if (!$config instanceof GeneratorConfig || !$target instanceof TargetProfile || $diagnostics->hasErrors()) {
-            return new Output(Status::from(Status::CONFIG_FAILED), $diagnostics, null, []);
+        if ($config instanceof GeneratorConfig && $input->outputRoot() !== null) {
+            $config = $this->moved($config, $input->outputRoot(), $diagnostics);
         }
 
-        $files = $this->files($config, $target, $verifier, $input->mode()->value() === Mode::WRITE, $diagnostics);
+        $verifier = $config instanceof GeneratorConfig ? $this->verifier($config, $diagnostics) : null;
+        if (!$config instanceof GeneratorConfig || !$target instanceof TargetProfile || $diagnostics->hasErrors()) {
+            // An edit of the config is the fix, so a cache of this result must watch it.
+            return new Output(Status::from(Status::CONFIG_FAILED), $diagnostics, null, [], [Path::normalize($input->configPath())]);
+        }
+
+        [$files, $read] = $this->files($config, $target, $verifier, $input->fetchesRemote(), $diagnostics);
+        $documents = array_merge([$config->path()], $read->documents());
         if ($files === null) {
-            return new Output(Status::from(Status::GENERATION_FAILED), $diagnostics, null, []);
+            return new Output(Status::from(Status::GENERATION_FAILED), $diagnostics, null, [], $documents, $read->remoteCache());
         }
 
         $outputDirs = array_values(array_unique(array_map(static fn (SourceConfig $source): string => $source->outputDir(), $config->sources())));
         try {
-            return $this->conclude($input->mode(), $this->writer->plan($outputDirs, $files), $files, $diagnostics);
+            return $this->conclude($input->mode(), $this->writer->plan($outputDirs, $files), $files, $diagnostics, $documents, $read->remoteCache());
         } finally {
             // plan() locks the output directories; apply() releases them, but a check or an error never applies.
             $this->writer->release();
@@ -106,20 +114,53 @@ final class Action
     }
 
     /**
-     * @param list<GeneratedFile> $files
+     * Every source's output directory at its place under $root; one outside the config's directory has none.
      */
-    private function conclude(Mode $mode, WritePlan $plan, array $files, Diagnostics $diagnostics): Output
+    private function moved(GeneratorConfig $config, string $root, Diagnostics $diagnostics): ?GeneratorConfig
+    {
+        $sources = [];
+        foreach ($config->sources() as $index => $source) {
+            if (Path::within($source->outputDir(), $root) !== null) {
+                $diagnostics->error(
+                    sprintf('The output root %s lies in the output directory %s, where the moved classes would meet the ones written there.', $root, $source->outputDir()),
+                    $config->location()->child('sources', (string) $index, 'outputDir'),
+                );
+
+                continue;
+            }
+
+            $relative = Path::within($config->baseDir(), $source->outputDir());
+            if ($relative === null) {
+                $diagnostics->error(
+                    sprintf('The output directory %s is outside the directory of the config, so it cannot move under %s.', $source->outputDir(), $root),
+                    $config->location()->child('sources', (string) $index, 'outputDir'),
+                );
+
+                continue;
+            }
+
+            $sources[] = $source->withOutputDir(Path::resolve($root, $relative === '' ? '.' : $relative));
+        }
+
+        return count($sources) === count($config->sources()) ? $config->withSources($sources) : null;
+    }
+
+    /**
+     * @param list<GeneratedFile> $files
+     * @param list<string> $documents
+     */
+    private function conclude(Mode $mode, WritePlan $plan, array $files, Diagnostics $diagnostics, array $documents, ?string $remoteCache): Output
     {
         foreach ($plan->conflicts() as $path => $reason) {
             $diagnostics->error($reason, new SchemaLocation($path));
         }
 
         if ($plan->conflicts() !== []) {
-            return new Output(Status::from(Status::GENERATION_FAILED), $diagnostics, $plan, $files);
+            return new Output(Status::from(Status::GENERATION_FAILED), $diagnostics, $plan, $files, $documents, $remoteCache);
         }
 
         if ($mode->value() === Mode::CHECK) {
-            return new Output(Status::from($plan->hasChanges() ? Status::OUT_OF_DATE : Status::OK), $diagnostics, $plan, $files);
+            return new Output(Status::from($plan->hasChanges() ? Status::OUT_OF_DATE : Status::OK), $diagnostics, $plan, $files, $documents, $remoteCache);
         }
 
         if ($mode->value() === Mode::WRITE) {
@@ -128,11 +169,11 @@ final class Action
             } catch (WriteFailed $exception) {
                 $diagnostics->error($exception->getMessage(), new SchemaLocation($exception->path()));
 
-                return new Output(Status::from(Status::GENERATION_FAILED), $diagnostics, $plan, $files);
+                return new Output(Status::from(Status::GENERATION_FAILED), $diagnostics, $plan, $files, $documents, $remoteCache);
             }
         }
 
-        return new Output(Status::from(Status::OK), $diagnostics, $plan, $files);
+        return new Output(Status::from(Status::OK), $diagnostics, $plan, $files, $documents, $remoteCache);
     }
 
     /**
@@ -177,17 +218,16 @@ final class Action
     /**
      * Null when the schemas or the model have errors, since emitting them would be wasted work.
      *
-     * @param bool $writes whether the run writes, which alone may fetch remote documents
+     * @param bool $fetches whether remote documents missing from the cache may be fetched
      *
-     * @return list<GeneratedFile>|null
+     * @return array{list<GeneratedFile>|null, SchemasOutput} the files, null after an error, and what the schemas read
      */
-    private function files(GeneratorConfig $config, TargetProfile $target, ?ClassVerifier $verifier, bool $writes, Diagnostics $diagnostics): ?array
+    private function files(GeneratorConfig $config, TargetProfile $target, ?ClassVerifier $verifier, bool $fetches, Diagnostics $diagnostics): array
     {
         $extensions = ($this->loadExtensions)(new ExtensionsInput($config));
         $diagnostics->merge($extensions->diagnostics());
         $registry = $extensions->registry();
-        // Only a run that writes fetches remote documents into the cache; checks read what the cache holds.
-        $schemas = ($this->loadSchemas)(new SchemasInput($config, $writes));
+        $schemas = ($this->loadSchemas)(new SchemasInput($config, $fetches));
         $diagnostics->merge($schemas->diagnostics());
         $formats = $registry->formats(array_map(static fn (ClassName $class): TypeModel => new ClassType($class), $config->formats()));
         $aliases = array_keys($config->extensions()->aliases());
@@ -196,7 +236,7 @@ final class Action
         $enriched = ($this->enrichModel)(new EnrichInput($model->classes(), $model->enums(), $schemas->graph(), $target, $registry, $this->packages($config, $diagnostics), $verifier));
         $diagnostics->merge($enriched->diagnostics());
         if ($diagnostics->hasErrors()) {
-            return null;
+            return [null, $schemas];
         }
 
         $files = [];
@@ -208,15 +248,16 @@ final class Action
                 $source->outputDir(),
                 $class->name()->shortName() . '.php',
                 $this->emitter->emit($class, $target, $model->inheritedProperties($class), $model->parentOf($class)),
+                $class->name()->fqcn(),
             );
         }
 
         foreach ($model->enums() as $built) {
             $source = $config->sources()[$built->source()];
             $enum = $built->model();
-            $files[] = new GeneratedFile($source->outputDir(), $enum->name()->shortName() . '.php', $this->emitter->emitEnum($enum, $target));
+            $files[] = new GeneratedFile($source->outputDir(), $enum->name()->shortName() . '.php', $this->emitter->emitEnum($enum, $target), $enum->name()->fqcn());
         }
 
-        return $files;
+        return [$files, $schemas];
     }
 }

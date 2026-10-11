@@ -64,6 +64,18 @@ final class RemoteRefsTest extends TestCase
         ], $this->messages($checked));
     }
 
+    public function testWritesWithoutFetchingWhenAskedTo(): void
+    {
+        $this->project('http://127.0.0.1:9/docs/', 'http://127.0.0.1:9/docs/money.yaml#/Money');
+
+        $written = DtoGenerator::generator()((new Input($this->project . '/dto-generator.yaml', Mode::from(Mode::WRITE)))->withoutFetching());
+
+        self::assertSame('generation-failed', $written->status()->value());
+        self::assertSame([
+            'error ' . $this->project . '/api.yaml#/components/schemas/Order/properties/price: Remote document "http://127.0.0.1:9/docs/money.yaml" is not cached in ' . $this->project . '/.dto-generator/remote; run generate to fetch it.',
+        ], $this->messages($written));
+    }
+
     private function project(string $prefix, string $ref): void
     {
         file_put_contents($this->project . '/composer.json', '{}');
