@@ -105,7 +105,9 @@ Classes are `final`, except the bases of `allOf` and of discriminated unions. At
 
 - **Inline objects in a `oneOf`/`anyOf` with a discriminator are not generated:** the mapping needs a `$ref`, so an
   error asks to move them to `components/schemas`.
-- **A missing key and `null` are the same.** An optional property is `null` either way.
+- **A missing key is not tracked.** An optional property without its key takes the schema's `default`, else `null`;
+  a DTO cannot tell a missing key from an explicit `null`, and an optional property that is not nullable accepts
+  `null`. JSON Merge Patch needs the raw request.
 - **Not interpreted:** `prefixItems`, `patternProperties`, `if`/`then`/`else`, `not`, `dependentSchemas`,
   `dependentRequired`, `unevaluatedProperties`, `unevaluatedItems`, `contains`, `minContains`, `maxContains`,
   `propertyNames`, `additionalItems`, `dependencies`, `$dynamicRef`. Each gives a warning, except in a schema with
