@@ -24,7 +24,7 @@ final class CallbackFetcher implements Fetcher
         $this->answer = $answer;
     }
 
-    public function get(string $url, int $timeout, int $maxBytes): Response
+    public function get(string $url, int $timeout, int $maxBytes, array $headers = []): Response
     {
         return ($this->answer)($url);
     }

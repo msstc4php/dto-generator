@@ -20,6 +20,8 @@ final class Input
 
     private bool $fetches = true;
 
+    private bool $refreshes = false;
+
     public function __construct(string $configPath, Mode $mode)
     {
         $this->configPath = $configPath;
@@ -76,5 +78,25 @@ final class Input
     public function fetchesRemote(): bool
     {
         return $this->fetches && $this->mode->value() === Mode::WRITE;
+    }
+
+    /**
+     * Fetches every remote document the run reads again, replacing what the cache holds. Only a run that fetches can
+     * refresh: in a check, a dry run or after withoutFetching() this changes nothing.
+     */
+    public function withRefreshedRemote(): self
+    {
+        $input = clone $this;
+        $input->refreshes = true;
+
+        return $input;
+    }
+
+    /**
+     * Whether a refresh was asked for and the run fetches.
+     */
+    public function refreshesRemote(): bool
+    {
+        return $this->refreshes && $this->fetchesRemote();
     }
 }

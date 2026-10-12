@@ -37,6 +37,8 @@ remoteRefs:                      # remote $refs, off unless allowed
   allow: [https://schemas.example.com/common/]
   cacheDir: .dto-generator/remote
   timeout: 10
+  headers:                       # sent when fetching, over https only
+    - { prefix: https://schemas.example.com/, name: Authorization, value: 'Bearer ${SCHEMAS_TOKEN}' }
 
 sources:                         # required, at least one
   - spec: openapi/public.yaml
@@ -177,6 +179,7 @@ extensions by package name. Attributes are written in that order.
 | `allow` | `[]` | URL prefixes (`http://` or `https://`, no query or fragment) |
 | `cacheDir` | `.dto-generator/remote` | a directory, relative to the config file |
 | `timeout` | `10` | seconds per document, 1 to 300 |
+| `headers` | none | list of `{prefix, name, value}`, see below |
 
 ```yaml
 remoteRefs:
@@ -198,16 +201,49 @@ project.
   certificates are verified, redirects are not followed (a `3xx` is an error naming the new URL, which you then allow
   and refer to), TLS 1.2 or newer is required, headers may take 64 KB and the body 10 MB, a body shorter than its
   `Content-Length` or one sent in chunks is an error, the whole answer must arrive within `timeout` seconds
-  (resolving the host name is not counted), and any status but `200` is an error. Proxies (`HTTP_PROXY`,
-  `HTTPS_PROXY`) are not used. JSON or YAML is told by the
+  (resolving the host name is not counted), and any status but `200` is an error. JSON or YAML is told by the
   extension of the URL, else by a YAML `Content-Type`, else by whether it starts with `{`.
+- **Headers.** Each entry of `headers` adds a header to the fetch of every document under its `prefix`, which must be an
+  `https://` URL: credentials never travel in clear text, and since redirects are not followed they never reach another
+  host. `${NAME}` in `value` stands for the environment variable `NAME`, read only when a document is fetched, so
+  `--check` and runs that find everything cached need no secret. Variables are looked up in `$_SERVER`, then `$_ENV`,
+  then `getenv()`, so the values Symfony's Dotenv loads count too; a value set later with `putenv()` alone does not
+  replace one already in `$_SERVER`. Keep secrets in the environment (a CI secret), never in the config, which you
+  commit. A variable that is not set or is empty, or a value holding a control character other than a tab, is an error,
+  and no value ever appears in a message or in the cache. A name starting with `HTTP_` is refused: under CGI and FPM the
+  client of a request sets such variables from its headers. Of several entries with the same name (letter case ignored)
+  for one URL, the one with the longest prefix wins; two entries with the same name and prefix are an error, and an
+  entry whose prefix no `allow` prefix overlaps gets a warning, since it is never sent. `Host`, `Connection`,
+  `Content-Length`, `Transfer-Encoding` and `Proxy-*` cannot be set; `Accept` and `User-Agent` replace the generator's
+  own. For Basic authentication put `Basic <base64 of user:password>` into the variable.
+
+  ```yaml
+  remoteRefs:
+    allow: [https://gitlab.example.com/api/v4/projects/12/repository/files/]
+    headers:
+      - prefix: https://gitlab.example.com/api/
+        name: PRIVATE-TOKEN
+        value: ${GITLAB_TOKEN}
+  ```
+- **Proxies.** Like curl, the generator takes `https_proxy` (or `HTTPS_PROXY`) for https URLs and only the lower-case
+  `http_proxy` for http ones (`HTTP_PROXY` can come from a request header under CGI); unlike curl it ignores
+  `all_proxy`/`ALL_PROXY`. A proxy is `http://[user[:password]@]host[:port]`, the scheme may be left out and the port
+  defaults to 1080; an HTTPS or SOCKS proxy is an error for every fetch that would use it, so set `no_proxy=*` (or list
+  the schema hosts in it) to fetch directly instead. https goes through a `CONNECT` tunnel, so TLS and the certificate
+  check still run with the server itself and the proxy sees neither the request nor its headers; plain http is sent to
+  the proxy. `no_proxy` (or `NO_PROXY`) lists hosts reached directly, separated by commas or spaces: a name also covers
+  its subdomains (dots around it change nothing), `host:port` only that port, an IP address only itself however it is
+  spelled, `*` every host; CIDR ranges are not supported. Messages name a proxy by host and port, never with its
+  credentials.
 - **Cache.** Fetched documents are kept in `cacheDir`, with `index.json` recording each URL, when it was fetched (UTC)
   and the SHA-256 of what came back. Later runs read the cache and never go to the network; a cached copy that no
   longer matches its SHA-256, a symbolic link, and an `index.json` that is not valid (say, after a merge conflict) are
   errors. Commit the directory: builds then need no network, and a change in a schema you depend on shows in review.
   The SHA-256 catches accidents, not someone who may commit both a file and its hash: review the directory like code.
-  The empty `.index.lock` serializes runs that share the cache and need not be committed. To fetch a document again,
-  delete its file and its entry in `index.json` (or the whole directory).
+  The empty `.index.lock` serializes runs that share the cache and need not be committed. To fetch the documents a run
+  reads again, run `generate --refresh-remote`: it replaces their copies, which also repairs a broken one, and deletes
+  the files no entry names any more. Entries of documents that no specification reads any longer stay until you
+  delete them.
 - **Checks.** `--check` and `--dry-run` read the cache only: a document that is not there is an error asking to run
   `generate`.
 - Credentials in URLs, other schemes (`file:`, `ftp:`) and specifications given by URL in `sources` are not supported.

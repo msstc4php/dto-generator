@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MSSTC4PHP\DtoGenerator\Tests\Functional\Cli;
 
 use MSSTC4PHP\DtoGenerator\DtoGenerator;
+use MSSTC4PHP\DtoGenerator\Tests\Support\RemoteServer;
 use MSSTC4PHP\DtoGenerator\Tests\Support\SplitOutput;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Input\ArrayInput;
@@ -149,6 +150,49 @@ final class GenerateCommandTest extends TestCase
     public function testRejectsAnEmptyOutputRoot(): void
     {
         self::assertSame([3, '', "error: --output-root must name a directory.\n"], $this->execute(['--output-root' => '']));
+    }
+
+    public function testRefreshesTheCachedRemoteDocuments(): void
+    {
+        $server = RemoteServer::start();
+        try {
+            $url = $server->url('/docs/currency.yaml');
+            file_put_contents($this->dir . '/dto-generator.yaml', self::CONFIG . "\nremoteRefs:\n  allow: ['" . $server->url('/docs/') . "']\n");
+            file_put_contents($this->dir . '/api/openapi.yaml', self::SPEC . "\n    Price:\n      type: object\n      properties:\n        currency: { \$ref: '" . $url . "#/Currency' }\n");
+            $stale = "Currency:\n  type: string\n  enum: [GBP]\n";
+            mkdir($this->dir . '/.dto-generator/remote', 0777, true);
+            file_put_contents($this->dir . '/.dto-generator/remote/' . hash('sha256', $stale) . '.yaml', $stale);
+            file_put_contents($this->dir . '/.dto-generator/remote/index.json', (string) json_encode([$url => ['file' => hash('sha256', $stale) . '.yaml', 'fetchedAt' => '2026-01-01T00:00:00Z', 'sha256' => hash('sha256', $stale)]]));
+
+            $result = $this->execute([]);
+            self::assertSame(0, $result[0], $result[1] . $result[2]);
+            self::assertStringContainsString('GBP', (string) file_get_contents($this->dir . '/src/Dto/Currency.php'));
+
+            self::assertSame(0, $this->execute(['--refresh-remote' => true])[0]);
+            self::assertStringContainsString('EUR', (string) file_get_contents($this->dir . '/src/Dto/Currency.php'));
+            self::assertStringNotContainsString('GBP', (string) file_get_contents($this->dir . '/src/Dto/Currency.php'));
+            self::assertFileDoesNotExist($this->dir . '/.dto-generator/remote/' . hash('sha256', $stale) . '.yaml');
+        } finally {
+            $server->stop();
+        }
+    }
+
+    /**
+     * @return array<string, array{array<string, bool>}>
+     */
+    public static function runsThatLeaveTheCache(): array
+    {
+        return ['check' => [['--check' => true]], 'dry run' => [['--dry-run' => true]]];
+    }
+
+    /**
+     * @dataProvider runsThatLeaveTheCache
+     *
+     * @param array<string, bool> $options
+     */
+    public function testRejectsARefreshOfARunThatLeavesTheCache(array $options): void
+    {
+        self::assertSame([3, '', "error: --refresh-remote fetches into the cache, which --check and --dry-run leave as it is.\n"], $this->execute($options + ['--refresh-remote' => true]));
     }
 
     public function testRejectsCheckTogetherWithDryRun(): void

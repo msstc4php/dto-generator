@@ -19,7 +19,8 @@ use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
 /**
- * `dto-generator generate [--config=] [--check] [--dry-run] [--format=text|json]` with the exit codes of spec §9.2.
+ * `dto-generator generate [--config=] [--check] [--dry-run] [--format=text|json] [--output-root=] [--refresh-remote]` with
+ * the exit codes of spec §9.2.
  * The report goes to stdout; in text mode, diagnostics go to stderr.
  *
  * @phpstan-import-type ChangeShape from JsonReport
@@ -59,6 +60,7 @@ final class GenerateCommand extends Command
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Write nothing; show what would change')
             ->addOption('format', null, InputOption::VALUE_REQUIRED, 'text (default) or json')
             ->addOption('output-root', null, InputOption::VALUE_REQUIRED, 'Write every output directory under this one, at its path relative to the config')
+            ->addOption('refresh-remote', null, InputOption::VALUE_NONE, 'Fetch the remote documents the run reads again, replacing their cached copies')
         ;
     }
 
@@ -78,6 +80,11 @@ final class GenerateCommand extends Command
             return $this->usageError($output, $json, '--check and --dry-run cannot be combined.');
         }
 
+        $refresh = $options['refresh-remote'] === true;
+        if ($refresh && ($check || $dryRun)) {
+            return $this->usageError($output, $json, '--refresh-remote fetches into the cache, which --check and --dry-run leave as it is.');
+        }
+
         $config = $this->configPath($options['config'] ?? null);
         if ($config === null) {
             return $this->usageError($output, $json, 'No dto-generator.yaml or dto-generator.json here; pass --config.');
@@ -90,6 +97,10 @@ final class GenerateCommand extends Command
 
         $mode = Mode::from($check ? Mode::CHECK : ($dryRun ? Mode::DRY_RUN : Mode::WRITE));
         $generateInput = new Input($config, $mode);
+        if ($refresh) {
+            $generateInput = $generateInput->withRefreshedRemote();
+        }
+
         $result = ($this->generate)(is_string($outputRoot) ? $generateInput->withOutputRoot(Path::resolve($this->workingDirectory, $outputRoot)) : $generateInput);
         if ($json) {
             // Raw: the console formatter would strip anything that looks like a <tag> from the JSON.

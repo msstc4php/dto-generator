@@ -11,8 +11,10 @@ interface Fetcher
      *
      * @param positive-int $timeout seconds
      * @param positive-int $maxBytes a longer body is an error
+     * @param array<string, string> $headers values by name, sent besides the client's own; Accept and User-Agent replace
+     *                                       them
      *
      * @throws FetchFailed when no answer arrives or the body is too long
      */
-    public function get(string $url, int $timeout, int $maxBytes): Response;
+    public function get(string $url, int $timeout, int $maxBytes, array $headers = []): Response;
 }

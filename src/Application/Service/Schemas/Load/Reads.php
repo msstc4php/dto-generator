@@ -4,24 +4,32 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Application\Service\Schemas\Load;
 
+use MSSTC4PHP\DtoGenerator\Application\Port\Document;
+
 /**
- * What one run read: the local documents, and whether any remote one came from the cache.
+ * What one run read: the local documents, and the remote ones, kept so each is loaded, and refreshed, once per run.
  */
 final class Reads
 {
     /** @var array<string, true> */
     private array $documents = [];
 
-    private bool $remote = false;
+    /** @var array<string, Document> by URL */
+    private array $remote = [];
 
     public function document(string $path): void
     {
         $this->documents[$path] = true;
     }
 
-    public function remote(): void
+    public function remote(Document $document): void
     {
-        $this->remote = true;
+        $this->remote[$document->path()] = $document;
+    }
+
+    public function remoteDocument(string $url): ?Document
+    {
+        return $this->remote[$url] ?? null;
     }
 
     /**
@@ -34,6 +42,6 @@ final class Reads
 
     public function readsRemote(): bool
     {
-        return $this->remote;
+        return $this->remote !== [];
     }
 }

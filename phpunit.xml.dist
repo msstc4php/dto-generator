@@ -14,6 +14,19 @@
         <!-- php:7.4-cli ships without php.ini; its default hides notices and deprecations from PHPUnit. -->
         <ini name="error_reporting" value="-1"/>
         <ini name="display_errors" value="1"/>
+        <!-- The tests reach their local servers directly, whatever proxy the machine that runs them has. -->
+        <env name="https_proxy" value="" force="true"/>
+        <server name="https_proxy" value="" force="true"/>
+        <env name="HTTPS_PROXY" value="" force="true"/>
+        <server name="HTTPS_PROXY" value="" force="true"/>
+        <env name="http_proxy" value="" force="true"/>
+        <server name="http_proxy" value="" force="true"/>
+        <env name="HTTP_PROXY" value="" force="true"/>
+        <server name="HTTP_PROXY" value="" force="true"/>
+        <env name="no_proxy" value="" force="true"/>
+        <server name="no_proxy" value="" force="true"/>
+        <env name="NO_PROXY" value="" force="true"/>
+        <server name="NO_PROXY" value="" force="true"/>
     </php>
 
     <testsuites>
