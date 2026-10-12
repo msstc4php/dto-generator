@@ -162,8 +162,8 @@ Attributes appear in a fixed order: built-in `x-php-attributes` first, then exte
   extension that checks it (the Symfony bridge writes constraints). The extension marks each occurrence it checks, or
   warns about, with `$context->keywordChecks()->checked($holder->location(), 'contains')`, where `$holder` is the
   schema that holds the keyword (the target of a `$ref`, an `allOf` branch), not the property that reaches it. After
-  enrichment the generator warns about every occurrence left unmarked, so a keyword the extension never sees is not lost. Claiming
-  a keyword the generator does not warn about gives a warning and is ignored.
+  enrichment the generator warns about every occurrence left unmarked, so a keyword the extension never sees is not
+  lost. Claiming a keyword the generator does not warn about gives a warning and is ignored.
 - The generator enriches a class before its properties, so an enricher that is both may carry what it read from the
   class's schema over to them.
 

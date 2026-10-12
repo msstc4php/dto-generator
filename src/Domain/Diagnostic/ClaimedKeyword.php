@@ -33,7 +33,7 @@ final class ClaimedKeyword
         return $this->keyword;
     }
 
-    public function location(): SchemaLocation
+    public function keywordLocation(): SchemaLocation
     {
         return $this->schema->child($this->keyword);
     }

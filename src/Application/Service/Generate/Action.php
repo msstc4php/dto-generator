@@ -247,7 +247,7 @@ final class Action
         $enriched = ($this->enrichModel)(new EnrichInput($model->classes(), $model->enums(), $schemas->graph(), $target, $registry, $this->packages($config, $diagnostics), $verifier, $keywordChecks));
         $diagnostics->merge($enriched->diagnostics());
         foreach ($keywordChecks->unchecked() as $occurrence) {
-            $diagnostics->warning(UnsupportedKeywords::unchecked($occurrence->keyword()), $occurrence->location());
+            $diagnostics->warning(UnsupportedKeywords::unchecked($occurrence->keyword()), $occurrence->keywordLocation());
         }
 
         if ($diagnostics->hasErrors()) {

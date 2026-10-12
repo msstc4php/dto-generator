@@ -19,9 +19,9 @@ All notable changes to this package are documented here. The format follows
   `linux/arm64`, tagged `X.Y.Z`, and `X.Y`, `X`, `latest` when it is the newest of their line.
 - `ExtensionRegistry::claimKeywords()`: an extension that checks a keyword the generator calls unsupported (such as
   `contains`) claims it and marks each occurrence it checks, or warns about, in `keywordChecks()` of its
-  `PropertyContext`/`ClassContext` (`Domain\Diagnostic\KeywordChecks`, `ClaimedKeyword`); the generator warns about the occurrences
-  left unmarked, as before, after the other diagnostics. A test double implementing `ExtensionRegistry` needs the new method. The contract of
-  `ClassEnricher` says that a class is enriched before its properties.
+  `PropertyContext`/`ClassContext` (`Domain\Diagnostic\KeywordChecks`); the generator warns about the occurrences
+  left unmarked, as before, after the other diagnostics. A test double implementing `ExtensionRegistry` needs the new
+  method. The contract of `ClassEnricher` says that a class is enriched before its properties.
 
 ### Changed
 

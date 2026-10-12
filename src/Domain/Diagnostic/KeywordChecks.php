@@ -44,7 +44,7 @@ final class KeywordChecks
     public function expect(SchemaLocation $schema, string $keyword): void
     {
         $occurrence = new ClaimedKeyword($schema, $keyword);
-        $this->pending[$occurrence->location()->toString()] = $occurrence;
+        $this->pending[$occurrence->keywordLocation()->toString()] = $occurrence;
     }
 
     /**

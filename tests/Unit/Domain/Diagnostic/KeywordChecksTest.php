@@ -30,6 +30,6 @@ final class KeywordChecksTest extends TestCase
         self::assertTrue($checks->isClaimed('contains'));
         self::assertFalse($checks->isClaimed('not'));
         self::assertFalse((new KeywordChecks())->isClaimed('contains'));
-        self::assertSame('a.yaml#/A/propertyNames', $checks->unchecked()[0]->location()->toString());
+        self::assertSame('a.yaml#/A/propertyNames', $checks->unchecked()[0]->keywordLocation()->toString());
     }
 }
