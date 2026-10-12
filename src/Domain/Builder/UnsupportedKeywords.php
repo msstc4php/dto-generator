@@ -6,7 +6,8 @@ namespace MSSTC4PHP\DtoGenerator\Domain\Builder;
 
 /**
  * JSON Schema keywords that shape a value in ways no generated type expresses; silently dropping them would hide
- * that the DTO admits more than the schema. Keywords the Symfony bridge turns into constraints are not listed.
+ * that the DTO admits more than the schema. An extension that checks one claims it; the parser hands each occurrence
+ * to KeywordChecks, and the generator warns about those the extension left unmarked.
  */
 final class UnsupportedKeywords
 {
@@ -18,6 +19,14 @@ final class UnsupportedKeywords
 
     private function __construct()
     {
+    }
+
+    /**
+     * Whether an extension may take over the warning about the keyword because it checks it.
+     */
+    public static function isClaimable(string $keyword): bool
+    {
+        return in_array($keyword, self::NO_EFFECT, true);
     }
 
     /**
@@ -33,6 +42,14 @@ final class UnsupportedKeywords
             return '"nullable" is OpenAPI 3.0 and has no effect in 3.1; write type: [T, \'null\'].';
         }
 
-        return in_array($keyword, self::NO_EFFECT, true) ? sprintf('"%s" is not supported and has no effect on the generated type.', $keyword) : null;
+        return in_array($keyword, self::NO_EFFECT, true) ? self::unchecked($keyword) : null;
+    }
+
+    /**
+     * The warning about a keyword nothing checks: none supports it, or the extension that claims it left it alone.
+     */
+    public static function unchecked(string $keyword): string
+    {
+        return sprintf('"%s" is not supported and has no effect on the generated type.', $keyword);
     }
 }

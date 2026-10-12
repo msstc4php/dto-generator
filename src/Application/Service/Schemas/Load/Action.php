@@ -50,6 +50,7 @@ final class Action
         $owners = [];
         $queue = [];
         $reads = new Reads();
+        $parser = $this->parser->claiming($input->keywordChecks());
 
         foreach ($config->sources() as $index => $source) {
             $specAt = $config->location()->child('sources', (string) $index, 'spec');
@@ -73,7 +74,7 @@ final class Action
                 }
 
                 $location = (new SchemaLocation($document->path()))->child('components', 'schemas', $name);
-                $schema = new ResolvedSchema($this->parser->parse($node, $location, $diagnostics), $index, $name, true);
+                $schema = new ResolvedSchema($parser->parse($node, $location, $diagnostics), $index, $name, true);
                 $graph->add($schema);
                 $queue[] = $schema;
             }
@@ -92,7 +93,7 @@ final class Action
                     continue;
                 }
 
-                $resolved = $this->resolve($target, $use, $owners, $input, $diagnostics, $graph, $reads);
+                $resolved = $this->resolve($target, $use, $owners, $input, $diagnostics, $graph, $reads, $parser);
                 if (!$resolved instanceof ResolvedSchema) {
                     $graph->markFailed($target);
 
@@ -237,7 +238,7 @@ final class Action
     /**
      * @param array<string, int> $owners
      */
-    private function resolve(SchemaLocation $target, ReferenceUse $use, array $owners, Input $input, Diagnostics $diagnostics, GraphBuilder $graph, Reads $reads): ?ResolvedSchema
+    private function resolve(SchemaLocation $target, ReferenceUse $use, array $owners, Input $input, Diagnostics $diagnostics, GraphBuilder $graph, Reads $reads, SchemaParser $parser): ?ResolvedSchema
     {
         $document = $this->load($target->file(), $use->location(), $input, $diagnostics, $graph, $reads);
         if (!$document instanceof Document) {
@@ -255,7 +256,7 @@ final class Action
 
         $node = JsonPointer::get($document->root(), $target->pointer());
 
-        return new ResolvedSchema($this->parser->parse($node, $target, $diagnostics), $owners[$document->path()] ?? null, $this->nameOf($target), false);
+        return new ResolvedSchema($parser->parse($node, $target, $diagnostics), $owners[$document->path()] ?? null, $this->nameOf($target), false);
     }
 
     private function nameOf(SchemaLocation $location): string

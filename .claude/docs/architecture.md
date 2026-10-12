@@ -131,3 +131,10 @@ F2 (2026-10-10 UTC, `docs/internal/specs/2026-10-10-f2-remote-refs-design.md`): 
   `documents()` — конфиг + прочитанные локальные документы (`Schemas\Load\Reads`), `remoteCache()` — каталог кэша,
   если читались удалённые. Не перечисляются: composer.json/lock, installed.json, классы расширений и `x-php-type`
   (Symfony сам следит за vendor через `ComposerResource`). При CONFIG_FAILED — только путь конфига.
+
+## Заявки ключевых слов расширениями (2026-10-12 UTC, этап G1 моста)
+
+- `ExtensionRegistry::claimKeywords(...)` → `Registry::claimedKeywords()` → `Schemas\Load\Input(config, policy, claimed)` (из `Generate\Action`) → `SchemaParser::claiming()` (клон с `$claimed`): заявленное слово из `UnsupportedKeywords::NO_EFFECT` не даёт предупреждения «not supported». Заявлять можно только слова из этого списка (`isClaimable`), иначе ошибка регистрации.
+- Мост 1.3 заявляет `dependentRequired`, `propertyNames`, `contains`, `minContains`, `maxContains` и сам предупреждает, где не проверяет. Спека — в мосте: `docs/internal/specs/2026-10-12-g-validation-keywords-design.md`.
+- Метод добавлен в интерфейс `@api`: `make bc-check` этого не ловит, но тестовые двойники `ExtensionRegistry` (как в мосте) ломаются — отмечено в CHANGELOG.
+- Контракт `ClassEnricher`: класс обогащается до своих свойств (`Enrich\Action::enrich`) — мост на это опирается.

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MSSTC4PHP\DtoGenerator\Contract;
 
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
+use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\KeywordChecks;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\DiscriminatorModel;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
@@ -33,12 +34,15 @@ final class ClassContext
 
     private bool $inline;
 
+    private KeywordChecks $keywordChecks;
+
     /**
      * @param bool $inline whether the class comes from an object written inside a property, whose schema is the property's
      * @param SchemaReferences|null $references how `$ref`s resolve; none when omitted
      * @param DiscriminatorModel|null $selectingDiscriminator the discriminator whose mapping selects this class, if any
+     * @param KeywordChecks|null $keywordChecks the claimed keywords of the run; none when omitted
      */
-    public function __construct(ClassModel $class, Schema $schema, TargetProfile $target, InstalledPackages $packages, Diagnostics $diagnostics, bool $inline = false, ?SchemaReferences $references = null, ?DiscriminatorModel $selectingDiscriminator = null)
+    public function __construct(ClassModel $class, Schema $schema, TargetProfile $target, InstalledPackages $packages, Diagnostics $diagnostics, bool $inline = false, ?SchemaReferences $references = null, ?DiscriminatorModel $selectingDiscriminator = null, ?KeywordChecks $keywordChecks = null)
     {
         $this->class = $class;
         $this->schema = $schema;
@@ -48,6 +52,7 @@ final class ClassContext
         $this->inline = $inline;
         $this->references = $references ?? SchemaReferences::none();
         $this->selectingDiscriminator = $selectingDiscriminator;
+        $this->keywordChecks = $keywordChecks ?? new KeywordChecks();
     }
 
     /**
@@ -102,5 +107,13 @@ final class ClassContext
     public function selectingDiscriminator(): ?DiscriminatorModel
     {
         return $this->selectingDiscriminator;
+    }
+
+    /**
+     * Where the extension marks the claimed keywords it checked; see ExtensionRegistry::claimKeywords().
+     */
+    public function keywordChecks(): KeywordChecks
+    {
+        return $this->keywordChecks;
     }
 }

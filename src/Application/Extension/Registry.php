@@ -12,6 +12,7 @@ use MSSTC4PHP\DtoGenerator\Contract\FormatMapping;
 use MSSTC4PHP\DtoGenerator\Contract\PropertyContext;
 use MSSTC4PHP\DtoGenerator\Contract\PropertyEnricher;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\ExtensionVocabulary;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\UnsupportedKeywords;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
 use MSSTC4PHP\DtoGenerator\Domain\Model\AttributeModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\TypeModel;
@@ -50,6 +51,9 @@ final class Registry implements ExtensionRegistry
 
     /** @var list<non-empty-string> */
     private array $claims = [];
+
+    /** @var list<string> keywords whose warning an extension takes over */
+    private array $keywords = [];
 
     /**
      * @param SchemaLocation $location where problems of the extensions themselves are reported: the config
@@ -110,6 +114,26 @@ final class Registry implements ExtensionRegistry
                 $this->claims[] = $glob;
             }
         }
+    }
+
+    public function claimKeywords(string ...$keywords): void
+    {
+        foreach ($keywords as $keyword) {
+            if (!UnsupportedKeywords::isClaimable($keyword)) {
+                // A newer generator may support a keyword an older extension still claims.
+                $this->diagnostics->warning(sprintf('Extension "%s" claims keyword "%s", which the generator does not warn about; the claim is ignored.', $this->current, $keyword), $this->location);
+            } elseif (!in_array($keyword, $this->keywords, true)) {
+                $this->keywords[] = $keyword;
+            }
+        }
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function claimedKeywords(): array
+    {
+        return $this->keywords;
     }
 
     public function isClaimed(string $key): bool

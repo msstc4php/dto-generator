@@ -26,7 +26,9 @@ use MSSTC4PHP\DtoGenerator\Application\Service\Schemas\Load\Action as LoadSchema
 use MSSTC4PHP\DtoGenerator\Application\Service\Schemas\Load\Input as SchemasInput;
 use MSSTC4PHP\DtoGenerator\Application\Service\Schemas\Load\Output as SchemasOutput;
 use MSSTC4PHP\DtoGenerator\Contract\InstalledPackages;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\UnsupportedKeywords;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
+use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\KeywordChecks;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\TypeModel;
@@ -235,14 +237,19 @@ final class Action
         $extensions = ($this->loadExtensions)(new ExtensionsInput($config));
         $diagnostics->merge($extensions->diagnostics());
         $registry = $extensions->registry();
-        $schemas = ($this->loadSchemas)(new SchemasInput($config, $remotePolicy));
+        $keywordChecks = new KeywordChecks($registry->claimedKeywords());
+        $schemas = ($this->loadSchemas)(new SchemasInput($config, $remotePolicy, $keywordChecks));
         $diagnostics->merge($schemas->diagnostics());
         $formats = $registry->formats(array_map(static fn (ClassName $class): TypeModel => new ClassType($class), $config->formats()));
         $aliases = array_keys($config->extensions()->aliases());
         $model = ($this->buildModel)(new BuildInput($config, $target, $schemas->graph(), $formats, $aliases));
         $diagnostics->merge($model->diagnostics());
-        $enriched = ($this->enrichModel)(new EnrichInput($model->classes(), $model->enums(), $schemas->graph(), $target, $registry, $this->packages($config, $diagnostics), $verifier));
+        $enriched = ($this->enrichModel)(new EnrichInput($model->classes(), $model->enums(), $schemas->graph(), $target, $registry, $this->packages($config, $diagnostics), $verifier, $keywordChecks));
         $diagnostics->merge($enriched->diagnostics());
+        foreach ($keywordChecks->unchecked() as $occurrence) {
+            $diagnostics->warning(UnsupportedKeywords::unchecked($occurrence->keyword()), $occurrence->keywordLocation());
+        }
+
         if ($diagnostics->hasErrors()) {
             return [null, $schemas];
         }

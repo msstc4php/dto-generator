@@ -9,6 +9,7 @@ use MSSTC4PHP\DtoGenerator\Application\Port\ClassVerifier;
 use MSSTC4PHP\DtoGenerator\Application\Service\Model\Build\BuiltClass;
 use MSSTC4PHP\DtoGenerator\Application\Service\Model\Build\BuiltEnum;
 use MSSTC4PHP\DtoGenerator\Contract\InstalledPackages;
+use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\KeywordChecks;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaGraph;
 use MSSTC4PHP\DtoGenerator\Domain\Target\TargetProfile;
 
@@ -30,13 +31,17 @@ final class Input
     /** @var list<BuiltEnum> */
     private array $enums;
 
+    private KeywordChecks $keywordChecks;
+
     /**
      * @param list<BuiltClass> $classes
      * @param list<BuiltEnum> $enums the enums of this run, which exist for attributes though the autoloader lacks them
      * @param ClassVerifier|null $verifier the consumer's autoloader when verifyClasses is on
+     * @param KeywordChecks|null $keywordChecks the claimed keywords the schemas hold
      */
-    public function __construct(array $classes, array $enums, SchemaGraph $graph, TargetProfile $target, Registry $registry, InstalledPackages $packages, ?ClassVerifier $verifier = null)
+    public function __construct(array $classes, array $enums, SchemaGraph $graph, TargetProfile $target, Registry $registry, InstalledPackages $packages, ?ClassVerifier $verifier = null, ?KeywordChecks $keywordChecks = null)
     {
+        $this->keywordChecks = $keywordChecks ?? new KeywordChecks();
         $this->verifier = $verifier;
         $this->enums = $enums;
         $this->classes = $classes;
@@ -80,6 +85,11 @@ final class Input
     public function verifier(): ?ClassVerifier
     {
         return $this->verifier;
+    }
+
+    public function keywordChecks(): KeywordChecks
+    {
+        return $this->keywordChecks;
     }
 
     public function packages(): InstalledPackages
