@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MSSTC4PHP\DtoGenerator\Domain\Builder;
 
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
+use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\KeywordChecks;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Discriminator;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Extensions;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
@@ -24,16 +25,13 @@ final class SchemaParser
     /** Inside a schema whose type x-php-type or x-php-skip replaces. */
     private bool $quiet = false;
 
-    /** @var list<string> keywords an extension checks, see UnsupportedKeywords */
-    private array $claimed = [];
+    /** The keywords extensions check, whose occurrences wait for them rather than giving a warning here. */
+    private ?KeywordChecks $checks = null;
 
-    /**
-     * @param list<string> $keywords
-     */
-    public function claiming(array $keywords): self
+    public function claiming(KeywordChecks $checks): self
     {
         $parser = clone $this;
-        $parser->claimed = $keywords;
+        $parser->checks = $checks;
 
         return $parser;
     }
@@ -87,7 +85,12 @@ final class SchemaParser
                 continue;
             }
 
-            $unsupported = $this->quiet || in_array($keyword, $this->claimed, true) ? null : UnsupportedKeywords::warning($keyword, $value);
+            $unsupported = $this->quiet ? null : UnsupportedKeywords::warning($keyword, $value);
+            if ($unsupported !== null && $this->checks instanceof KeywordChecks && $this->checks->isClaimed($keyword)) {
+                $this->checks->expect($keyword, $location);
+                $unsupported = null;
+            }
+
             if ($unsupported !== null) {
                 $diagnostics->warning($unsupported, $location->child($keyword));
             }

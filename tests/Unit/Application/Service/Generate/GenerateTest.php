@@ -97,12 +97,16 @@ final class GenerateTest extends TestCase
 
     public function testLeavesTheKeywordsAnExtensionClaimsToIt(): void
     {
-        $schemas = ['Roles' => ['type' => 'object', 'properties' => ['names' => ['type' => 'array', 'items' => ['type' => 'string'], 'contains' => ['const' => 'a']]]]];
+        $schemas = ['Roles' => ['type' => 'object', 'properties' => [
+            'checkedNames' => ['type' => 'array', 'items' => ['type' => 'string'], 'contains' => ['const' => 'a']],
+            'names' => ['type' => 'array', 'items' => ['type' => 'string'], 'contains' => ['const' => 'a']],
+        ]]];
         $claimed = $this->generate(new RecordingWriter(new WritePlan([], [], [])), Mode::WRITE, $schemas, ['extensions' => [ContainsCheckingExtension::class]]);
         $unclaimed = $this->generate(new RecordingWriter(new WritePlan([], [], [])), Mode::WRITE, $schemas);
 
-        self::assertSame([], $this->messages($claimed));
-        self::assertSame(['warning /project/api/openapi.yaml#/components/schemas/Roles/properties/names/contains: "contains" is not supported and has no effect on the generated type.'], $this->messages($unclaimed));
+        $warning = 'warning /project/api/openapi.yaml#/components/schemas/Roles/properties/%s/contains: "contains" is not supported and has no effect on the generated type.';
+        self::assertSame([sprintf($warning, 'names')], $this->messages($claimed));
+        self::assertSame([sprintf($warning, 'checkedNames'), sprintf($warning, 'names')], $this->messages($unclaimed));
     }
 
     public function testMapsFormatsOfTheConfig(): void

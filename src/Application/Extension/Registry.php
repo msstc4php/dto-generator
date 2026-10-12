@@ -120,7 +120,8 @@ final class Registry implements ExtensionRegistry
     {
         foreach ($keywords as $keyword) {
             if (!UnsupportedKeywords::isClaimable($keyword)) {
-                $this->diagnostics->error(sprintf('Extension "%s" cannot claim keyword "%s": the generator does not warn about it.', $this->current, $keyword), $this->location);
+                // A newer generator may support a keyword an older extension still claims.
+                $this->diagnostics->warning(sprintf('Extension "%s" claims keyword "%s", which the generator does not warn about; the claim is ignored.', $this->current, $keyword), $this->location);
             } elseif (!in_array($keyword, $this->keywords, true)) {
                 $this->keywords[] = $keyword;
             }

@@ -7,6 +7,7 @@ namespace MSSTC4PHP\DtoGenerator\Tests\Unit\Domain\Builder;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\SchemaParser;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostic;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
+use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\KeywordChecks;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaType;
@@ -239,12 +240,13 @@ final class SchemaParserTest extends TestCase
     public function testLeavesTheClaimedKeywordsToTheirExtension(): void
     {
         $diagnostics = new Diagnostics();
+        $checks = new KeywordChecks(['contains', 'dependentRequired']);
         $parser = new SchemaParser();
-        $parser->claiming(['contains', 'dependentRequired'])->parse([
+        $parser->claiming($checks)->parse([
             'type' => 'object',
             'dependentRequired' => ['a' => ['b']],
             'propertyNames' => ['maxLength' => 3],
-            'properties' => ['a' => ['type' => 'array', 'contains' => ['const' => 1]]],
+            'properties' => ['a' => ['type' => 'array', 'contains' => ['const' => 1]], 'b' => ['x-php-type' => 'App\\B', 'contains' => true]],
         ], $this->root(), $diagnostics);
         $parser->parse(['type' => 'array', 'contains' => ['const' => 1]], $this->root(), $diagnostics);
 
@@ -252,6 +254,10 @@ final class SchemaParserTest extends TestCase
             'warning a.yaml#/components/schemas/User/propertyNames: "propertyNames" is not supported and has no effect on the generated type.',
             'warning a.yaml#/components/schemas/User/contains: "contains" is not supported and has no effect on the generated type.',
         ], array_map(static fn (Diagnostic $diagnostic): string => $diagnostic->toString(), $diagnostics->all()));
+        self::assertSame(
+            ['a.yaml#/components/schemas/User dependentRequired', 'a.yaml#/components/schemas/User/properties/a contains'],
+            array_map(static fn (array $pending): string => $pending[1]->toString() . ' ' . $pending[0], $checks->unchecked()),
+        );
     }
 
     public function testStaysQuietWhereTheTypeIgnoresTheSchema(): void

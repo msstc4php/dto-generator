@@ -159,8 +159,10 @@ Attributes appear in a fixed order: built-in `x-php-attributes` first, then exte
   user cannot take them for an alias. Keys in the `x-php-`/`x-dto-` vocabulary cannot be claimed. Two extensions may
   claim the same key; then both read it.
 - `claimKeywords('contains')` takes over the generator's warning that a JSON Schema keyword has no effect, for an
-  extension that checks it (the Symfony bridge writes constraints); the extension then warns where it cannot. Only
-  the keywords the generator warns about can be claimed.
+  extension that checks it (the Symfony bridge writes constraints). The extension marks each occurrence it checks, or
+  warns about, with `$context->keywordChecks()->checked($schema->location(), 'contains')`; after enrichment the
+  generator warns about every occurrence left unmarked, so a keyword the extension never sees is not lost. Claiming
+  a keyword the generator does not warn about gives a warning and is ignored.
 - The generator enriches a class before its properties, so an enricher that is both may carry what it read from the
   class's schema over to them.
 

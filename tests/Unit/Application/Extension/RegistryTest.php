@@ -161,7 +161,7 @@ final class RegistryTest extends TestCase
         self::assertSame([], $this->messages($diagnostics));
     }
 
-    public function testRefusesKeywordsTheGeneratorDoesNotWarnAbout(): void
+    public function testIgnoresKeywordsTheGeneratorDoesNotWarnAbout(): void
     {
         $registry = $this->registry($diagnostics);
         $registry->register($this->extension('greedy', static function (ExtensionRegistry $registry): void {
@@ -170,9 +170,9 @@ final class RegistryTest extends TestCase
 
         self::assertSame(
             [
-                'error ' . self::CONFIG . '#: Extension "greedy" cannot claim keyword "type": the generator does not warn about it.',
-                'error ' . self::CONFIG . '#: Extension "greedy" cannot claim keyword "nullable": the generator does not warn about it.',
-                'error ' . self::CONFIG . '#: Extension "greedy" cannot claim keyword "x-check": the generator does not warn about it.',
+                'warning ' . self::CONFIG . '#: Extension "greedy" claims keyword "type", which the generator does not warn about; the claim is ignored.',
+                'warning ' . self::CONFIG . '#: Extension "greedy" claims keyword "nullable", which the generator does not warn about; the claim is ignored.',
+                'warning ' . self::CONFIG . '#: Extension "greedy" claims keyword "x-check", which the generator does not warn about; the claim is ignored.',
             ],
             $this->messages($diagnostics),
         );

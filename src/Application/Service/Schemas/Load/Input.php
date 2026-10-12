@@ -6,6 +6,7 @@ namespace MSSTC4PHP\DtoGenerator\Application\Service\Schemas\Load;
 
 use MSSTC4PHP\DtoGenerator\Application\Config\GeneratorConfig;
 use MSSTC4PHP\DtoGenerator\Application\Port\RemotePolicy;
+use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\KeywordChecks;
 
 final class Input
 {
@@ -13,26 +14,22 @@ final class Input
 
     private RemotePolicy $remotePolicy;
 
-    /** @var list<string> */
-    private array $claimedKeywords;
+    private KeywordChecks $keywordChecks;
 
     /**
      * @param RemotePolicy|null $remotePolicy the cache only by default
-     * @param list<string> $claimedKeywords keywords an extension checks, so the parser does not warn about them
+     * @param KeywordChecks|null $keywordChecks the keywords extensions check, none by default
      */
-    public function __construct(GeneratorConfig $config, ?RemotePolicy $remotePolicy = null, array $claimedKeywords = [])
+    public function __construct(GeneratorConfig $config, ?RemotePolicy $remotePolicy = null, ?KeywordChecks $keywordChecks = null)
     {
         $this->config = $config;
         $this->remotePolicy = $remotePolicy ?? RemotePolicy::from(RemotePolicy::CACHED);
-        $this->claimedKeywords = $claimedKeywords;
+        $this->keywordChecks = $keywordChecks ?? new KeywordChecks();
     }
 
-    /**
-     * @return list<string>
-     */
-    public function claimedKeywords(): array
+    public function keywordChecks(): KeywordChecks
     {
-        return $this->claimedKeywords;
+        return $this->keywordChecks;
     }
 
     public function remotePolicy(): RemotePolicy

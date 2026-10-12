@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace MSSTC4PHP\DtoGenerator\Contract;
 
 /**
+ * The generator implements it and hands it to extensions; extensions do not implement it.
+ *
  * @api
  */
 interface ExtensionRegistry
@@ -24,8 +26,9 @@ interface ExtensionRegistry
     public function claimExtensionKeys(string ...$globs): void;
 
     /**
-     * JSON Schema keywords the extension checks (such as `contains`), so the core does not warn that they have no effect.
-     * Only keywords the core warns about may be claimed. The extension warns itself where it cannot check one.
+     * JSON Schema keywords the extension checks (such as `contains`) among those the core calls unsupported. Each
+     * occurrence waits for the extension to mark it in the context's keywordChecks(), as checked or warned about; the
+     * core warns about the rest after enrichment, as for keywords nobody claims.
      */
     public function claimKeywords(string ...$keywords): void;
 }

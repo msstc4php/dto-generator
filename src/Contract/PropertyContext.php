@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MSSTC4PHP\DtoGenerator\Contract;
 
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
+use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\KeywordChecks;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\PropertyModel;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
@@ -31,10 +32,13 @@ final class PropertyContext
 
     private SchemaReferences $references;
 
+    private KeywordChecks $keywordChecks;
+
     /**
      * @param SchemaReferences|null $references how `$ref`s resolve; none when omitted
+     * @param KeywordChecks|null $keywordChecks the claimed keywords of the run; none when omitted
      */
-    public function __construct(PropertyModel $property, ClassModel $owner, Schema $schema, TargetProfile $target, InstalledPackages $packages, Diagnostics $diagnostics, ?SchemaReferences $references = null)
+    public function __construct(PropertyModel $property, ClassModel $owner, Schema $schema, TargetProfile $target, InstalledPackages $packages, Diagnostics $diagnostics, ?SchemaReferences $references = null, ?KeywordChecks $keywordChecks = null)
     {
         $this->property = $property;
         $this->owner = $owner;
@@ -43,6 +47,7 @@ final class PropertyContext
         $this->packages = $packages;
         $this->diagnostics = $diagnostics;
         $this->references = $references ?? SchemaReferences::none();
+        $this->keywordChecks = $keywordChecks ?? new KeywordChecks();
     }
 
     public function property(): PropertyModel
@@ -81,5 +86,13 @@ final class PropertyContext
     public function references(): SchemaReferences
     {
         return $this->references;
+    }
+
+    /**
+     * Where the extension marks the claimed keywords it checked; see ExtensionRegistry::claimKeywords().
+     */
+    public function keywordChecks(): KeywordChecks
+    {
+        return $this->keywordChecks;
     }
 }

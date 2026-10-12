@@ -17,11 +17,11 @@ All notable changes to this package are documented here. The format follows
   can get read and write models while the rest keep one, or keep one model in a split project.
 - Every release tag publishes the Docker image to `ghcr.io/msstc4php/dto-generator` for `linux/amd64` and
   `linux/arm64`, tagged `X.Y.Z`, and `X.Y`, `X`, `latest` when it is the newest of their line.
-
 - `ExtensionRegistry::claimKeywords()`: an extension that checks a keyword the generator calls unsupported (such as
-  `contains`) claims it, and the generator no longer warns about it; the extension warns where it cannot check it.
-  Only those keywords may be claimed; a test double implementing `ExtensionRegistry` needs the method too. The
-  contract of `ClassEnricher` says that a class is enriched before its properties.
+  `contains`) claims it and marks each occurrence it checks, or warns about, in `keywordChecks()` of its
+  `PropertyContext`/`ClassContext` (`Domain\Diagnostic\KeywordChecks`); the generator warns about the occurrences
+  left unmarked, as before. A test double implementing `ExtensionRegistry` needs the new method. The contract of
+  `ClassEnricher` says that a class is enriched before its properties.
 
 ### Changed
 

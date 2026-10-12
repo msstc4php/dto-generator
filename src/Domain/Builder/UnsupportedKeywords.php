@@ -41,6 +41,14 @@ final class UnsupportedKeywords
             return '"nullable" is OpenAPI 3.0 and has no effect in 3.1; write type: [T, \'null\'].';
         }
 
-        return in_array($keyword, self::NO_EFFECT, true) ? sprintf('"%s" is not supported and has no effect on the generated type.', $keyword) : null;
+        return in_array($keyword, self::NO_EFFECT, true) ? self::unchecked($keyword) : null;
+    }
+
+    /**
+     * The warning about a keyword nothing checks: none supports it, or the extension that claims it left it alone.
+     */
+    public static function unchecked(string $keyword): string
+    {
+        return sprintf('"%s" is not supported and has no effect on the generated type.', $keyword);
     }
 }

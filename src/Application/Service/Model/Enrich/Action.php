@@ -80,7 +80,7 @@ final class Action
     {
         $input = $run->input();
         $diagnostics = $run->diagnostics();
-        $context = new ClassContext($class, $schema, $input->target(), $input->packages(), $diagnostics, $inline, $run->references(), $selectingDiscriminator);
+        $context = new ClassContext($class, $schema, $input->target(), $input->packages(), $diagnostics, $inline, $run->references(), $selectingDiscriminator, $input->keywordChecks());
         $attributes = AttributeRules::admitted($input->registry()->enrichClass($context), $input->target(), $schema->location(), $diagnostics);
         $run->verify($attributes, $schema->location());
 
@@ -96,7 +96,7 @@ final class Action
     {
         $input = $run->input();
         $diagnostics = $run->diagnostics();
-        $context = new PropertyContext($property, $owner, $schema, $input->target(), $input->packages(), $diagnostics, $run->references());
+        $context = new PropertyContext($property, $owner, $schema, $input->target(), $input->packages(), $diagnostics, $run->references(), $input->keywordChecks());
         $attributes = AttributeRules::admitted($input->registry()->enrichProperty($context), $input->target(), $schema->location(), $diagnostics);
         $run->verify($attributes, $schema->location());
 
