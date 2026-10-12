@@ -8,5 +8,8 @@
         xsi:noNamespaceSchemaLocation="tools/vendor/roave/backward-compatibility-check/Resources/schema.xsd">
     <baseline>
         <ignored-regex>#(?s)^(?!(?:(?!MSSTC4PHP\\).)*MSSTC4PHP\\DtoGenerator\\(?:Contract\\|Domain\\(?:Model|Schema|Diagnostic|Target|Shared|Exception)\\|DtoGenerator\b|Application\\Service\\Generate\\(?:Action|Input|Mode|Output|Status|WritePlan|GeneratedFile|FileChange)\b)).*$#</ignored-regex>
+        <!-- Intended (1.4): the generator implements ExtensionRegistry and hands it to extensions; only test doubles
+             implement it elsewhere (CHANGELOG). -->
+        <ignored-regex>#^\[BC\] ADDED: Method claimKeywords\(\) was added to interface MSSTC4PHP\\DtoGenerator\\Contract\\ExtensionRegistry$#</ignored-regex>
     </baseline>
 </roave-bc-check>
