@@ -20,8 +20,8 @@ All notable changes to this package are documented here. The format follows
 
 - `ExtensionRegistry::claimKeywords()`: an extension that checks a keyword the generator calls unsupported (such as
   `contains`) claims it, and the generator no longer warns about it; the extension warns where it cannot check it.
-  Only those keywords may be claimed. The contract of `ClassEnricher` says that a class is enriched before its
-  properties.
+  Only those keywords may be claimed; a test double implementing `ExtensionRegistry` needs the method too. The
+  contract of `ClassEnricher` says that a class is enriched before its properties.
 
 ### Changed
 
