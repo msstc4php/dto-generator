@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Application\Port;
 
-use InvalidArgumentException;
 use MSSTC4PHP\DtoGenerator\Application\Config\RemoteHeader;
 
 /**
@@ -13,22 +12,12 @@ use MSSTC4PHP\DtoGenerator\Application\Config\RemoteHeader;
  */
 final class RemoteRequest
 {
-    /** The cache only: checks, dry runs and builds without the network. */
-    public const CACHED = 'cached';
-
-    /** Fetched when the cache lacks it: a run that writes. */
-    public const MISSING = 'missing';
-
-    /** Fetched again even when cached: `--refresh-remote`. */
-    public const ALL = 'all';
-
     private string $cacheDir;
 
     /** @var positive-int */
     private int $timeout;
 
-    /** @var self::CACHED|self::MISSING|self::ALL */
-    private string $policy;
+    private RemotePolicy $policy;
 
     /** @var list<RemoteHeader> */
     private array $headers;
@@ -36,17 +25,10 @@ final class RemoteRequest
     /**
      * @param string $cacheDir absolute directory of the cache
      * @param positive-int $timeout seconds the fetch may take
-     * @param self::CACHED|self::MISSING|self::ALL $policy
      * @param list<RemoteHeader> $headers the headers whose prefix covers the document
-     *
-     * @throws InvalidArgumentException for an unknown policy
      */
-    public function __construct(string $cacheDir, int $timeout, string $policy, array $headers = [])
+    public function __construct(string $cacheDir, int $timeout, RemotePolicy $policy, array $headers = [])
     {
-        if (!in_array($policy, [self::CACHED, self::MISSING, self::ALL], true)) {
-            throw new InvalidArgumentException(sprintf('Unknown policy "%s" for remote documents.', $policy));
-        }
-
         $this->cacheDir = $cacheDir;
         $this->timeout = $timeout;
         $this->policy = $policy;
@@ -68,12 +50,12 @@ final class RemoteRequest
 
     public function fetchesMissing(): bool
     {
-        return $this->policy !== self::CACHED;
+        return $this->policy->value() !== RemotePolicy::CACHED;
     }
 
     public function fetchesCached(): bool
     {
-        return $this->policy === self::ALL;
+        return $this->policy->value() === RemotePolicy::ALL;
     }
 
     /**

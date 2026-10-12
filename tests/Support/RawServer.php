@@ -38,9 +38,11 @@ final class RawServer
         $name = (string) stream_socket_get_name($socket, false);
         fclose($socket);
         $port = (int) substr($name, (int) strrpos($name, ':') + 1);
+        $ready = sys_get_temp_dir() . '/raw-server-' . bin2hex(random_bytes(4));
         $code = sprintf(
-            '$s = stream_socket_server("tcp://127.0.0.1:%d"); $c = stream_socket_accept($s, 10); sleep(%d); fread($c, 4096); fwrite($c, base64_decode("%s")); fclose($c);',
+            '$s = stream_socket_server("tcp://127.0.0.1:%d"); touch(%s); $c = stream_socket_accept($s, 10); sleep(%d); fread($c, 4096); fwrite($c, base64_decode("%s")); fclose($c);',
             $port,
+            var_export($ready, true),
             $silence,
             base64_encode($answer),
         );
@@ -49,8 +51,16 @@ final class RawServer
             throw new RuntimeException('The server did not start.');
         }
 
-        // Probing would use up the one connection, so the server is given time to listen instead.
-        usleep(200000);
+        // Probing would use up the one connection, so the server says when it listens.
+        for ($wait = 0; !is_file($ready); $wait++) {
+            if ($wait > 250) {
+                throw new RuntimeException('The server did not listen.');
+            }
+
+            usleep(20000);
+        }
+
+        unlink($ready);
 
         return new self($process, $port);
     }

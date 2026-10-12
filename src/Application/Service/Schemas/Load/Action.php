@@ -128,10 +128,12 @@ final class Action
                 throw DocumentLoadFailed::remote($path, 'cannot be loaded: this generator was built without remote documents.');
             }
 
-            $settings = $input->config()->remoteRefs();
-
-            $document = $this->remote->load($path, new RemoteRequest($settings->cacheDir(), $settings->timeout(), $input->remotePolicy(), $settings->headersFor($path)));
-            $reads->remote();
+            $document = $reads->remoteDocument($path);
+            if (!$document instanceof Document) {
+                $settings = $input->config()->remoteRefs();
+                $document = $this->remote->load($path, new RemoteRequest($settings->cacheDir(), $settings->timeout(), $input->remotePolicy(), $settings->headersFor($path)));
+                $reads->remote($document);
+            }
 
             return $document;
         } catch (DocumentLoadFailed $exception) {

@@ -10,6 +10,7 @@ use MSSTC4PHP\DtoGenerator\Infrastructure\Remote\StreamFetcher;
 use MSSTC4PHP\DtoGenerator\Tests\Support\ProxyServer;
 use MSSTC4PHP\DtoGenerator\Tests\Support\RawServer;
 use MSSTC4PHP\DtoGenerator\Tests\Support\RemoteServer;
+use MSSTC4PHP\DtoGenerator\Tests\Support\TlsServer;
 use PHPUnit\Framework\TestCase;
 
 final class StreamFetcherTest extends TestCase
@@ -299,6 +300,8 @@ final class StreamFetcherTest extends TestCase
             'line break in the value' => [['X-Token' => "a\r\nX-Injected: 1"], 'the header X-Token cannot be sent'],
             'delete in the value' => [['X-Token' => "a\x7F"], 'the header X-Token cannot be sent'],
             'space in the name' => [["X\nY" => 'v'], 'the header X?Y cannot be sent'],
+            'host' => [['Host' => 'elsewhere.example'], 'the header Host cannot be sent'],
+            'proxy authorization' => [['Proxy-Authorization' => 'Basic x'], 'the header Proxy-Authorization cannot be sent'],
         ];
     }
 
@@ -345,38 +348,39 @@ final class StreamFetcherTest extends TestCase
         }
     }
 
-    public function testTunnelsHttpsThroughTheProxyAndChecksTheServersCertificate(): void
+    public function testTunnelsHttpsThroughTheProxyToTheServer(): void
     {
-        [$server, $dir, $port] = $this->tlsServer('/CN=127.0.0.1');
+        $server = $this->tlsServer('DNS:localhost');
         $proxy = ProxyServer::start();
         try {
-            $direct = $this->fetcher([], $dir . '/cert.pem')->get('https://127.0.0.1:' . $port . '/a.yaml', 5, 65536);
-            self::assertSame(200, $direct->status());
+            $url = 'https://localhost:' . $server->port() . '/a.yaml';
+            self::assertSame('A: {}', $this->fetcher([], $server->certificate())->get($url, 5, 1024)->body());
 
-            $tunnelled = $this->fetcher(['https_proxy' => 'http://user:pw@127.0.0.1:' . $proxy->port()], $dir . '/cert.pem')->get('https://127.0.0.1:' . $port . '/a.yaml', 5, 65536, ['X-Token' => 't']);
+            $tunnelled = $this->fetcher(['https_proxy' => 'http://user:pw@127.0.0.1:' . $proxy->port()], $server->certificate())->get($url, 5, 1024, ['X-Token' => 't']);
 
-            self::assertSame(200, $tunnelled->status());
-            self::assertStringContainsString('s_server', $tunnelled->body());
-            // The request itself, and its headers, went through the tunnel encrypted.
-            self::assertSame("CONNECT 127.0.0.1:{$port} HTTP/1.1\r\nHost: 127.0.0.1:{$port}\r\nProxy-Authorization: Basic " . base64_encode('user:pw') . "\r\n\r\n", $proxy->log());
+            self::assertSame('A: {}', $tunnelled->body());
+            // The proxy saw the tunnel only; the request and its headers reached the server through it.
+            self::assertSame("CONNECT localhost:{$server->port()} HTTP/1.1\r\nHost: localhost:{$server->port()}\r\nProxy-Authorization: Basic " . base64_encode('user:pw') . "\r\n\r\n", $proxy->log());
+            self::assertStringEndsWith("GET /a.yaml HTTP/1.0\r\nHost: localhost:{$server->port()}\r\nAccept: application/json, application/yaml;q=0.9, */*;q=0.5\r\nUser-Agent: msstc4php-dto-generator\r\nX-Token: t\r\nConnection: close\r\n\r\n", $server->log());
         } finally {
             $proxy->stop();
-            $this->stopTlsServer($server, $dir);
+            $server->stop();
         }
     }
 
-    public function testChecksTheCertificateOfTheServerNotOfTheProxy(): void
+    public function testChecksTheCertificateAgainstTheServerNotTheProxy(): void
     {
-        [$server, $dir, $port] = $this->tlsServer('/CN=elsewhere.example');
+        // Valid for the proxy's address only: a client that checked the proxy's name would accept it.
+        $server = $this->tlsServer('IP:127.0.0.1');
         $proxy = ProxyServer::start();
         try {
             $this->expectException(FetchFailed::class);
             $this->expectExceptionMessageMatches('~did not match expected CN|certificate verify failed~i');
 
-            $this->fetcher(['https_proxy' => '127.0.0.1:' . $proxy->port()], $dir . '/cert.pem')->get('https://127.0.0.1:' . $port . '/a.yaml', 5, 65536);
+            $this->fetcher(['https_proxy' => '127.0.0.1:' . $proxy->port()], $server->certificate())->get('https://localhost:' . $server->port() . '/a.yaml', 5, 1024);
         } finally {
             $proxy->stop();
-            $this->stopTlsServer($server, $dir);
+            $server->stop();
         }
     }
 
@@ -466,55 +470,14 @@ final class StreamFetcherTest extends TestCase
         return new StreamFetcher(Proxies::fromEnvironment(static fn (string $name): ?string => $environment[$name] ?? null), $caFile);
     }
 
-    /**
-     * An `openssl s_server` with a certificate for the subject, valid for 127.0.0.1 only when the subject names it.
-     *
-     * @return array{resource, string, int} the process, the directory of cert.pem and the port
-     */
-    private function tlsServer(string $subject): array
+    private function tlsServer(string $subjectAltName): TlsServer
     {
-        $openssl = trim((string) shell_exec('command -v openssl'));
-        if ($openssl === '') {
+        $server = TlsServer::start($subjectAltName);
+        if (!$server instanceof TlsServer) {
             self::markTestSkipped('openssl is not installed.');
         }
 
-        $dir = sys_get_temp_dir() . '/tls-' . bin2hex(random_bytes(4));
-        mkdir($dir);
-        $san = $subject === '/CN=127.0.0.1' ? 'IP:127.0.0.1' : 'DNS:elsewhere.example';
-        exec(sprintf('%s req -x509 -newkey rsa:2048 -nodes -subj %s -addext %s -days 1 -keyout %s -out %s 2>/dev/null', escapeshellarg($openssl), escapeshellarg($subject), escapeshellarg('subjectAltName=' . $san), escapeshellarg($dir . '/key.pem'), escapeshellarg($dir . '/cert.pem')));
-        $socket = stream_socket_server('tcp://127.0.0.1:0');
-        self::assertIsResource($socket);
-        $name = (string) stream_socket_get_name($socket, false);
-        fclose($socket);
-        $port = (int) substr($name, (int) strrpos($name, ':') + 1);
-        $server = proc_open([$openssl, 's_server', '-accept', (string) $port, '-cert', $dir . '/cert.pem', '-key', $dir . '/key.pem', '-www', '-quiet'], [1 => ['file', '/dev/null', 'w'], 2 => ['file', '/dev/null', 'w']], $pipes);
-        self::assertIsResource($server);
-        for ($attempt = 0; $attempt < 100; $attempt++) {
-            $connection = @fsockopen('127.0.0.1', $port);
-            if (is_resource($connection)) {
-                fclose($connection);
-
-                break;
-            }
-
-            usleep(20000);
-        }
-
-        return [$server, $dir, $port];
-    }
-
-    /**
-     * @param resource $server
-     */
-    private function stopTlsServer($server, string $dir): void
-    {
-        proc_terminate($server);
-        proc_close($server);
-        foreach ((array) glob($dir . '/*') as $file) {
-            unlink((string) $file);
-        }
-
-        rmdir($dir);
+        return $server;
     }
 
     private function url(string $path): string

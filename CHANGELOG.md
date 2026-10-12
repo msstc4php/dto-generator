@@ -12,15 +12,18 @@ All notable changes to this package are documented here. The format follows
   token for a private GitLab or Artifactory; `${NAME}` in a value reads the environment variable `NAME` only when a
   document is fetched, so secrets stay out of the config and checks need none.
 - `generate --refresh-remote` (and `Generate\Input::withRefreshedRemote()`) fetches every remote document the run
-  reads again, replacing its cached copy.
+  reads again, replacing its cached copy; a check or a dry run cannot refresh.
 - Every release tag publishes the Docker image to `ghcr.io/msstc4php/dto-generator` for `linux/amd64` and
   `linux/arm64`, tagged `X.Y.Z`, and `X.Y`, `X`, `latest` when it is the newest of their line.
 
 ### Changed
 
 - Remote documents are fetched through the proxy of `https_proxy`/`HTTPS_PROXY` (https) or `http_proxy` (http),
-  except for the hosts of `no_proxy`/`NO_PROXY`, as curl does; they used to be fetched directly whatever the
-  environment said.
+  except for the hosts of `no_proxy`/`NO_PROXY`, as curl does (`all_proxy` is not read); they used to be fetched
+  directly whatever the environment said. Only `http://` proxies are supported: where these variables name an HTTPS
+  or SOCKS proxy, fetches now fail, and `no_proxy=*` restores direct fetching.
+- The errors about a broken cached copy of a remote document suggest `generate --refresh-remote` instead of editing
+  `index.json`.
 
 ## [1.3.1] - 2026-10-12
 

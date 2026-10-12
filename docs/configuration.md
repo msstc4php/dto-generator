@@ -206,12 +206,16 @@ project.
 - **Headers.** Each entry of `headers` adds a header to the fetch of every document under its `prefix`, which must be
   an `https://` URL: credentials never travel in clear text, and since redirects are not followed they never reach
   another host. `${NAME}` in `value` stands for the environment variable `NAME`, read only when a document is
-  fetched, so `--check` and runs that find everything cached need no secret. Keep secrets in the environment (a CI
-  secret), never in the config, which you commit. A variable that is not set or is empty, or a value holding a line
-  break, is an error, and no value ever appears in a message or in the cache. Of several entries with the same name
-  (letter case ignored) for one URL, the one with the longest prefix wins. `Host`, `Connection`, `Content-Length`,
-  `Transfer-Encoding` and `Proxy-*` cannot be set; `Accept` and `User-Agent` replace the generator's own. For Basic
-  authentication put `Basic <base64 of user:password>` into the variable.
+  fetched, so `--check` and runs that find everything cached need no secret. Variables are looked up in `$_SERVER`,
+  then `$_ENV`, then `getenv()`, so the values Symfony's Dotenv loads count too. Keep secrets in the environment (a CI
+  secret), never in the config, which you commit. A variable that is not set or is empty, or a value holding a
+  control character other than a tab, is an error, and no value ever appears in a message or in the cache. A name
+  starting with `HTTP_` is refused: under CGI and FPM the client of a request sets such variables from its headers.
+  Of several entries with the same name (letter case ignored) for one URL, the one with the longest prefix wins; two
+  entries with the same name and prefix are an error, and an entry whose prefix no `allow` prefix overlaps gets a
+  warning, since it is never sent. `Host`, `Connection`, `Content-Length`, `Transfer-Encoding` and `Proxy-*` cannot
+  be set; `Accept` and `User-Agent` replace the generator's own. For Basic authentication put
+  `Basic <base64 of user:password>` into the variable.
 
   ```yaml
   remoteRefs:
@@ -222,21 +226,23 @@ project.
         value: ${GITLAB_TOKEN}
   ```
 - **Proxies.** Like curl, the generator takes `https_proxy` (or `HTTPS_PROXY`) for https URLs and only the lower-case
-  `http_proxy` for http ones (`HTTP_PROXY` can come from a request header under CGI). A proxy is
-  `http://[user[:password]@]host[:port]`, the scheme may be left out and the port defaults to 1080; HTTPS and SOCKS
-  proxies are not supported. https goes through a `CONNECT` tunnel, so TLS and the certificate check still run with
+  `http_proxy` for http ones (`HTTP_PROXY` can come from a request header under CGI); unlike curl it ignores
+  `all_proxy`/`ALL_PROXY`. A proxy is `http://[user[:password]@]host[:port]`, the scheme may be left out and the port
+  defaults to 1080; an HTTPS or SOCKS proxy is an error for every fetch that would use it, so set `no_proxy=*` (or
+  list the schema hosts in it) to fetch directly instead. https goes through a `CONNECT` tunnel, so TLS and the certificate check still run with
   the server itself and the proxy sees neither the request nor its headers; plain http is sent to the proxy.
   `no_proxy` (or `NO_PROXY`) lists hosts reached directly, separated by commas or spaces: a name also covers its
-  subdomains (a leading dot changes nothing), `host:port` only that port, an IP address only itself, `*` every host;
-  CIDR ranges are not supported. Messages name a proxy by host and port, never with its credentials.
+  subdomains (dots around it change nothing), `host:port` only that port, an IP address only itself however it is
+  spelled, `*` every host; CIDR ranges are not supported. Messages name a proxy by host and port, never with its credentials.
 - **Cache.** Fetched documents are kept in `cacheDir`, with `index.json` recording each URL, when it was fetched (UTC)
   and the SHA-256 of what came back. Later runs read the cache and never go to the network; a cached copy that no
   longer matches its SHA-256, a symbolic link, and an `index.json` that is not valid (say, after a merge conflict) are
   errors. Commit the directory: builds then need no network, and a change in a schema you depend on shows in review.
   The SHA-256 catches accidents, not someone who may commit both a file and its hash: review the directory like code.
   The empty `.index.lock` serializes runs that share the cache and need not be committed. To fetch the documents a run
-  reads again, run `generate --refresh-remote`: it replaces their copies and deletes the files no entry names any
-  more. Entries of documents that no specification reads any longer stay until you delete them.
+  reads again, run `generate --refresh-remote`: it replaces their copies, which also repairs a broken one, and deletes
+  the files no entry names any more. Entries of documents that no specification reads any longer stay until you
+  delete them.
 - **Checks.** `--check` and `--dry-run` read the cache only: a document that is not there is an error asking to run
   `generate`.
 - Credentials in URLs, other schemes (`file:`, `ftp:`) and specifications given by URL in `sources` are not supported.

@@ -14,6 +14,12 @@ use MSSTC4PHP\DtoGenerator\Domain\Shared\Url;
  */
 final class RemoteHeader
 {
+    /** A field name (RFC 9110 §5.6.2), for patterns delimited by "/". */
+    public const TOKEN = "[!#$%&'*+.^_`|~0-9A-Za-z-]+";
+
+    /** A tab is allowed in a field value (RFC 9110 §5.5), line breaks would end it. */
+    public const CONTROL_CHARACTERS = '/[\x00-\x08\x0A-\x1F\x7F]/';
+
     private const VARIABLE = '#\$\{([A-Za-z_][A-Za-z0-9_]*)\}#';
 
     private const OWN = ['host', 'connection', 'content-length', 'transfer-encoding'];
@@ -35,12 +41,11 @@ final class RemoteHeader
             throw new InvalidArgumentException(sprintf('A header is sent only over https, not to "%s".', $prefix));
         }
 
-        if (preg_match('#^[!\#$%&\'*+.^_`|~0-9A-Za-z-]+\z#', $name) !== 1) {
+        if (preg_match('/^' . self::TOKEN . '\z/', $name) !== 1) {
             throw new InvalidArgumentException(sprintf('A header name must be an HTTP token, not "%s".', $name));
         }
 
-        $lower = strtolower($name);
-        if (in_array($lower, self::OWN, true) || strncmp($lower, 'proxy-', 6) === 0) {
+        if (self::isReserved($name)) {
             throw new InvalidArgumentException(sprintf('The header %s is written by the generator itself.', $name));
         }
 
@@ -52,17 +57,32 @@ final class RemoteHeader
             throw new InvalidArgumentException(sprintf('The value of the header %s must not hold control characters.', $name));
         }
 
+        preg_match_all(self::VARIABLE, $template, $matches);
+        foreach ($matches[1] as $variable) {
+            // Under CGI and FPM, the client of a request sets these from its headers (httpoxy).
+            if (strncasecmp($variable, 'HTTP_', 5) === 0) {
+                throw new InvalidArgumentException(sprintf('The value of the header %s names %s, but a variable named HTTP_* can come from a request header.', $name, $variable));
+            }
+        }
+
         $this->prefix = $prefix;
         $this->name = $name;
         $this->template = $template;
     }
 
-    /**
-     * A tab is allowed in a field value (RFC 9110 §5.5), line breaks would end it.
-     */
     public static function hasControlCharacters(string $value): bool
     {
-        return preg_match('#[\x00-\x08\x0A-\x1F\x7F]#', $value) === 1;
+        return preg_match(self::CONTROL_CHARACTERS, $value) === 1;
+    }
+
+    /**
+     * Whether the client or a proxy writes the header: another value would make the request ambiguous.
+     */
+    public static function isReserved(string $name): bool
+    {
+        $lower = strtolower($name);
+
+        return in_array($lower, self::OWN, true) || strncmp($lower, 'proxy-', 6) === 0;
     }
 
     public function prefix(): string

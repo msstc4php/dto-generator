@@ -150,7 +150,7 @@ vendor/bin/dto-generator generate --check               # write nothing; exit 1 
 vendor/bin/dto-generator generate --dry-run             # write nothing; show what would change
 vendor/bin/dto-generator generate --format=json         # machine-readable report on stdout
 vendor/bin/dto-generator generate --output-root=var/dto # every outputDir under var/dto, at its path relative to the config
-vendor/bin/dto-generator generate --refresh-remote      # fetch the cached remote documents again
+vendor/bin/dto-generator generate --refresh-remote      # fetch every remote document the run reads again
 vendor/bin/dto-generator generate --config=api/dto.yaml # default: dto-generator.yaml, then dto-generator.json
 ```
 

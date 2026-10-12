@@ -5,29 +5,24 @@ declare(strict_types=1);
 namespace MSSTC4PHP\DtoGenerator\Application\Service\Schemas\Load;
 
 use MSSTC4PHP\DtoGenerator\Application\Config\GeneratorConfig;
-use MSSTC4PHP\DtoGenerator\Application\Port\RemoteRequest;
+use MSSTC4PHP\DtoGenerator\Application\Port\RemotePolicy;
 
 final class Input
 {
     private GeneratorConfig $config;
 
-    /** @var RemoteRequest::CACHED|RemoteRequest::MISSING|RemoteRequest::ALL */
-    private string $remotePolicy;
+    private RemotePolicy $remotePolicy;
 
     /**
-     * @param RemoteRequest::CACHED|RemoteRequest::MISSING|RemoteRequest::ALL $remotePolicy which remote documents may be
-     *                                                                                      fetched: none, those missing from the cache (a run that writes) or all of them (a refresh)
+     * @param RemotePolicy|null $remotePolicy the cache only by default
      */
-    public function __construct(GeneratorConfig $config, string $remotePolicy = RemoteRequest::CACHED)
+    public function __construct(GeneratorConfig $config, ?RemotePolicy $remotePolicy = null)
     {
         $this->config = $config;
-        $this->remotePolicy = $remotePolicy;
+        $this->remotePolicy = $remotePolicy ?? RemotePolicy::from(RemotePolicy::CACHED);
     }
 
-    /**
-     * @return RemoteRequest::CACHED|RemoteRequest::MISSING|RemoteRequest::ALL
-     */
-    public function remotePolicy(): string
+    public function remotePolicy(): RemotePolicy
     {
         return $this->remotePolicy;
     }

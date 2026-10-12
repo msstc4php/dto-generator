@@ -116,6 +116,7 @@ final class ProxiesTest extends TestCase
             'empty entries' => [',,', 'example.com', 443, false],
             'port matches' => ['example.com:443', 'example.com', 443, true],
             'port differs' => ['example.com:8443', 'example.com', 443, false],
+            'port differs, then a match' => ['example.com:8443, example.com', 'example.com', 443, true],
             'leading dot with port' => ['.example.com:443', 'example.com', 443, true],
             'ip' => ['127.0.0.1', '127.0.0.1', 80, true],
             'ip is no domain' => ['0.0.1', '127.0.0.1', 80, false],
@@ -123,6 +124,13 @@ final class ProxiesTest extends TestCase
             'ipv6 bracketed' => ['[::1]', '[::1]', 80, true],
             'ipv6 with port' => ['[::1]:80', '[::1]', 80, true],
             'ipv6 with another port' => ['[::1]:81', '[::1]', 80, false],
+            'ipv6 spelled out' => ['::1', '[0:0:0:0:0:0:0:1]', 80, true],
+            'ipv6 entry spelled out' => ['[0:0:0:0:0:0:0:1]', '[::1]', 80, true],
+            'ipv6 against a name' => ['::1', 'localhost', 80, false],
+            'name against an ip' => ['localhost', '127.0.0.1', 80, false],
+            'host with a trailing dot' => ['example.com', 'api.example.com.', 443, true],
+            'entry with a trailing dot' => ['example.com.', 'example.com', 443, true],
+            'ipv4 entry against ipv6' => ['127.0.0.1', '[::1]', 80, false],
         ];
     }
 
@@ -144,18 +152,20 @@ final class ProxiesTest extends TestCase
 
     public function testReadsTheEnvironmentByDefault(): void
     {
-        $saved = [];
-        foreach (['https_proxy', 'HTTPS_PROXY', 'no_proxy', 'NO_PROXY'] as $name) {
-            $saved[$name] = getenv($name);
+        $names = ['https_proxy', 'HTTPS_PROXY', 'no_proxy', 'NO_PROXY'];
+        $saved = [$_SERVER, $_ENV, array_map(static fn (string $name) => getenv($name), array_combine($names, $names))];
+        foreach ($names as $name) {
+            unset($_SERVER[$name], $_ENV[$name]);
             putenv($name);
         }
 
         try {
             self::assertNull(Proxies::fromEnvironment()->for('https', 'a.example', 443));
-            putenv('HTTPS_PROXY=http://from-env:3128');
+            $_SERVER['HTTPS_PROXY'] = 'http://from-env:3128';
             self::assertSame('from-env:3128', $this->label(Proxies::fromEnvironment()->for('https', 'a.example', 443)));
         } finally {
-            foreach ($saved as $name => $value) {
+            [$_SERVER, $_ENV] = $saved;
+            foreach ($saved[2] as $name => $value) {
                 putenv($value === false ? $name : $name . '=' . $value);
             }
         }

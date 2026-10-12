@@ -98,15 +98,18 @@ final class ConfigFactory
             $timeout = RemoteRefsSettings::TIMEOUT;
         }
 
-        return new RemoteRefsSettings($allow, Path::resolve($baseDir, $cacheDir), $timeout, $section->has('headers') ? $this->remoteHeaders($section) : []);
+        return new RemoteRefsSettings($allow, Path::resolve($baseDir, $cacheDir), $timeout, $section->has('headers') ? $this->remoteHeaders($section, $allow) : []);
     }
 
     /**
+     * @param list<string> $allow the normalized prefixes remote $refs may name
+     *
      * @return list<RemoteHeader>
      */
-    private function remoteHeaders(RawSection $section): array
+    private function remoteHeaders(RawSection $section, array $allow): array
     {
         $headers = [];
+        $seen = [];
         foreach ($section->sectionList('headers') as $header) {
             $header->rejectUnknownKeys(['prefix', 'name', 'value']);
             $prefix = $header->requiredString('prefix');
@@ -123,15 +126,56 @@ final class ConfigFactory
             }
 
             try {
-                $headers[] = new RemoteHeader(Url::normalize($prefix), $name, $value);
+                $prefix = Url::normalize($prefix);
             } catch (InvalidModel $exception) {
                 $header->report($exception->getMessage(), 'prefix');
+
+                continue;
+            }
+
+            if (substr($prefix, 0, 8) !== 'https://') {
+                $header->report(sprintf('A header is sent only over https, not to "%s".', $prefix), 'prefix');
+
+                continue;
+            }
+
+            if (isset($seen[$prefix][strtolower($name)])) {
+                $header->report(sprintf('Another entry already sets %s for %s.', $seen[$prefix][strtolower($name)], $prefix));
+
+                continue;
+            }
+
+            try {
+                $headers[] = new RemoteHeader($prefix, $name, $value);
+                $seen[$prefix][strtolower($name)] = $name;
             } catch (InvalidArgumentException $exception) {
                 $header->report($exception->getMessage());
+
+                continue;
+            }
+
+            if (!$this->meetsAnyOf($prefix, $allow)) {
+                $header->warn(sprintf('No remoteRefs.allow prefix overlaps %s, so the header %s is never sent.', $prefix, $name), 'prefix');
             }
         }
 
         return $headers;
+    }
+
+    /**
+     * Whether a URL lies under one of the prefixes or one of them under it.
+     *
+     * @param list<string> $prefixes
+     */
+    private function meetsAnyOf(string $url, array $prefixes): bool
+    {
+        foreach ($prefixes as $prefix) {
+            if (Url::isUnder($url, $prefix) || Url::isUnder($prefix, $url)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function target(RawSection $section): TargetSettings

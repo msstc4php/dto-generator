@@ -12,7 +12,7 @@ use MSSTC4PHP\DtoGenerator\Application\Port\CodeEmitter;
 use MSSTC4PHP\DtoGenerator\Application\Port\FileWriter;
 use MSSTC4PHP\DtoGenerator\Application\Port\ProjectPackages;
 use MSSTC4PHP\DtoGenerator\Application\Port\ProjectPackagesUnusable;
-use MSSTC4PHP\DtoGenerator\Application\Port\RemoteRequest;
+use MSSTC4PHP\DtoGenerator\Application\Port\RemotePolicy;
 use MSSTC4PHP\DtoGenerator\Application\Port\WriteFailed;
 use MSSTC4PHP\DtoGenerator\Application\Service\Config\Load\Action as LoadConfig;
 use MSSTC4PHP\DtoGenerator\Application\Service\Config\Load\Input as ConfigInput;
@@ -216,26 +216,21 @@ final class Action
         return $verifier;
     }
 
-    /**
-     * @return RemoteRequest::CACHED|RemoteRequest::MISSING|RemoteRequest::ALL
-     */
-    private function remotePolicy(Input $input): string
+    private function remotePolicy(Input $input): RemotePolicy
     {
         if ($input->refreshesRemote()) {
-            return RemoteRequest::ALL;
+            return RemotePolicy::from(RemotePolicy::ALL);
         }
 
-        return $input->fetchesRemote() ? RemoteRequest::MISSING : RemoteRequest::CACHED;
+        return RemotePolicy::from($input->fetchesRemote() ? RemotePolicy::MISSING : RemotePolicy::CACHED);
     }
 
     /**
      * Null when the schemas or the model have errors, since emitting them would be wasted work.
      *
-     * @param RemoteRequest::CACHED|RemoteRequest::MISSING|RemoteRequest::ALL $remotePolicy
-     *
      * @return array{list<GeneratedFile>|null, SchemasOutput} the files, null after an error, and what the schemas read
      */
-    private function files(GeneratorConfig $config, TargetProfile $target, ?ClassVerifier $verifier, string $remotePolicy, Diagnostics $diagnostics): array
+    private function files(GeneratorConfig $config, TargetProfile $target, ?ClassVerifier $verifier, RemotePolicy $remotePolicy, Diagnostics $diagnostics): array
     {
         $extensions = ($this->loadExtensions)(new ExtensionsInput($config));
         $diagnostics->merge($extensions->diagnostics());

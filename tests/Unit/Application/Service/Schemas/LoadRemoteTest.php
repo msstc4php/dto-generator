@@ -8,7 +8,7 @@ use MSSTC4PHP\DtoGenerator\Application\Config\GeneratorConfig;
 use MSSTC4PHP\DtoGenerator\Application\Config\RemoteHeader;
 use MSSTC4PHP\DtoGenerator\Application\Config\RemoteRefsSettings;
 use MSSTC4PHP\DtoGenerator\Application\Port\DocumentLoadFailed;
-use MSSTC4PHP\DtoGenerator\Application\Port\RemoteRequest;
+use MSSTC4PHP\DtoGenerator\Application\Port\RemotePolicy;
 use MSSTC4PHP\DtoGenerator\Application\Service\Schemas\Load\Action;
 use MSSTC4PHP\DtoGenerator\Application\Service\Schemas\Load\Input;
 use MSSTC4PHP\DtoGenerator\Application\Service\Schemas\Load\Output;
@@ -126,7 +126,7 @@ final class LoadRemoteTest extends TestCase
         ));
         $loader = new InMemoryDocumentLoader([self::SPEC => $this->spec(['price' => ['$ref' => self::MONEY . '#/Money']])]);
 
-        (new Action($loader, new SchemaParser(), $remote))(new Input($config, RemoteRequest::ALL));
+        (new Action($loader, new SchemaParser(), $remote))(new Input($config, RemotePolicy::from(RemotePolicy::ALL)));
 
         [[$url, $request]] = $remote->requests();
         self::assertSame(self::MONEY, $url);
@@ -136,12 +136,28 @@ final class LoadRemoteTest extends TestCase
         self::assertSame([$header], $request->headers());
     }
 
+    public function testLoadsEachRemoteDocumentOncePerRun(): void
+    {
+        $remote = new InMemoryRemoteDocuments([self::MONEY => ['Money' => ['type' => 'string'], 'Rate' => ['type' => 'number']]]);
+        $config = ConfigMother::remote(ConfigMother::source(self::SPEC), ['https://schemas.example.com/']);
+        $loader = new InMemoryDocumentLoader([self::SPEC => $this->spec(['price' => ['$ref' => self::MONEY . '#/Money'], 'rate' => ['$ref' => self::MONEY . '#/Rate']])]);
+        $action = new Action($loader, new SchemaParser(), $remote);
+
+        $first = $action(new Input($config, RemotePolicy::from(RemotePolicy::ALL)));
+        self::assertSame([], $this->messages($first));
+        self::assertCount(1, $remote->requests());
+
+        // The next run of the same action loads, and refreshes, again.
+        $action(new Input($config, RemotePolicy::from(RemotePolicy::ALL)));
+        self::assertCount(2, $remote->requests());
+    }
+
     public function testNeedsRemoteDocumentsToLoadOne(): void
     {
         $config = ConfigMother::remote(ConfigMother::source(self::SPEC), ['https://schemas.example.com/']);
         $loader = new InMemoryDocumentLoader([self::SPEC => $this->spec(['price' => ['$ref' => self::MONEY . '#/Money']])]);
 
-        $output = (new Action($loader, new SchemaParser()))(new Input($config, RemoteRequest::MISSING));
+        $output = (new Action($loader, new SchemaParser()))(new Input($config, RemotePolicy::from(RemotePolicy::MISSING)));
 
         self::assertSame([
             'error /project/api/openapi.yaml#/components/schemas/Order/properties/price: Remote document "https://schemas.example.com/common/v1/money.yaml" cannot be loaded: this generator was built without remote documents.',
@@ -157,7 +173,7 @@ final class LoadRemoteTest extends TestCase
         $config = ConfigMother::remote(ConfigMother::source(self::SPEC), $allow);
         $loader = new InMemoryDocumentLoader([self::SPEC => $this->spec($properties)]);
 
-        return (new Action($loader, new SchemaParser(), $remote))(new Input($config, $fetch ? RemoteRequest::MISSING : RemoteRequest::CACHED));
+        return (new Action($loader, new SchemaParser(), $remote))(new Input($config, $fetch ? RemotePolicy::from(RemotePolicy::MISSING) : RemotePolicy::from(RemotePolicy::CACHED)));
     }
 
     /**

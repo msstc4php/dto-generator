@@ -84,14 +84,6 @@ final class RemoteRefsSettings
     }
 
     /**
-     * @return list<RemoteHeader>
-     */
-    public function headers(): array
-    {
-        return $this->headers;
-    }
-
-    /**
      * The headers whose prefix covers a normalized URL; of those with one name, the one with the longest prefix.
      *
      * @return list<RemoteHeader>

@@ -191,7 +191,7 @@ final class ConfigFactoryTest extends TestCase
             'remoteRefs header prefix with query' => [['version' => 1, 'remoteRefs' => ['headers' => [['prefix' => 'https://a.example/?x', 'name' => 'X', 'value' => 'v']]], 'sources' => [$source]], 'A header prefix must be an absolute https URL without query or fragment.', '/remoteRefs/headers/0/prefix'],
             'remoteRefs header prefix with fragment' => [['version' => 1, 'remoteRefs' => ['headers' => [['prefix' => 'https://a.example/#x', 'name' => 'X', 'value' => 'v']]], 'sources' => [$source]], 'A header prefix must be an absolute https URL without query or fragment.', '/remoteRefs/headers/0/prefix'],
             'remoteRefs header prefix with credentials' => [['version' => 1, 'remoteRefs' => ['headers' => [['prefix' => 'https://u@a.example/', 'name' => 'X', 'value' => 'v']]], 'sources' => [$source]], 'credentials in a URL are not supported', '/remoteRefs/headers/0/prefix'],
-            'remoteRefs header over http' => [['version' => 1, 'remoteRefs' => ['headers' => [['prefix' => 'http://a.example/', 'name' => 'X', 'value' => 'v']]], 'sources' => [$source]], 'A header is sent only over https, not to "http://a.example/".', '/remoteRefs/headers/0'],
+            'remoteRefs header over http' => [['version' => 1, 'remoteRefs' => ['headers' => [['prefix' => 'http://a.example/', 'name' => 'X', 'value' => 'v']]], 'sources' => [$source]], 'A header is sent only over https, not to "http://a.example/".', '/remoteRefs/headers/0/prefix'],
             'remoteRefs header name' => [['version' => 1, 'remoteRefs' => ['headers' => [['prefix' => 'https://a.example/', 'name' => 'Host', 'value' => 'v']]], 'sources' => [$source]], 'The header Host is written by the generator itself.', '/remoteRefs/headers/0'],
             'remoteRefs header value not a string' => [['version' => 1, 'remoteRefs' => ['headers' => [['prefix' => 'https://a.example/', 'name' => 'X', 'value' => 2]]], 'sources' => [$source]], '"value" must be a non-empty string', '/remoteRefs/headers/0/value'],
             'withers not bool' => [['version' => 1, 'dto' => ['withers' => 'no'], 'sources' => [$source]], '"withers" must be true or false', '/dto/withers'],
@@ -307,29 +307,56 @@ final class ConfigFactoryTest extends TestCase
     public function testReadsTheHeadersOfRemoteDocuments(): void
     {
         $source = ['spec' => '/abs/openapi.yaml', 'namespace' => 'App\\Dto', 'outputDir' => 'src/Dto'];
-        $config = $this->valid(['version' => 1, 'remoteRefs' => ['headers' => [
+        $config = $this->valid(['version' => 1, 'remoteRefs' => ['allow' => ['https://git.example.com/api/v4/', 'https://other.example.com/'], 'headers' => [
             ['prefix' => 'HTTPS://Git.Example.com/api/', 'name' => 'PRIVATE-TOKEN', 'value' => '${GITLAB_TOKEN}'],
-            ['prefix' => 'https://other.example.com/', 'name' => 'Accept', 'value' => 'application/json'],
+            ['prefix' => 'https://other.example.com/schemas/', 'name' => 'Accept', 'value' => 'application/json'],
+            ['prefix' => 'https://git.example.com/api/v4/x/', 'name' => 'private-token', 'value' => 'inner'],
         ]], 'sources' => [$source]]);
 
-        $headers = $config->remoteRefs()->headers();
-        self::assertCount(2, $headers);
-        self::assertSame('https://git.example.com/api/', $headers[0]->prefix());
-        self::assertSame('PRIVATE-TOKEN', $headers[0]->name());
-        self::assertSame(['GITLAB_TOKEN'], $headers[0]->variables());
-        self::assertSame('application/json', $headers[1]->render([]));
+        $git = $config->remoteRefs()->headersFor('https://git.example.com/api/v4/a.yaml');
+        self::assertCount(1, $git);
+        self::assertSame('https://git.example.com/api/', $git[0]->prefix());
+        self::assertSame('PRIVATE-TOKEN', $git[0]->name());
+        self::assertSame(['GITLAB_TOKEN'], $git[0]->variables());
+        self::assertSame('inner', $config->remoteRefs()->headersFor('https://git.example.com/api/v4/x/a.yaml')[0]->render([]));
+        self::assertSame('application/json', $config->remoteRefs()->headersFor('https://other.example.com/schemas/a.yaml')[0]->render([]));
+    }
+
+    public function testWarnsAboutAHeaderNoAllowedUrlGets(): void
+    {
+        $diagnostics = new Diagnostics();
+        $config = (new ConfigFactory())->create(
+            ['version' => 1, 'remoteRefs' => ['allow' => ['https://a.example/schemas/'], 'headers' => [
+                ['prefix' => 'https://b.example/', 'name' => 'X', 'value' => 'v'],
+                ['prefix' => 'https://a.example/other/', 'name' => 'Y', 'value' => 'v'],
+            ]], 'sources' => [['spec' => '/abs/openapi.yaml', 'namespace' => 'App\\Dto', 'outputDir' => 'src/Dto']]],
+            self::PATH,
+            $diagnostics,
+        );
+
+        self::assertNotNull($config);
+        self::assertSame([
+            'warning ' . self::PATH . '#/remoteRefs/headers/0/prefix: No remoteRefs.allow prefix overlaps https://b.example/, so the header X is never sent.',
+            'warning ' . self::PATH . '#/remoteRefs/headers/1/prefix: No remoteRefs.allow prefix overlaps https://a.example/other/, so the header Y is never sent.',
+        ], array_map(static fn (Diagnostic $d): string => $d->toString(), $diagnostics->all()));
     }
 
     public function testReportsEveryHeaderItCannotUse(): void
     {
         $diagnostics = new Diagnostics();
         (new ConfigFactory())->create(
-            ['version' => 1, 'remoteRefs' => ['headers' => [
+            ['version' => 1, 'remoteRefs' => ['allow' => ['https://a.example/'], 'headers' => [
                 ['name' => 'X', 'value' => 'v'],
                 ['prefix' => 'a.example/', 'name' => 'X', 'value' => 'v'],
                 ['prefix' => 'http://a.example/', 'name' => 'X', 'value' => 'v'],
                 'text',
                 ['prefix' => 'https://a.example/', 'name' => 'Y', 'value' => '${'],
+                ['prefix' => 'https://a.example/', 'name' => 'z', 'value' => 'one'],
+                ['prefix' => 'HTTPS://A.example/', 'name' => 'Z', 'value' => 'two'],
+                ['prefix' => 'https://a.example/', 'name' => 'W', 'value' => 'one'],
+                ['prefix' => 'https://a.example/', 'name' => 'w', 'value' => 'two'],
+                ['prefix' => 'https://u@a.example/', 'name' => 'X', 'value' => 'v'],
+                ['prefix' => 'https://a.example/', 'name' => 'X', 'value' => '${HTTP_TOKEN}'],
             ]], 'sources' => [['spec' => '/abs/openapi.yaml', 'namespace' => 'App\\Dto', 'outputDir' => 'src/Dto']]],
             self::PATH,
             $diagnostics,
@@ -339,8 +366,12 @@ final class ConfigFactoryTest extends TestCase
             'error ' . self::PATH . '#/remoteRefs/headers/3: Expected an object.',
             'error ' . self::PATH . '#/remoteRefs/headers/0: "prefix" is required.',
             'error ' . self::PATH . '#/remoteRefs/headers/1/prefix: A header prefix must be an absolute https URL without query or fragment.',
-            'error ' . self::PATH . '#/remoteRefs/headers/2: A header is sent only over https, not to "http://a.example/".',
+            'error ' . self::PATH . '#/remoteRefs/headers/2/prefix: A header is sent only over https, not to "http://a.example/".',
             'error ' . self::PATH . '#/remoteRefs/headers/4: The value of the header Y has a "${" that does not start a variable such as ${NAME}.',
+            'error ' . self::PATH . '#/remoteRefs/headers/6: Another entry already sets z for https://a.example/.',
+            'error ' . self::PATH . '#/remoteRefs/headers/8: Another entry already sets W for https://a.example/.',
+            'error ' . self::PATH . '#/remoteRefs/headers/9/prefix: URL "https://u@a.example/": credentials in a URL are not supported.',
+            'error ' . self::PATH . '#/remoteRefs/headers/10: The value of the header X names HTTP_TOKEN, but a variable named HTTP_* can come from a request header.',
         ], array_map(static fn (Diagnostic $d): string => $d->toString(), $diagnostics->all()));
     }
 

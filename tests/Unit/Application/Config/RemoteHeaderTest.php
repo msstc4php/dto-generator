@@ -53,6 +53,7 @@ final class RemoteHeaderTest extends TestCase
             'bad variable name' => ['https://a.example/', 'X', '${1A}', 'The value of the header X has a "${" that does not start a variable such as ${NAME}.'],
             'line break' => ['https://a.example/', 'X', "a\nb", 'The value of the header X must not hold control characters.'],
             'delete' => ['https://a.example/', 'X', "a\x7F", 'The value of the header X must not hold control characters.'],
+            'variable from a request header' => ['https://a.example/', 'X', '${http_token}', 'The value of the header X names http_token, but a variable named HTTP_* can come from a request header.'],
         ];
     }
 
@@ -87,8 +88,7 @@ final class RemoteHeaderTest extends TestCase
         self::assertSame(['outer', 'one'], $this->values($settings->headersFor('https://git.example.com/docs/a.yaml')));
         self::assertSame(['deeper', 'one'], $this->values($settings->headersFor('https://git.example.com/api/v2/a.yaml')));
         self::assertSame([], $settings->headersFor('https://elsewhere.example.com/a.yaml'));
-        self::assertCount(6, $settings->headers());
-        self::assertSame([], (new RemoteRefsSettings([], '/cache'))->headers());
+        self::assertSame([], (new RemoteRefsSettings([], '/cache'))->headersFor('https://git.example.com/a.yaml'));
     }
 
     /**

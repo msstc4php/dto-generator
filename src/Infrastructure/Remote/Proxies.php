@@ -32,11 +32,7 @@ final class Proxies
      */
     public static function fromEnvironment(?Closure $environment = null): self
     {
-        return new self($environment ?? static function (string $name): ?string {
-            $value = getenv($name);
-
-            return is_string($value) ? $value : null;
-        });
+        return new self($environment ?? static fn (string $name): ?string => Environment::variable($name));
     }
 
     /**
@@ -90,9 +86,9 @@ final class Proxies
     private function bypasses(string $host, int $port): bool
     {
         [, $list] = $this->variable(['no_proxy', 'NO_PROXY']);
-        $host = trim($host, '[]');
-        // An address has no parent domain: 0.0.1 must not cover 127.0.0.1.
-        $isAddress = filter_var($host, FILTER_VALIDATE_IP) !== false;
+        $host = rtrim(trim($host, '[]'), '.');
+        // An address has no parent domain, and has more than one spelling: 0:0:0:0:0:0:0:1 is ::1.
+        $address = filter_var($host, FILTER_VALIDATE_IP) !== false ? inet_pton($host) : false;
         $entries = preg_split('#[\s,]+#', strtolower($list), -1, PREG_SPLIT_NO_EMPTY);
         foreach (is_array($entries) ? $entries : [] as $entry) {
             if ($entry === '*') {
@@ -100,7 +96,15 @@ final class Proxies
             }
 
             [$entryHost, $entryPort] = $this->entry($entry);
-            if (($entryPort === null || $entryPort === $port) && ($host === $entryHost || (!$isAddress && substr($host, -strlen($entryHost) - 1) === '.' . $entryHost))) {
+            if ($entryPort !== null && $entryPort !== $port) {
+                continue;
+            }
+
+            if ($address !== false) {
+                if (filter_var($entryHost, FILTER_VALIDATE_IP) !== false && inet_pton($entryHost) === $address) {
+                    return true;
+                }
+            } elseif ($host === $entryHost || substr($host, -strlen($entryHost) - 1) === '.' . $entryHost) {
                 return true;
             }
         }
@@ -109,7 +113,7 @@ final class Proxies
     }
 
     /**
-     * @return array{string, ?int} the host without brackets or a leading dot, and the port if the entry names one
+     * @return array{string, ?int} the host without brackets or dots around it, and the port if the entry names one
      */
     private function entry(string $entry): array
     {
@@ -119,9 +123,9 @@ final class Proxies
 
         // One colon is a port; more make a bare IPv6 address.
         if (preg_match('#^([^:]+):(\d+)\z#', $entry, $matches) === 1) {
-            return [ltrim($matches[1], '.'), (int) $matches[2]];
+            return [trim($matches[1], '.'), (int) $matches[2]];
         }
 
-        return [ltrim($entry, '.'), null];
+        return [trim($entry, '.'), null];
     }
 }
