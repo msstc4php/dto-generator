@@ -238,9 +238,12 @@ fatal error. It changes the whole process, so call it only from a one-off comman
 The image runs the generator on a mounted project, with the Symfony bridge installed:
 
 ```bash
-docker build -f docker/Dockerfile -t dto-generator .
-docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/app" dto-generator --config=dto-generator.yaml [--check]
+docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/app" ghcr.io/msstc4php/dto-generator:1 --config=dto-generator.yaml [--check]
 ```
+
+Every release is published for `linux/amd64` and `linux/arm64` as `ghcr.io/msstc4php/dto-generator:X.Y.Z`; `X.Y`, `X`
+and `latest` follow the newest release of their line. To build the image yourself:
+`docker build -f docker/Dockerfile -t dto-generator .`
 
 The container does not run your project's code: `verifyClasses: auto` is off in it
 (`DTO_GENERATOR_VERIFY_CLASSES=0`); only an explicit `verifyClasses: true` loads the project's autoloader. Only the

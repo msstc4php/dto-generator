@@ -1,0 +1,108 @@
+name: Docker image
+
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to publish (vX.Y.Z)
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  # Two publications must not race for the floating tags.
+  group: docker-image
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/msstc4php/dto-generator
+
+jobs:
+  publish:
+    name: Publish ${{ inputs.tag || github.ref_name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Release tag
+        id: release
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::Not a release tag: $TAG"; exit 1; }
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v5
+        with:
+          ref: refs/tags/${{ steps.release.outputs.tag }}
+          # The release tags decide which floating tags this release may move.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Image tags
+        id: meta
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          version="${TAG#v}"
+          grep -qx "ARG VERSION=$version" docker/Dockerfile || { echo "::error::docker/Dockerfile does not default VERSION to $version"; exit 1; }
+          releases="$(git tag --list 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sed 's/^v//')"
+          newest() { printf '%s\n' "$releases" | grep -E "^$1" | sort -V | tail -n 1; }
+          major="${version%%.*}"
+          minor="${version%.*}"
+          # Republishing an older release never moves a floating tag back.
+          tags="$IMAGE:$version"
+          [ "$(newest "${minor//./\\.}\\.")" = "$version" ] && tags="$tags,$IMAGE:$minor"
+          [ "$(newest "$major\\.")" = "$version" ] && tags="$tags,$IMAGE:$major"
+          [ "$(newest '')" = "$version" ] && tags="$tags,$IMAGE:latest"
+          echo "Tags: $tags"
+          {
+            echo "version=$version"
+            echo "tags=$tags"
+            echo "revision=$(git rev-parse HEAD)"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Build for the smoke test
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: linux/amd64
+          build-args: VERSION=${{ steps.meta.outputs.version }}
+          tags: dto-generator:smoke
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - run: sh tests/Docker/smoke.sh dto-generator:smoke
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          build-args: VERSION=${{ steps.meta.outputs.version }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=${{ steps.meta.outputs.version }}
+            org.opencontainers.image.revision=${{ steps.meta.outputs.revision }}
+            org.opencontainers.image.licenses=MIT
+            org.opencontainers.image.description=Generates PHP DTO classes from OpenAPI 3.1 schemas.
+          push: true
+          cache-from: type=gha
