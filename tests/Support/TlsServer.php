@@ -16,7 +16,8 @@ final class TlsServer
         [$port, $dir] = [(int) $argv[1], $argv[2]];
         $context = stream_context_create(['ssl' => ['local_cert' => $dir . '/cert.pem', 'local_pk' => $dir . '/key.pem']]);
         $server = stream_socket_server('tcp://127.0.0.1:' . $port, $errno, $error, STREAM_SERVER_BIND | STREAM_SERVER_LISTEN, $context);
-        file_put_contents($dir . '/ready', '');
+        file_put_contents($dir . '/ready.part', $server === false ? 'failed' : 'listening');
+        rename($dir . '/ready.part', $dir . '/ready');
         while ($client = @stream_socket_accept($server, 30)) {
             stream_set_timeout($client, 5);
             if (@stream_socket_enable_crypto($client, true, STREAM_CRYPTO_METHOD_TLS_SERVER) !== true) {
@@ -53,7 +54,7 @@ final class TlsServer
     /**
      * @param string $subjectAltName such as "DNS:localhost" or "IP:127.0.0.1"
      *
-     * @return self|null null without the openssl command
+     * @return self|null null without an openssl command that makes the certificate
      */
     public static function start(string $subjectAltName): ?self
     {
@@ -71,6 +72,17 @@ final class TlsServer
             escapeshellarg($dir . '/key.pem'),
             escapeshellarg($dir . '/cert.pem'),
         ));
+        // An openssl without -addext (an old LibreSSL) makes no certificate: nothing to test with.
+        if (!is_file($dir . '/cert.pem')) {
+            foreach ((array) glob($dir . '/*') as $file) {
+                unlink((string) $file);
+            }
+
+            rmdir($dir);
+
+            return null;
+        }
+
         $socket = stream_socket_server('tcp://127.0.0.1:0');
         if ($socket === false) {
             throw new RuntimeException('No free port.');
@@ -92,7 +104,14 @@ final class TlsServer
             usleep(20000);
         }
 
-        return new self($process, $port, $dir);
+        $server = new self($process, $port, $dir);
+        if (file_get_contents($dir . '/ready') !== 'listening') {
+            $server->stop();
+
+            throw new RuntimeException('The TLS server could not listen on its port.');
+        }
+
+        return $server;
     }
 
     public function port(): int

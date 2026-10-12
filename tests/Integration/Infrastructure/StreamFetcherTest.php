@@ -257,6 +257,33 @@ final class StreamFetcherTest extends TestCase
         }
     }
 
+    public function testReportsAServerThatClosesWithoutAnAnswer(): void
+    {
+        $server = RawServer::answering('');
+        try {
+            $this->expectException(FetchFailed::class);
+            $this->expectExceptionMessage('the connection closed without an answer');
+
+            $this->fetcher([])->get($server->url('/a.yaml'), 5, 1024);
+        } finally {
+            $server->stop();
+        }
+    }
+
+    public function testReportsAProxyThatClosesWithoutAnswering(): void
+    {
+        $proxy = RawServer::answering('');
+        $port = (int) substr($proxy->url(''), strlen('http://127.0.0.1:'));
+        try {
+            $this->expectException(FetchFailed::class);
+            $this->expectExceptionMessage('the connection closed without an answer');
+
+            $this->fetcher(['https_proxy' => '127.0.0.1:' . $port])->get('https://schemas.example.com/a.yaml', 5, 1024);
+        } finally {
+            $proxy->stop();
+        }
+    }
+
     public function testFetchesOnlyANormalizedUrl(): void
     {
         $this->expectException(FetchFailed::class);
@@ -379,6 +406,7 @@ final class StreamFetcherTest extends TestCase
 
             $this->fetcher(['https_proxy' => '127.0.0.1:' . $proxy->port()], $server->certificate())->get('https://localhost:' . $server->port() . '/a.yaml', 5, 1024);
         } finally {
+            self::assertStringStartsWith('CONNECT localhost:' . $server->port() . ' ', $proxy->log());
             $proxy->stop();
             $server->stop();
         }

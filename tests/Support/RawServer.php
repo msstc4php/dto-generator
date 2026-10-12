@@ -40,7 +40,7 @@ final class RawServer
         $port = (int) substr($name, (int) strrpos($name, ':') + 1);
         $ready = sys_get_temp_dir() . '/raw-server-' . bin2hex(random_bytes(4));
         $code = sprintf(
-            '$s = stream_socket_server("tcp://127.0.0.1:%d"); touch(%s); $c = stream_socket_accept($s, 10); sleep(%d); fread($c, 4096); fwrite($c, base64_decode("%s")); fclose($c);',
+            '$s = stream_socket_server("tcp://127.0.0.1:%1$d"); file_put_contents(%2$s . ".part", $s === false ? "failed" : "listening"); rename(%2$s . ".part", %2$s); $c = stream_socket_accept($s, 10); sleep(%3$d); fread($c, 4096); fwrite($c, base64_decode("%4$s")); fclose($c);',
             $port,
             var_export($ready, true),
             $silence,
@@ -60,7 +60,14 @@ final class RawServer
             usleep(20000);
         }
 
+        $listening = file_get_contents($ready) === 'listening';
         unlink($ready);
+        if (!$listening) {
+            proc_terminate($process);
+            proc_close($process);
+
+            throw new RuntimeException('The server could not listen on its port.');
+        }
 
         return new self($process, $port);
     }

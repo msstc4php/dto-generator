@@ -15,7 +15,8 @@ final class ProxyServer
     private const SCRIPT = <<<'PHP'
         [$port, $log, $deny] = [(int) $argv[1], $argv[2], $argv[3] === '1'];
         $server = stream_socket_server('tcp://127.0.0.1:' . $port);
-        file_put_contents($log . '.ready', '');
+        file_put_contents($log . '.part', $server === false ? 'failed' : 'listening');
+        rename($log . '.part', $log . '.ready');
         while ($client = @stream_socket_accept($server, 30)) {
             $head = '';
             while (!feof($client) && strpos($head, "\r\n\r\n") === false) {
@@ -91,7 +92,14 @@ final class ProxyServer
             usleep(20000);
         }
 
-        return new self($process, $port, $log);
+        $proxy = new self($process, $port, $log);
+        if (file_get_contents($log . '.ready') !== 'listening') {
+            $proxy->stop();
+
+            throw new RuntimeException('The proxy could not listen on its port.');
+        }
+
+        return $proxy;
     }
 
     public function port(): int

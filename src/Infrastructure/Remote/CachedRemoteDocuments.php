@@ -8,9 +8,9 @@ use Closure;
 use DateTimeImmutable;
 use DateTimeZone;
 use JsonException;
-use MSSTC4PHP\DtoGenerator\Application\Config\RemoteHeader;
 use MSSTC4PHP\DtoGenerator\Application\Port\Document;
 use MSSTC4PHP\DtoGenerator\Application\Port\DocumentLoadFailed;
+use MSSTC4PHP\DtoGenerator\Application\Port\HttpField;
 use MSSTC4PHP\DtoGenerator\Application\Port\RemoteDocuments;
 use MSSTC4PHP\DtoGenerator\Application\Port\RemoteRequest;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Document\DocumentDecoder;
@@ -66,9 +66,17 @@ final class CachedRemoteDocuments implements RemoteDocuments
     private function read(string $url, RemoteRequest $request): array
     {
         $directory = $request->cacheDir();
-        $entry = $this->index($url, $directory)[$url] ?? null;
-        if ($entry !== null && !$request->fetchesCached()) {
-            return $this->cached($url, $directory . '/' . $entry['file'], $entry['sha256']);
+        // Shared with the writers' lock: a refresh must not delete the file between reading the index and reading it.
+        $lock = $this->sharedLock($directory);
+        try {
+            $entry = $this->index($url, $directory)[$url] ?? null;
+            if ($entry !== null && !$request->fetchesCached()) {
+                return $this->cached($url, $directory . '/' . $entry['file'], $entry['sha256']);
+            }
+        } finally {
+            if (is_resource($lock)) {
+                fclose($lock);
+            }
         }
 
         if (!$request->fetchesMissing()) {
@@ -121,7 +129,7 @@ final class CachedRemoteDocuments implements RemoteDocuments
 
             $value = $header->render($variables);
             // A line break from the environment would end the header and start another.
-            if (RemoteHeader::hasControlCharacters($value)) {
+            if (HttpField::hasControlCharacters($value)) {
                 throw DocumentLoadFailed::remote($url, sprintf('cannot be fetched: the value of its %s header holds control characters.', $header->name()));
             }
 
@@ -290,6 +298,30 @@ final class CachedRemoteDocuments implements RemoteDocuments
 
             throw DocumentLoadFailed::remote($url, sprintf('could not be cached in %s: %s.', $directory, $problem ?? 'unknown error'));
         }
+    }
+
+    /**
+     * Best effort: a cache that was never written to, or a read-only checkout without the lock file, has no writer to
+     * wait for.
+     *
+     * @return resource|null
+     */
+    private function sharedLock(string $directory)
+    {
+        set_error_handler(static fn (): bool => true);
+        try {
+            $lock = fopen($directory . '/' . self::LOCK, 'r');
+        } finally {
+            restore_error_handler();
+        }
+
+        if ($lock === false) {
+            return null;
+        }
+
+        flock($lock, LOCK_SH);
+
+        return $lock;
     }
 
     private function directory(string $url, string $directory): void

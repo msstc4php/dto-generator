@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MSSTC4PHP\DtoGenerator\Application\Config;
 
 use InvalidArgumentException;
+use MSSTC4PHP\DtoGenerator\Application\Port\HttpField;
 use MSSTC4PHP\DtoGenerator\Domain\Exception\InvalidModel;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\Url;
 
@@ -14,15 +15,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Shared\Url;
  */
 final class RemoteHeader
 {
-    /** A field name (RFC 9110 §5.6.2), for patterns delimited by "/". */
-    public const TOKEN = "[!#$%&'*+.^_`|~0-9A-Za-z-]+";
-
-    /** A tab is allowed in a field value (RFC 9110 §5.5), line breaks would end it. */
-    public const CONTROL_CHARACTERS = '/[\x00-\x08\x0A-\x1F\x7F]/';
-
     private const VARIABLE = '#\$\{([A-Za-z_][A-Za-z0-9_]*)\}#';
-
-    private const OWN = ['host', 'connection', 'content-length', 'transfer-encoding'];
 
     private string $prefix;
 
@@ -41,11 +34,11 @@ final class RemoteHeader
             throw new InvalidArgumentException(sprintf('A header is sent only over https, not to "%s".', $prefix));
         }
 
-        if (preg_match('/^' . self::TOKEN . '\z/', $name) !== 1) {
+        if (!HttpField::isName($name)) {
             throw new InvalidArgumentException(sprintf('A header name must be an HTTP token, not "%s".', $name));
         }
 
-        if (self::isReserved($name)) {
+        if (HttpField::isReserved($name)) {
             throw new InvalidArgumentException(sprintf('The header %s is written by the generator itself.', $name));
         }
 
@@ -53,7 +46,7 @@ final class RemoteHeader
             throw new InvalidArgumentException(sprintf('The value of the header %s has a "${" that does not start a variable such as ${NAME}.', $name));
         }
 
-        if (self::hasControlCharacters($template)) {
+        if (HttpField::hasControlCharacters($template)) {
             throw new InvalidArgumentException(sprintf('The value of the header %s must not hold control characters.', $name));
         }
 
@@ -68,21 +61,6 @@ final class RemoteHeader
         $this->prefix = $prefix;
         $this->name = $name;
         $this->template = $template;
-    }
-
-    public static function hasControlCharacters(string $value): bool
-    {
-        return preg_match(self::CONTROL_CHARACTERS, $value) === 1;
-    }
-
-    /**
-     * Whether the client or a proxy writes the header: another value would make the request ambiguous.
-     */
-    public static function isReserved(string $name): bool
-    {
-        $lower = strtolower($name);
-
-        return in_array($lower, self::OWN, true) || strncmp($lower, 'proxy-', 6) === 0;
     }
 
     public function prefix(): string

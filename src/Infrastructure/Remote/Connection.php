@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Infrastructure\Remote;
 
-use MSSTC4PHP\DtoGenerator\Application\Config\RemoteHeader;
+use MSSTC4PHP\DtoGenerator\Application\Port\HttpField;
 
 /**
  * A socket under one deadline, which covers every operation on it: connecting, TLS, writing and reading. PHP's own
@@ -112,14 +112,15 @@ final class Connection
         $status = 0;
         $headers = [];
         $headerBytes = 0;
-        for ($first = true; ($line = $this->line()) !== ''; $first = false) {
+        $first = true;
+        for (; ($line = $this->line()) !== ''; $first = false) {
             $headerBytes += strlen($line);
             if ($headerBytes > self::MAX_HEADER_BYTES) {
                 throw new FetchFailed(sprintf('its headers are larger than %d bytes', self::MAX_HEADER_BYTES));
             }
 
             // They would reach the diagnostics, and a terminal, as they are.
-            if (RemoteHeader::hasControlCharacters($line)) {
+            if (HttpField::hasControlCharacters($line)) {
                 throw new FetchFailed('its headers hold control characters');
             }
 
@@ -129,12 +130,16 @@ final class Connection
                 }
 
                 $status = (int) $matches[1];
-            } elseif (preg_match('/^(' . RemoteHeader::TOKEN . '):[ \t]*(.*?)[ \t]*$/', $line, $matches) !== 1) {
+            } elseif (preg_match('/^(' . HttpField::TOKEN . '):[ \t]*(.*?)[ \t]*$/', $line, $matches) !== 1) {
                 // "Transfer-Encoding : chunked" would otherwise pass unseen (RFC 9112 §5.1); folded lines are refused too.
                 throw new FetchFailed('its headers are malformed');
             } else {
                 $headers[] = [strtolower($matches[1]), $matches[2]];
             }
+        }
+
+        if ($first) {
+            throw new FetchFailed('the connection closed without an answer');
         }
 
         return [$status, $headers];

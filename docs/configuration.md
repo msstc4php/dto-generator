@@ -203,19 +203,19 @@ project.
   `Content-Length` or one sent in chunks is an error, the whole answer must arrive within `timeout` seconds
   (resolving the host name is not counted), and any status but `200` is an error. JSON or YAML is told by the
   extension of the URL, else by a YAML `Content-Type`, else by whether it starts with `{`.
-- **Headers.** Each entry of `headers` adds a header to the fetch of every document under its `prefix`, which must be
-  an `https://` URL: credentials never travel in clear text, and since redirects are not followed they never reach
-  another host. `${NAME}` in `value` stands for the environment variable `NAME`, read only when a document is
-  fetched, so `--check` and runs that find everything cached need no secret. Variables are looked up in `$_SERVER`,
-  then `$_ENV`, then `getenv()`, so the values Symfony's Dotenv loads count too. Keep secrets in the environment (a CI
-  secret), never in the config, which you commit. A variable that is not set or is empty, or a value holding a
-  control character other than a tab, is an error, and no value ever appears in a message or in the cache. A name
-  starting with `HTTP_` is refused: under CGI and FPM the client of a request sets such variables from its headers.
-  Of several entries with the same name (letter case ignored) for one URL, the one with the longest prefix wins; two
-  entries with the same name and prefix are an error, and an entry whose prefix no `allow` prefix overlaps gets a
-  warning, since it is never sent. `Host`, `Connection`, `Content-Length`, `Transfer-Encoding` and `Proxy-*` cannot
-  be set; `Accept` and `User-Agent` replace the generator's own. For Basic authentication put
-  `Basic <base64 of user:password>` into the variable.
+- **Headers.** Each entry of `headers` adds a header to the fetch of every document under its `prefix`, which must be an
+  `https://` URL: credentials never travel in clear text, and since redirects are not followed they never reach another
+  host. `${NAME}` in `value` stands for the environment variable `NAME`, read only when a document is fetched, so
+  `--check` and runs that find everything cached need no secret. Variables are looked up in `$_SERVER`, then `$_ENV`,
+  then `getenv()`, so the values Symfony's Dotenv loads count too; a value set later with `putenv()` alone does not
+  replace one already in `$_SERVER`. Keep secrets in the environment (a CI secret), never in the config, which you
+  commit. A variable that is not set or is empty, or a value holding a control character other than a tab, is an error,
+  and no value ever appears in a message or in the cache. A name starting with `HTTP_` is refused: under CGI and FPM the
+  client of a request sets such variables from its headers. Of several entries with the same name (letter case ignored)
+  for one URL, the one with the longest prefix wins; two entries with the same name and prefix are an error, and an
+  entry whose prefix no `allow` prefix overlaps gets a warning, since it is never sent. `Host`, `Connection`,
+  `Content-Length`, `Transfer-Encoding` and `Proxy-*` cannot be set; `Accept` and `User-Agent` replace the generator's
+  own. For Basic authentication put `Basic <base64 of user:password>` into the variable.
 
   ```yaml
   remoteRefs:
@@ -228,12 +228,13 @@ project.
 - **Proxies.** Like curl, the generator takes `https_proxy` (or `HTTPS_PROXY`) for https URLs and only the lower-case
   `http_proxy` for http ones (`HTTP_PROXY` can come from a request header under CGI); unlike curl it ignores
   `all_proxy`/`ALL_PROXY`. A proxy is `http://[user[:password]@]host[:port]`, the scheme may be left out and the port
-  defaults to 1080; an HTTPS or SOCKS proxy is an error for every fetch that would use it, so set `no_proxy=*` (or
-  list the schema hosts in it) to fetch directly instead. https goes through a `CONNECT` tunnel, so TLS and the certificate check still run with
-  the server itself and the proxy sees neither the request nor its headers; plain http is sent to the proxy.
-  `no_proxy` (or `NO_PROXY`) lists hosts reached directly, separated by commas or spaces: a name also covers its
-  subdomains (dots around it change nothing), `host:port` only that port, an IP address only itself however it is
-  spelled, `*` every host; CIDR ranges are not supported. Messages name a proxy by host and port, never with its credentials.
+  defaults to 1080; an HTTPS or SOCKS proxy is an error for every fetch that would use it, so set `no_proxy=*` (or list
+  the schema hosts in it) to fetch directly instead. https goes through a `CONNECT` tunnel, so TLS and the certificate
+  check still run with the server itself and the proxy sees neither the request nor its headers; plain http is sent to
+  the proxy. `no_proxy` (or `NO_PROXY`) lists hosts reached directly, separated by commas or spaces: a name also covers
+  its subdomains (dots around it change nothing), `host:port` only that port, an IP address only itself however it is
+  spelled, `*` every host; CIDR ranges are not supported. Messages name a proxy by host and port, never with its
+  credentials.
 - **Cache.** Fetched documents are kept in `cacheDir`, with `index.json` recording each URL, when it was fetched (UTC)
   and the SHA-256 of what came back. Later runs read the cache and never go to the network; a cached copy that no
   longer matches its SHA-256, a symbolic link, and an `index.json` that is not valid (say, after a merge conflict) are

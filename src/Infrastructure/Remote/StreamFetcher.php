@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Infrastructure\Remote;
 
-use MSSTC4PHP\DtoGenerator\Application\Config\RemoteHeader;
+use MSSTC4PHP\DtoGenerator\Application\Port\HttpField;
 use MSSTC4PHP\DtoGenerator\Domain\Exception\InvalidModel;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\Url;
 
@@ -82,7 +82,7 @@ final class StreamFetcher implements Fetcher
         $lines = ['accept' => 'Accept: ' . self::ACCEPT, 'user-agent' => 'User-Agent: msstc4php-dto-generator'];
         foreach ($headers as $name => $value) {
             // The config checked them already; the request must not depend on that.
-            if (preg_match('/^' . RemoteHeader::TOKEN . '\z/', $name) !== 1 || RemoteHeader::isReserved($name) || RemoteHeader::hasControlCharacters($value)) {
+            if (!HttpField::isName($name) || HttpField::isReserved($name) || HttpField::hasControlCharacters($value)) {
                 throw new FetchFailed(sprintf('the header %s cannot be sent', preg_replace('#[^\x21-\x7E]#', '?', $name)));
             }
 

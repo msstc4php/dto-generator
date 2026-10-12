@@ -41,7 +41,7 @@ final class CachedRemoteDocumentsTest extends TestCase
         $first = $this->documents(new Response(200, 'application/yaml', null, "Money: {type: string}\n"));
 
         self::assertSame(['Money' => ['type' => 'string']], $first->load(self::URL, new RemoteRequest($this->cache, 7, RemotePolicy::from(RemotePolicy::MISSING)))->root());
-        self::assertSame(['Money' => ['type' => 'string']], $first->load(self::URL, new RemoteRequest($this->cache, 7, RemotePolicy::from(RemotePolicy::MISSING)))->root(), 'kept for the run');
+        self::assertSame(['Money' => ['type' => 'string']], $first->load(self::URL, new RemoteRequest($this->cache, 7, RemotePolicy::from(RemotePolicy::MISSING)))->root(), 'read from the cache');
         self::assertCount(1, $this->requests());
         self::assertSame([self::URL, 7, 10485760], $this->requests()[0]);
 
@@ -290,6 +290,35 @@ final class CachedRemoteDocumentsTest extends TestCase
 
         self::assertSame(['A' => []], $repaired->root());
         self::assertSame(['A' => []], $this->documents()->load(self::URL, new RemoteRequest($this->cache, 7, RemotePolicy::from(RemotePolicy::CACHED)))->root());
+    }
+
+    public function testWaitsForAWriterBeforeReadingTheCache(): void
+    {
+        $this->documents(new Response(200, null, null, 'A: {}'))->load(self::URL, new RemoteRequest($this->cache, 7, RemotePolicy::from(RemotePolicy::MISSING)));
+        $old = hash('sha256', 'A: {}') . '.yaml';
+        $new = hash('sha256', 'B: {}') . '.yaml';
+        $index = (string) json_encode([self::URL => ['file' => $new, 'fetchedAt' => '2026-10-12T00:00:00Z', 'sha256' => hash('sha256', 'B: {}')]]);
+        $started = $this->cache . '/started';
+        // A refresh in another process: it holds the lock while it replaces the entry and deletes the old file.
+        $code = sprintf(
+            '$l = fopen(%1$s . "/.index.lock", "c"); flock($l, LOCK_EX); touch(%2$s); usleep(600000); file_put_contents(%1$s . "/" . %3$s, "B: {}"); file_put_contents(%1$s . "/index.json", %4$s); unlink(%1$s . "/" . %5$s); fclose($l);',
+            var_export($this->cache, true),
+            var_export($started, true),
+            var_export($new, true),
+            var_export($index, true),
+            var_export($old, true),
+        );
+        $process = proc_open([PHP_BINARY, '-r', $code], [], $pipes);
+        self::assertIsResource($process);
+        for ($wait = 0; !is_file($started) && $wait < 250; $wait++) {
+            usleep(20000);
+        }
+
+        try {
+            self::assertSame(['B' => []], $this->documents()->load(self::URL, new RemoteRequest($this->cache, 7, RemotePolicy::from(RemotePolicy::CACHED)))->root());
+        } finally {
+            proc_close($process);
+        }
     }
 
     public function testReportsACacheItCannotWrite(): void

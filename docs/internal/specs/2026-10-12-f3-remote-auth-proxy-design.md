@@ -66,15 +66,14 @@ remoteRefs:
 
 ## 5. Архитектура
 
-- Application: `Config\RemoteHeader` (префикс, имя, шаблон; `variables()`, `render(array<string, string>)`, общие
-  проверки токена и управляющих символов), `RemoteRefsSettings::headersFor(url)`; порт
-  `Port\RemoteDocuments::load(string $url, RemoteRequest $request)`, `Port\RemoteRequest` (каталог кэша, срок,
-  `RemotePolicy` `cached|missing|all`, заголовки). Порт внутренний — BC не
-  затрагивает.
-- Infrastructure: `CachedRemoteDocuments` подставляет переменные (`getenv`) и передаёт заголовки `Fetcher::get()`;
-  `Remote\Proxies` (из окружения) и `Remote\Proxy`, `Remote\Environment`; `StreamFetcher` строит запрос и туннель,
-  `Remote\Connection` держит сокет под общим сроком (TCP, TLS, чтение заголовков и тела). Для тестов
-  `StreamFetcher` принимает файл доверенных сертификатов (`@internal`).
+- Application: `Config\RemoteHeader` (префикс, имя, шаблон; `variables()`, `render(array<string, string>)`, грамматика
+  полей — `Application\Port\HttpField`), `RemoteRefsSettings::headersFor(url)`; порт `Port\RemoteDocuments::load(string
+  $url, RemoteRequest $request)`, `Port\RemoteRequest` (каталог кэша, срок, `RemotePolicy` `cached|missing|all`,
+  заголовки). Порт внутренний — BC не затрагивает.
+- Infrastructure: `CachedRemoteDocuments` подставляет переменные (через `Remote\Environment`: `$_SERVER` → `$_ENV` →
+  `getenv`) и передаёт заголовки `Fetcher::get()`; `Remote\Proxies` (из окружения) и `Remote\Proxy`,
+  `Remote\Environment`; `StreamFetcher` строит запрос и туннель, `Remote\Connection` держит сокет под общим сроком (TCP,
+  TLS, чтение заголовков и тела). Для тестов `StreamFetcher` принимает файл доверенных сертификатов (`@internal`).
 
 ## 6. Вне рамок
 
