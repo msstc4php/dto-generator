@@ -43,7 +43,10 @@ final class ConfigMother
         );
     }
 
-    public static function split(SourceConfig $source, ?ViewSuffixes $suffixes = null): GeneratorConfig
+    /**
+     * @param 'single'|'split' $readWriteModels
+     */
+    public static function split(SourceConfig $source, ?ViewSuffixes $suffixes = null, string $readWriteModels = ReadWriteModels::SPLIT): GeneratorConfig
     {
         return new GeneratorConfig(
             self::PATH,
@@ -54,7 +57,7 @@ final class ConfigMother
                 DateTimeClass::from(DateTimeClass::IMMUTABLE),
                 AllOfStrategy::from(AllOfStrategy::EXTENDS),
                 true,
-                ReadWriteModels::from(ReadWriteModels::SPLIT),
+                ReadWriteModels::from($readWriteModels),
                 $suffixes,
             ),
             [],

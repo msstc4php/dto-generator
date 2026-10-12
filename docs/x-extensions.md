@@ -70,7 +70,7 @@ Admin:
     - $ref: '#/components/schemas/User'
     - properties: {role: {type: string}}
 User:
-  x-php-read-write: split      # UserRead and UserWrite, while the rest keeps one model per schema
+  x-php-read-write: split      # UserRead and UserWrite; the rest keeps one model, but those holding, extending or listing User
   properties:
     id: {type: integer, readOnly: true}
     password: {type: string, writeOnly: true}

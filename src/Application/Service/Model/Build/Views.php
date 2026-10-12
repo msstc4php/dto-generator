@@ -49,7 +49,8 @@ final class Views
         // What the analysis reads of the flags is reported once whichever way the run goes: the views repeat it only
         // for the schemas that got a class.
         $found = new Diagnostics();
-        $dependent = $this->dependent($single, new Directions($this->graph, $found), $found);
+        $dependent = $this->dependent($single, new Directions($this->graph, $found));
+        $this->warnAboutOverriddenSingles($single, $dependent, $found);
         if ($dependent === []) {
             return $this->with($single->output(), $found);
         }
@@ -131,7 +132,7 @@ final class Views
      *
      * @return array<string, bool>
      */
-    private function dependent(Run $single, Directions $directions, Diagnostics $diagnostics): array
+    private function dependent(Run $single, Directions $directions): array
     {
         $dependent = [];
         $rejected = [];
@@ -172,18 +173,31 @@ final class Views
             }
         }
 
+        return $dependent;
+    }
+
+    /**
+     * A class that asked for one model gets views all the same when it holds, extends or lists a class with views; a
+     * schema refused its name has no class to warn about.
+     *
+     * @param array<string, bool> $dependent
+     */
+    private function warnAboutOverriddenSingles(Run $single, array $dependent, Diagnostics $diagnostics): void
+    {
         foreach ($single->classSchemas() as $classSchema) {
             $schema = $classSchema->schema();
+            if ($classSchema->taker() !== null || !($dependent[$schema->location()->toString()] ?? false)) {
+                continue;
+            }
+
             $declared = ReadWriteMode::declared($schema);
-            if ($classSchema->taker() === null && ($dependent[$schema->location()->toString()] ?? false) && $declared instanceof ReadWriteModels && !$declared->isSplit()) {
+            if ($declared instanceof ReadWriteModels && !$declared->isSplit()) {
                 $diagnostics->warning(
                     sprintf('"%s: single" is overridden: the class holds, extends or lists a class with read and write views, so it gets them too.', ReadWriteMode::KEY),
                     $schema->location()->child(ReadWriteMode::KEY),
                 );
             }
         }
-
-        return $dependent;
     }
 
     /**

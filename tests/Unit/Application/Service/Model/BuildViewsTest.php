@@ -388,10 +388,99 @@ final class BuildViewsTest extends TestCase
         self::assertSame([$error], ModelFixture::messages($split));
     }
 
-    public function testWarnsAboutTheModeOfAnEnum(): void
+    public function testNamesTheViewsOfASplitSchemaWithTheSuffixesOfASingleRun(): void
     {
-        $output = ModelFixture::build(['Colour' => ['type' => 'string', 'enum' => ['red'], 'x-php-read-write' => 'split']]);
+        $output = ModelFixture::build(
+            ['User' => ['type' => 'object', 'x-php-read-write' => 'split', 'properties' => ['id' => ['type' => 'integer', 'readOnly' => true]]]],
+            [],
+            ['*'],
+            'extends',
+            true,
+            new ViewSuffixes('Out', 'In'),
+            'single',
+        );
 
-        self::assertSame(['warning /project/api/openapi.yaml#/components/schemas/Colour/x-php-read-write: "x-php-read-write" has no effect here.'], ModelFixture::messages($output));
+        self::assertSame(['App\Dto\UserOut', 'App\Dto\UserIn'], array_keys(ModelFixture::classes($output)));
+    }
+
+    public function testReportsOnlyTheNameOfASingleSchemaNamedLikeAView(): void
+    {
+        $output = ModelFixture::build([
+            'Pet' => ['type' => 'object', 'properties' => ['id' => ['type' => 'string', 'readOnly' => true]]],
+            'PetRead' => ['type' => 'object', 'x-php-read-write' => 'single', 'properties' => ['a' => ['type' => 'string']]],
+        ], [], ['*'], 'extends', true, new ViewSuffixes());
+
+        self::assertSame([
+            'error /project/api/openapi.yaml#/components/schemas/PetRead: Class App\Dto\PetRead is already generated from /project/api/openapi.yaml#/components/schemas/Pet; set "x-php-class-name" on one of them, or change dto.readWriteSuffixes.',
+        ], ModelFixture::messages($output));
+    }
+
+    /**
+     * @dataProvider singleSchemasWithViews
+     *
+     * @param array<string, array<array-key, mixed>> $schemas
+     * @param list<string> $classes
+     */
+    public function testWarnsWhenASingleSchemaGetsViewsAnyWay(array $schemas, array $classes): void
+    {
+        $output = ModelFixture::build($schemas, [], ['*'], 'extends', true, new ViewSuffixes());
+
+        self::assertSame($classes, array_keys(ModelFixture::classes($output)));
+        self::assertSame([
+            'warning /project/api/openapi.yaml#/components/schemas/Holder/x-php-read-write: "x-php-read-write: single" is overridden: the class holds, extends or lists a class with read and write views, so it gets them too.',
+        ], ModelFixture::messages($output));
+    }
+
+    /**
+     * @return iterable<string, array{array<string, array<array-key, mixed>>, list<string>}>
+     */
+    public static function singleSchemasWithViews(): iterable
+    {
+        $pet = ['type' => 'object', 'properties' => ['id' => ['type' => 'integer', 'readOnly' => true]]];
+
+        yield 'extends' => [
+            ['Pet' => $pet, 'Holder' => ['x-php-read-write' => 'single', 'allOf' => [['$ref' => '#/components/schemas/Pet'], ['type' => 'object', 'properties' => ['a' => ['type' => 'string']]]]]],
+            ['App\Dto\PetRead', 'App\Dto\HolderRead', 'App\Dto\PetWrite', 'App\Dto\HolderWrite'],
+        ];
+        yield 'lists in an array' => [
+            ['Pet' => $pet, 'Holder' => ['type' => 'object', 'x-php-read-write' => 'single', 'properties' => ['pets' => ['type' => 'array', 'items' => ['$ref' => '#/components/schemas/Pet']]]]],
+            ['App\Dto\PetRead', 'App\Dto\HolderRead', 'App\Dto\PetWrite', 'App\Dto\HolderWrite'],
+        ];
+        yield 'lists as a variant' => [
+            [
+                'Pet' => ['type' => 'object', 'required' => ['kind'], 'properties' => ['kind' => ['type' => 'string'], 'id' => ['type' => 'integer', 'readOnly' => true]]],
+                'Holder' => ['x-php-read-write' => 'single', 'oneOf' => [['$ref' => '#/components/schemas/Pet']], 'discriminator' => ['propertyName' => 'kind']],
+            ],
+            ['App\Dto\PetRead', 'App\Dto\HolderRead', 'App\Dto\PetWrite', 'App\Dto\HolderWrite'],
+        ];
+    }
+
+    /**
+     * @dataProvider misplacedModes
+     *
+     * @param array<string, array<array-key, mixed>> $schemas
+     */
+    public function testReportsAMisplacedOrMistypedMode(array $schemas, string $message): void
+    {
+        self::assertSame([$message], ModelFixture::messages(ModelFixture::build($schemas)));
+    }
+
+    /**
+     * @return iterable<string, array{array<string, array<array-key, mixed>>, string}>
+     */
+    public static function misplacedModes(): iterable
+    {
+        $at = 'warning /project/api/openapi.yaml#/components/schemas/';
+
+        yield 'an enum' => [['Colour' => ['type' => 'string', 'enum' => ['red'], 'x-php-read-write' => 'split']], $at . 'Colour/x-php-read-write: "x-php-read-write" has no effect here.'];
+        yield 'an alias' => [['Code' => ['type' => 'string', 'x-php-read-write' => 'split']], $at . 'Code/x-php-read-write: "x-php-read-write" has no effect here.'];
+        yield 'an allOf member' => [
+            ['Pet' => ['allOf' => [['type' => 'object', 'x-php-read-write' => 'split', 'properties' => ['a' => ['type' => 'string']]]]]],
+            $at . 'Pet/allOf/0/x-php-read-write: "x-php-read-write" has no effect here.',
+        ];
+        yield 'not a string' => [
+            ['Pet' => ['type' => 'object', 'x-php-read-write' => true, 'properties' => ['a' => ['type' => 'string']]]],
+            'error /project/api/openapi.yaml#/components/schemas/Pet/x-php-read-write: "x-php-read-write" must be "single" or "split".',
+        ];
     }
 }

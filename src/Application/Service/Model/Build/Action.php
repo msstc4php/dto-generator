@@ -47,16 +47,15 @@ final class Action
     {
         $dto = $input->config()->dto();
         // Without a split class the result is the build with every property: one schema may ask for views itself.
-        $views = new Views($input->graph(), $dto->viewSuffixes(), new ReadWriteMode($dto->readWriteModels()));
+        $mode = new ReadWriteMode($dto->readWriteModels());
 
-        return $views->build(fn (?View $view): Run => $this->build($input, $view));
+        return (new Views($input->graph(), $dto->viewSuffixes(), $mode))->build(fn (?View $view): Run => $this->build($input, $view, $mode));
     }
 
-    private function build(Input $input, ?View $view): Run
+    private function build(Input $input, ?View $view, ReadWriteMode $mode): Run
     {
         $diagnostics = new Diagnostics();
         $config = $input->config();
-        $mode = new ReadWriteMode($config->dto()->readWriteModels());
         $registry = new Registry($view, $view instanceof View ? new PropertyView($view->direction(), new Directions($input->graph(), $diagnostics), $mode) : null);
         $enums = new EnumBuilder($this->names);
         /** @var list<array{Schema, string, int}> $aliases named non-object schemas with their name and source */
