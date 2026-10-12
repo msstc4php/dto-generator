@@ -6,7 +6,8 @@ namespace MSSTC4PHP\DtoGenerator\Domain\Builder;
 
 /**
  * JSON Schema keywords that shape a value in ways no generated type expresses; silently dropping them would hide
- * that the DTO admits more than the schema. An extension that checks one claims it, and the parser stays quiet.
+ * that the DTO admits more than the schema. An extension that checks one claims it; the parser hands each occurrence
+ * to KeywordChecks, and the generator warns about those the extension left unmarked.
  */
 final class UnsupportedKeywords
 {

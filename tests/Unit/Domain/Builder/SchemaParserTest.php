@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MSSTC4PHP\DtoGenerator\Tests\Unit\Domain\Builder;
 
 use MSSTC4PHP\DtoGenerator\Domain\Builder\SchemaParser;
+use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\ClaimedKeyword;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostic;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\KeywordChecks;
@@ -256,7 +257,7 @@ final class SchemaParserTest extends TestCase
         ], array_map(static fn (Diagnostic $diagnostic): string => $diagnostic->toString(), $diagnostics->all()));
         self::assertSame(
             ['a.yaml#/components/schemas/User dependentRequired', 'a.yaml#/components/schemas/User/properties/a contains'],
-            array_map(static fn (array $pending): string => $pending[1]->toString() . ' ' . $pending[0], $checks->unchecked()),
+            array_map(static fn (ClaimedKeyword $pending): string => $pending->schema()->toString() . ' ' . $pending->keyword(), $checks->unchecked()),
         );
     }
 

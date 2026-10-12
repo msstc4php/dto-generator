@@ -10,6 +10,7 @@ use MSSTC4PHP\DtoGenerator\Application\Service\Schemas\Load\Action;
 use MSSTC4PHP\DtoGenerator\Application\Service\Schemas\Load\Input;
 use MSSTC4PHP\DtoGenerator\Application\Service\Schemas\Load\Output;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\SchemaParser;
+use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\ClaimedKeyword;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostic;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\KeywordChecks;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\ResolvedSchema;
@@ -136,7 +137,7 @@ final class LoadTest extends TestCase
         $output = (new Action(new InMemoryDocumentLoader($documents), new SchemaParser()))(new Input($config, null, $checks));
 
         self::assertSame(['warning /project/api/openapi.yaml#/components/schemas/Odd/not: "not" is not supported and has no effect on the generated type.'], $this->messages($output));
-        self::assertSame([['contains', '/project/api/openapi.yaml#/components/schemas/Odd']], array_map(static fn (array $pending): array => [$pending[0], $pending[1]->toString()], $checks->unchecked()));
+        self::assertSame([['contains', '/project/api/openapi.yaml#/components/schemas/Odd']], array_map(static fn (ClaimedKeyword $pending): array => [$pending->keyword(), $pending->schema()->toString()], $checks->unchecked()));
     }
 
     public function testFollowsCyclesOnce(): void

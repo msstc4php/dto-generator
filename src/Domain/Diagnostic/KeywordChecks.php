@@ -17,7 +17,7 @@ final class KeywordChecks
     /** @var list<string> */
     private array $claimed;
 
-    /** @var array<string, array{string, SchemaLocation}> keyword location => the keyword and its schema */
+    /** @var array<string, ClaimedKeyword> by the location of the keyword */
     private array $pending = [];
 
     /**
@@ -41,13 +41,15 @@ final class KeywordChecks
     /**
      * @internal the parser reports each occurrence of a claimed keyword
      */
-    public function expect(string $keyword, SchemaLocation $schema): void
+    public function expect(SchemaLocation $schema, string $keyword): void
     {
-        $this->pending[$schema->child($keyword)->toString()] = [$keyword, $schema];
+        $occurrence = new ClaimedKeyword($schema, $keyword);
+        $this->pending[$occurrence->location()->toString()] = $occurrence;
     }
 
     /**
-     * The extension checked the keyword of this schema, or warned that it cannot.
+     * The extension checked the keyword of this schema, or warned that it cannot. The schema is the one that holds the
+     * keyword: the target of a `$ref` or the `allOf` branch, not the property that reaches it.
      */
     public function checked(SchemaLocation $schema, string $keyword): void
     {
@@ -57,7 +59,7 @@ final class KeywordChecks
     /**
      * @internal
      *
-     * @return list<array{string, SchemaLocation}> each keyword nobody checked, with its schema
+     * @return list<ClaimedKeyword> each occurrence nobody checked
      */
     public function unchecked(): array
     {

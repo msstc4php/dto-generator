@@ -87,7 +87,7 @@ final class SchemaParser
 
             $unsupported = $this->quiet ? null : UnsupportedKeywords::warning($keyword, $value);
             if ($unsupported !== null && $this->checks instanceof KeywordChecks && $this->checks->isClaimed($keyword)) {
-                $this->checks->expect($keyword, $location);
+                $this->checks->expect($location, $keyword);
                 $unsupported = null;
             }
 
