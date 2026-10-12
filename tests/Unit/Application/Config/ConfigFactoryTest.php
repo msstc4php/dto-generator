@@ -182,6 +182,18 @@ final class ConfigFactoryTest extends TestCase
             'remoteRefs timeout zero' => [['version' => 1, 'remoteRefs' => ['timeout' => 0], 'sources' => [$source]], '"timeout" must be a number of seconds from 1 to 300', '/remoteRefs/timeout'],
             'remoteRefs timeout large' => [['version' => 1, 'remoteRefs' => ['timeout' => 301], 'sources' => [$source]], '"timeout" must be a number of seconds from 1 to 300', '/remoteRefs/timeout'],
             'remoteRefs timeout text' => [['version' => 1, 'remoteRefs' => ['timeout' => '10'], 'sources' => [$source]], '"timeout" must be a number of seconds from 1 to 300', '/remoteRefs/timeout'],
+            'remoteRefs headers not a list' => [['version' => 1, 'remoteRefs' => ['headers' => ['name' => 'X']], 'sources' => [$source]], '"headers" must be a non-empty list', '/remoteRefs/headers'],
+            'remoteRefs header key' => [['version' => 1, 'remoteRefs' => ['headers' => [['prefix' => 'https://a.example/', 'name' => 'X', 'value' => 'v', 'secret' => 'x']]], 'sources' => [$source]], 'Unknown key "secret"', '/remoteRefs/headers/0/secret'],
+            'remoteRefs header without a name' => [['version' => 1, 'remoteRefs' => ['headers' => [['prefix' => 'https://a.example/', 'value' => 'v']]], 'sources' => [$source]], '"name" is required.', '/remoteRefs/headers/0'],
+            'remoteRefs header without a value' => [['version' => 1, 'remoteRefs' => ['headers' => [['prefix' => 'https://a.example/', 'name' => 'X']]], 'sources' => [$source]], '"value" is required.', '/remoteRefs/headers/0'],
+            'remoteRefs header without a prefix' => [['version' => 1, 'remoteRefs' => ['headers' => [['name' => 'X', 'value' => 'v']]], 'sources' => [$source]], '"prefix" is required.', '/remoteRefs/headers/0'],
+            'remoteRefs header prefix not a url' => [['version' => 1, 'remoteRefs' => ['headers' => [['prefix' => 'a.example/', 'name' => 'X', 'value' => 'v']]], 'sources' => [$source]], 'A header prefix must be an absolute https URL without query or fragment.', '/remoteRefs/headers/0/prefix'],
+            'remoteRefs header prefix with query' => [['version' => 1, 'remoteRefs' => ['headers' => [['prefix' => 'https://a.example/?x', 'name' => 'X', 'value' => 'v']]], 'sources' => [$source]], 'A header prefix must be an absolute https URL without query or fragment.', '/remoteRefs/headers/0/prefix'],
+            'remoteRefs header prefix with fragment' => [['version' => 1, 'remoteRefs' => ['headers' => [['prefix' => 'https://a.example/#x', 'name' => 'X', 'value' => 'v']]], 'sources' => [$source]], 'A header prefix must be an absolute https URL without query or fragment.', '/remoteRefs/headers/0/prefix'],
+            'remoteRefs header prefix with credentials' => [['version' => 1, 'remoteRefs' => ['headers' => [['prefix' => 'https://u@a.example/', 'name' => 'X', 'value' => 'v']]], 'sources' => [$source]], 'credentials in a URL are not supported', '/remoteRefs/headers/0/prefix'],
+            'remoteRefs header over http' => [['version' => 1, 'remoteRefs' => ['headers' => [['prefix' => 'http://a.example/', 'name' => 'X', 'value' => 'v']]], 'sources' => [$source]], 'A header is sent only over https, not to "http://a.example/".', '/remoteRefs/headers/0'],
+            'remoteRefs header name' => [['version' => 1, 'remoteRefs' => ['headers' => [['prefix' => 'https://a.example/', 'name' => 'Host', 'value' => 'v']]], 'sources' => [$source]], 'The header Host is written by the generator itself.', '/remoteRefs/headers/0'],
+            'remoteRefs header value not a string' => [['version' => 1, 'remoteRefs' => ['headers' => [['prefix' => 'https://a.example/', 'name' => 'X', 'value' => 2]]], 'sources' => [$source]], '"value" must be a non-empty string', '/remoteRefs/headers/0/value'],
             'withers not bool' => [['version' => 1, 'dto' => ['withers' => 'no'], 'sources' => [$source]], '"withers" must be true or false', '/dto/withers'],
             'unknown dto key' => [['version' => 1, 'dto' => ['mutable' => true], 'sources' => [$source]], 'Unknown key "mutable"', '/dto/mutable'],
             'unknown format key' => [['version' => 1, 'formats' => ['uuid' => ['type' => 'App\Uuid', 'kind' => 1]], 'sources' => [$source]], 'Unknown key "kind"', '/formats/uuid/kind'],
@@ -290,6 +302,46 @@ final class ConfigFactoryTest extends TestCase
         self::assertSame(dirname(self::PATH) . '/var/remote', $set->remoteRefs()->cacheDir());
         self::assertSame(1, $set->remoteRefs()->timeout());
         self::assertSame(300, $longest->remoteRefs()->timeout());
+    }
+
+    public function testReadsTheHeadersOfRemoteDocuments(): void
+    {
+        $source = ['spec' => '/abs/openapi.yaml', 'namespace' => 'App\\Dto', 'outputDir' => 'src/Dto'];
+        $config = $this->valid(['version' => 1, 'remoteRefs' => ['headers' => [
+            ['prefix' => 'HTTPS://Git.Example.com/api/', 'name' => 'PRIVATE-TOKEN', 'value' => '${GITLAB_TOKEN}'],
+            ['prefix' => 'https://other.example.com/', 'name' => 'Accept', 'value' => 'application/json'],
+        ]], 'sources' => [$source]]);
+
+        $headers = $config->remoteRefs()->headers();
+        self::assertCount(2, $headers);
+        self::assertSame('https://git.example.com/api/', $headers[0]->prefix());
+        self::assertSame('PRIVATE-TOKEN', $headers[0]->name());
+        self::assertSame(['GITLAB_TOKEN'], $headers[0]->variables());
+        self::assertSame('application/json', $headers[1]->render([]));
+    }
+
+    public function testReportsEveryHeaderItCannotUse(): void
+    {
+        $diagnostics = new Diagnostics();
+        (new ConfigFactory())->create(
+            ['version' => 1, 'remoteRefs' => ['headers' => [
+                ['name' => 'X', 'value' => 'v'],
+                ['prefix' => 'a.example/', 'name' => 'X', 'value' => 'v'],
+                ['prefix' => 'http://a.example/', 'name' => 'X', 'value' => 'v'],
+                'text',
+                ['prefix' => 'https://a.example/', 'name' => 'Y', 'value' => '${'],
+            ]], 'sources' => [['spec' => '/abs/openapi.yaml', 'namespace' => 'App\\Dto', 'outputDir' => 'src/Dto']]],
+            self::PATH,
+            $diagnostics,
+        );
+
+        self::assertSame([
+            'error ' . self::PATH . '#/remoteRefs/headers/3: Expected an object.',
+            'error ' . self::PATH . '#/remoteRefs/headers/0: "prefix" is required.',
+            'error ' . self::PATH . '#/remoteRefs/headers/1/prefix: A header prefix must be an absolute https URL without query or fragment.',
+            'error ' . self::PATH . '#/remoteRefs/headers/2: A header is sent only over https, not to "http://a.example/".',
+            'error ' . self::PATH . '#/remoteRefs/headers/4: The value of the header Y has a "${" that does not start a variable such as ${NAME}.',
+        ], array_map(static fn (Diagnostic $d): string => $d->toString(), $diagnostics->all()));
     }
 
     public function testReadsWithersOff(): void

@@ -12,6 +12,7 @@ use MSSTC4PHP\DtoGenerator\Application\Port\CodeEmitter;
 use MSSTC4PHP\DtoGenerator\Application\Port\FileWriter;
 use MSSTC4PHP\DtoGenerator\Application\Port\ProjectPackages;
 use MSSTC4PHP\DtoGenerator\Application\Port\ProjectPackagesUnusable;
+use MSSTC4PHP\DtoGenerator\Application\Port\RemoteRequest;
 use MSSTC4PHP\DtoGenerator\Application\Port\WriteFailed;
 use MSSTC4PHP\DtoGenerator\Application\Service\Config\Load\Action as LoadConfig;
 use MSSTC4PHP\DtoGenerator\Application\Service\Config\Load\Input as ConfigInput;
@@ -98,7 +99,7 @@ final class Action
             return new Output(Status::from(Status::CONFIG_FAILED), $diagnostics, null, [], [Path::normalize($input->configPath())]);
         }
 
-        [$files, $read] = $this->files($config, $target, $verifier, $input->fetchesRemote(), $diagnostics);
+        [$files, $read] = $this->files($config, $target, $verifier, $this->remotePolicy($input), $diagnostics);
         $documents = array_merge([$config->path()], $read->documents());
         if ($files === null) {
             return new Output(Status::from(Status::GENERATION_FAILED), $diagnostics, null, [], $documents, $read->remoteCache());
@@ -216,18 +217,30 @@ final class Action
     }
 
     /**
+     * @return RemoteRequest::CACHED|RemoteRequest::MISSING|RemoteRequest::ALL
+     */
+    private function remotePolicy(Input $input): string
+    {
+        if ($input->refreshesRemote()) {
+            return RemoteRequest::ALL;
+        }
+
+        return $input->fetchesRemote() ? RemoteRequest::MISSING : RemoteRequest::CACHED;
+    }
+
+    /**
      * Null when the schemas or the model have errors, since emitting them would be wasted work.
      *
-     * @param bool $fetches whether remote documents missing from the cache may be fetched
+     * @param RemoteRequest::CACHED|RemoteRequest::MISSING|RemoteRequest::ALL $remotePolicy
      *
      * @return array{list<GeneratedFile>|null, SchemasOutput} the files, null after an error, and what the schemas read
      */
-    private function files(GeneratorConfig $config, TargetProfile $target, ?ClassVerifier $verifier, bool $fetches, Diagnostics $diagnostics): array
+    private function files(GeneratorConfig $config, TargetProfile $target, ?ClassVerifier $verifier, string $remotePolicy, Diagnostics $diagnostics): array
     {
         $extensions = ($this->loadExtensions)(new ExtensionsInput($config));
         $diagnostics->merge($extensions->diagnostics());
         $registry = $extensions->registry();
-        $schemas = ($this->loadSchemas)(new SchemasInput($config, $fetches));
+        $schemas = ($this->loadSchemas)(new SchemasInput($config, $remotePolicy));
         $diagnostics->merge($schemas->diagnostics());
         $formats = $registry->formats(array_map(static fn (ClassName $class): TypeModel => new ClassType($class), $config->formats()));
         $aliases = array_keys($config->extensions()->aliases());

@@ -15,7 +15,23 @@ final class StreamFetcher implements Fetcher
 {
     private const MAX_HEADER_BYTES = 65536;
 
-    public function get(string $url, int $timeout, int $maxBytes): Response
+    private const ACCEPT = 'application/json, application/yaml;q=0.9, */*;q=0.5';
+
+    private ?Proxies $proxies;
+
+    private ?string $caFile;
+
+    /**
+     * @param Proxies|null $proxies those of the process environment by default
+     * @param string|null $caFile internal, for tests: the certificates to trust instead of the system's
+     */
+    public function __construct(?Proxies $proxies = null, ?string $caFile = null)
+    {
+        $this->proxies = $proxies;
+        $this->caFile = $caFile;
+    }
+
+    public function get(string $url, int $timeout, int $maxBytes, array $headers = []): Response
     {
         // Only the spelling the allow list checked, which also keeps line breaks out of the request.
         $parts = $this->isNormalized($url) ? parse_url($url) : false;
@@ -26,16 +42,80 @@ final class StreamFetcher implements Fetcher
         $deadline = microtime(true) + $timeout;
         $secure = $parts['scheme'] === 'https';
         $port = $parts['port'] ?? ($secure ? 443 : 80);
-        $stream = $this->connect($parts['host'], $port, $secure, $deadline, $timeout);
+        $authority = $parts['host'] . ':' . $port;
+        $proxy = ($this->proxies ?? Proxies::fromEnvironment())->for($parts['scheme'], $parts['host'], $port);
+        $stream = $proxy instanceof Proxy
+            ? $this->connect($proxy->host(), $proxy->port(), $parts['host'], $deadline, sprintf('the proxy at %s: ', $proxy->label()))
+            : $this->connect($parts['host'], $port, $parts['host'], $deadline, '');
         try {
-            $target = ($parts['path'] ?? '/') . (isset($parts['query']) ? '?' . $parts['query'] : '');
+            if ($proxy instanceof Proxy && $secure) {
+                $this->tunnel($stream, $authority, $proxy, $deadline, $timeout);
+            }
+
+            if ($secure) {
+                $this->secure($stream, $deadline, $timeout);
+            }
+
+            $path = ($parts['path'] ?? '/') . (isset($parts['query']) ? '?' . $parts['query'] : '');
             $host = $parts['host'] . (isset($parts['port']) ? ':' . $port : '');
+            // A proxy forwards plain http by the absolute URL (RFC 9112 §3.2.2).
+            $target = $proxy instanceof Proxy && !$secure ? 'http://' . $host . $path : $path;
+            $request = "GET {$target} HTTP/1.0\r\nHost: {$host}\r\n" . $this->headerLines($headers);
+            if ($proxy instanceof Proxy && !$secure && $proxy->authorization() !== null) {
+                $request .= 'Proxy-Authorization: ' . $proxy->authorization() . "\r\n";
+            }
+
             $this->limit($stream, $deadline, $timeout);
-            fwrite($stream, "GET {$target} HTTP/1.0\r\nHost: {$host}\r\nAccept: application/json, application/yaml;q=0.9, */*;q=0.5\r\nUser-Agent: msstc4php-dto-generator\r\nConnection: close\r\n\r\n");
+            fwrite($stream, $request . "Connection: close\r\n\r\n");
 
             return $this->response($stream, $deadline, $timeout, $maxBytes);
         } finally {
             fclose($stream);
+        }
+    }
+
+    /**
+     * Accept and User-Agent unless the given headers replace them, then the given ones.
+     *
+     * @param array<string, string> $headers
+     */
+    private function headerLines(array $headers): string
+    {
+        $lines = ['accept' => 'Accept: ' . self::ACCEPT, 'user-agent' => 'User-Agent: msstc4php-dto-generator'];
+        foreach ($headers as $name => $value) {
+            // The config checked them already; the request must not depend on that.
+            if (preg_match('#^[!\#$%&\'*+.^_`|~0-9A-Za-z-]+\z#', $name) !== 1 || preg_match('#[\x00-\x08\x0A-\x1F\x7F]#', $value) === 1) {
+                throw new FetchFailed(sprintf('the header %s cannot be sent', preg_replace('#[^\x21-\x7E]#', '?', $name)));
+            }
+
+            $lines[strtolower($name)] = $name . ': ' . $value;
+        }
+
+        return implode("\r\n", $lines) . "\r\n";
+    }
+
+    /**
+     * Asks the proxy for a tunnel to the server (RFC 9110 §9.3.6); TLS to the server then runs through it.
+     *
+     * @param resource $stream
+     * @param positive-int $timeout
+     */
+    private function tunnel($stream, string $authority, Proxy $proxy, float $deadline, int $timeout): void
+    {
+        $request = "CONNECT {$authority} HTTP/1.1\r\nHost: {$authority}\r\n";
+        if ($proxy->authorization() !== null) {
+            $request .= 'Proxy-Authorization: ' . $proxy->authorization() . "\r\n";
+        }
+
+        $this->limit($stream, $deadline, $timeout);
+        fwrite($stream, $request . "\r\n");
+        $status = $this->headers($stream, $deadline, $timeout)[0];
+        if ($status === 407) {
+            throw new FetchFailed(sprintf('the proxy at %s requires authentication (407)', $proxy->label()));
+        }
+
+        if ($status < 200 || $status > 299) {
+            throw new FetchFailed(sprintf('the proxy at %s answered %d', $proxy->label(), $status));
         }
     }
 
@@ -49,18 +129,23 @@ final class StreamFetcher implements Fetcher
     }
 
     /**
-     * TCP first, then TLS 1.2 or newer within what is left of the deadline; a failed handshake explains itself only in
-     * warnings, which are kept.
+     * A TCP connection whose context carries the TLS settings for the server, which a tunnel through a proxy reaches
+     * later; a failure explains itself only in warnings, which are kept.
      *
-     * @param positive-int $timeout
+     * @param string $peer the server's host, whose certificate TLS checks
+     * @param string $failure what a failure message starts with
      *
      * @return resource
      */
-    private function connect(string $host, int $port, bool $secure, float $deadline, int $timeout)
+    private function connect(string $host, int $port, string $peer, float $deadline, string $failure)
     {
-        $name = trim($host, '[]');
+        $name = trim($peer, '[]');
         $methods = STREAM_CRYPTO_METHOD_TLSv1_2_CLIENT | (defined('STREAM_CRYPTO_METHOD_TLSv1_3_CLIENT') ? STREAM_CRYPTO_METHOD_TLSv1_3_CLIENT : 0);
-        $context = stream_context_create(['ssl' => ['verify_peer' => true, 'verify_peer_name' => true, 'peer_name' => $name, 'SNI_enabled' => true, 'crypto_method' => $methods]]);
+        $ssl = ['verify_peer' => true, 'verify_peer_name' => true, 'peer_name' => $name, 'SNI_enabled' => true, 'crypto_method' => $methods];
+        if ($this->caFile !== null) {
+            $ssl['cafile'] = $this->caFile;
+        }
+
         $warnings = [];
         set_error_handler(static function (int $level, string $message) use (&$warnings): bool {
             $warnings[] = $message;
@@ -68,25 +153,45 @@ final class StreamFetcher implements Fetcher
             return true;
         });
         try {
-            $stream = stream_socket_client('tcp://' . $host . ':' . $port, $errno, $error, max(0.001, $deadline - microtime(true)), STREAM_CLIENT_CONNECT, $context);
-            $secured = is_resource($stream) && $secure ? $this->handshake($stream, $deadline) : true;
-            if ($secured !== true) {
-                fclose($stream);
-                $stream = $secured;
-            }
+            $stream = stream_socket_client('tcp://' . $host . ':' . $port, $errno, $error, max(0.001, $deadline - microtime(true)), STREAM_CLIENT_CONNECT, stream_context_create(['ssl' => $ssl]));
         } finally {
             restore_error_handler();
         }
 
-        if ($stream === null) {
-            throw new FetchFailed(sprintf('it took longer than %d seconds', $timeout));
-        }
-
         if (!is_resource($stream)) {
-            throw new FetchFailed($warnings === [] ? (($error ?? '') === '' ? 'the connection failed' : (string) $error) : implode('; ', $warnings));
+            throw new FetchFailed($failure . ($warnings === [] ? (($error ?? '') === '' ? 'the connection failed' : (string) $error) : implode('; ', $warnings)));
         }
 
         return $stream;
+    }
+
+    /**
+     * TLS 1.2 or newer within what is left of the deadline.
+     *
+     * @param resource $stream
+     * @param positive-int $timeout
+     */
+    private function secure($stream, float $deadline, int $timeout): void
+    {
+        $warnings = [];
+        set_error_handler(static function (int $level, string $message) use (&$warnings): bool {
+            $warnings[] = $message;
+
+            return true;
+        });
+        try {
+            $secured = $this->handshake($stream, $deadline);
+        } finally {
+            restore_error_handler();
+        }
+
+        if ($secured === null) {
+            throw new FetchFailed(sprintf('it took longer than %d seconds', $timeout));
+        }
+
+        if (!$secured) {
+            throw new FetchFailed($warnings === [] ? 'the TLS handshake failed' : implode('; ', $warnings));
+        }
     }
 
     /**
@@ -131,43 +236,20 @@ final class StreamFetcher implements Fetcher
      */
     private function response($stream, float $deadline, int $timeout, int $maxBytes): Response
     {
-        $status = 0;
+        [$status, $headers] = $this->headers($stream, $deadline, $timeout);
         $contentType = null;
         $location = null;
         $lengths = [];
-        $headerBytes = 0;
         $transferEncoding = null;
-        for ($first = true; ($line = $this->line($stream, $deadline, $timeout)) !== ''; $first = false) {
-            $headerBytes += strlen($line);
-            if ($headerBytes > self::MAX_HEADER_BYTES) {
-                throw new FetchFailed(sprintf('its headers are larger than %d bytes', self::MAX_HEADER_BYTES));
-            }
-
-            // They would reach the diagnostics, and a terminal, as they are.
-            if (preg_match('#[\x00-\x08\x0A-\x1F\x7F]#', $line) === 1) {
-                throw new FetchFailed('its headers hold control characters');
-            }
-
-            if ($first) {
-                if (preg_match('#^HTTP/\d\.\d (\d{3})#', $line, $matches) !== 1) {
-                    throw new FetchFailed('the server did not answer in HTTP');
-                }
-
-                $status = (int) $matches[1];
-            } elseif (preg_match('#^([!\#$%&\'*+.^_`|~0-9A-Za-z-]+):[ \t]*(.*?)[ \t]*$#', $line, $matches) !== 1) {
-                // "Transfer-Encoding : chunked" would otherwise pass unseen (RFC 9112 §5.1); folded lines are refused too.
-                throw new FetchFailed('its headers are malformed');
-            } else {
-                $header = strtolower($matches[1]);
-                if ($header === 'content-type') {
-                    $contentType = $matches[2];
-                } elseif ($header === 'location') {
-                    $location = $matches[2];
-                } elseif ($header === 'content-length') {
-                    $lengths[$matches[2]] = true;
-                } elseif ($header === 'transfer-encoding') {
-                    $transferEncoding = $matches[2];
-                }
+        foreach ($headers as [$header, $value]) {
+            if ($header === 'content-type') {
+                $contentType = $value;
+            } elseif ($header === 'location') {
+                $location = $value;
+            } elseif ($header === 'content-length') {
+                $lengths[$value] = true;
+            } elseif ($header === 'transfer-encoding') {
+                $transferEncoding = $value;
             }
         }
 
@@ -195,6 +277,47 @@ final class StreamFetcher implements Fetcher
         }
 
         return new Response($status, $contentType, $location, $body);
+    }
+
+    /**
+     * The status line and the header fields of an answer, the server's or the proxy's.
+     *
+     * @param resource $stream
+     * @param positive-int $timeout
+     *
+     * @return array{int, list<array{string, string}>} the status and each field as lower-case name and value
+     */
+    private function headers($stream, float $deadline, int $timeout): array
+    {
+        $status = 0;
+        $headers = [];
+        $headerBytes = 0;
+        for ($first = true; ($line = $this->line($stream, $deadline, $timeout)) !== ''; $first = false) {
+            $headerBytes += strlen($line);
+            if ($headerBytes > self::MAX_HEADER_BYTES) {
+                throw new FetchFailed(sprintf('its headers are larger than %d bytes', self::MAX_HEADER_BYTES));
+            }
+
+            // They would reach the diagnostics, and a terminal, as they are.
+            if (preg_match('#[\x00-\x08\x0A-\x1F\x7F]#', $line) === 1) {
+                throw new FetchFailed('its headers hold control characters');
+            }
+
+            if ($first) {
+                if (preg_match('#^HTTP/\d\.\d (\d{3})#', $line, $matches) !== 1) {
+                    throw new FetchFailed('the server did not answer in HTTP');
+                }
+
+                $status = (int) $matches[1];
+            } elseif (preg_match('#^([!\#$%&\'*+.^_`|~0-9A-Za-z-]+):[ \t]*(.*?)[ \t]*$#', $line, $matches) !== 1) {
+                // "Transfer-Encoding : chunked" would otherwise pass unseen (RFC 9112 §5.1); folded lines are refused too.
+                throw new FetchFailed('its headers are malformed');
+            } else {
+                $headers[] = [strtolower($matches[1]), $matches[2]];
+            }
+        }
+
+        return [$status, $headers];
     }
 
     /**

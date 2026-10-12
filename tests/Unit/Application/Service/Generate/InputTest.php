@@ -60,4 +60,16 @@ final class InputTest extends TestCase
         self::assertSame(Mode::WRITE, $offline->mode()->value());
         self::assertFalse($offline->withOutputRoot('/other')->fetchesRemote());
     }
+
+    public function testRefreshesOnlyWhenAskedAndWhenItFetches(): void
+    {
+        $input = new Input('/p/c.yaml', Mode::from(Mode::WRITE));
+        $refreshing = $input->withOutputRoot('/build')->withRefreshedRemote();
+
+        self::assertFalse($input->refreshesRemote());
+        self::assertTrue($refreshing->refreshesRemote());
+        self::assertSame('/build', $refreshing->outputRoot());
+        self::assertFalse($refreshing->withoutFetching()->refreshesRemote());
+        self::assertFalse((new Input('/p/c.yaml', Mode::from(Mode::CHECK)))->withRefreshedRemote()->refreshesRemote());
+    }
 }

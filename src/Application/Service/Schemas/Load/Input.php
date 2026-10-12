@@ -5,25 +5,31 @@ declare(strict_types=1);
 namespace MSSTC4PHP\DtoGenerator\Application\Service\Schemas\Load;
 
 use MSSTC4PHP\DtoGenerator\Application\Config\GeneratorConfig;
+use MSSTC4PHP\DtoGenerator\Application\Port\RemoteRequest;
 
 final class Input
 {
     private GeneratorConfig $config;
 
-    private bool $fetchesRemote;
+    /** @var RemoteRequest::CACHED|RemoteRequest::MISSING|RemoteRequest::ALL */
+    private string $remotePolicy;
 
     /**
-     * @param bool $fetchesRemote whether a remote document missing from the cache may be fetched (a run that writes)
+     * @param RemoteRequest::CACHED|RemoteRequest::MISSING|RemoteRequest::ALL $remotePolicy which remote documents may be
+     *                                                                                      fetched: none, those missing from the cache (a run that writes) or all of them (a refresh)
      */
-    public function __construct(GeneratorConfig $config, bool $fetchesRemote = false)
+    public function __construct(GeneratorConfig $config, string $remotePolicy = RemoteRequest::CACHED)
     {
         $this->config = $config;
-        $this->fetchesRemote = $fetchesRemote;
+        $this->remotePolicy = $remotePolicy;
     }
 
-    public function fetchesRemote(): bool
+    /**
+     * @return RemoteRequest::CACHED|RemoteRequest::MISSING|RemoteRequest::ALL
+     */
+    public function remotePolicy(): string
     {
-        return $this->fetchesRemote;
+        return $this->remotePolicy;
     }
 
     public function config(): GeneratorConfig

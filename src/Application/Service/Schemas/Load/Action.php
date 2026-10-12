@@ -9,6 +9,7 @@ use MSSTC4PHP\DtoGenerator\Application\Port\Document;
 use MSSTC4PHP\DtoGenerator\Application\Port\DocumentLoader;
 use MSSTC4PHP\DtoGenerator\Application\Port\DocumentLoadFailed;
 use MSSTC4PHP\DtoGenerator\Application\Port\RemoteDocuments;
+use MSSTC4PHP\DtoGenerator\Application\Port\RemoteRequest;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\SchemaParser;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
 use MSSTC4PHP\DtoGenerator\Domain\Exception\InvalidModel;
@@ -129,7 +130,7 @@ final class Action
 
             $settings = $input->config()->remoteRefs();
 
-            $document = $this->remote->load($path, $settings->cacheDir(), $settings->timeout(), $input->fetchesRemote());
+            $document = $this->remote->load($path, new RemoteRequest($settings->cacheDir(), $settings->timeout(), $input->remotePolicy(), $settings->headersFor($path)));
             $reads->remote();
 
             return $document;

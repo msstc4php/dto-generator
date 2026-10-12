@@ -19,6 +19,9 @@ final class RecordingFetcher implements Fetcher
     /** @var list<array{string, int, int}> */
     private array $requests = [];
 
+    /** @var list<array<string, string>> */
+    private array $headers = [];
+
     /**
      * @param list<Response|FetchFailed> $answers
      */
@@ -27,9 +30,10 @@ final class RecordingFetcher implements Fetcher
         $this->answers = $answers;
     }
 
-    public function get(string $url, int $timeout, int $maxBytes): Response
+    public function get(string $url, int $timeout, int $maxBytes, array $headers = []): Response
     {
         $this->requests[] = [$url, $timeout, $maxBytes];
+        $this->headers[] = $headers;
         $answer = array_shift($this->answers);
         if (!$answer instanceof Response) {
             throw $answer ?? new FetchFailed('no answer left');
@@ -44,5 +48,13 @@ final class RecordingFetcher implements Fetcher
     public function requests(): array
     {
         return $this->requests;
+    }
+
+    /**
+     * @return list<array<string, string>> the headers of each request
+     */
+    public function headers(): array
+    {
+        return $this->headers;
     }
 }

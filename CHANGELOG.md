@@ -8,8 +8,19 @@ All notable changes to this package are documented here. The format follows
 
 ### Added
 
+- `remoteRefs.headers` sends headers with the fetch of the remote documents under an `https://` prefix, such as a
+  token for a private GitLab or Artifactory; `${NAME}` in a value reads the environment variable `NAME` only when a
+  document is fetched, so secrets stay out of the config and checks need none.
+- `generate --refresh-remote` (and `Generate\Input::withRefreshedRemote()`) fetches every remote document the run
+  reads again, replacing its cached copy.
 - Every release tag publishes the Docker image to `ghcr.io/msstc4php/dto-generator` for `linux/amd64` and
   `linux/arm64`, tagged `X.Y.Z`, and `X.Y`, `X`, `latest` when it is the newest of their line.
+
+### Changed
+
+- Remote documents are fetched through the proxy of `https_proxy`/`HTTPS_PROXY` (https) or `http_proxy` (http),
+  except for the hosts of `no_proxy`/`NO_PROXY`, as curl does; they used to be fetched directly whatever the
+  environment said.
 
 ## [1.3.1] - 2026-10-12
 

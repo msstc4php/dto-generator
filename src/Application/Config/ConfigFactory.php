@@ -70,7 +70,7 @@ final class ConfigFactory
 
     private function remoteRefs(RawSection $section, string $baseDir): RemoteRefsSettings
     {
-        $section->rejectUnknownKeys(['allow', 'cacheDir', 'timeout']);
+        $section->rejectUnknownKeys(['allow', 'cacheDir', 'timeout', 'headers']);
         $allow = [];
         foreach ($section->stringList('allow', []) as $index => $prefix) {
             if (!Url::isUrl($prefix) || strpbrk($prefix, '?#') !== false) {
@@ -98,7 +98,40 @@ final class ConfigFactory
             $timeout = RemoteRefsSettings::TIMEOUT;
         }
 
-        return new RemoteRefsSettings($allow, Path::resolve($baseDir, $cacheDir), $timeout);
+        return new RemoteRefsSettings($allow, Path::resolve($baseDir, $cacheDir), $timeout, $section->has('headers') ? $this->remoteHeaders($section) : []);
+    }
+
+    /**
+     * @return list<RemoteHeader>
+     */
+    private function remoteHeaders(RawSection $section): array
+    {
+        $headers = [];
+        foreach ($section->sectionList('headers') as $header) {
+            $header->rejectUnknownKeys(['prefix', 'name', 'value']);
+            $prefix = $header->requiredString('prefix');
+            $name = $header->requiredString('name');
+            $value = $header->requiredString('value');
+            if ($prefix === null || $name === null || $value === null) {
+                continue;
+            }
+
+            if (!Url::isUrl($prefix) || strpbrk($prefix, '?#') !== false) {
+                $header->report('A header prefix must be an absolute https URL without query or fragment.', 'prefix');
+
+                continue;
+            }
+
+            try {
+                $headers[] = new RemoteHeader(Url::normalize($prefix), $name, $value);
+            } catch (InvalidModel $exception) {
+                $header->report($exception->getMessage(), 'prefix');
+            } catch (InvalidArgumentException $exception) {
+                $header->report($exception->getMessage());
+            }
+        }
+
+        return $headers;
     }
 
     private function target(RawSection $section): TargetSettings

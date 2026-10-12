@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace MSSTC4PHP\DtoGenerator\Tests\Unit\Infrastructure\Remote;
 
 use DateTimeImmutable;
+use MSSTC4PHP\DtoGenerator\Application\Config\RemoteHeader;
 use MSSTC4PHP\DtoGenerator\Application\Port\DocumentLoadFailed;
+use MSSTC4PHP\DtoGenerator\Application\Port\RemoteRequest;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Remote\CachedRemoteDocuments;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Remote\FetchFailed;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Remote\Response;
@@ -37,8 +39,8 @@ final class CachedRemoteDocumentsTest extends TestCase
     {
         $first = $this->documents(new Response(200, 'application/yaml', null, "Money: {type: string}\n"));
 
-        self::assertSame(['Money' => ['type' => 'string']], $first->load(self::URL, $this->cache, 7, true)->root());
-        self::assertSame(['Money' => ['type' => 'string']], $first->load(self::URL, $this->cache, 7, true)->root(), 'kept for the run');
+        self::assertSame(['Money' => ['type' => 'string']], $first->load(self::URL, new RemoteRequest($this->cache, 7, RemoteRequest::MISSING))->root());
+        self::assertSame(['Money' => ['type' => 'string']], $first->load(self::URL, new RemoteRequest($this->cache, 7, RemoteRequest::MISSING))->root(), 'kept for the run');
         self::assertCount(1, $this->requests());
         self::assertSame([self::URL, 7, 10485760], $this->requests()[0]);
 
@@ -52,7 +54,7 @@ final class CachedRemoteDocumentsTest extends TestCase
         self::assertFileExists($this->cache . '/.index.lock');
 
         $later = $this->documents(new FetchFailed('offline'));
-        self::assertSame(self::URL, $later->load(self::URL, $this->cache, 7, false)->path());
+        self::assertSame(self::URL, $later->load(self::URL, new RemoteRequest($this->cache, 7, RemoteRequest::CACHED))->path());
         self::assertCount(1, $this->requests());
     }
 
@@ -60,8 +62,8 @@ final class CachedRemoteDocumentsTest extends TestCase
     {
         $documents = $this->documents(new Response(200, null, null, '{"A": {}}'), new Response(200, null, null, '{"B": {}}'));
 
-        $documents->load('https://example.com/b.json', $this->cache, 7, true);
-        $documents->load('https://example.com/a.json', $this->cache, 7, true);
+        $documents->load('https://example.com/b.json', new RemoteRequest($this->cache, 7, RemoteRequest::MISSING));
+        $documents->load('https://example.com/a.json', new RemoteRequest($this->cache, 7, RemoteRequest::MISSING));
 
         $index = json_decode((string) file_get_contents($this->cache . '/index.json'), true);
 
@@ -91,7 +93,7 @@ final class CachedRemoteDocumentsTest extends TestCase
     {
         $documents = $this->documents(new Response(200, $type, null, $body));
 
-        self::assertSame(['A' => []], $documents->load($url, $this->cache, 7, true)->root());
+        self::assertSame(['A' => []], $documents->load($url, new RemoteRequest($this->cache, 7, RemoteRequest::MISSING))->root());
         self::assertSame([hash('sha256', $body) . $extension, 'index.json'], $this->listed());
     }
 
@@ -122,7 +124,7 @@ final class CachedRemoteDocumentsTest extends TestCase
     public function testReportsADocumentItCannotFetch($answer, string $problem): void
     {
         try {
-            $this->documents($answer)->load(self::URL, $this->cache, 7, true);
+            $this->documents($answer)->load(self::URL, new RemoteRequest($this->cache, 7, RemoteRequest::MISSING));
             self::fail('No failure');
         } catch (DocumentLoadFailed $exception) {
             self::assertStringStartsWith('Remote document "' . self::URL . '" ' . $problem, $exception->getMessage());
@@ -139,7 +141,7 @@ final class CachedRemoteDocumentsTest extends TestCase
         $this->expectExceptionMessage('Remote document "' . self::URL . '" is not cached in ' . $this->cache . '; run generate to fetch it.');
 
         try {
-            $this->documents(new Response(200, null, null, 'A: {}'))->load(self::URL, $this->cache, 7, false);
+            $this->documents(new Response(200, null, null, 'A: {}'))->load(self::URL, new RemoteRequest($this->cache, 7, RemoteRequest::CACHED));
         } finally {
             self::assertSame([], $this->requests());
         }
@@ -147,26 +149,26 @@ final class CachedRemoteDocumentsTest extends TestCase
 
     public function testRefusesACachedCopyChangedByHand(): void
     {
-        $this->documents(new Response(200, null, null, 'A: {}'))->load(self::URL, $this->cache, 7, true);
+        $this->documents(new Response(200, null, null, 'A: {}'))->load(self::URL, new RemoteRequest($this->cache, 7, RemoteRequest::MISSING));
         $file = $this->cache . '/' . hash('sha256', 'A: {}') . '.yaml';
         file_put_contents($file, 'A: {type: integer}');
 
         $this->expectException(DocumentLoadFailed::class);
         $this->expectExceptionMessage('Remote document "' . self::URL . '" in the cache (' . $file . ') does not match the SHA-256 recorded when it was fetched; delete it and its entry in index.json to fetch it again.');
 
-        $this->documents()->load(self::URL, $this->cache, 7, true);
+        $this->documents()->load(self::URL, new RemoteRequest($this->cache, 7, RemoteRequest::MISSING));
     }
 
     public function testReportsACachedCopyThatIsGone(): void
     {
-        $this->documents(new Response(200, null, null, 'A: {}'))->load(self::URL, $this->cache, 7, true);
+        $this->documents(new Response(200, null, null, 'A: {}'))->load(self::URL, new RemoteRequest($this->cache, 7, RemoteRequest::MISSING));
         $file = $this->cache . '/' . hash('sha256', 'A: {}') . '.yaml';
         unlink($file);
 
         $this->expectException(DocumentLoadFailed::class);
         $this->expectExceptionMessage('Remote document "' . self::URL . '" is listed in the cache, but ' . $file . ' cannot be read as a plain file; delete its entry in index.json to fetch it again.');
 
-        $this->documents()->load(self::URL, $this->cache, 7, true);
+        $this->documents()->load(self::URL, new RemoteRequest($this->cache, 7, RemoteRequest::MISSING));
     }
 
     /**
@@ -203,7 +205,7 @@ final class CachedRemoteDocumentsTest extends TestCase
         $this->expectException(DocumentLoadFailed::class);
         $this->expectExceptionMessage('Remote document "' . self::URL . '" cannot use the cache: ' . $this->cache . '/index.json ' . $problem);
 
-        $this->documents(new Response(200, null, null, 'A: {}'))->load(self::URL, $this->cache, 7, true);
+        $this->documents(new Response(200, null, null, 'A: {}'))->load(self::URL, new RemoteRequest($this->cache, 7, RemoteRequest::MISSING));
     }
 
     public function testTakesAnEmptyIndex(): void
@@ -211,12 +213,12 @@ final class CachedRemoteDocumentsTest extends TestCase
         mkdir($this->cache, 0777, true);
         file_put_contents($this->cache . '/index.json', '{}');
 
-        self::assertSame(['A' => []], $this->documents(new Response(200, null, null, 'A: {}'))->load(self::URL, $this->cache, 7, true)->root());
+        self::assertSame(['A' => []], $this->documents(new Response(200, null, null, 'A: {}'))->load(self::URL, new RemoteRequest($this->cache, 7, RemoteRequest::MISSING))->root());
     }
 
     public function testRefusesACachedCopyThatIsALink(): void
     {
-        $this->documents(new Response(200, null, null, 'A: {}'))->load(self::URL, $this->cache, 7, true);
+        $this->documents(new Response(200, null, null, 'A: {}'))->load(self::URL, new RemoteRequest($this->cache, 7, RemoteRequest::MISSING));
         $file = $this->cache . '/' . hash('sha256', 'A: {}') . '.yaml';
         rename($file, $this->cache . '/target.yaml');
         symlink($this->cache . '/target.yaml', $file);
@@ -224,7 +226,7 @@ final class CachedRemoteDocumentsTest extends TestCase
         $this->expectException(DocumentLoadFailed::class);
         $this->expectExceptionMessage('cannot be read as a plain file');
 
-        $this->documents()->load(self::URL, $this->cache, 7, true);
+        $this->documents()->load(self::URL, new RemoteRequest($this->cache, 7, RemoteRequest::MISSING));
     }
 
     public function testRefusesAnIndexOrALockThatIsALink(): void
@@ -234,7 +236,7 @@ final class CachedRemoteDocumentsTest extends TestCase
         symlink($this->cache . '/elsewhere.json', $this->cache . '/index.json');
 
         try {
-            $this->documents(new Response(200, null, null, 'A: {}'))->load(self::URL, $this->cache, 7, true);
+            $this->documents(new Response(200, null, null, 'A: {}'))->load(self::URL, new RemoteRequest($this->cache, 7, RemoteRequest::MISSING));
             self::fail('No failure');
         } catch (DocumentLoadFailed $exception) {
             self::assertSame('Remote document "' . self::URL . '" cannot use the cache: ' . $this->cache . '/index.json is a symbolic link; replace it with the file.', $exception->getMessage());
@@ -246,7 +248,7 @@ final class CachedRemoteDocumentsTest extends TestCase
         $this->expectExceptionMessage('could not be cached in ' . $this->cache . ': its index cannot be locked (.index.lock must be a plain file).');
 
         try {
-            $this->documents(new Response(200, null, null, 'A: {}'))->load(self::URL, $this->cache, 7, true);
+            $this->documents(new Response(200, null, null, 'A: {}'))->load(self::URL, new RemoteRequest($this->cache, 7, RemoteRequest::MISSING));
         } finally {
             self::assertFileDoesNotExist(dirname($this->cache) . '/victim');
         }
@@ -257,13 +259,13 @@ final class CachedRemoteDocumentsTest extends TestCase
         $cache = $this->cache;
         // The other run fetches and records B while this one waits for A.
         $racing = new CachedRemoteDocuments(new CallbackFetcher(static function () use ($cache): Response {
-            (new CachedRemoteDocuments(new RecordingFetcher([new Response(200, null, null, 'B: {}')])))->load(self::URL, $cache, 7, true);
+            (new CachedRemoteDocuments(new RecordingFetcher([new Response(200, null, null, 'B: {}')])))->load(self::URL, new RemoteRequest($cache, 7, RemoteRequest::MISSING));
 
             return new Response(200, null, null, 'A: {}');
         }));
 
-        self::assertSame(['A' => []], $racing->load(self::URL, $this->cache, 7, true)->root());
-        self::assertSame(['A' => []], $this->documents()->load(self::URL, $this->cache, 7, false)->root());
+        self::assertSame(['A' => []], $racing->load(self::URL, new RemoteRequest($this->cache, 7, RemoteRequest::MISSING))->root());
+        self::assertSame(['A' => []], $this->documents()->load(self::URL, new RemoteRequest($this->cache, 7, RemoteRequest::CACHED))->root());
         $files = [hash('sha256', 'A: {}') . '.yaml', hash('sha256', 'B: {}') . '.yaml', 'index.json'];
         sort($files);
         self::assertSame($files, $this->listed());
@@ -273,8 +275,8 @@ final class CachedRemoteDocumentsTest extends TestCase
     {
         $documents = $this->documents(new Response(200, null, null, 'A: {}'), new Response(200, null, null, 'B: {}'));
 
-        self::assertSame(['A' => []], $documents->load(self::URL, $this->cache, 7, true)->root());
-        self::assertSame(['B' => []], $documents->load(self::URL, $this->cache . '-other', 7, true)->root());
+        self::assertSame(['A' => []], $documents->load(self::URL, new RemoteRequest($this->cache, 7, RemoteRequest::MISSING))->root());
+        self::assertSame(['B' => []], $documents->load(self::URL, new RemoteRequest($this->cache . '-other', 7, RemoteRequest::MISSING))->root());
         TestRunTemporaryDirectory::remove($this->cache . '-other');
     }
 
@@ -286,7 +288,116 @@ final class CachedRemoteDocumentsTest extends TestCase
         $this->expectException(DocumentLoadFailed::class);
         $this->expectExceptionMessageMatches('~^Remote document "' . preg_quote(self::URL, '~') . '" could not be cached in ' . preg_quote($this->cache, '~') . ': mkdir\(\): File exists\.$~');
 
-        $this->documents(new Response(200, null, null, 'A: {}'))->load(self::URL, $this->cache, 7, true);
+        $this->documents(new Response(200, null, null, 'A: {}'))->load(self::URL, new RemoteRequest($this->cache, 7, RemoteRequest::MISSING));
+    }
+
+    public function testSendsTheHeadersWithTheirVariablesFilledIn(): void
+    {
+        $fetcher = new RecordingFetcher([new Response(200, null, null, 'A: {}')]);
+        $documents = new CachedRemoteDocuments($fetcher, null, null, static fn (string $name): ?string => ['TOKEN' => 's3cr3t', 'TEAM' => 'dto'][$name] ?? null);
+
+        $documents->load(self::URL, new RemoteRequest($this->cache, 7, RemoteRequest::MISSING, [
+            new RemoteHeader('https://schemas.example.com/', 'Authorization', 'Bearer ${TOKEN}'),
+            new RemoteHeader('https://schemas.example.com/', 'X-Team', '${TEAM}-${TEAM}'),
+        ]));
+
+        self::assertSame([['Authorization' => 'Bearer s3cr3t', 'X-Team' => 'dto-dto']], $fetcher->headers());
+        self::assertStringNotContainsString('s3cr3t', (string) file_get_contents($this->cache . '/index.json'));
+    }
+
+    /**
+     * @return array<string, array{?string, string}>
+     */
+    public static function unusableVariables(): array
+    {
+        return [
+            'not set' => [null, 'needs the environment variable TOKEN for its Authorization header, which is not set.'],
+            'empty' => ['', 'needs the environment variable TOKEN for its Authorization header, which is not set.'],
+            'line break' => ["a\r\nX-Injected: 1", 'cannot be fetched: the value of its Authorization header holds control characters.'],
+        ];
+    }
+
+    /**
+     * @dataProvider unusableVariables
+     */
+    public function testFetchesNothingWithAVariableItCannotUse(?string $value, string $problem): void
+    {
+        $fetcher = new RecordingFetcher([new Response(200, null, null, 'A: {}')]);
+        $documents = new CachedRemoteDocuments($fetcher, null, null, static fn (): ?string => $value);
+
+        try {
+            $documents->load(self::URL, new RemoteRequest($this->cache, 7, RemoteRequest::MISSING, [new RemoteHeader('https://schemas.example.com/', 'Authorization', 'Bearer ${TOKEN}')]));
+            self::fail('No failure.');
+        } catch (DocumentLoadFailed $exception) {
+            self::assertSame(sprintf('Remote document "%s" %s', self::URL, $problem), $exception->getMessage());
+        }
+
+        self::assertSame([], $fetcher->requests());
+    }
+
+    public function testReadsTheCacheWithoutTheVariablesOfItsHeaders(): void
+    {
+        $this->documents(new Response(200, null, null, 'A: {}'))->load(self::URL, new RemoteRequest($this->cache, 7, RemoteRequest::MISSING));
+        $documents = new CachedRemoteDocuments(new RecordingFetcher([]), null, null, static fn (): ?string => null);
+
+        $document = $documents->load(self::URL, new RemoteRequest($this->cache, 7, RemoteRequest::CACHED, [new RemoteHeader('https://schemas.example.com/', 'Authorization', '${TOKEN}')]));
+
+        self::assertSame(['A' => []], $document->root());
+    }
+
+    public function testReadsTheEnvironmentByDefault(): void
+    {
+        $fetcher = new RecordingFetcher([new Response(200, null, null, 'A: {}')]);
+        putenv('DTO_GENERATOR_TEST_TOKEN=from-env');
+        try {
+            (new CachedRemoteDocuments($fetcher))->load(self::URL, new RemoteRequest($this->cache, 7, RemoteRequest::MISSING, [new RemoteHeader('https://schemas.example.com/', 'X-Token', '${DTO_GENERATOR_TEST_TOKEN}')]));
+        } finally {
+            putenv('DTO_GENERATOR_TEST_TOKEN');
+        }
+
+        self::assertSame([['X-Token' => 'from-env']], $fetcher->headers());
+
+        $this->expectExceptionMessage('needs the environment variable DTO_GENERATOR_TEST_TOKEN for its X-Token header');
+        (new CachedRemoteDocuments(new RecordingFetcher([])))->load('https://schemas.example.com/other.yaml', new RemoteRequest($this->cache, 7, RemoteRequest::MISSING, [new RemoteHeader('https://schemas.example.com/', 'X-Token', '${DTO_GENERATOR_TEST_TOKEN}')]));
+    }
+
+    public function testRefreshesACachedDocumentAndDropsTheFileItReplaced(): void
+    {
+        $this->documents(new Response(200, null, null, 'A: {}'))->load(self::URL, new RemoteRequest($this->cache, 7, RemoteRequest::MISSING));
+        $refreshing = $this->documents(new Response(200, null, null, 'B: {}'));
+
+        $request = new RemoteRequest($this->cache, 7, RemoteRequest::ALL);
+        self::assertSame(['B' => []], $refreshing->load(self::URL, $request)->root());
+        self::assertSame(['B' => []], $refreshing->load(self::URL, $request)->root(), 'once per run');
+
+        self::assertCount(2, $this->requests());
+        self::assertSame([hash('sha256', 'B: {}') . '.yaml', 'index.json'], $this->listed());
+        self::assertSame(['B' => []], $this->documents()->load(self::URL, new RemoteRequest($this->cache, 7, RemoteRequest::CACHED))->root());
+    }
+
+    public function testKeepsAReplacedFileAnotherDocumentStillUses(): void
+    {
+        $other = 'https://schemas.example.com/common/copy.yaml';
+        $documents = $this->documents(new Response(200, null, null, 'A: {}'), new Response(200, null, null, 'A: {}'));
+        $documents->load(self::URL, new RemoteRequest($this->cache, 7, RemoteRequest::MISSING));
+        $documents->load($other, new RemoteRequest($this->cache, 7, RemoteRequest::MISSING));
+
+        $this->documents(new Response(200, null, null, 'B: {}'))->load(self::URL, new RemoteRequest($this->cache, 7, RemoteRequest::ALL));
+
+        $files = [hash('sha256', 'A: {}') . '.yaml', hash('sha256', 'B: {}') . '.yaml', 'index.json'];
+        sort($files);
+        self::assertSame($files, $this->listed());
+        self::assertSame(['A' => []], $this->documents()->load($other, new RemoteRequest($this->cache, 7, RemoteRequest::CACHED))->root());
+    }
+
+    public function testKeepsTheFileOfARefreshThatGotTheSameAnswer(): void
+    {
+        $this->documents(new Response(200, null, null, 'A: {}'))->load(self::URL, new RemoteRequest($this->cache, 7, RemoteRequest::MISSING));
+
+        $this->documents(new Response(200, null, null, 'A: {}'))->load(self::URL, new RemoteRequest($this->cache, 7, RemoteRequest::ALL));
+
+        self::assertSame([hash('sha256', 'A: {}') . '.yaml', 'index.json'], $this->listed());
+        self::assertSame(['A' => []], $this->documents()->load(self::URL, new RemoteRequest($this->cache, 7, RemoteRequest::CACHED))->root());
     }
 
     /**

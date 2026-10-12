@@ -150,6 +150,7 @@ vendor/bin/dto-generator generate --check               # write nothing; exit 1 
 vendor/bin/dto-generator generate --dry-run             # write nothing; show what would change
 vendor/bin/dto-generator generate --format=json         # machine-readable report on stdout
 vendor/bin/dto-generator generate --output-root=var/dto # every outputDir under var/dto, at its path relative to the config
+vendor/bin/dto-generator generate --refresh-remote      # fetch the cached remote documents again
 vendor/bin/dto-generator generate --config=api/dto.yaml # default: dto-generator.yaml, then dto-generator.json
 ```
 
@@ -207,7 +208,8 @@ $output->status()->value();   // ok | out-of-date | generation-failed | config-f
 $output->diagnostics()->all();
 ```
 
-`Mode::CHECK` and `Mode::DRY_RUN` match `--check` and `--dry-run`.
+`Mode::CHECK` and `Mode::DRY_RUN` match `--check` and `--dry-run`; `$input->withRefreshedRemote()` matches
+`--refresh-remote`.
 
 To build the DTOs somewhere the project's sources never see, such as a framework's build directory, move every
 output directory under one root and keep the network out of the build:
@@ -245,7 +247,8 @@ Every release is published for `linux/amd64` and `linux/arm64` as `ghcr.io/msstc
 and `latest` follow the newest release of their line. To build the image yourself:
 `docker build -f docker/Dockerfile -t dto-generator .`
 
-The container does not run your project's code: `verifyClasses: auto` is off in it
+Pass the environment variables that `remoteRefs.headers` names and any proxy variables with `-e`
+(`-e GITLAB_TOKEN -e https_proxy`). The container does not run your project's code: `verifyClasses: auto` is off in it
 (`DTO_GENERATOR_VERIFY_CLASSES=0`); only an explicit `verifyClasses: true` loads the project's autoloader. Only the
 extensions installed in the image are available. `target.php: auto` and the bridge's Symfony versions are
 read from the mounted `composer.json` and `composer.lock`. Build arguments: `VERSION` (the generator version the image
