@@ -7,9 +7,11 @@ namespace MSSTC4PHP\DtoGenerator\Tests\Unit\Domain\Builder;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\Direction;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\Directions;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\PropertyView;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\ReadWriteMode;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostic;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaGraph;
+use MSSTC4PHP\DtoGenerator\Domain\Target\ReadWriteModels;
 use MSSTC4PHP\DtoGenerator\Tests\Support\GraphFixture;
 use PHPUnit\Framework\TestCase;
 
@@ -50,8 +52,8 @@ final class DirectionsTest extends TestCase
     public function testAdmitsThePropertiesOfAView(): void
     {
         $graph = $this->graph(['type' => 'string']);
-        $read = new PropertyView(Direction::from(Direction::READ), new Directions($graph, new Diagnostics()));
-        $write = new PropertyView(Direction::from(Direction::WRITE), new Directions($graph, new Diagnostics()));
+        $read = new PropertyView(Direction::from(Direction::READ), new Directions($graph, new Diagnostics()), new ReadWriteMode(ReadWriteModels::from(ReadWriteModels::SPLIT)));
+        $write = new PropertyView(Direction::from(Direction::WRITE), new Directions($graph, new Diagnostics()), new ReadWriteMode(ReadWriteModels::from(ReadWriteModels::SPLIT)));
         $holder = $graph->all()[0]->schema();
         $id = $holder->requireProperty('id');
         $password = $holder->requireProperty('password');

@@ -249,28 +249,20 @@ final class ConfigFactoryTest extends TestCase
         $partly = $this->valid(['version' => 1, 'dto' => ['readWriteModels' => 'split', 'readWriteSuffixes' => ['write' => 'Input']], 'sources' => [$source]]);
         $single = $this->valid(['version' => 1, 'dto' => ['readWriteModels' => 'single'], 'sources' => [$source]]);
 
-        self::assertFalse($default->dto()->splitsReadAndWrite());
+        self::assertFalse($default->dto()->readWriteModels()->isSplit());
         self::assertSame(['Read', 'Write'], [$default->dto()->viewSuffixes()->read(), $default->dto()->viewSuffixes()->write()]);
-        self::assertTrue($split->dto()->splitsReadAndWrite());
+        self::assertTrue($split->dto()->readWriteModels()->isSplit());
         self::assertSame(['Response', 'Request'], [$split->dto()->viewSuffixes()->read(), $split->dto()->viewSuffixes()->write()]);
         self::assertSame(['Read', 'Input'], [$partly->dto()->viewSuffixes()->read(), $partly->dto()->viewSuffixes()->write()]);
-        self::assertFalse($single->dto()->splitsReadAndWrite());
+        self::assertFalse($single->dto()->readWriteModels()->isSplit());
         self::assertSame('split', $split->dto()->readWriteModels()->value());
     }
 
-    public function testWarnsThatSuffixesNeedSplitModels(): void
+    public function testTakesSuffixesForTheSchemasThatSplitThemselves(): void
     {
-        $diagnostics = new Diagnostics();
-        (new ConfigFactory())->create(
-            ['version' => 1, 'dto' => ['readWriteSuffixes' => ['read' => 'Out']], 'sources' => [['spec' => '/abs/openapi.yaml', 'namespace' => 'App\Dto', 'outputDir' => 'src/Dto']]],
-            self::PATH,
-            $diagnostics,
-        );
+        $config = $this->valid(['version' => 1, 'dto' => ['readWriteSuffixes' => ['read' => 'Out']], 'sources' => [['spec' => '/abs/openapi.yaml', 'namespace' => 'App\Dto', 'outputDir' => 'src/Dto']]]);
 
-        self::assertSame(
-            ['warning ' . self::PATH . '#/dto/readWriteSuffixes: "readWriteSuffixes" has no effect without "readWriteModels: split".'],
-            array_map(static fn (Diagnostic $d): string => $d->toString(), $diagnostics->all()),
-        );
+        self::assertSame('Out', $config->dto()->viewSuffixes()->read());
     }
 
     public function testReportsEveryPrefixItCannotUse(): void

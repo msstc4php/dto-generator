@@ -16,12 +16,12 @@ final class ExtensionVocabulary
     /** The core keys; any other key starting with x-php- or x-dto- is a typo. */
     public const KNOWN = [
         'x-php-class-name', 'x-php-name', 'x-php-type', 'x-dto-mutable', 'x-php-all-of', 'x-php-skip', 'x-php-attributes',
-        'x-enum-descriptions', 'x-enum-varnames',
+        'x-php-read-write', 'x-enum-descriptions', 'x-enum-varnames',
     ];
 
     private const CLASS_SCHEMA = [
-        'x-php-class-name', 'x-php-type', 'x-dto-mutable', 'x-php-all-of', 'x-php-skip', 'x-php-attributes', 'x-enum-descriptions',
-        'x-enum-varnames',
+        'x-php-class-name', 'x-php-type', 'x-dto-mutable', 'x-php-all-of', 'x-php-skip', 'x-php-attributes', 'x-php-read-write',
+        'x-enum-descriptions', 'x-enum-varnames',
     ];
 
     /** An enum is no class, so it carries no attributes. */
@@ -33,6 +33,9 @@ final class ExtensionVocabulary
 
     /** An inline object or enum becomes a class or an enum, so it takes the keys of one. */
     private const DECLARATION = ['x-php-class-name', 'x-dto-mutable', 'x-enum-descriptions', 'x-enum-varnames'];
+
+    /** An enum has no properties to split into views. */
+    private const CLASS_DECLARATION = ['x-php-read-write'];
 
     private const ITEMS = ['x-php-type'];
 
@@ -128,7 +131,11 @@ final class ExtensionVocabulary
      */
     private static function withDeclaration(Schema $schema, array $allowed): array
     {
-        return SchemaShape::isClass($schema) || SchemaShape::isEnum($schema) ? array_merge($allowed, self::DECLARATION) : $allowed;
+        if (SchemaShape::isClass($schema)) {
+            return array_merge($allowed, self::DECLARATION, self::CLASS_DECLARATION);
+        }
+
+        return SchemaShape::isEnum($schema) ? array_merge($allowed, self::DECLARATION) : $allowed;
     }
 
     /**

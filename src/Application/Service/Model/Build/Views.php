@@ -9,6 +9,7 @@ use MSSTC4PHP\DtoGenerator\Application\Config\ViewSuffixes;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\ClassBuilder;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\Direction;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\Directions;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\ReadWriteMode;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\ViewDependence;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostic;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
@@ -18,10 +19,11 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\DiscriminatorModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\PropertyModel;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaGraph;
+use MSSTC4PHP\DtoGenerator\Domain\Target\ReadWriteModels;
 
 /**
- * readWriteModels: split (spec F1 §4, §5): the classes that depend on the direction, read off a build that keeps every
- * property, then a build per direction, merged.
+ * Read and write views (spec F1 §4, §5, F4): the classes that depend on the direction, read off a build that keeps every
+ * property, then a build per direction, merged; without such classes, the build that keeps every property.
  */
 final class Views
 {
@@ -29,10 +31,13 @@ final class Views
 
     private ViewSuffixes $suffixes;
 
-    public function __construct(SchemaGraph $graph, ViewSuffixes $suffixes)
+    private ReadWriteMode $mode;
+
+    public function __construct(SchemaGraph $graph, ViewSuffixes $suffixes, ReadWriteMode $mode)
     {
         $this->graph = $graph;
         $this->suffixes = $suffixes;
+        $this->mode = $mode;
     }
 
     /**
@@ -44,7 +49,7 @@ final class Views
         // What the analysis reads of the flags is reported once whichever way the run goes: the views repeat it only
         // for the schemas that got a class.
         $found = new Diagnostics();
-        $dependent = $this->dependent($single, new Directions($this->graph, $found));
+        $dependent = $this->dependent($single, new Directions($this->graph, $found), $found);
         if ($dependent === []) {
             return $this->with($single->output(), $found);
         }
@@ -120,21 +125,24 @@ final class Views
     }
 
     /**
-     * Locations of the object schemas whose classes depend on the direction: those with a directed property in any
+     * Locations of the object schemas whose classes depend on the direction: split ones with a directed property in any
      * member of their composition, those that hold, extend or list them, and a schema whose name another took when that
      * one depends on it, so the views refuse the name again.
      *
      * @return array<string, bool>
      */
-    private function dependent(Run $single, Directions $directions): array
+    private function dependent(Run $single, Directions $directions, Diagnostics $diagnostics): array
     {
         $dependent = [];
         $rejected = [];
         foreach ($single->classSchemas() as $classSchema) {
             $schema = $classSchema->schema();
             $additional = $schema->additionalProperties();
-            $directed = $directions->ofSources(ClassBuilder::kept($classSchema->composition()->propertySources())) !== []
-                || ($additional instanceof Schema && $directions->of($additional) instanceof Direction);
+            // The flags of a class kept as one model are not read, so they are not reported either.
+            $directed = $this->mode->splits($schema) && (
+                $directions->ofSources(ClassBuilder::kept($classSchema->composition()->propertySources())) !== []
+                || ($additional instanceof Schema && $directions->of($additional) instanceof Direction)
+            );
             $taker = $classSchema->taker();
             if ($taker !== null) {
                 $rejected[$schema->location()->toString()] = $taker;
@@ -161,6 +169,17 @@ final class Views
         foreach ($rejected as $location => $taker) {
             if ($dependent[$taker] ?? false) {
                 $dependent[$location] = true;
+            }
+        }
+
+        foreach ($single->classSchemas() as $classSchema) {
+            $schema = $classSchema->schema();
+            $declared = ReadWriteMode::declared($schema);
+            if ($classSchema->taker() === null && ($dependent[$schema->location()->toString()] ?? false) && $declared instanceof ReadWriteModels && !$declared->isSplit()) {
+                $diagnostics->warning(
+                    sprintf('"%s: single" is overridden: the class holds, extends or lists a class with read and write views, so it gets them too.', ReadWriteMode::KEY),
+                    $schema->location()->child(ReadWriteMode::KEY),
+                );
             }
         }
 

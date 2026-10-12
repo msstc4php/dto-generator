@@ -69,14 +69,6 @@ final class DtoSettings
         return $this->withers;
     }
 
-    /**
-     * Whether a class whose model depends on readOnly/writeOnly gets a read and a write view (`readWriteModels: split`).
-     */
-    public function splitsReadAndWrite(): bool
-    {
-        return $this->readWriteModels->isSplit();
-    }
-
     public function readWriteModels(): ReadWriteModels
     {
         return $this->readWriteModels;

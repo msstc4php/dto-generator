@@ -274,4 +274,124 @@ final class BuildViewsTest extends TestCase
         self::assertSame(['id: int', 'name: string', 'password: string', 'owner: App\Dto\PetOwner|null', 'tag: App\Dto\Tag|null'], ModelFixture::classes($output)['App\Dto\Pet']);
         self::assertSame([], ModelFixture::messages($output));
     }
+
+    public function testSplitsASchemaThatAsksForItWhenTheRunKeepsOneModel(): void
+    {
+        $output = ModelFixture::build([
+            'User' => ['type' => 'object', 'x-php-read-write' => 'split', 'properties' => [
+                'id' => ['type' => 'integer', 'readOnly' => true],
+                'name' => ['type' => 'string'],
+                'password' => ['type' => 'string', 'writeOnly' => true],
+            ]],
+            'Holder' => ['type' => 'object', 'properties' => ['user' => ['$ref' => '#/components/schemas/User']]],
+            'Other' => ['type' => 'object', 'properties' => [
+                'id' => ['type' => 'integer', 'readOnly' => true],
+                'both' => ['type' => 'string', 'readOnly' => true, 'writeOnly' => true],
+            ]],
+        ]);
+
+        self::assertSame([
+            'App\Dto\UserRead' => ['id: int|null', 'name: string|null'],
+            'App\Dto\HolderRead' => ['user: App\Dto\UserRead|null'],
+            'App\Dto\Other' => ['id: int|null', 'both: string|null'],
+            'App\Dto\UserWrite' => ['name: string|null', 'password: string|null'],
+            'App\Dto\HolderWrite' => ['user: App\Dto\UserWrite|null'],
+        ], ModelFixture::classes($output));
+        self::assertSame([], ModelFixture::messages($output));
+    }
+
+    public function testKeepsOneModelOfASchemaThatAsksForItWhenTheRunSplits(): void
+    {
+        $output = ModelFixture::build([
+            'Pet' => ['type' => 'object', 'x-php-read-write' => 'single', 'properties' => [
+                'id' => ['type' => 'integer', 'readOnly' => true],
+                'both' => ['type' => 'string', 'readOnly' => true, 'writeOnly' => true],
+                'owner' => ['type' => 'object', 'properties' => ['since' => ['type' => 'string']]],
+            ]],
+            'Tag' => ['type' => 'object', 'properties' => ['id' => ['type' => 'integer', 'readOnly' => true]]],
+        ], [], ['*'], 'extends', true, new ViewSuffixes());
+
+        self::assertSame([
+            'App\Dto\Pet' => ['id: int|null', 'both: string|null', 'owner: App\Dto\PetOwner|null'],
+            'App\Dto\TagRead' => ['id: int|null'],
+            'App\Dto\PetOwner' => ['since: string|null'],
+            'App\Dto\TagWrite' => [],
+        ], ModelFixture::classes($output));
+        self::assertSame([], ModelFixture::messages($output));
+    }
+
+    public function testWarnsWhenASingleSchemaGetsViewsOfAClassItHolds(): void
+    {
+        $output = ModelFixture::build([
+            'Holder' => ['type' => 'object', 'x-php-read-write' => 'single', 'properties' => [
+                'pet' => ['$ref' => '#/components/schemas/Pet'],
+                'secret' => ['type' => 'string', 'writeOnly' => true],
+            ]],
+            'Pet' => ['type' => 'object', 'properties' => ['id' => ['type' => 'integer', 'readOnly' => true]]],
+        ], [], ['*'], 'extends', true, new ViewSuffixes());
+
+        self::assertSame([
+            'App\Dto\HolderRead' => ['pet: App\Dto\PetRead|null', 'secret: string|null'],
+            'App\Dto\PetRead' => ['id: int|null'],
+            'App\Dto\HolderWrite' => ['pet: App\Dto\PetWrite|null', 'secret: string|null'],
+            'App\Dto\PetWrite' => [],
+        ], ModelFixture::classes($output));
+        self::assertSame([
+            'warning /project/api/openapi.yaml#/components/schemas/Holder/x-php-read-write: "x-php-read-write: single" is overridden: the class holds, extends or lists a class with read and write views, so it gets them too.',
+        ], ModelFixture::messages($output));
+    }
+
+    public function testKeepsTheInlineValuesOfASingleSchemaInEachView(): void
+    {
+        $output = ModelFixture::build([
+            'Bag' => ['type' => 'object', 'x-php-read-write' => 'single', 'properties' => ['name' => ['type' => 'string']], 'additionalProperties' => [
+                'type' => 'object', 'readOnly' => true, 'properties' => ['a' => ['type' => 'string']],
+            ]],
+            'Tag' => ['type' => 'object', 'properties' => ['id' => ['type' => 'integer', 'readOnly' => true]]],
+        ], [], ['*'], 'extends', true, new ViewSuffixes());
+
+        self::assertSame([
+            'App\Dto\Bag' => ['name: string|null', 'additionalProperties: array<array-key, App\Dto\BagAdditionalProperty>'],
+            'App\Dto\TagRead' => ['id: int|null'],
+            'App\Dto\BagAdditionalProperty' => ['a: string|null'],
+            'App\Dto\TagWrite' => [],
+        ], ModelFixture::classes($output));
+        self::assertSame([], ModelFixture::messages($output));
+    }
+
+    public function testLeavesTheInlineObjectsOfASplitSchemaToTheRun(): void
+    {
+        $output = ModelFixture::build([
+            'Pet' => ['type' => 'object', 'x-php-read-write' => 'split', 'properties' => [
+                'id' => ['type' => 'integer', 'readOnly' => true],
+                'owner' => ['type' => 'object', 'properties' => ['since' => ['type' => 'string', 'readOnly' => true]]],
+            ]],
+        ]);
+
+        self::assertSame([
+            'App\Dto\PetRead' => ['id: int|null', 'owner: App\Dto\PetOwner|null'],
+            'App\Dto\PetOwner' => ['since: string|null'],
+            'App\Dto\PetWrite' => ['owner: App\Dto\PetOwner|null'],
+        ], ModelFixture::classes($output));
+    }
+
+    public function testReportsAnUnknownModeOnceAndFollowsTheRun(): void
+    {
+        $schemas = ['Pet' => ['type' => 'object', 'x-php-read-write' => 'both', 'properties' => ['id' => ['type' => 'integer', 'readOnly' => true]]]];
+        $error = 'error /project/api/openapi.yaml#/components/schemas/Pet/x-php-read-write: "x-php-read-write" must be "single" or "split".';
+        $single = ModelFixture::build($schemas);
+        $split = ModelFixture::build($schemas, [], ['*'], 'extends', true, new ViewSuffixes());
+
+        self::assertSame(['App\Dto\Pet'], array_keys(ModelFixture::classes($single)));
+        self::assertSame([$error], ModelFixture::messages($single));
+        self::assertSame(['App\Dto\PetRead', 'App\Dto\PetWrite'], array_keys(ModelFixture::classes($split)));
+        self::assertSame([$error], ModelFixture::messages($split));
+    }
+
+    public function testWarnsAboutTheModeOfAnEnum(): void
+    {
+        $output = ModelFixture::build(['Colour' => ['type' => 'string', 'enum' => ['red'], 'x-php-read-write' => 'split']]);
+
+        self::assertSame(['warning /project/api/openapi.yaml#/components/schemas/Colour/x-php-read-write: "x-php-read-write" has no effect here.'], ModelFixture::messages($output));
+    }
 }

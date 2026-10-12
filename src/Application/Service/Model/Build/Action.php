@@ -15,6 +15,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Builder\Hierarchy;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\NamedClass;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\NameResolver;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\PropertyView;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\ReadWriteMode;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\RequiredCycles;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\SchemaShape;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\TypeMapper;
@@ -45,18 +46,18 @@ final class Action
     public function __invoke(Input $input): Output
     {
         $dto = $input->config()->dto();
-        if (!$dto->splitsReadAndWrite()) {
-            return $this->build($input, null)->output();
-        }
+        // Without a split class the result is the build with every property: one schema may ask for views itself.
+        $views = new Views($input->graph(), $dto->viewSuffixes(), new ReadWriteMode($dto->readWriteModels()));
 
-        return (new Views($input->graph(), $dto->viewSuffixes()))->build(fn (?View $view): Run => $this->build($input, $view));
+        return $views->build(fn (?View $view): Run => $this->build($input, $view));
     }
 
     private function build(Input $input, ?View $view): Run
     {
         $diagnostics = new Diagnostics();
         $config = $input->config();
-        $registry = new Registry($view, $view instanceof View ? new PropertyView($view->direction(), new Directions($input->graph(), $diagnostics)) : null);
+        $mode = new ReadWriteMode($config->dto()->readWriteModels());
+        $registry = new Registry($view, $view instanceof View ? new PropertyView($view->direction(), new Directions($input->graph(), $diagnostics), $mode) : null);
         $enums = new EnumBuilder($this->names);
         /** @var list<array{Schema, string, int}> $aliases named non-object schemas with their name and source */
         $aliases = [];
@@ -291,7 +292,7 @@ final class Action
             $kept[$wireName] = true;
         }
 
-        $excluded = $registry->excluded($composition);
+        $excluded = $registry->excluded($owner, $composition);
         foreach ($composition->ownParts() as $part) {
             foreach ($part->propertyNames() as $wireName) {
                 $property = $part->requireProperty($wireName);
@@ -303,7 +304,7 @@ final class Action
         }
 
         $additional = $owner->additionalProperties();
-        if ($additional instanceof Schema && $registry->admits($additional)) {
+        if ($additional instanceof Schema && $registry->admits($owner, $additional)) {
             $candidates[] = [$additional, $registry->baseOf($ownerName) . 'AdditionalProperty', 'additionalProperties'];
         }
 

@@ -15,15 +15,26 @@ final class PropertyView
 
     private Directions $directions;
 
-    public function __construct(Direction $direction, Directions $directions)
+    private ReadWriteMode $mode;
+
+    public function __construct(Direction $direction, Directions $directions, ReadWriteMode $mode)
     {
         $this->direction = $direction;
         $this->directions = $directions;
+        $this->mode = $mode;
     }
 
     public function direction(): Direction
     {
         return $this->direction;
+    }
+
+    /**
+     * Whether the view leaves out properties of the class: a class kept as one model has all of them in each view.
+     */
+    public function appliesTo(Schema $class): bool
+    {
+        return $this->mode->splits($class);
     }
 
     public function admits(Schema $property): bool

@@ -217,9 +217,6 @@ final class ConfigFactory
         $mutability = Mutability::from($section->choice('mutability', Mutability::IMMUTABLE, $this->values(Mutability::cases())));
         $withers = $section->bool('withers', true);
         $readWriteModels = ReadWriteModels::from($section->choice('readWriteModels', ReadWriteModels::SINGLE, $this->values(ReadWriteModels::cases())));
-        if ($section->has('readWriteSuffixes') && !$readWriteModels->isSplit()) {
-            $section->warn('"readWriteSuffixes" has no effect without "readWriteModels: split".', 'readWriteSuffixes');
-        }
 
         if (!$withers && !$mutability->isImmutable()) {
             $section->warn('"withers: false" has no effect on mutable DTOs, which keep their setters; it applies to schemas made immutable with x-dto-mutable: false.', 'withers');
