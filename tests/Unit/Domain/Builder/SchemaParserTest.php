@@ -236,6 +236,24 @@ final class SchemaParserTest extends TestCase
         );
     }
 
+    public function testLeavesTheClaimedKeywordsToTheirExtension(): void
+    {
+        $diagnostics = new Diagnostics();
+        $parser = new SchemaParser();
+        $parser->claiming(['contains', 'dependentRequired'])->parse([
+            'type' => 'object',
+            'dependentRequired' => ['a' => ['b']],
+            'propertyNames' => ['maxLength' => 3],
+            'properties' => ['a' => ['type' => 'array', 'contains' => ['const' => 1]]],
+        ], $this->root(), $diagnostics);
+        $parser->parse(['type' => 'array', 'contains' => ['const' => 1]], $this->root(), $diagnostics);
+
+        self::assertSame([
+            'warning a.yaml#/components/schemas/User/propertyNames: "propertyNames" is not supported and has no effect on the generated type.',
+            'warning a.yaml#/components/schemas/User/contains: "contains" is not supported and has no effect on the generated type.',
+        ], array_map(static fn (Diagnostic $diagnostic): string => $diagnostic->toString(), $diagnostics->all()));
+    }
+
     public function testStaysQuietWhereTheTypeIgnoresTheSchema(): void
     {
         $diagnostics = new Diagnostics();

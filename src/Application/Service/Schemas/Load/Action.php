@@ -50,6 +50,7 @@ final class Action
         $owners = [];
         $queue = [];
         $reads = new Reads();
+        $parser = $this->parser->claiming($input->claimedKeywords());
 
         foreach ($config->sources() as $index => $source) {
             $specAt = $config->location()->child('sources', (string) $index, 'spec');
@@ -73,7 +74,7 @@ final class Action
                 }
 
                 $location = (new SchemaLocation($document->path()))->child('components', 'schemas', $name);
-                $schema = new ResolvedSchema($this->parser->parse($node, $location, $diagnostics), $index, $name, true);
+                $schema = new ResolvedSchema($parser->parse($node, $location, $diagnostics), $index, $name, true);
                 $graph->add($schema);
                 $queue[] = $schema;
             }
@@ -255,7 +256,7 @@ final class Action
 
         $node = JsonPointer::get($document->root(), $target->pointer());
 
-        return new ResolvedSchema($this->parser->parse($node, $target, $diagnostics), $owners[$document->path()] ?? null, $this->nameOf($target), false);
+        return new ResolvedSchema($this->parser->claiming($input->claimedKeywords())->parse($node, $target, $diagnostics), $owners[$document->path()] ?? null, $this->nameOf($target), false);
     }
 
     private function nameOf(SchemaLocation $location): string

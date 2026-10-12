@@ -111,7 +111,8 @@ Classes are `final`, except the bases of `allOf` and of discriminated unions. At
 - **Not interpreted:** `prefixItems`, `patternProperties`, `if`/`then`/`else`, `not`, `dependentSchemas`,
   `dependentRequired`, `unevaluatedProperties`, `unevaluatedItems`, `contains`, `minContains`, `maxContains`,
   `propertyNames`, `additionalItems`, `dependencies`, `$dynamicRef`. Each gives a warning, except in a schema with
-  `x-php-type` or `x-php-skip`;
+  `x-php-type` or `x-php-skip`, and except a keyword an extension checks and claims (the Symfony bridge 1.3 claims
+  `dependentRequired`, `propertyNames`, `contains`, `minContains` and `maxContains`);
   the PHP type ignores them. `readOnly`/`writeOnly` are ignored without a warning by default: they describe requests
   and responses, which one DTO does not tell apart. `dto.readWriteModels: split`, or `x-php-read-write: split` on one
   schema, gives such classes a read and a write model ([configuration](configuration.md#dto)); the keywords count on

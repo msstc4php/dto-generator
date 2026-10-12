@@ -22,4 +22,10 @@ interface ExtensionRegistry
      * Keys like `x-assert-*` that the extension reads, so the core does not treat them as unknown.
      */
     public function claimExtensionKeys(string ...$globs): void;
+
+    /**
+     * JSON Schema keywords the extension checks (such as `contains`), so the core does not warn that they have no effect.
+     * Only keywords the core warns about may be claimed. The extension warns itself where it cannot check one.
+     */
+    public function claimKeywords(string ...$keywords): void;
 }

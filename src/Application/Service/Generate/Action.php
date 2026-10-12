@@ -235,7 +235,7 @@ final class Action
         $extensions = ($this->loadExtensions)(new ExtensionsInput($config));
         $diagnostics->merge($extensions->diagnostics());
         $registry = $extensions->registry();
-        $schemas = ($this->loadSchemas)(new SchemasInput($config, $remotePolicy));
+        $schemas = ($this->loadSchemas)(new SchemasInput($config, $remotePolicy, $registry->claimedKeywords()));
         $diagnostics->merge($schemas->diagnostics());
         $formats = $registry->formats(array_map(static fn (ClassName $class): TypeModel => new ClassType($class), $config->formats()));
         $aliases = array_keys($config->extensions()->aliases());

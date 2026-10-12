@@ -6,7 +6,7 @@ namespace MSSTC4PHP\DtoGenerator\Domain\Builder;
 
 /**
  * JSON Schema keywords that shape a value in ways no generated type expresses; silently dropping them would hide
- * that the DTO admits more than the schema. Keywords the Symfony bridge turns into constraints are not listed.
+ * that the DTO admits more than the schema. An extension that checks one claims it, and the parser stays quiet.
  */
 final class UnsupportedKeywords
 {
@@ -18,6 +18,14 @@ final class UnsupportedKeywords
 
     private function __construct()
     {
+    }
+
+    /**
+     * Whether an extension may take over the warning about the keyword because it checks it.
+     */
+    public static function isClaimable(string $keyword): bool
+    {
+        return in_array($keyword, self::NO_EFFECT, true);
     }
 
     /**

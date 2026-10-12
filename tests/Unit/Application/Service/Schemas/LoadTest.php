@@ -127,6 +127,15 @@ final class LoadTest extends TestCase
         );
     }
 
+    public function testLeavesTheClaimedKeywordsToTheirExtension(): void
+    {
+        $documents = [self::SPEC => $this->spec(['Odd' => ['type' => 'array', 'contains' => ['const' => 1], 'not' => ['type' => 'null']]])];
+        $config = ConfigMother::config(ConfigMother::source(self::SPEC));
+        $output = (new Action(new InMemoryDocumentLoader($documents), new SchemaParser()))(new Input($config, null, ['contains']));
+
+        self::assertSame(['warning /project/api/openapi.yaml#/components/schemas/Odd/not: "not" is not supported and has no effect on the generated type.'], $this->messages($output));
+    }
+
     public function testFollowsCyclesOnce(): void
     {
         $output = $this->load([self::SPEC => $this->spec([

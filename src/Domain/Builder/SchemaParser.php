@@ -24,6 +24,20 @@ final class SchemaParser
     /** Inside a schema whose type x-php-type or x-php-skip replaces. */
     private bool $quiet = false;
 
+    /** @var list<string> keywords an extension checks, see UnsupportedKeywords */
+    private array $claimed = [];
+
+    /**
+     * @param list<string> $keywords
+     */
+    public function claiming(array $keywords): self
+    {
+        $parser = clone $this;
+        $parser->claimed = $keywords;
+
+        return $parser;
+    }
+
     /**
      * @param JsonValue $node
      */
@@ -73,7 +87,7 @@ final class SchemaParser
                 continue;
             }
 
-            $unsupported = $this->quiet ? null : UnsupportedKeywords::warning($keyword, $value);
+            $unsupported = $this->quiet || in_array($keyword, $this->claimed, true) ? null : UnsupportedKeywords::warning($keyword, $value);
             if ($unsupported !== null) {
                 $diagnostics->warning($unsupported, $location->child($keyword));
             }

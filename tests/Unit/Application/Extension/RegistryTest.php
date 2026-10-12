@@ -147,6 +147,38 @@ final class RegistryTest extends TestCase
         self::assertSame([], $this->messages($diagnostics));
     }
 
+    public function testClaimsKeywordsTheExtensionChecks(): void
+    {
+        $registry = $this->registry($diagnostics);
+        $registry->register($this->extension('symfony', static function (ExtensionRegistry $registry): void {
+            $registry->claimKeywords('contains', 'propertyNames');
+        }), []);
+        $registry->register($this->extension('other', static function (ExtensionRegistry $registry): void {
+            $registry->claimKeywords('contains', 'not');
+        }), []);
+
+        self::assertSame(['contains', 'propertyNames', 'not'], $registry->claimedKeywords());
+        self::assertSame([], $this->messages($diagnostics));
+    }
+
+    public function testRefusesKeywordsTheGeneratorDoesNotWarnAbout(): void
+    {
+        $registry = $this->registry($diagnostics);
+        $registry->register($this->extension('greedy', static function (ExtensionRegistry $registry): void {
+            $registry->claimKeywords('type', 'nullable', 'x-check', 'dependentRequired');
+        }), []);
+
+        self::assertSame(
+            [
+                'error ' . self::CONFIG . '#: Extension "greedy" cannot claim keyword "type": the generator does not warn about it.',
+                'error ' . self::CONFIG . '#: Extension "greedy" cannot claim keyword "nullable": the generator does not warn about it.',
+                'error ' . self::CONFIG . '#: Extension "greedy" cannot claim keyword "x-check": the generator does not warn about it.',
+            ],
+            $this->messages($diagnostics),
+        );
+        self::assertSame(['dependentRequired'], $registry->claimedKeywords());
+    }
+
     public function testRefusesClaimsOnTheCoreVocabulary(): void
     {
         $registry = $this->registry($diagnostics);

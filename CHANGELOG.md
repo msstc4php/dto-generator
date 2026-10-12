@@ -18,6 +18,11 @@ All notable changes to this package are documented here. The format follows
 - Every release tag publishes the Docker image to `ghcr.io/msstc4php/dto-generator` for `linux/amd64` and
   `linux/arm64`, tagged `X.Y.Z`, and `X.Y`, `X`, `latest` when it is the newest of their line.
 
+- `ExtensionRegistry::claimKeywords()`: an extension that checks a keyword the generator calls unsupported (such as
+  `contains`) claims it, and the generator no longer warns about it; the extension warns where it cannot check it.
+  Only those keywords may be claimed. The contract of `ClassEnricher` says that a class is enriched before its
+  properties.
+
 ### Changed
 
 - Remote documents are fetched through the proxy of `https_proxy`/`HTTPS_PROXY` (https) or `http_proxy` (http),

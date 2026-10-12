@@ -25,6 +25,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostic;
 use MSSTC4PHP\DtoGenerator\Extension\CustomAttributes\CustomAttributes;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Emitter\PhpParserEmitter;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Extension\ClassExtensionLoader;
+use MSSTC4PHP\DtoGenerator\Tests\Support\Extensions\ContainsCheckingExtension;
 use MSSTC4PHP\DtoGenerator\Tests\Support\Extensions\MoneyFormatExtension;
 use MSSTC4PHP\DtoGenerator\Tests\Support\Extensions\PackageVersionExtension;
 use MSSTC4PHP\DtoGenerator\Tests\Support\FixedClassVerifier;
@@ -92,6 +93,16 @@ final class GenerateTest extends TestCase
 
         self::assertSame('ok', $output->status()->value());
         self::assertStringContainsString('@phpstan-param numeric-string $amount', $output->files()[2]->contents());
+    }
+
+    public function testLeavesTheKeywordsAnExtensionClaimsToIt(): void
+    {
+        $schemas = ['Roles' => ['type' => 'object', 'properties' => ['names' => ['type' => 'array', 'items' => ['type' => 'string'], 'contains' => ['const' => 'a']]]]];
+        $claimed = $this->generate(new RecordingWriter(new WritePlan([], [], [])), Mode::WRITE, $schemas, ['extensions' => [ContainsCheckingExtension::class]]);
+        $unclaimed = $this->generate(new RecordingWriter(new WritePlan([], [], [])), Mode::WRITE, $schemas);
+
+        self::assertSame([], $this->messages($claimed));
+        self::assertSame(['warning /project/api/openapi.yaml#/components/schemas/Roles/properties/names/contains: "contains" is not supported and has no effect on the generated type.'], $this->messages($unclaimed));
     }
 
     public function testMapsFormatsOfTheConfig(): void
