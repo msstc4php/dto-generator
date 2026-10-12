@@ -45,9 +45,20 @@ final class ModelFixture
             true,
         );
 
-        $config = $split instanceof ViewSuffixes ? ConfigMother::split($source, $split, $readWriteModels) : ConfigMother::configWith(AllOfStrategy::from($allOfStrategy), $source);
+        $config = $split instanceof ViewSuffixes ? ConfigMother::readWrite($source, $split, $readWriteModels, $allOfStrategy) : ConfigMother::configWith(AllOfStrategy::from($allOfStrategy), $source);
 
         return (new Action(new NameResolver()))(new Input($config, $target, $graph, []));
+    }
+
+    /**
+     * A run with read and write views, or a single run in which schemas may ask for them.
+     *
+     * @param array<int|string, array<array-key, mixed>> $schemas components/schemas of the spec
+     * @param 'single'|'split' $readWriteModels
+     */
+    public static function views(array $schemas, ?ViewSuffixes $suffixes = null, string $readWriteModels = ReadWriteModels::SPLIT, string $allOfStrategy = AllOfStrategy::EXTENDS): Output
+    {
+        return self::build($schemas, [], ['*'], $allOfStrategy, true, $suffixes ?? new ViewSuffixes(), $readWriteModels);
     }
 
     /**

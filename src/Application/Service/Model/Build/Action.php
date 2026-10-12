@@ -46,7 +46,7 @@ final class Action
     public function __invoke(Input $input): Output
     {
         $dto = $input->config()->dto();
-        // Without a split class the result is the build with every property: one schema may ask for views itself.
+        // Always through Views: one schema may ask for views even when the run keeps one model.
         $mode = new ReadWriteMode($dto->readWriteModels());
 
         return (new Views($input->graph(), $dto->viewSuffixes(), $mode))->build(fn (?View $view): Run => $this->build($input, $view, $mode));

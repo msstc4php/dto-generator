@@ -46,7 +46,7 @@ final class ConfigMother
     /**
      * @param 'single'|'split' $readWriteModels
      */
-    public static function split(SourceConfig $source, ?ViewSuffixes $suffixes = null, string $readWriteModels = ReadWriteModels::SPLIT): GeneratorConfig
+    public static function readWrite(SourceConfig $source, ?ViewSuffixes $suffixes = null, string $readWriteModels = ReadWriteModels::SPLIT, string $allOfStrategy = AllOfStrategy::EXTENDS): GeneratorConfig
     {
         return new GeneratorConfig(
             self::PATH,
@@ -55,7 +55,7 @@ final class ConfigMother
                 Mutability::from(Mutability::IMMUTABLE),
                 AccessorStyle::from(AccessorStyle::AUTO),
                 DateTimeClass::from(DateTimeClass::IMMUTABLE),
-                AllOfStrategy::from(AllOfStrategy::EXTENDS),
+                AllOfStrategy::from($allOfStrategy),
                 true,
                 ReadWriteModels::from($readWriteModels),
                 $suffixes,

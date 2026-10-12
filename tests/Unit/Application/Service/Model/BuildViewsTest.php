@@ -28,7 +28,7 @@ final class BuildViewsTest extends TestCase
 
     public function testBuildsAReadAndAWriteViewOfEveryDependentClass(): void
     {
-        $output = ModelFixture::build(self::PETS, [], ['*'], 'extends', true, new ViewSuffixes());
+        $output = ModelFixture::views(self::PETS);
 
         self::assertSame([
             'App\Dto\PetRead' => ['id: int', 'name: string', 'owner: App\Dto\PetOwnerRead|null', 'tag: App\Dto\Tag|null'],
@@ -47,7 +47,7 @@ final class BuildViewsTest extends TestCase
 
     public function testListsTheViewsOfTheVariantsOfADiscriminatedBase(): void
     {
-        $output = ModelFixture::build([
+        $output = ModelFixture::views([
             'Animal' => ['oneOf' => [['$ref' => '#/components/schemas/Fish'], ['$ref' => '#/components/schemas/Bird']], 'discriminator' => ['propertyName' => 'kind']],
             'Fish' => ['type' => 'object', 'required' => ['kind'], 'properties' => [
                 'kind' => ['type' => 'string'],
@@ -56,7 +56,7 @@ final class BuildViewsTest extends TestCase
             ]],
             'Bird' => ['type' => 'object', 'required' => ['kind'], 'properties' => ['kind' => ['type' => 'string']]],
             'Colour' => ['type' => 'string', 'enum' => ['red', 'blue']],
-        ], [], ['*'], 'extends', true, new ViewSuffixes('Response', 'Request'));
+        ], new ViewSuffixes('Response', 'Request'));
         $hierarchy = ModelFixture::hierarchy($output);
 
         self::assertSame('abstract by kind {Fish: App\Dto\FishResponse, Bird: App\Dto\BirdResponse}', $hierarchy['App\Dto\AnimalResponse']);
@@ -68,12 +68,12 @@ final class BuildViewsTest extends TestCase
 
     public function testNamesAnOverriddenClassWithTheSuffixAndReportsAMarkedBothWaysPropertyOnce(): void
     {
-        $output = ModelFixture::build([
+        $output = ModelFixture::views([
             'Pet' => ['type' => 'object', 'x-php-class-name' => 'Animal', 'properties' => [
                 'id' => ['type' => 'string', 'readOnly' => true, 'writeOnly' => true],
                 'secret' => ['type' => 'string', 'writeOnly' => true],
             ]],
-        ], [], ['*'], 'extends', true, new ViewSuffixes());
+        ]);
 
         self::assertSame(['App\Dto\AnimalRead' => ['id: string|null'], 'App\Dto\AnimalWrite' => ['id: string|null', 'secret: string|null']], ModelFixture::classes($output));
         self::assertSame(['warning /project/api/openapi.yaml#/components/schemas/Pet/properties/id: "readOnly" and "writeOnly" are both true; the property is in both views.'], ModelFixture::messages($output));
@@ -81,10 +81,10 @@ final class BuildViewsTest extends TestCase
 
     public function testReportsAViewNamedLikeAnotherClass(): void
     {
-        $output = ModelFixture::build([
+        $output = ModelFixture::views([
             'PetRead' => ['type' => 'object', 'properties' => ['a' => ['type' => 'string']]],
             'Pet' => ['type' => 'object', 'properties' => ['id' => ['type' => 'string', 'readOnly' => true]]],
-        ], [], ['*'], 'extends', true, new ViewSuffixes());
+        ]);
 
         self::assertSame([
             'error /project/api/openapi.yaml#/components/schemas/Pet: Class App\Dto\PetRead is already generated from /project/api/openapi.yaml#/components/schemas/PetRead; set "x-php-class-name" on one of them, or change dto.readWriteSuffixes.',
@@ -93,12 +93,12 @@ final class BuildViewsTest extends TestCase
 
     public function testReportsAClassNamedLikeAViewDeclaredBefore(): void
     {
-        $output = ModelFixture::build([
+        $output = ModelFixture::views([
             'Pet' => ['type' => 'object', 'properties' => ['id' => ['type' => 'string', 'readOnly' => true]]],
             'Other' => ['type' => 'object', 'x-php-class-name' => 'PetWrite', 'properties' => ['a' => ['type' => 'string']]],
             'Plain' => ['type' => 'object', 'properties' => ['a' => ['type' => 'string']]],
             'Same' => ['type' => 'object', 'x-php-class-name' => 'Plain', 'properties' => ['a' => ['type' => 'string']]],
-        ], [], ['*'], 'extends', true, new ViewSuffixes());
+        ]);
 
         self::assertSame([
             'error /project/api/openapi.yaml#/components/schemas/Same: Class App\Dto\Plain is already generated from /project/api/openapi.yaml#/components/schemas/Plain; set "x-php-class-name" on one of them.',
@@ -108,13 +108,13 @@ final class BuildViewsTest extends TestCase
 
     public function testSplitsAClassWhoseFlagIsOnALaterDeclaration(): void
     {
-        $extends = ModelFixture::build([
+        $extends = ModelFixture::views([
             'Child' => ['properties' => ['id' => ['type' => 'integer', 'readOnly' => true]], 'allOf' => [['type' => 'object', 'properties' => ['id' => ['type' => 'integer'], 'name' => ['type' => 'string']]]]],
-        ], [], ['*'], 'extends', true, new ViewSuffixes());
-        $merged = ModelFixture::build([
+        ]);
+        $merged = ModelFixture::views([
             'Base' => ['type' => 'object', 'properties' => ['id' => ['type' => 'integer']]],
             'Child' => ['allOf' => [['$ref' => '#/components/schemas/Base'], ['type' => 'object', 'properties' => ['id' => ['type' => 'integer', 'readOnly' => true], 'name' => ['type' => 'string']]]]],
-        ], [], ['*'], 'merge', true, new ViewSuffixes());
+        ], null, 'split', 'merge');
 
         self::assertSame(['App\Dto\ChildRead' => ['id: int|null', 'name: string|null'], 'App\Dto\ChildWrite' => ['name: string|null']], ModelFixture::classes($extends));
         self::assertSame(['id: int|null', 'name: string|null'], ModelFixture::classes($merged)['App\Dto\ChildRead']);
@@ -124,12 +124,12 @@ final class BuildViewsTest extends TestCase
 
     public function testKeepsAPropertyMarkedEachWayByAnotherMemberInBothViews(): void
     {
-        $output = ModelFixture::build([
+        $output = ModelFixture::views([
             'Child' => ['allOf' => [
                 ['type' => 'object', 'properties' => ['x' => ['type' => 'string', 'readOnly' => true], 'y' => ['type' => 'string']]],
                 ['type' => 'object', 'properties' => ['x' => ['type' => 'string', 'writeOnly' => true], 'z' => ['type' => 'string', 'readOnly' => true]]],
             ]],
-        ], [], ['*'], 'merge', true, new ViewSuffixes());
+        ], null, 'split', 'merge');
 
         self::assertSame([
             'App\Dto\ChildRead' => ['x: string|null', 'y: string|null', 'z: string|null'],
@@ -140,10 +140,10 @@ final class BuildViewsTest extends TestCase
 
     public function testSplitsASchemaWhoseNameAnotherTook(): void
     {
-        $output = ModelFixture::build([
+        $output = ModelFixture::views([
             'Pet' => ['type' => 'object', 'properties' => ['id' => ['type' => 'integer', 'readOnly' => true]]],
             'pet' => ['type' => 'object', 'properties' => ['secret' => ['type' => 'string', 'writeOnly' => true], 'name' => ['type' => 'string']]],
-        ], [], ['*'], 'extends', true, new ViewSuffixes());
+        ]);
 
         // The write build's refusal of PetWrite is the same problem, named after the read view.
         self::assertSame([
@@ -153,12 +153,12 @@ final class BuildViewsTest extends TestCase
 
     public function testDeclaresNoInlineClassForAPropertyOfTheOtherView(): void
     {
-        $output = ModelFixture::build([
+        $output = ModelFixture::views([
             'Pet' => ['type' => 'object', 'properties' => [
                 'owner' => ['type' => 'object', 'writeOnly' => true, 'properties' => ['name' => ['type' => 'string'], 'since' => ['type' => 'string', 'readOnly' => true]]],
                 'extra' => ['type' => 'object', 'properties' => ['a' => ['type' => 'string']]],
             ], 'additionalProperties' => ['type' => 'object', 'readOnly' => true, 'properties' => ['b' => ['type' => 'string']]]],
-        ], [], ['*'], 'extends', true, new ViewSuffixes());
+        ]);
 
         self::assertSame([
             'App\Dto\PetRead' => ['extra: App\Dto\PetExtra|null', 'additionalProperties: array<array-key, App\Dto\PetAdditionalProperty>'],
@@ -171,21 +171,21 @@ final class BuildViewsTest extends TestCase
 
     public function testReportsAProblemOfADependentClassOnce(): void
     {
-        $output = ModelFixture::build([
+        $output = ModelFixture::views([
             'Pet' => ['allOf' => [
                 ['type' => 'object', 'properties' => ['a' => ['type' => 'string'], 'id' => ['type' => 'integer', 'readOnly' => true]]],
                 ['type' => 'object', 'properties' => ['a' => ['type' => 'integer']]],
             ]],
-        ], [], ['*'], 'merge', true, new ViewSuffixes());
+        ], null, 'split', 'merge');
 
         self::assertSame(['error /project/api/openapi.yaml#/components/schemas/Pet/allOf/1/properties/a: Property "a" of App\Dto\PetRead is int|null here, but string|null in an earlier allOf member.'], ModelFixture::messages($output));
     }
 
     public function testReportsTheFlagsOfAModelThatNeedsNoViews(): void
     {
-        $output = ModelFixture::build([
+        $output = ModelFixture::views([
             'Pet' => ['type' => 'object', 'properties' => ['id' => ['type' => 'integer', 'readOnly' => 'yes'], 'both' => ['type' => 'string', 'readOnly' => true, 'writeOnly' => true]]],
-        ], [], ['*'], 'extends', true, new ViewSuffixes());
+        ]);
 
         self::assertSame(['App\Dto\Pet' => ['id: int|null', 'both: string|null']], ModelFixture::classes($output));
         self::assertSame([
@@ -196,9 +196,9 @@ final class BuildViewsTest extends TestCase
 
     public function testSplitsAClassWhoseUndeclaredPropertiesAreDirected(): void
     {
-        $output = ModelFixture::build([
+        $output = ModelFixture::views([
             'Pet' => ['type' => 'object', 'properties' => ['name' => ['type' => 'string']], 'additionalProperties' => ['type' => 'string', 'readOnly' => true]],
-        ], [], ['*'], 'extends', true, new ViewSuffixes());
+        ]);
 
         self::assertSame([
             'App\Dto\PetRead' => ['name: string|null', 'additionalProperties: array<array-key, string>'],
@@ -208,7 +208,7 @@ final class BuildViewsTest extends TestCase
 
     public function testReportsANameTakenFromASchemaWhoseTakerDoesNotDependOnTheDirection(): void
     {
-        $named = ModelFixture::build([
+        $named = ModelFixture::views([
             'Pet' => ['type' => 'object', 'properties' => ['name' => ['type' => 'string']]],
             'pet' => ['type' => 'object', 'properties' => [
                 'id' => ['type' => 'integer', 'readOnly' => true],
@@ -216,11 +216,11 @@ final class BuildViewsTest extends TestCase
             ]],
             'Holder' => ['type' => 'object', 'properties' => ['p' => ['$ref' => '#/components/schemas/pet']]],
             'Other' => ['type' => 'object', 'properties' => ['o' => ['type' => 'string', 'readOnly' => true]]],
-        ], [], ['*'], 'extends', true, new ViewSuffixes());
-        $inline = ModelFixture::build([
+        ]);
+        $inline = ModelFixture::views([
             'PetOwner' => ['type' => 'object', 'properties' => ['x' => ['type' => 'string']]],
             'Pet' => ['type' => 'object', 'properties' => ['owner' => ['type' => 'object', 'properties' => ['since' => ['type' => 'string', 'readOnly' => true]]]]],
-        ], [], ['*'], 'extends', true, new ViewSuffixes());
+        ]);
 
         self::assertSame(['App\Dto\Pet', 'App\Dto\Holder', 'App\Dto\OtherRead', 'App\Dto\OtherWrite'], array_keys(ModelFixture::classes($named)));
         self::assertSame([
@@ -234,13 +234,13 @@ final class BuildViewsTest extends TestCase
 
     public function testIgnoresTheDirectionOfASkippedProperty(): void
     {
-        $output = ModelFixture::build([
+        $output = ModelFixture::views([
             'Pet' => ['type' => 'object', 'properties' => [
                 'name' => ['type' => 'string'],
                 'internal' => ['type' => 'string', 'readOnly' => true, 'writeOnly' => true, 'x-php-skip' => true],
                 'hidden' => ['type' => 'string', 'readOnly' => true, 'x-php-skip' => true],
             ]],
-        ], [], ['*'], 'extends', true, new ViewSuffixes());
+        ]);
 
         self::assertSame(['App\Dto\Pet' => ['name: string|null']], ModelFixture::classes($output));
         self::assertSame([], ModelFixture::messages($output));
@@ -254,7 +254,7 @@ final class BuildViewsTest extends TestCase
         ]]];
 
         self::assertSame(['App\Dto\Child' => ['n: string|null']], ModelFixture::classes(ModelFixture::build($schemas)));
-        self::assertSame(['App\Dto\Child' => ['n: string|null']], ModelFixture::classes(ModelFixture::build($schemas, [], ['*'], 'extends', true, new ViewSuffixes())));
+        self::assertSame(['App\Dto\Child' => ['n: string|null']], ModelFixture::classes(ModelFixture::views($schemas)));
     }
 
     public function testKeepsOneClassPerSchemaWithoutDirectedProperties(): void
@@ -263,7 +263,7 @@ final class BuildViewsTest extends TestCase
 
         self::assertSame(
             ModelFixture::classes(ModelFixture::build($schemas)),
-            ModelFixture::classes(ModelFixture::build($schemas, [], ['*'], 'extends', true, new ViewSuffixes())),
+            ModelFixture::classes(ModelFixture::views($schemas)),
         );
     }
 
@@ -302,14 +302,14 @@ final class BuildViewsTest extends TestCase
 
     public function testKeepsOneModelOfASchemaThatAsksForItWhenTheRunSplits(): void
     {
-        $output = ModelFixture::build([
+        $output = ModelFixture::views([
             'Pet' => ['type' => 'object', 'x-php-read-write' => 'single', 'properties' => [
                 'id' => ['type' => 'integer', 'readOnly' => true],
                 'both' => ['type' => 'string', 'readOnly' => true, 'writeOnly' => true],
                 'owner' => ['type' => 'object', 'properties' => ['since' => ['type' => 'string']]],
             ]],
             'Tag' => ['type' => 'object', 'properties' => ['id' => ['type' => 'integer', 'readOnly' => true]]],
-        ], [], ['*'], 'extends', true, new ViewSuffixes());
+        ]);
 
         self::assertSame([
             'App\Dto\Pet' => ['id: int|null', 'both: string|null', 'owner: App\Dto\PetOwner|null'],
@@ -322,13 +322,13 @@ final class BuildViewsTest extends TestCase
 
     public function testWarnsWhenASingleSchemaGetsViewsOfAClassItHolds(): void
     {
-        $output = ModelFixture::build([
+        $output = ModelFixture::views([
             'Holder' => ['type' => 'object', 'x-php-read-write' => 'single', 'properties' => [
                 'pet' => ['$ref' => '#/components/schemas/Pet'],
                 'secret' => ['type' => 'string', 'writeOnly' => true],
             ]],
             'Pet' => ['type' => 'object', 'properties' => ['id' => ['type' => 'integer', 'readOnly' => true]]],
-        ], [], ['*'], 'extends', true, new ViewSuffixes());
+        ]);
 
         self::assertSame([
             'App\Dto\HolderRead' => ['pet: App\Dto\PetRead|null', 'secret: string|null'],
@@ -343,12 +343,12 @@ final class BuildViewsTest extends TestCase
 
     public function testKeepsTheInlineValuesOfASingleSchemaInEachView(): void
     {
-        $output = ModelFixture::build([
+        $output = ModelFixture::views([
             'Bag' => ['type' => 'object', 'x-php-read-write' => 'single', 'properties' => ['name' => ['type' => 'string']], 'additionalProperties' => [
                 'type' => 'object', 'readOnly' => true, 'properties' => ['a' => ['type' => 'string']],
             ]],
             'Tag' => ['type' => 'object', 'properties' => ['id' => ['type' => 'integer', 'readOnly' => true]]],
-        ], [], ['*'], 'extends', true, new ViewSuffixes());
+        ]);
 
         self::assertSame([
             'App\Dto\Bag' => ['name: string|null', 'additionalProperties: array<array-key, App\Dto\BagAdditionalProperty>'],
@@ -357,6 +357,44 @@ final class BuildViewsTest extends TestCase
             'App\Dto\TagWrite' => [],
         ], ModelFixture::classes($output));
         self::assertSame([], ModelFixture::messages($output));
+    }
+
+    public function testSplitsAnInlineObjectThatAsksForItAndItsOwner(): void
+    {
+        $output = ModelFixture::views([
+            'Pet' => ['type' => 'object', 'properties' => [
+                'owner' => ['type' => 'object', 'x-php-read-write' => 'split', 'properties' => [
+                    'since' => ['type' => 'string', 'readOnly' => true],
+                    'name' => ['type' => 'string'],
+                ]],
+            ]],
+        ], null, 'single');
+
+        self::assertSame([
+            'App\Dto\PetRead' => ['owner: App\Dto\PetOwnerRead|null'],
+            'App\Dto\PetOwnerRead' => ['since: string|null', 'name: string|null'],
+            'App\Dto\PetWrite' => ['owner: App\Dto\PetOwnerWrite|null'],
+            'App\Dto\PetOwnerWrite' => ['name: string|null'],
+        ], ModelFixture::classes($output));
+        self::assertSame([], ModelFixture::messages($output));
+    }
+
+    public function testMergesTheFlagsOfAnotherSchemaByTheModeOfTheClass(): void
+    {
+        $user = ['type' => 'object', 'properties' => ['id' => ['type' => 'integer', 'readOnly' => true], 'pw' => ['type' => 'string', 'writeOnly' => true]]];
+        $admin = ['allOf' => [['$ref' => '#/components/schemas/User'], ['type' => 'object', 'properties' => ['role' => ['type' => 'string']]]]];
+        $single = ModelFixture::views(['User' => $user + ['x-php-read-write' => 'split'], 'Admin' => $admin], null, 'single', 'merge');
+        $split = ModelFixture::views(['User' => $user + ['x-php-read-write' => 'single'], 'Admin' => $admin + ['x-php-read-write' => 'split']], null, 'single', 'merge');
+
+        self::assertSame(['id: int|null', 'pw: string|null', 'role: string|null'], ModelFixture::classes($single)['App\Dto\Admin']);
+        self::assertSame(['App\Dto\UserRead', 'App\Dto\Admin', 'App\Dto\UserWrite'], array_keys(ModelFixture::classes($single)));
+        self::assertSame([], ModelFixture::messages($single));
+        self::assertSame([
+            'App\Dto\User' => ['id: int|null', 'pw: string|null'],
+            'App\Dto\AdminRead' => ['id: int|null', 'role: string|null'],
+            'App\Dto\AdminWrite' => ['pw: string|null', 'role: string|null'],
+        ], ModelFixture::classes($split));
+        self::assertSame([], ModelFixture::messages($split));
     }
 
     public function testLeavesTheInlineObjectsOfASplitSchemaToTheRun(): void
@@ -380,7 +418,7 @@ final class BuildViewsTest extends TestCase
         $schemas = ['Pet' => ['type' => 'object', 'x-php-read-write' => 'both', 'properties' => ['id' => ['type' => 'integer', 'readOnly' => true]]]];
         $error = 'error /project/api/openapi.yaml#/components/schemas/Pet/x-php-read-write: "x-php-read-write" must be "single" or "split".';
         $single = ModelFixture::build($schemas);
-        $split = ModelFixture::build($schemas, [], ['*'], 'extends', true, new ViewSuffixes());
+        $split = ModelFixture::views($schemas);
 
         self::assertSame(['App\Dto\Pet'], array_keys(ModelFixture::classes($single)));
         self::assertSame([$error], ModelFixture::messages($single));
@@ -390,12 +428,8 @@ final class BuildViewsTest extends TestCase
 
     public function testNamesTheViewsOfASplitSchemaWithTheSuffixesOfASingleRun(): void
     {
-        $output = ModelFixture::build(
+        $output = ModelFixture::views(
             ['User' => ['type' => 'object', 'x-php-read-write' => 'split', 'properties' => ['id' => ['type' => 'integer', 'readOnly' => true]]]],
-            [],
-            ['*'],
-            'extends',
-            true,
             new ViewSuffixes('Out', 'In'),
             'single',
         );
@@ -405,10 +439,10 @@ final class BuildViewsTest extends TestCase
 
     public function testReportsOnlyTheNameOfASingleSchemaNamedLikeAView(): void
     {
-        $output = ModelFixture::build([
+        $output = ModelFixture::views([
             'Pet' => ['type' => 'object', 'properties' => ['id' => ['type' => 'string', 'readOnly' => true]]],
             'PetRead' => ['type' => 'object', 'x-php-read-write' => 'single', 'properties' => ['a' => ['type' => 'string']]],
-        ], [], ['*'], 'extends', true, new ViewSuffixes());
+        ]);
 
         self::assertSame([
             'error /project/api/openapi.yaml#/components/schemas/PetRead: Class App\Dto\PetRead is already generated from /project/api/openapi.yaml#/components/schemas/Pet; set "x-php-class-name" on one of them, or change dto.readWriteSuffixes.',
@@ -423,7 +457,7 @@ final class BuildViewsTest extends TestCase
      */
     public function testWarnsWhenASingleSchemaGetsViewsAnyWay(array $schemas, array $classes): void
     {
-        $output = ModelFixture::build($schemas, [], ['*'], 'extends', true, new ViewSuffixes());
+        $output = ModelFixture::views($schemas);
 
         self::assertSame($classes, array_keys(ModelFixture::classes($output)));
         self::assertSame([

@@ -70,11 +70,14 @@ Admin:
     - $ref: '#/components/schemas/User'
     - properties: {role: {type: string}}
 User:
-  x-php-read-write: split      # UserRead and UserWrite; the rest keeps one model, but those holding, extending or listing User
+  x-php-read-write: split      # UserRead and UserWrite; so do the classes that hold, extend or list User
   properties:
     id: {type: integer, readOnly: true}
     password: {type: string, writeOnly: true}
 ```
+
+`Admin` above stays one class with all of User's properties: it copies them instead of extending `User`, and follows
+its own setting.
 
 ## `x-enum-descriptions`
 
