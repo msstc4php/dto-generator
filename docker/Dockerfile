@@ -8,6 +8,8 @@ FROM composer:2 AS vendor
 ARG VERSION=1.3.0
 ARG BRIDGE_REPOSITORY=https://github.com/msstc4symfony/dto-generator-bridge
 ARG BRIDGE_VERSION=^1.0
+# The bridge 1.2+ requires its runtime package, which is not on Packagist either.
+ARG RUNTIME_REPOSITORY=https://github.com/msstc4symfony/dto-generator-bridge-runtime
 ENV COMPOSER_ROOT_VERSION=$VERSION
 # Where the bridge comes from: build.sh names the local export with its commit. The bind mount below is not part of
 # the step's cache key, this argument is, so a layer never crosses between the two sources.
@@ -20,6 +22,7 @@ COPY src ./src
 # or scripts of its own.
 RUN --mount=type=bind,from=bridge,target=/opt/bridge \
     composer config platform.php 8.4 \
+    && composer config repositories.runtime vcs "$RUNTIME_REPOSITORY" \
     && if [ -f /opt/bridge/composer.json ]; then \
         composer config repositories.bridge '{"type": "path", "url": "/opt/bridge", "options": {"symlink": false, "versions": {"msstc4symfony/dto-generator-bridge": "1.0.0"}}}'; \
     else \

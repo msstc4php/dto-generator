@@ -6,6 +6,11 @@ All notable changes to this package are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- The Docker image knows the repository of `msstc4symfony/dto-generator-bridge-runtime`, which the bridge requires
+  from 1.2 on; without it Composer settled for an older bridge, or failed with a local bridge checkout.
+
 ## [1.3.0] - 2026-10-12
 
 ### Added
