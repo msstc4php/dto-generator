@@ -10,6 +10,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Builder\Direction;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\Directions;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\NameResolver;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\PropertyView;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\ReadWriteMode;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\TypeMapper;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostic;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
@@ -22,6 +23,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Target\DateTimeClass;
 use MSSTC4PHP\DtoGenerator\Domain\Target\MetadataMode;
 use MSSTC4PHP\DtoGenerator\Domain\Target\Mutability;
 use MSSTC4PHP\DtoGenerator\Domain\Target\PhpVersion;
+use MSSTC4PHP\DtoGenerator\Domain\Target\ReadWriteModels;
 use MSSTC4PHP\DtoGenerator\Domain\Target\TargetProfile;
 use MSSTC4PHP\DtoGenerator\Tests\Support\GraphFixture;
 use PHPUnit\Framework\TestCase;
@@ -155,7 +157,7 @@ final class ClassBuilderTest extends TestCase
                 ['type' => 'object', 'properties' => ['tags' => ['type' => 'array', 'items' => ['type' => 'string', 'x-php-nmae' => 1, 'x-php-name' => 'x']]]],
                 ['tags' => 'tags: list<string>|null = NULL'],
                 [
-                    "error {$at}/properties/tags/items/x-php-nmae: Unknown extension \"x-php-nmae\"; known: x-php-class-name, x-php-name, x-php-type, x-dto-mutable, x-php-all-of, x-php-skip, x-php-attributes, x-enum-descriptions, x-enum-varnames.",
+                    "error {$at}/properties/tags/items/x-php-nmae: Unknown extension \"x-php-nmae\"; known: x-php-class-name, x-php-name, x-php-type, x-dto-mutable, x-php-all-of, x-php-skip, x-php-attributes, x-php-read-write, x-enum-descriptions, x-enum-varnames.",
                     "warning {$at}/properties/tags/items/x-php-name: \"x-php-name\" has no effect here.",
                 ],
             ],
@@ -245,7 +247,7 @@ final class ClassBuilderTest extends TestCase
                 ['type' => 'object', 'properties' => ['id' => ['type' => 'string', 'x-php-nmae' => 'x']]],
                 ['id' => 'id: string|null = NULL'],
                 [
-                    "error {$at}/properties/id/x-php-nmae: Unknown extension \"x-php-nmae\"; known: x-php-class-name, x-php-name, x-php-type, x-dto-mutable, x-php-all-of, x-php-skip, x-php-attributes, x-enum-descriptions, x-enum-varnames.",
+                    "error {$at}/properties/id/x-php-nmae: Unknown extension \"x-php-nmae\"; known: x-php-class-name, x-php-name, x-php-type, x-dto-mutable, x-php-all-of, x-php-skip, x-php-attributes, x-php-read-write, x-enum-descriptions, x-enum-varnames.",
                 ],
             ],
             'misplaced extension' => [
@@ -258,7 +260,7 @@ final class ClassBuilderTest extends TestCase
             'foreign extensions are ignored' => [
                 ['type' => 'object', 'properties' => ['id' => ['type' => 'string', 'x-internal' => 1, 'x-dtoish' => 1, 'x-phpstorm' => 1, 'x-php-zzz' => 1]]],
                 ['id' => 'id: string|null = NULL'],
-                ["error {$at}/properties/id/x-php-zzz: Unknown extension \"x-php-zzz\"; known: x-php-class-name, x-php-name, x-php-type, x-dto-mutable, x-php-all-of, x-php-skip, x-php-attributes, x-enum-descriptions, x-enum-varnames."],
+                ["error {$at}/properties/id/x-php-zzz: Unknown extension \"x-php-zzz\"; known: x-php-class-name, x-php-name, x-php-type, x-dto-mutable, x-php-all-of, x-php-skip, x-php-attributes, x-php-read-write, x-enum-descriptions, x-enum-varnames."],
             ],
             'x-dto-mutable not a boolean' => [
                 ['type' => 'object', 'x-dto-mutable' => 'yes', 'properties' => ['id' => ['type' => 'string']]],
@@ -374,7 +376,7 @@ final class ClassBuilderTest extends TestCase
             true,
         );
         $diagnostics = new Diagnostics();
-        $builder = new ClassBuilder(new NameResolver(), new TypeMapper($graph, new Declarations(), $target, []), $target, [], $view === null ? null : new PropertyView(Direction::from($view), new Directions($graph, $diagnostics)));
+        $builder = new ClassBuilder(new NameResolver(), new TypeMapper($graph, new Declarations(), $target, []), $target, [], $view === null ? null : new PropertyView(Direction::from($view), new Directions($graph, $diagnostics), new ReadWriteMode(ReadWriteModels::from(ReadWriteModels::SPLIT))));
         $class = $builder->build(ClassName::fromFqcn('App\Dto\User'), $graph->all()[0]->schema(), $diagnostics);
 
         return [$class, array_map(static fn (Diagnostic $d): string => $d->toString(), $diagnostics->all())];

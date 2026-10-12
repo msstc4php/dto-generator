@@ -70,21 +70,24 @@ final class Registry
     }
 
     /**
-     * Whether a property schema belongs to this build's view; every property does without a view.
+     * Whether a property schema of the owner's class belongs to this build's view; every property does without a view
+     * or in a class kept as one model.
      */
-    public function admits(Schema $property): bool
+    public function admits(Schema $owner, Schema $property): bool
     {
-        return !$this->properties instanceof PropertyView || $this->properties->admits($property);
+        return !$this->properties instanceof PropertyView || !$this->properties->appliesTo($owner) || $this->properties->admits($property);
     }
 
     /**
-     * The properties of a composition that belong to the other view.
+     * The properties of the owner's composition that belong to the other view.
      *
      * @return array<array-key, string>
      */
-    public function excluded(Composition $composition): array
+    public function excluded(Schema $owner, Composition $composition): array
     {
-        return $this->properties instanceof PropertyView ? $this->properties->excluded(ClassBuilder::kept($composition->propertySources())) : [];
+        return $this->properties instanceof PropertyView && $this->properties->appliesTo($owner)
+            ? $this->properties->excluded(ClassBuilder::kept($composition->propertySources()))
+            : [];
     }
 
     /**

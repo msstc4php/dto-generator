@@ -13,6 +13,8 @@ All notable changes to this package are documented here. The format follows
   document is fetched, so secrets stay out of the config and checks need none.
 - `generate --refresh-remote` (and `Generate\Input::withRefreshedRemote()`) fetches every remote document the run
   reads again, replacing its cached copy; a check or a dry run cannot refresh.
+- `x-php-read-write: single | split` on an object schema overrides `dto.readWriteModels` for its class: one schema
+  can get read and write models while the rest keep one, or keep one model in a split project.
 - Every release tag publishes the Docker image to `ghcr.io/msstc4php/dto-generator` for `linux/amd64` and
   `linux/arm64`, tagged `X.Y.Z`, and `X.Y`, `X`, `latest` when it is the newest of their line.
 
@@ -24,6 +26,8 @@ All notable changes to this package are documented here. The format follows
   or SOCKS proxy, fetches now fail, and `no_proxy=*` restores direct fetching.
 - The errors about a broken cached copy of a remote document suggest `generate --refresh-remote` instead of editing
   `index.json`.
+- `dto.readWriteSuffixes` without `readWriteModels: split` no longer gives a warning: it names the models of the
+  schemas with `x-php-read-write: split`.
 
 ## [1.3.1] - 2026-10-12
 

@@ -8,7 +8,9 @@ use MSSTC4PHP\DtoGenerator\Application\Config\ViewSuffixes;
 use MSSTC4PHP\DtoGenerator\Application\Service\Model\Build\Run;
 use MSSTC4PHP\DtoGenerator\Application\Service\Model\Build\View;
 use MSSTC4PHP\DtoGenerator\Application\Service\Model\Build\Views;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\ReadWriteMode;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaGraph;
+use MSSTC4PHP\DtoGenerator\Domain\Target\ReadWriteModels;
 use MSSTC4PHP\DtoGenerator\Tests\Support\ModelFixture;
 use PHPUnit\Framework\TestCase;
 
@@ -20,7 +22,7 @@ final class ViewsTest extends TestCase
         $read = ModelFixture::build(['Tag' => ['type' => 'object', 'properties' => ['a' => ['type' => 'string']]], 'Colour' => $colour]);
         $write = ModelFixture::build(['Tag' => ['type' => 'object', 'properties' => ['b' => ['type' => 'string']]], 'Colour' => $colour]);
 
-        $merged = (new Views(new SchemaGraph([]), new ViewSuffixes()))->merge($read, $write);
+        $merged = $this->views()->merge($read, $write);
 
         self::assertSame(['App\Dto\Tag' => ['a: string|null']], ModelFixture::classes($merged));
         self::assertSame(['App\Dto\Colour'], ModelFixture::enums($merged));
@@ -58,7 +60,7 @@ final class ViewsTest extends TestCase
      */
     public function testReportsEveryKindOfDisagreement(array $read, array $write): void
     {
-        $merged = (new Views(new SchemaGraph([]), new ViewSuffixes()))->merge(ModelFixture::build($read), ModelFixture::build($write));
+        $merged = $this->views()->merge(ModelFixture::build($read), ModelFixture::build($write));
 
         self::assertContains(
             'error /project/api/openapi.yaml#/components/schemas/Tag: App\Dto\Tag comes out differently in the read and the write build, which is a defect of the generator; please report it.',
@@ -71,7 +73,7 @@ final class ViewsTest extends TestCase
         $single = ModelFixture::build(['Tag' => ['type' => 'object', 'properties' => ['a' => ['type' => 'string']]], 'Old' => ['type' => 'object', 'properties' => ['a' => ['type' => 'string']], 'oneOf' => [['required' => ['a']], ['type' => 'object']]]]);
         $builds = 0;
 
-        $output = (new Views(new SchemaGraph([]), new ViewSuffixes()))->build(static function (?View $view) use ($single, &$builds): Run {
+        $output = $this->views()->build(static function (?View $view) use ($single, &$builds): Run {
             $builds++;
 
             return new Run($single, []);
@@ -85,7 +87,7 @@ final class ViewsTest extends TestCase
 
     public function testTakesAnEnumOfEitherBuild(): void
     {
-        $merged = (new Views(new SchemaGraph([]), new ViewSuffixes()))->merge(
+        $merged = $this->views()->merge(
             ModelFixture::build(['Red' => ['type' => 'string', 'enum' => ['red']]]),
             ModelFixture::build(['Red' => ['type' => 'string', 'enum' => ['red']], 'Blue' => ['type' => 'string', 'enum' => ['blue']]]),
         );
@@ -102,7 +104,7 @@ final class ViewsTest extends TestCase
         $read = ModelFixture::build(['Pet' => $conflict('PetRead')]);
         $write = ModelFixture::build(['Pet' => $conflict('PetWrite'), 'Log' => $conflict('PetWriteLog')]);
 
-        $merged = (new Views(new SchemaGraph([]), new ViewSuffixes()))->merge($read, $write);
+        $merged = $this->views()->merge($read, $write);
 
         self::assertSame([
             'error /project/api/openapi.yaml#/components/schemas/Pet/allOf/1/properties/a: Property "a" of App\Dto\PetRead is int|null here, but string|null in an earlier allOf member.',
@@ -117,9 +119,14 @@ final class ViewsTest extends TestCase
             'A' => ['allOf' => [['$ref' => '#/components/schemas/Tag'], ['type' => 'object', 'properties' => ['v' => ['type' => 'string']]]]],
         ];
 
-        $merged = (new Views(new SchemaGraph([]), new ViewSuffixes()))->merge(ModelFixture::build($tag), ModelFixture::build($tag));
+        $merged = $this->views()->merge(ModelFixture::build($tag), ModelFixture::build($tag));
 
         self::assertSame(['App\Dto\Tag', 'App\Dto\A'], array_keys(ModelFixture::classes($merged)));
         self::assertSame([], ModelFixture::messages($merged));
+    }
+
+    private function views(): Views
+    {
+        return new Views(new SchemaGraph([]), new ViewSuffixes(), new ReadWriteMode(ReadWriteModels::from(ReadWriteModels::SPLIT)));
     }
 }

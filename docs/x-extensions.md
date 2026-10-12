@@ -13,6 +13,7 @@ them; the [Symfony bridge](https://github.com/msstc4symfony/dto-generator-bridge
 | `x-php-skip` | schema, property | `true` / `false` | Leave it out of the output |
 | `x-dto-mutable` | schema | `true` / `false` | Overrides `dto.mutability` for this class |
 | `x-php-all-of` | schema | `extends` / `merge` | Overrides `dto.allOfStrategy` for this `allOf` |
+| `x-php-read-write` | object schema | `single` / `split` | Overrides `dto.readWriteModels` for this class |
 | `x-php-attributes` | schema, property | list | Attributes to write |
 | `x-enum-descriptions` | schema with `enum` | map | PHPDoc per enum case |
 | `x-enum-varnames` | schema with `enum` | list | Names of the enum cases |
@@ -57,7 +58,7 @@ many places, [`formats`](configuration.md#formats) in the config is shorter.
 - On a property: the property is not generated. Skipping a required property gives a warning.
 - On a schema: no class is generated. A `$ref` to it becomes `mixed`, with a warning.
 
-## `x-dto-mutable` and `x-php-all-of`
+## `x-dto-mutable`, `x-php-all-of` and `x-php-read-write`
 
 ```yaml
 Draft:
@@ -68,7 +69,15 @@ Admin:
   allOf:
     - $ref: '#/components/schemas/User'
     - properties: {role: {type: string}}
+User:
+  x-php-read-write: split      # UserRead and UserWrite; so do the classes that hold, extend or list User
+  properties:
+    id: {type: integer, readOnly: true}
+    password: {type: string, writeOnly: true}
 ```
+
+`Admin` above stays one class with all of User's properties: it copies them instead of extending `User`, and follows
+its own setting.
 
 ## `x-enum-descriptions`
 

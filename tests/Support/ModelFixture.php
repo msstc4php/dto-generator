@@ -21,6 +21,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Target\DateTimeClass;
 use MSSTC4PHP\DtoGenerator\Domain\Target\MetadataMode;
 use MSSTC4PHP\DtoGenerator\Domain\Target\Mutability;
 use MSSTC4PHP\DtoGenerator\Domain\Target\PhpVersion;
+use MSSTC4PHP\DtoGenerator\Domain\Target\ReadWriteModels;
 use MSSTC4PHP\DtoGenerator\Domain\Target\TargetProfile;
 
 final class ModelFixture
@@ -29,8 +30,9 @@ final class ModelFixture
      * @param array<int|string, array<array-key, mixed>> $schemas components/schemas of the spec
      * @param array<string, array<array-key, mixed>> $extraDocuments
      * @param list<string> $include
+     * @param 'single'|'split' $readWriteModels the run's, when $split gives the suffixes
      */
-    public static function build(array $schemas, array $extraDocuments = [], array $include = ['*'], string $allOfStrategy = AllOfStrategy::EXTENDS, bool $failOnLoadErrors = true, ?ViewSuffixes $split = null): Output
+    public static function build(array $schemas, array $extraDocuments = [], array $include = ['*'], string $allOfStrategy = AllOfStrategy::EXTENDS, bool $failOnLoadErrors = true, ?ViewSuffixes $split = null, string $readWriteModels = ReadWriteModels::SPLIT): Output
     {
         $source = ConfigMother::source(GraphFixture::SPEC, $include);
         $graph = GraphFixture::load($schemas, $extraDocuments, $source, $failOnLoadErrors);
@@ -43,9 +45,20 @@ final class ModelFixture
             true,
         );
 
-        $config = $split instanceof ViewSuffixes ? ConfigMother::split($source, $split) : ConfigMother::configWith(AllOfStrategy::from($allOfStrategy), $source);
+        $config = $split instanceof ViewSuffixes ? ConfigMother::readWrite($source, $split, $readWriteModels, $allOfStrategy) : ConfigMother::configWith(AllOfStrategy::from($allOfStrategy), $source);
 
         return (new Action(new NameResolver()))(new Input($config, $target, $graph, []));
+    }
+
+    /**
+     * A run with read and write views, or a single run in which schemas may ask for them.
+     *
+     * @param array<int|string, array<array-key, mixed>> $schemas components/schemas of the spec
+     * @param 'single'|'split' $readWriteModels
+     */
+    public static function views(array $schemas, ?ViewSuffixes $suffixes = null, string $readWriteModels = ReadWriteModels::SPLIT, string $allOfStrategy = AllOfStrategy::EXTENDS): Output
+    {
+        return self::build($schemas, [], ['*'], $allOfStrategy, true, $suffixes ?? new ViewSuffixes(), $readWriteModels);
     }
 
     /**

@@ -106,9 +106,13 @@ Required; must be `1`.
   - Do not mark a discriminator property `readOnly`: the write model would lose it, and a request could not select
     its variant.
   - A problem of a split class is reported once, naming its read model.
+  - `x-php-read-write: single | split` on an object schema overrides the setting for its class; inline objects
+    follow the setting, not their owner. A `single` class ignores the `readOnly`/`writeOnly` of its properties but
+    still gets both models when it holds, extends or lists a class that has them (a warning). With
+    `allOfStrategy: merge`, a class follows its own setting, not that of the schemas whose properties it copies.
 - **`readWriteSuffixes`**: what the two models add to the class name, for example `{read: Response, write: Request}`.
-  The two must differ, letter case ignored; without `readWriteModels: split` they have no effect (a warning). A model
-  named like another class is an error.
+  The two must differ, letter case ignored; they also name the models of schemas with `x-php-read-write: split`. A
+  model named like another class is an error.
 
 ## `formats`
 

@@ -80,8 +80,10 @@ final class ClassBuilder
         $taken = [];
         $byWireName = [];
         $sources = $composition->propertySources();
+        ReadWriteMode::check($schema, $diagnostics);
+        $view = $this->view instanceof PropertyView && $this->view->appliesTo($schema) ? $this->view : null;
         // The other view's properties are left out quietly, unlike x-php-skip.
-        $skipped = self::skippedWireNames($sources) + ($this->view instanceof PropertyView ? $this->view->excluded(self::kept($sources)) : []);
+        $skipped = self::skippedWireNames($sources) + ($view instanceof PropertyView ? $view->excluded(self::kept($sources)) : []);
         foreach ($sources as [$wireName, $propertySchema]) {
             ExtensionVocabulary::checkProperty($propertySchema, $diagnostics, $this->aliases);
             if (self::isSkipped($propertySchema, $diagnostics) && $composition->isRequired($wireName)) {
@@ -139,7 +141,7 @@ final class ClassBuilder
             $properties[] = $property;
         }
 
-        $additional = $this->additionalProperties($schema, isset($taken['additionalproperties']), $diagnostics);
+        $additional = $this->additionalProperties($schema, $view, isset($taken['additionalproperties']), $diagnostics);
         if ($additional instanceof PropertyModel) {
             $properties[] = $additional;
         }
@@ -158,10 +160,10 @@ final class ClassBuilder
     /**
      * `properties` together with an `additionalProperties` schema: the extra keys land in $additionalProperties (spec §5.1).
      */
-    private function additionalProperties(Schema $schema, bool $nameTaken, Diagnostics $diagnostics): ?PropertyModel
+    private function additionalProperties(Schema $schema, ?PropertyView $view, bool $nameTaken, Diagnostics $diagnostics): ?PropertyModel
     {
         $additional = $schema->additionalProperties();
-        if (!$additional instanceof Schema || ($this->view instanceof PropertyView && !$this->view->admits($additional))) {
+        if (!$additional instanceof Schema || ($view instanceof PropertyView && !$view->admits($additional))) {
             return null;
         }
 
