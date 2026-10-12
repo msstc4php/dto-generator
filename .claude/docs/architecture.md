@@ -73,12 +73,13 @@ Hex-подход, адаптированный под библиотеку; пр
 
 F1 (2026-10-10 UTC, `docs/internal/specs/2026-10-10-f1-read-write-models-design.md`): модели чтения и записи.
 
-- `dto.readWriteModels` → `Domain/Target/ReadWriteModels` (enum), `DtoSettings::readWriteModels()`/`splitsReadAndWrite()`; `dto.readWriteSuffixes` → `Application/Config/ViewSuffixes` (`of(Direction)`; различие без учёта регистра; суффиксы при `single` — warning).
+- `dto.readWriteModels` → `Domain/Target/ReadWriteModels` (enum), `DtoSettings::readWriteModels()` (`splitsReadAndWrite()` удалён в F4); `dto.readWriteSuffixes` → `Application/Config/ViewSuffixes` (`of(Direction)`; различие без учёта регистра; с F4 при `single` warning нет).
 - `Build\Action::__invoke`: без `split` — одна сборка `build($input, null)->output()`; с `split` — `Build\Views::build(Closure(?View): Run)`. `build()` возвращает `Build\Run`: выход и все объектные схемы с составом (`[Schema, Composition]`), включая отвергнутые `Registry::claim()` (`Registry::rejected()`; их состав — `AllOfResolver::compose()` с выброшенными диагностиками).
 - `Views`: `dependent()` — схемы с направленным свойством в любом члене состава (`Directions::ofSources(Composition::propertySources())` или `of(additionalProperties)`) + замыкание `ViewDependence::of()` (BFS по обратным рёбрам: типы свойств, родитель, mapping) → locations; пусто → пробная сборка + предупреждения анализа; иначе две сборки `View(direction, suffix, dependent)` и `merge()`: общие классы/enum-ы один раз, страховка «один FQCN одной схемы — одна модель» (`shape()`), диагностики записи с именами `…Write`→`…Read` (по совпадению `source`) совпавшие с чтением — отбрасываются.
 - `Domain/Builder/Directions` — экземпляр на сборку (граф + `Diagnostics` сборки, кэш флагов по location: предупреждение о флаге — один раз); цепочка `$ref` — `SchemaGraph::chain()` (её же использует `Contract\SchemaReferences`). `PropertyView(direction, Directions)`: `admits(Schema)`, `excluded(sources)`.
 - `Registry(?View, ?PropertyView)`: `className(namespace, short, schema)` (суффикс зависимым), базовое имя запоминается только после успешного `claim()`; `baseOf()` — для инлайн-имён (`PetOwnerRead`); `excluded(Composition)`/`admits()` — для `hoist()` (инлайн-классы свойств другого представления не объявляются); коллизия имени представления — «…, or change dto.readWriteSuffixes».
 - `ClassBuilder(…, ?PropertyView)`: исключает `view->excluded(composition->propertySources())` без warning; `$additionalProperties` — через `admits()`.
+- **F4 (2026-10-12 UTC, `…/2026-10-12-f4-read-write-per-schema-design.md`)**: `x-php-read-write: single|split` на схеме класса → `Domain/Builder/ReadWriteMode` (`splits(schema)` = ключ ?? режим запуска; `declared()`, `check()` — ошибка значения в `ClassBuilder::build`, в каждой сборке, дубли снимает `Views::merge`). `Build\Action` **всегда** идёт через `Views` (без split-классов — пробная сборка как есть). Семена `Views::dependent` — только `mode->splits(schema) && …` (short-circuit: флаги single-классов не читаются → нет новых предупреждений), замыкание прежнее; явный `single`, ставший зависимым, — warning на ключе. Фильтр видов гейтится по классу: `PropertyView::appliesTo(class)`, `ClassBuilder` берёт `$view` только для split-класса, `Registry::excluded(owner, composition)`/`admits(owner, property)`. Ключ — в `ExtensionVocabulary::KNOWN`, `CLASS_SCHEMA` и `CLASS_DECLARATION` (не в `DECLARATION`: иначе enum принимал бы его молча). Инлайн-объекты ключ не наследуют.
 - Golden: `tests/Fixtures/Projects/golden/{api/views.yaml, php7.4-views.yaml, php8.2-views.yaml, expected/*-views}`; `tests/Targets/run.sh` берёт версию PHP из имени каталога до `-`.
 
 F2 (2026-10-10 UTC, `docs/internal/specs/2026-10-10-f2-remote-refs-design.md`): удалённые `$ref`.
@@ -89,6 +90,36 @@ F2 (2026-10-10 UTC, `docs/internal/specs/2026-10-10-f2-remote-refs-design.md`): 
 - `Infrastructure/Remote/CachedRemoteDocuments`: `index.json` {url: {file: sha256(url).json|yaml, fetchedAt UTC, sha256 тела}}, перед чтением кэша — сверка SHA-256; без кэша и без `fetch` — «is not cached …; run generate»; 3xx — «redirects to …», не 200 — «server answered N»; формат — расширение URL → Content-Type → первый символ; запись — временный файл + rename. `Fetcher`/`StreamFetcher` — stream wrapper (`follow_location 0`, `ignore_errors`, `verify_peer`, лимит `maxlen+1`). Декодер JSON/YAML (BOM, алиас-бомбы) — общий `Infrastructure/Document/DocumentDecoder` (+ `UndecodableDocument`), `FileDocumentLoader` им пользуется.
 - Ревью F2 (CR-001…CR-018): `Url::normalize()` — только символы RFC 3986 (иначе «has characters a URL cannot hold»), экранирования unreserved декодируются (`%2e%2e` → `..`) до удаления dot-сегментов, `%2F`/`%5C` в пути — ошибка, путь выше корня — `/` (идемпотентность — тест), пустой query отброшен (PHP 7.4 и 8 разбирают `?` по-разному); `Url::hasScheme()` — любая схема в ссылке удалённого документа (`file:/…`) — ошибка. `StreamFetcher` — свой HTTP/1.0-клиент на `stream_socket_client` (срок на весь ответ через `stream_set_timeout` перед каждым чтением, заголовки ≤ 64 КБ, причина отказа TLS — из предупреждения). Порт `RemoteDocuments::load(url, cacheDir, timeout, fetch)`. Кэш: `index.json` проверяется целиком (невалидный JSON или запись не `{file: <64 hex>.json|yaml, fetchedAt, sha256: 64 hex}` — ошибка, не пустой кэш), запись индекса — под `flock` на `.index.lock` с перечитыванием, `JSON_THROW_ON_ERROR`, символические ссылки отвергаются, память — по `cacheDir + url`.
 - Тесты: `tests/Support/{InMemoryRemoteDocuments,RecordingFetcher,RemoteServer}` (`php -S` на свободном порту с `tests/Fixtures/Remote/router.php`), `tests/Integration/{RemoteRefsTest,Infrastructure/StreamFetcherTest}`.
+
+## F3 — заголовки, прокси, обновление кэша (2026-10-12 UTC)
+
+Спека `docs/internal/specs/2026-10-12-f3-remote-auth-proxy-design.md`. Поверх F2 (старые строки выше про
+порт `load(url, cacheDir, timeout, fetch)` и память в `CachedRemoteDocuments` устарели):
+- Порт `RemoteDocuments::load(url, RemoteRequest)`; `RemoteRequest` = cacheDir, timeout, `RemotePolicy`
+  (`cached|missing|all`, AbstractEnum), заголовки. `Generate\Action::remotePolicy()`: refresh → ALL, write → MISSING,
+  иначе CACHED. `Schemas\Load\Input(config, ?RemotePolicy)`.
+- **Память удалённых документов — на запуск**, в `Schemas\Load\Reads::remoteDocument()/remote(Document)`
+  (загрузчик зовёт `load()` на каждую ссылку). В `CachedRemoteDocuments` памяти нет — иначе refresh переиспользованного
+  генератора (мост) был no-op.
+- `Config\RemoteHeader(prefix https, name, template)`: грамматика полей — `Application\Port\HttpField` (`TOKEN`,
+  `isName`, `hasControlCharacters`, `isReserved`), общая с инфраструктурой (в `Domain\Shared` нельзя: он под BC-check,
+  `PublicApiTest` требует там `@api`); `${VAR}` с именем `HTTP_*` запрещён (httpoxy). `RemoteRefsSettings::headersFor(url)` — самый длинный
+  префикс на имя. `ConfigFactory::remoteHeaders()`: https-проверка с указателем на `/prefix`, дубликат prefix+name —
+  ошибка (сообщение называет первое написание), префикс без пересечения с `allow` — предупреждение.
+- `CachedRemoteDocuments`: переменные — `Remote\Environment::variable()` ($_SERVER → $_ENV → getenv; Dotenv Symfony
+  не делает putenv). Чтение индекса и файла — под `LOCK_SH` на `.index.lock` (если файла блокировки нет — без неё). Файл
+  документа пишется **под LOCK_EX индекса**; на ALL прежний файл удаляется, если его не называет
+  ни одна запись (только на refresh: при MISSING запись мог только что внести параллельный запуск).
+- `Remote\Proxies::fromEnvironment(?Closure)` → `Proxy(host, port, ?authorization, label)`: `https_proxy`→`HTTPS_PROXY`,
+  для http только `http_proxy`; `all_proxy` не читается; без схемы — http, порт 1080; не-http прокси — `FetchFailed`
+  с именем переменной. `no_proxy`: `*`, суффикс по точке, `host:port`, IP через `inet_pton`, точки по краям отбрасываются.
+- `StreamFetcher(?Proxies, ?caFile)` строит запрос/CONNECT; `Remote\Connection` — сокет под общим сроком (open с
+  peer_name **цели** в ssl-контексте, secure, write, head, body). CONNECT: 407 и не-2xx — «the proxy at host:port …»; пустой ответ (сервера или прокси) — «the connection closed
+  without an answer».
+- CLI `--refresh-remote` (с `--check`/`--dry-run` — usage error, код 3).
+- Тесты: `tests/Support/{ProxyServer,TlsServer}` (PHP-процессы, файл готовности, лог голов запросов); TLS-тесты
+  адресуют цель как `localhost`, прокси — `127.0.0.1`, чтобы отличать peer name. `phpunit.xml.dist` обнуляет
+  прокси-переменные в env и `$_SERVER`.
 
 ## Сборка вне исходников (2026-10-11 UTC, для режима build моста)
 

@@ -13,7 +13,7 @@ UTF-8 BOM срезается; NUL-байт в пути — `DocumentLoadFailed::
 ## Composer и Docker (этап 6b)
 
 - Пакет — `composer-plugin`: потребителю нужно `allow-plugins` (Composer 2.2+ спросит). Отказ отключает только плагин.
-- Docker-образ обнаруживает расширения из своего vendor, читает `composer.json`/`composer.lock` смонтированного проекта и не выполняет его код при `verifyClasses: auto`. Имя образа — `ghcr.io/msstc4php/dto-generator`; публикации пока нет.
+- Docker-образ обнаруживает расширения из своего vendor, читает `composer.json`/`composer.lock` смонтированного проекта и не выполняет его код при `verifyClasses: auto`. Образ `ghcr.io/msstc4php/dto-generator` публикует `.github/workflows/docker-image.yml` по тегу `vX.Y.Z` (или вручную: `gh workflow run docker-image.yml -f tag=vX.Y.Z`): smoke на amd64, затем amd64+arm64 (arm64 через QEMU). Плавающие `X.Y`/`X`/`latest` двигаются, только если релиз — новейший в своей линии; шаг падает, если `ARG VERSION` в Dockerfile тега не совпадает с тегом (поэтому релизный коммит обязан поднять `ARG VERSION`).
 
 ## Пакеты и расширения потребителя (этап 6a)
 

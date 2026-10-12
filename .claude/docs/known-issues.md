@@ -168,3 +168,18 @@
 `Path::resolve('/', 'src/Dto')` давал `//src/Dto`, а это по `UNC_ROOT` — сервер `src`, share `Dto`. Теперь база
 обрезается по `/` перед склейкой. Ловушка общая: любая склейка «каталог + '/' + путь» в коде проекта должна идти через
 `Path::resolve()`.
+- **Рантайм моста в Docker-образе (2026-10-12 UTC).** Мост с 1.2 требует `msstc4symfony/dto-generator-bridge-runtime` (не на Packagist). Без `repositories.runtime` (`ARG RUNTIME_REPOSITORY`) Composer молча брал мост 1.1.0 из VCS, а с локальным мостом (`make docker-build`) падал. Проверка: `docker build --no-cache --progress=plain -f docker/Dockerfile .` → в логе `Locking msstc4symfony/dto-generator-bridge (v1.2.0)`. Релизы 2026-10-12: ядро v1.3.0 и v1.3.1 (с этим исправлением), рантайм v1.0.0, мост v1.2.0.
+- **Прокси песочницы Claude Code (2026-10-12 UTC).** В окружении заданы `https_proxy`/`http_proxy` (localhost:3128) и
+  `no_proxy` с CIDR-записями (их генератор игнорирует). С F3 `StreamFetcher` читает их, поэтому `phpunit.xml.dist`
+  обнуляет прокси-переменные (`<env>` и `<server>`); тесты, которым нужно окружение, сохраняют и восстанавливают
+  `$_SERVER`/`$_ENV`/`putenv`. Проверка изоляции: `https_proxy=http://127.0.0.1:9 http_proxy=… no_proxy= vendor/bin/phpunit tests/Integration`.
+- **`RawServer` под Infection.** Фиксированные 200 мс до первого соединения не хватало под нагрузкой (Connection
+  refused в начальном прогоне Infection) — теперь ждёт файл готовности, как `ProxyServer`/`TlsServer`.
+- **Infection и эквивалентные мутанты в конфиге.** `strncmp(..., 8)` и склейка ключа давали неубиваемые мутанты —
+  код переписан на `substr(...) !== 'https://'` и `$seen[$prefix][lower(name)] = $name` (значение видно в сообщении).
+
+## F4: `x-php-read-write` (2026-10-12 UTC)
+
+- Неверное значение ключа сообщается только у схем, дошедших до `ClassBuilder::build` (как `x-dto-mutable`): у схемы с `x-php-skip: true` или отвергнутой по имени ошибки нет — это осознанно.
+- Предупреждение «single is overridden» не выдаётся схеме, у которой отобрали имя (`taker !== null`): класса нет. Его держит `testReportsOnlyTheNameOfASingleSchemaNamedLikeAView`: мутанты условия убивает и Holder-тест, так что 100 % MSI сами по себе нужность guard не доказывали.
+- `ModelFixture::build(..., $split, 'single')` — суффиксы при глобальном `single` (для схем с `split`).
