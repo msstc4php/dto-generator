@@ -23,6 +23,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ArgumentValue;
 use MSSTC4PHP\DtoGenerator\Domain\Model\AttributeArgument;
 use MSSTC4PHP\DtoGenerator\Domain\Model\AttributeModel;
+use MSSTC4PHP\DtoGenerator\Domain\Model\ClassModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\DiscriminatorModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ImportAlias;
@@ -146,6 +147,36 @@ final class EnrichTest extends TestCase
         self::assertSame(['App\\Dto\\Pet' => ['class: App\\Attr\\Selected(none)'], 'App\\Dto\\Cat' => ['class: App\\Attr\\Selected(none)']], $this->attributes($output));
     }
 
+    public function testLeavesAClassOutOfItsOwnAncestorsInACycle(): void
+    {
+        $output = $this->enrich([
+            'Pet' => ['type' => 'object', 'properties' => ['name' => ['type' => 'string']]],
+            'Cat' => ['allOf' => [['$ref' => '#/components/schemas/Pet'], ['properties' => ['lives' => ['type' => 'integer']]]]],
+        ], $this->ancestry(), '8.2', true, MetadataMode::ATTRIBUTES, null, static fn (array $classes): array => array_map(
+            static fn (BuiltClass $class): BuiltClass => $class->model()->name()->fqcn() === 'App\\Dto\\Pet'
+                ? new BuiltClass($class->model()->withHierarchy($class->model()->kind(), ClassName::fromFqcn('App\\Dto\\Cat'), null), $class->source())
+                : $class,
+            $classes,
+        ));
+
+        self::assertSame(['App\\Dto\\Pet' => ['class: App\\Attr\\Ancestors(Cat)'], 'App\\Dto\\Cat' => ['class: App\\Attr\\Ancestors(Pet)']], $this->attributes($output));
+    }
+
+    public function testGivesEachClassItsAncestorsNearestFirst(): void
+    {
+        $output = $this->enrich([
+            'Base' => ['type' => 'object', 'properties' => ['a' => ['type' => 'string']]],
+            'Middle' => ['allOf' => [['$ref' => '#/components/schemas/Base'], ['type' => 'object', 'properties' => ['b' => ['type' => 'string']]]]],
+            'Leaf' => ['allOf' => [['$ref' => '#/components/schemas/Middle'], ['type' => 'object', 'properties' => ['c' => ['type' => 'string']]]]],
+        ], $this->ancestry());
+
+        self::assertSame([
+            'App\\Dto\\Base' => ['class: App\\Attr\\Ancestors()'],
+            'App\\Dto\\Middle' => ['class: App\\Attr\\Ancestors(Base)'],
+            'App\\Dto\\Leaf' => ['class: App\\Attr\\Ancestors(Middle,Base)'],
+        ], $this->attributes($output));
+    }
+
     /**
      * @param array<string, string> $mapping value => schema name
      *
@@ -159,6 +190,23 @@ final class EnrichTest extends TestCase
             'properties' => ['petType' => ['type' => 'string']],
             'discriminator' => ['propertyName' => 'petType', 'mapping' => array_map(static fn (string $name): string => '#/components/schemas/' . $name, $mapping)],
         ];
+    }
+
+    /**
+     * Marks every class with the short names of its ancestors.
+     */
+    private function ancestry(): Closure
+    {
+        return static function (ExtensionRegistry $registry): void {
+            $registry->addClassEnricher(new class implements ClassEnricher {
+                public function enrichClass(ClassContext $context): array
+                {
+                    $names = array_map(static fn (ClassModel $ancestor): string => $ancestor->name()->shortName(), $context->ancestors());
+
+                    return [new AttributeModel(ClassName::fromFqcn('App\\Attr\\Ancestors'), [AttributeArgument::positional(ArgumentValue::literal(implode(',', $names)))])];
+                }
+            });
+        };
     }
 
     /**
