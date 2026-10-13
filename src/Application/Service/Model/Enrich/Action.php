@@ -80,9 +80,7 @@ final class Action
     {
         $ancestors = [];
         $ancestor = $class->parent();
-        $seen = [];
-        while ($ancestor !== null && isset($models[$ancestor->fqcn()]) && !isset($seen[$ancestor->fqcn()])) {
-            $seen[$ancestor->fqcn()] = true;
+        while ($ancestor !== null && isset($models[$ancestor->fqcn()]) && $ancestor->fqcn() !== $class->name()->fqcn() && !in_array($models[$ancestor->fqcn()], $ancestors, true)) {
             $ancestors[] = $models[$ancestor->fqcn()];
             $ancestor = $models[$ancestor->fqcn()]->parent();
         }
