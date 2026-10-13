@@ -6,6 +6,11 @@ All notable changes to this package are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `ClassContext::ancestors()`: the classes a class extends, nearest first, with their own properties, so an extension
+  can name inherited properties (the Symfony bridge checks conditions and requirements on them).
+
 ### Fixed
 
 - A list of values of any type is documented as `array<int, mixed>` in `@var` and `@param`, and as `list<mixed>` in

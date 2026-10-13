@@ -23,6 +23,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ArgumentValue;
 use MSSTC4PHP\DtoGenerator\Domain\Model\AttributeArgument;
 use MSSTC4PHP\DtoGenerator\Domain\Model\AttributeModel;
+use MSSTC4PHP\DtoGenerator\Domain\Model\ClassModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\DiscriminatorModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ImportAlias;
@@ -144,6 +145,30 @@ final class EnrichTest extends TestCase
         ));
 
         self::assertSame(['App\\Dto\\Pet' => ['class: App\\Attr\\Selected(none)'], 'App\\Dto\\Cat' => ['class: App\\Attr\\Selected(none)']], $this->attributes($output));
+    }
+
+    public function testGivesEachClassItsAncestorsNearestFirst(): void
+    {
+        $output = $this->enrich([
+            'Base' => ['type' => 'object', 'properties' => ['a' => ['type' => 'string']]],
+            'Middle' => ['allOf' => [['$ref' => '#/components/schemas/Base'], ['type' => 'object', 'properties' => ['b' => ['type' => 'string']]]]],
+            'Leaf' => ['allOf' => [['$ref' => '#/components/schemas/Middle'], ['type' => 'object', 'properties' => ['c' => ['type' => 'string']]]]],
+        ], static function (ExtensionRegistry $registry): void {
+            $registry->addClassEnricher(new class implements ClassEnricher {
+                public function enrichClass(ClassContext $context): array
+                {
+                    $names = array_map(static fn (ClassModel $ancestor): string => $ancestor->name()->shortName(), $context->ancestors());
+
+                    return [new AttributeModel(ClassName::fromFqcn('App\\Attr\\Ancestors'), [AttributeArgument::positional(ArgumentValue::literal(implode(',', $names)))])];
+                }
+            });
+        });
+
+        self::assertSame([
+            'App\\Dto\\Base' => ['class: App\\Attr\\Ancestors()'],
+            'App\\Dto\\Middle' => ['class: App\\Attr\\Ancestors(Base)'],
+            'App\\Dto\\Leaf' => ['class: App\\Attr\\Ancestors(Middle,Base)'],
+        ], $this->attributes($output));
     }
 
     /**

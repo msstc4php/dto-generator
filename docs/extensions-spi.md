@@ -130,6 +130,7 @@ final readonly class Payment
 | `diagnostics()` | `warning()` and `error()` at a `SchemaLocation`, reported with the others |
 | `isInline()` (class) | whether the class was lifted from an inline object, whose `x-` keys belong to the property |
 | `selectingDiscriminator()` (class) | the discriminator whose mapping selects this class, or `null` |
+| `ancestors()` (class) | the classes it extends, nearest first, as built (each with its own properties); the list stops at a parent the run does not generate |
 
 Keywords beside a `$ref` (`{$ref: Email, maxLength: 64}`) stay on the property's schema, and the referenced schema has
 its own: read `schema()` first, then `references()->resolve(schema())`, or walk `references()->chain()` when every

@@ -36,13 +36,17 @@ final class ClassContext
 
     private KeywordChecks $keywordChecks;
 
+    /** @var list<ClassModel> */
+    private array $ancestors;
+
     /**
      * @param bool $inline whether the class comes from an object written inside a property, whose schema is the property's
      * @param SchemaReferences|null $references how `$ref`s resolve; none when omitted
      * @param DiscriminatorModel|null $selectingDiscriminator the discriminator whose mapping selects this class, if any
      * @param KeywordChecks|null $keywordChecks the claimed keywords of the run; none when omitted
+     * @param list<ClassModel> $ancestors the classes the class extends, nearest first
      */
-    public function __construct(ClassModel $class, Schema $schema, TargetProfile $target, InstalledPackages $packages, Diagnostics $diagnostics, bool $inline = false, ?SchemaReferences $references = null, ?DiscriminatorModel $selectingDiscriminator = null, ?KeywordChecks $keywordChecks = null)
+    public function __construct(ClassModel $class, Schema $schema, TargetProfile $target, InstalledPackages $packages, Diagnostics $diagnostics, bool $inline = false, ?SchemaReferences $references = null, ?DiscriminatorModel $selectingDiscriminator = null, ?KeywordChecks $keywordChecks = null, array $ancestors = [])
     {
         $this->class = $class;
         $this->schema = $schema;
@@ -53,6 +57,18 @@ final class ClassContext
         $this->references = $references ?? SchemaReferences::none();
         $this->selectingDiscriminator = $selectingDiscriminator;
         $this->keywordChecks = $keywordChecks ?? new KeywordChecks();
+        $this->ancestors = $ancestors;
+    }
+
+    /**
+     * The classes the class extends, nearest first, as the run builds them, before enrichment: each declares its own
+     * properties, which the class inherits. The list stops at a parent the run does not generate.
+     *
+     * @return list<ClassModel>
+     */
+    public function ancestors(): array
+    {
+        return $this->ancestors;
     }
 
     /**

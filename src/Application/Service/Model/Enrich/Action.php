@@ -35,7 +35,8 @@ final class Action
         foreach ($input->classes() as $built) {
             $source = $built->model()->source();
             $inline = !$input->graph()->get($source) instanceof ResolvedSchema;
-            $model = $this->enrich($built->model(), $run->index()->require($source), $inline, $this->selectingDiscriminator($built->model(), $models), $run);
+            $ancestors = $this->ancestors($built->model(), $models);
+            $model = $this->enrich($built->model(), $run->index()->require($source), $inline, $this->selectingDiscriminator($built->model(), $ancestors), $ancestors, $run);
             $this->checkRendering($model, $input->target()->metadata(), $run->diagnostics());
             $classes[] = new BuiltClass($model, $built->source());
         }
@@ -56,31 +57,47 @@ final class Action
     /**
      * A deep hierarchy shares the discriminator of its base, which may select a grandchild directly.
      *
-     * @param array<string, ClassModel> $models by FQCN
+     * @param list<ClassModel> $ancestors nearest first
      */
-    private function selectingDiscriminator(ClassModel $class, array $models): ?DiscriminatorModel
+    private function selectingDiscriminator(ClassModel $class, array $ancestors): ?DiscriminatorModel
     {
-        $ancestor = $class->parent();
-        $seen = [];
-        while ($ancestor !== null && isset($models[$ancestor->fqcn()]) && !isset($seen[$ancestor->fqcn()])) {
-            $seen[$ancestor->fqcn()] = true;
-            $model = $models[$ancestor->fqcn()];
+        foreach ($ancestors as $model) {
             $discriminator = $model->discriminator();
             if ($discriminator !== null && in_array($class->name()->fqcn(), array_map(static fn (ClassName $name): string => $name->fqcn(), $discriminator->mapping()), true)) {
                 return $discriminator;
             }
-
-            $ancestor = $model->parent();
         }
 
         return null;
     }
 
-    private function enrich(ClassModel $class, Schema $schema, bool $inline, ?DiscriminatorModel $selectingDiscriminator, EnrichmentRun $run): ClassModel
+    /**
+     * @param array<string, ClassModel> $models by FQCN
+     *
+     * @return list<ClassModel> nearest first, up to a parent outside the run
+     */
+    private function ancestors(ClassModel $class, array $models): array
+    {
+        $ancestors = [];
+        $ancestor = $class->parent();
+        $seen = [];
+        while ($ancestor !== null && isset($models[$ancestor->fqcn()]) && !isset($seen[$ancestor->fqcn()])) {
+            $seen[$ancestor->fqcn()] = true;
+            $ancestors[] = $models[$ancestor->fqcn()];
+            $ancestor = $models[$ancestor->fqcn()]->parent();
+        }
+
+        return $ancestors;
+    }
+
+    /**
+     * @param list<ClassModel> $ancestors
+     */
+    private function enrich(ClassModel $class, Schema $schema, bool $inline, ?DiscriminatorModel $selectingDiscriminator, array $ancestors, EnrichmentRun $run): ClassModel
     {
         $input = $run->input();
         $diagnostics = $run->diagnostics();
-        $context = new ClassContext($class, $schema, $input->target(), $input->packages(), $diagnostics, $inline, $run->references(), $selectingDiscriminator, $input->keywordChecks());
+        $context = new ClassContext($class, $schema, $input->target(), $input->packages(), $diagnostics, $inline, $run->references(), $selectingDiscriminator, $input->keywordChecks(), $ancestors);
         $attributes = AttributeRules::admitted($input->registry()->enrichClass($context), $input->target(), $schema->location(), $diagnostics);
         $run->verify($attributes, $schema->location());
 

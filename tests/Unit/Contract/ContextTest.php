@@ -46,6 +46,16 @@ final class ContextTest extends TestCase
         self::assertSame($discriminator, (new ClassContext($tag, $schema, $target, new InstalledPackages(), new Diagnostics(), false, null, $discriminator))->selectingDiscriminator());
     }
 
+    public function testListsTheAncestorsOfTheClass(): void
+    {
+        $tag = EmitterFixture::tag();
+        $schema = GraphFixture::load(['Tag' => ['type' => 'object', 'properties' => ['label' => ['type' => 'string']]]])->all()[0]->schema();
+        $target = EmitterFixture::target('8.2', Mutability::IMMUTABLE);
+
+        self::assertSame([], (new ClassContext($tag, $schema, $target, new InstalledPackages(), new Diagnostics()))->ancestors());
+        self::assertSame([$tag], (new ClassContext($tag, $schema, $target, new InstalledPackages(), new Diagnostics(), false, null, null, null, [$tag]))->ancestors());
+    }
+
     public function testLetsAnEnricherFollowReferences(): void
     {
         $tag = EmitterFixture::tag();
