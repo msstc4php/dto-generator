@@ -127,6 +127,11 @@ final class TypeRenderer
         }
 
         if ($type instanceof ListType) {
+            // Symfony PropertyInfo reads "list<mixed>" as the class "list" (5.4) or throws on "?list<mixed>" (8.1).
+            if ($portable && $type->item() instanceof MixedType) {
+                return 'array<int, mixed>';
+            }
+
             return 'list<' . $this->render($type->item(), $portable) . '>';
         }
 
