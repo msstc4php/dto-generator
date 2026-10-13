@@ -71,6 +71,8 @@ final class TypeRendererTest extends TestCase
             'refined scalar' => [new NullableType($name), '8.2', ['@phpstan-param ?non-empty-string $value']],
             'refined int' => [ScalarType::int('int<0, 30>'), '8.2', ['@phpstan-param int<0, 30> $value']],
             'list of classes' => [new NullableType(new ListType($tag)), '8.2', ['@param ?list<Tag> $value']],
+            'list of anything' => [new NullableType(new ListType(new MixedType())), '8.2', ['@param ?array<int, mixed> $value', '@phpstan-param ?list<mixed> $value']],
+            'list of lists of anything' => [new ListType(new ListType(new MixedType())), '8.2', ['@param list<array<int, mixed>> $value', '@phpstan-param list<list<mixed>> $value']],
             'list of refined scalars' => [new ListType($name), '8.2', ['@param list<string> $value', '@phpstan-param list<non-empty-string> $value']],
             'map of refined scalars' => [new MapType(ScalarType::int('non-negative-int')), '8.2', ['@param array<array-key, int> $value', '@phpstan-param array<array-key, non-negative-int> $value']],
             'string enum without PHP enums' => [new NullableType($currency), '7.4', ['@phpstan-param Currency::*|null $value']],

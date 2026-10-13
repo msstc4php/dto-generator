@@ -6,6 +6,13 @@ All notable changes to this package are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- A list of values of any type is documented as `array<int, mixed>` in `@var` and `@param`, and as `list<mixed>` in
+  `@phpstan-var` and `@phpstan-param`: Symfony PropertyInfo reads `list<mixed>` as a class named `list` (5.4)
+  or throws a `TypeError` on `?list<mixed>` (8.1), so Symfony Serializer could not denormalize a DTO with a
+  `type: array` without `items`.
+
 ## [1.4.1] - 2026-10-13
 
 ### Fixed
