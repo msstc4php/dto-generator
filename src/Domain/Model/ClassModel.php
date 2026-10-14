@@ -52,7 +52,8 @@ final class ClassModel
      * @param list<string> $discriminatedProperties wire names read by a discriminator of an ancestor or a subclass
      * @param list<string> $restoredMutators wire names of inherited properties whose mutators the parent leaves out but
      *                                       no discriminator of this class's chain reads
-     * @param list<ClassName> $interfaces the interfaces of the discriminated unions that list it, in their order
+     * @param list<ClassName> $interfaces the interfaces of the discriminated unions that list it, in their order; those an
+     *                                    interface extends
      */
     public function __construct(
         ClassName $name,
@@ -127,7 +128,16 @@ final class ClassModel
             throw new InvalidModel(sprintf('Class %s restores the mutators of "%s", which a discriminator of its chain reads.', $name->fqcn(), $wireName));
         }
 
-        $this->interfaces = $interfaces;
+        $this->interfaces = [];
+        foreach ($interfaces as $interface) {
+            if ($interface->equals($name)) {
+                throw new InvalidModel(sprintf('Class %s cannot implement itself.', $name->fqcn()));
+            }
+
+            if (array_filter($this->interfaces, static fn (ClassName $known): bool => $known->equals($interface)) === []) {
+                $this->interfaces[] = $interface;
+            }
+        }
     }
 
     /**
@@ -282,10 +292,21 @@ final class ClassModel
 
     public function withInterfaces(ClassName ...$interfaces): self
     {
-        $model = clone $this;
-        $model->interfaces = $interfaces;
-
-        return $model;
+        return new self(
+            $this->name,
+            $this->kind,
+            $this->parent,
+            $this->properties,
+            $this->mutability,
+            $this->doc,
+            $this->source,
+            $this->attributes,
+            $this->discriminator,
+            $this->discriminatorValues,
+            $this->discriminatedProperties,
+            $this->restoredMutators,
+            $interfaces,
+        );
     }
 
     public function withRestoredMutators(string ...$wireNames): self

@@ -84,6 +84,37 @@ final class BuildViewsTest extends TestCase
         self::assertSame(['App\Dto\Colour'], ModelFixture::enums($output));
     }
 
+    public function testSplitsTheClassesThatImplementADependentInterface(): void
+    {
+        $ref = static fn (string $name): array => ['$ref' => '#/components/schemas/' . $name];
+        $output = ModelFixture::views([
+            'Item' => ['oneOf' => [$ref('Plain'), $ref('Extended')], 'discriminator' => ['propertyName' => 'type']],
+            'Plain' => ['type' => 'object', 'properties' => ['type' => ['type' => 'string', 'const' => 'Plain'], 'id' => ['type' => 'string', 'readOnly' => true]]],
+            'Base' => ['type' => 'object', 'properties' => ['f' => ['type' => 'string']]],
+            'Extended' => ['allOf' => [$ref('Base'), ['type' => 'object', 'properties' => ['type' => ['type' => 'string', 'const' => 'Extended']]]]],
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        $hierarchy = ModelFixture::hierarchy($output);
+        self::assertSame('final extends App\\Dto\\Base implements App\\Dto\\ItemRead', $hierarchy['App\\Dto\\ExtendedRead']);
+        self::assertSame('final extends App\\Dto\\Base implements App\\Dto\\ItemWrite', $hierarchy['App\\Dto\\ExtendedWrite']);
+    }
+
+    public function testSharesAClassThatImplementsAnInterfaceOfNoDirection(): void
+    {
+        $ref = static fn (string $name): array => ['$ref' => '#/components/schemas/' . $name];
+        $output = ModelFixture::views([
+            'Item' => ['oneOf' => [$ref('Plain'), $ref('Extended')], 'discriminator' => ['propertyName' => 'type']],
+            'Plain' => ['type' => 'object', 'properties' => ['type' => ['type' => 'string', 'const' => 'Plain']]],
+            'Base' => ['type' => 'object', 'properties' => ['f' => ['type' => 'string']]],
+            'Extended' => ['allOf' => [$ref('Base'), ['type' => 'object', 'properties' => ['type' => ['type' => 'string', 'const' => 'Extended']]]]],
+            'Account' => ['type' => 'object', 'properties' => ['id' => ['type' => 'string', 'readOnly' => true]]],
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame('final implements App\\Dto\\Item', ModelFixture::hierarchy($output)['App\\Dto\\Plain']);
+    }
+
     public function testNamesAnOverriddenClassWithTheSuffixAndReportsAMarkedBothWaysPropertyOnce(): void
     {
         $output = ModelFixture::views([

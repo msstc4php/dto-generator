@@ -17,7 +17,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\UnionType;
 
 /**
  * The classes whose model depends on the direction (spec F1 §4): those with a directed property of their own, and
- * those that hold, extend or list as a variant a class that depends on it.
+ * those that hold, extend, implement or list as a variant a class that depends on it.
  */
 final class ViewDependence
 {
@@ -58,7 +58,7 @@ final class ViewDependence
     }
 
     /**
-     * The classes whose views this class must use: those its properties hold, its parent and its variants.
+     * The classes whose views this class must use: those its properties hold, its parent, its interfaces and its variants.
      *
      * @return Generator<int, ClassName, mixed, void>
      */
@@ -72,6 +72,8 @@ final class ViewDependence
         if ($parent instanceof ClassName) {
             yield $parent;
         }
+
+        yield from $class->interfaces();
 
         $discriminator = $class->discriminator();
         foreach ($discriminator instanceof DiscriminatorModel ? $discriminator->mapping() : [] as $variant) {

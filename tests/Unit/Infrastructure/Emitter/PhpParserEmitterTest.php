@@ -234,6 +234,7 @@ final class PhpParserEmitterTest extends TestCase
         $interface = $emitter->emit($item, $target);
         self::assertStringContainsString("/**\n * An item.\n */\ninterface Item\n{\n}\n", $interface);
         self::assertStringNotContainsString('__construct', $interface);
+        self::assertStringContainsString("\ninterface Item extends Field, \\App\\Other\\Row\n", $emitter->emit($item->withInterfaces(ClassName::fromFqcn('App\\Dto\\Field'), ClassName::fromFqcn('App\\Other\\Row')), $target));
         self::assertStringContainsString("\nfinal readonly class Call implements Item, \\App\\Other\\Field\n", $emitter->emit($call, $target));
     }
 

@@ -112,7 +112,12 @@ final class PhpParserEmitter implements CodeEmitter
         $attributes = new AttributeRenderer($types, $this->factory, $names, $target->metadata());
         $annotations = new AnnotationRenderer($types, $names, $target->metadata());
         if ($class->kind()->isInterface()) {
-            $node = $this->factory->interface($class->name()->shortName())->getNode();
+            $builder = $this->factory->interface($class->name()->shortName());
+            foreach ($class->interfaces() as $interface) {
+                $builder->extend($types->nameOf($interface));
+            }
+
+            $node = $builder->getNode();
             $this->describe($node, $class, $attributes, $annotations);
 
             return [$node, $names];

@@ -18,10 +18,16 @@ All notable changes to this package are documented here. The format follows
 - `SchemaReferences::at()`: the schema loaded at a location, such as the schema of an ancestor.
 - A discriminated `oneOf`/`anyOf` with no properties of its own, a variant of which already extends another class
   (through its own `allOf` or as the variant of another union), is an empty `interface` the variants implement,
-  instead of an error: PHP gives a class one parent but any number of interfaces. `ClassKind::INTERFACE` and
-  `ClassModel::interfaces()` describe it to extensions; the interface carries the discriminator.
-- An inline discriminated `oneOf`/`anyOf` (a property's schema) with inline object variants is a class named after its
-  place, with the variants extending it, instead of an error.
+  instead of an error: PHP gives a class one parent but any number of interfaces. A union that a class extends through
+  `allOf`, or that has properties, stays a class. Of unions that could each take a shared variant, a union with
+  properties takes it, else the first by class name; the order of the schemas plays no part. An interface variant of
+  such a union extends it. The variants' constructors check the interface's discriminator values, and have no mutators
+  for the property, as for an abstract base. Extensions see `ClassKind::INTERFACE` (a new value of `ClassKind`) and
+  `ClassModel::interfaces()`; the interface carries the discriminator.
+- Inline object variants of a discriminated `oneOf`/`anyOf` are classes extending the base (their title, or
+  `<Base>Option<N>`), selected by the one value their discriminator property has (`const` or a one-value `enum`, behind
+  a `$ref` or in a member of their `allOf`), instead of an error. An inline union (a property's schema) with such
+  variants is a class named after its place. Two inline variants with one value are an error.
 
 ### Changed
 
@@ -34,8 +40,6 @@ Found by generating the GitHub, OpenAI and Stripe specifications (GitHub now gen
   same scalar, the cases of an enum) leaves it to the parent, with a warning, instead of an error.
 - An inline schema whose class name another schema holds takes the name derived from its place, or that name
   numbered from 2, with a warning, instead of an error.
-- An inline object variant of a named discriminated `oneOf`/`anyOf` is a class extending the base (its title, or
-  `<Base>Option<N>`), mapped by the one value its discriminator property has, instead of an error.
 - The default of a union property that an enum member and a scalar member both admit stays a literal; one only an
   enum admits (next to a class or another scalar) is the enum case, where the literal was invalid PHP.
 - Property names and enum values that only a leading sign tells apart (`+1` and `-1`), or a sign alone (`*`), are

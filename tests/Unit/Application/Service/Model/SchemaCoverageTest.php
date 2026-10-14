@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Tests\Unit\Application\Service\Model;
 
+use MSSTC4PHP\DtoGenerator\Domain\Target\AllOfStrategy;
 use MSSTC4PHP\DtoGenerator\Tests\Support\ModelFixture;
 use PHPUnit\Framework\TestCase;
 
@@ -243,6 +244,56 @@ final class SchemaCoverageTest extends TestCase
         self::assertSame([], ModelFixture::messages($output));
         self::assertSame(['pet: App\\Dto\\Dog|string|null'], ModelFixture::classes($output)['App\\Dto\\Holder']);
         self::assertSame(['App\\Dto\\Holder', 'App\\Dto\\Dog'], array_keys(ModelFixture::classes($output)));
+    }
+
+    public function testFindsTheValueOfAnInlineVariantBehindARefAndInItsAllOf(): void
+    {
+        $output = ModelFixture::build([
+            'Event' => [
+                'oneOf' => [
+                    ['type' => 'object', 'properties' => ['type' => ['$ref' => '#/components/schemas/CreatedType']]],
+                    ['type' => 'object', 'properties' => ['type' => ['type' => 'string']], 'allOf' => [['properties' => ['type' => ['const' => 'deleted']]]]],
+                    ['type' => 'object', 'properties' => ['type' => ['type' => 'integer', 'const' => 7]]],
+                ],
+                'discriminator' => ['propertyName' => 'type'],
+            ],
+            'CreatedType' => ['type' => 'string', 'enum' => ['created']],
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame('abstract by type {created: App\\Dto\\EventOption1, deleted: App\\Dto\\EventOption2, 7: App\\Dto\\EventOption3}', ModelFixture::hierarchy($output)['App\\Dto\\Event']);
+    }
+
+    public function testRefusesTwoInlineVariantsWithOneValue(): void
+    {
+        $variant = ['type' => 'object', 'properties' => ['type' => ['type' => 'string', 'const' => 'x']]];
+        $other = ['type' => 'object', 'properties' => ['type' => ['type' => 'string', 'const' => 'y']]];
+        $output = ModelFixture::build(['Event' => ['oneOf' => [$variant, $variant, $other], 'discriminator' => ['propertyName' => 'type']]]);
+
+        self::assertSame(
+            ['error /project/api/openapi.yaml#/components/schemas/Event/oneOf/1: Another variant already has discriminator value "x", so App\\Dto\\EventOption2 can never be selected.'],
+            ModelFixture::messages($output),
+        );
+        self::assertSame('abstract by type {x: App\\Dto\\EventOption1, y: App\\Dto\\EventOption3}', ModelFixture::hierarchy($output)['App\\Dto\\Event']);
+    }
+
+    public function testRefusesAnInlineVariantWhoseValueIsNoStringOrIntegerOrLoops(): void
+    {
+        $output = ModelFixture::build([
+            'Event' => [
+                'oneOf' => [
+                    ['type' => 'object', 'properties' => ['type' => ['type' => 'boolean', 'const' => true]]],
+                    ['type' => 'object', 'properties' => ['type' => ['$ref' => '#/components/schemas/A']]],
+                ],
+                'discriminator' => ['propertyName' => 'type'],
+            ],
+            'A' => ['$ref' => '#/components/schemas/B'],
+            'B' => ['$ref' => '#/components/schemas/A'],
+        ], [], ['*'], AllOfStrategy::EXTENDS, false);
+
+        $message = ': An inline variant of a discriminated union needs one value of "type", in "const" or a one-value "enum", as the mapping cannot name it.';
+        self::assertContains(self::AT . 'Event/oneOf/0' . $message, ModelFixture::messages($output));
+        self::assertContains(self::AT . 'Event/oneOf/1' . $message, ModelFixture::messages($output));
     }
 
     public function testRefusesAnInlineVariantWithoutAValue(): void
