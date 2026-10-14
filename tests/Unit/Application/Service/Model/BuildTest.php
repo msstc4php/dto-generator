@@ -376,7 +376,7 @@ final class BuildTest extends TestCase
 
         self::assertSame(
             [
-                "warning {$at}User/properties/address: Class App\\Dto\\UserAddress is already generated from another schema, so this one becomes App\\Dto\\UserAddress3; set \"x-php-class-name\" to name it.",
+                "warning {$at}User/properties/address: Class App\\Dto\\UserAddress is already generated from {$at}UserAddress, so this one becomes App\\Dto\\UserAddress3; set \"x-php-class-name\" to name it.",
                 "error {$at}User/properties/home: Class App\\Dto\\UserAddress is already generated from {$at}UserAddress; set \"x-php-class-name\" on one of them.",
             ],
             ModelFixture::messages($output),

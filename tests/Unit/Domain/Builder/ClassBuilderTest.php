@@ -148,6 +148,11 @@ final class ClassBuilderTest extends TestCase
                 ['plus1' => '+1: int|null = NULL', 'minus1' => '-1: int|null = NULL', 'asterisk' => '*: string|null = NULL', '_2' => '2: string|null = NULL'],
                 [],
             ],
+            'spelled names that meet another' => [
+                ['type' => 'object', 'properties' => ['+1' => ['type' => 'integer'], '-1' => ['type' => 'integer'], 'plus1' => ['type' => 'integer']]],
+                ['_1' => '+1: int|null = NULL', 'plus1' => 'plus1: int|null = NULL'],
+                ["error {$at}/properties/-1: Property \"-1\" becomes \$_1, which \"+1\" already uses; set \"x-php-name\" on one of them."],
+            ],
             'a sign alone keeps its name' => [
                 ['type' => 'object', 'properties' => ['+1' => ['type' => 'integer'], 'x' => ['type' => 'integer', 'x-php-name' => '_1']]],
                 ['_1' => '+1: int|null = NULL'],

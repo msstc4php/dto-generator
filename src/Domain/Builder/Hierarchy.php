@@ -9,8 +9,11 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\ClassKind;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\DiscriminatorModel;
+use MSSTC4PHP\DtoGenerator\Domain\Model\EnumType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\Identifier;
+use MSSTC4PHP\DtoGenerator\Domain\Model\NullableType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\PropertyModel;
+use MSSTC4PHP\DtoGenerator\Domain\Model\ScalarType;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\DefaultValue;
 
 /**
@@ -28,14 +31,17 @@ final class Hierarchy
 
     private TypeMeet $meet;
 
+    private Superseded $superseded;
+
     private Diagnostics $diagnostics;
 
     /**
      * @param list<ClassModel> $classes
      */
-    private function __construct(array $classes, Diagnostics $diagnostics, TypeMeet $meet)
+    private function __construct(array $classes, Diagnostics $diagnostics, TypeMeet $meet, Superseded $superseded)
     {
         $this->meet = $meet;
+        $this->superseded = $superseded;
         foreach ($classes as $class) {
             $fqcn = $class->name()->fqcn();
             $this->models[$fqcn] = $class;
@@ -51,9 +57,9 @@ final class Hierarchy
      *
      * @return list<ClassModel> the classes in the given order
      */
-    public static function link(array $classes, array $unions, Diagnostics $diagnostics, TypeMeet $meet): array
+    public static function link(array $classes, array $unions, Diagnostics $diagnostics, TypeMeet $meet, Superseded $superseded): array
     {
-        $hierarchy = new self($classes, $diagnostics, $meet);
+        $hierarchy = new self($classes, $diagnostics, $meet, $superseded);
         $hierarchy->adoptVariants($unions);
         $hierarchy->breakCycles();
         foreach (self::leavesFirst($unions) as $base) {
@@ -314,6 +320,33 @@ final class Hierarchy
     }
 
     /**
+     * Whether the child's declaration only narrows the values of the parent's property, which constraints on the
+     * parent's type can check: the same name and default, and a type that differs by null, by a refinement of the
+     * same scalar or by the cases of an enum. A class, a date or a list over a scalar or a map is no such narrowing.
+     */
+    private function narrowsValues(PropertyModel $parent, PropertyModel $child): bool
+    {
+        $wide = $parent->type() instanceof NullableType ? $parent->type()->inner() : $parent->type();
+        $narrow = $child->type() instanceof NullableType ? $child->type()->inner() : $child->type();
+        $sameKind = $wide->describe() === $narrow->describe()
+            || ($wide instanceof ScalarType && $narrow instanceof ScalarType && $wide->kind() === $narrow->kind())
+            || $narrow instanceof EnumType;
+
+        return $sameKind && $parent->name() === $child->name() && $this->setDefault($parent) === $this->setDefault($child)
+            && $this->meet->admits($parent->type(), $child->type());
+    }
+
+    /**
+     * The default a schema sets; a null one only stands for a missing value.
+     */
+    private function setDefault(PropertyModel $property): string
+    {
+        $default = $property->default();
+
+        return $default instanceof DefaultValue && $default->value() !== null ? $default->toJson() : '';
+    }
+
+    /**
      * PHP lets no subclass declare its parent's property again: one the schema only narrows stays the parent's.
      */
     private function checkRedeclarations(ClassModel $model): ClassModel
@@ -333,8 +366,9 @@ final class Hierarchy
             [$byWireName, $inherited] = $wireNames[$property->wireName()] ?? [null, null];
             $byName = $names[Identifier::asciiLower($property->name())] ?? null;
             $kept[] = $property;
-            if ($inherited instanceof PropertyModel && $inherited->name() === $property->name() && $this->meet->admits($inherited->type(), $property->type())) {
+            if ($inherited instanceof PropertyModel && $this->narrowsValues($inherited, $property)) {
                 array_pop($kept);
+                $this->superseded->add($property->type());
                 $this->diagnostics->warning(
                     sprintf('Property "%s" of %s narrows the one %s declares, whose type %s the class keeps.', $property->wireName(), $fqcn, $byWireName, $inherited->type()->describe()),
                     $property->source(),

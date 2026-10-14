@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MSSTC4PHP\DtoGenerator\Tests\Unit\Application\Service\Model;
 
 use MSSTC4PHP\DtoGenerator\Application\Config\ViewSuffixes;
+use MSSTC4PHP\DtoGenerator\Domain\Model\PropertyModel;
 use MSSTC4PHP\DtoGenerator\Tests\Support\ModelFixture;
 use PHPUnit\Framework\TestCase;
 
@@ -25,6 +26,23 @@ final class BuildViewsTest extends TestCase
         'Cat' => ['allOf' => [['$ref' => '#/components/schemas/Pet'], ['type' => 'object', 'properties' => ['lives' => ['type' => 'integer']]]]],
         'Kennel' => ['type' => 'object', 'properties' => ['pets' => ['type' => 'array', 'items' => ['$ref' => '#/components/schemas/Pet']]]],
     ];
+
+    public function testSpellsSignedNamesAlikeInEveryView(): void
+    {
+        $output = ModelFixture::views([
+            'Reactions' => ['type' => 'object', 'properties' => [
+                '+1' => ['type' => 'integer', 'readOnly' => true],
+                '-1' => ['type' => 'integer'],
+            ]],
+        ]);
+
+        $names = [];
+        foreach ($output->classes() as $class) {
+            $names[$class->model()->name()->shortName()] = array_map(static fn (PropertyModel $property): string => $property->name(), $class->model()->properties());
+        }
+
+        self::assertSame(['ReactionsRead' => ['plus1', 'minus1'], 'ReactionsWrite' => ['minus1']], $names);
+    }
 
     public function testBuildsAReadAndAWriteViewOfEveryDependentClass(): void
     {

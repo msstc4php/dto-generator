@@ -53,14 +53,7 @@ final class TypeMapper
         $this->target = $target;
         $this->formats = $formats;
         $this->consts = new ConstMapper($formats);
-        $stringClasses = [$target->dateTimeClass()->className()];
-        foreach ($formats as $format) {
-            if ($format instanceof ClassType) {
-                $stringClasses[] = $format->className()->fqcn();
-            }
-        }
-
-        $this->meet = new TypeMeet($stringClasses);
+        $this->meet = new TypeMeet(ClassName::fromFqcn($target->dateTimeClass()->className()), $declarations);
     }
 
     /**

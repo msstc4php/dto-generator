@@ -18,16 +18,20 @@ use MSSTC4PHP\DtoGenerator\Domain\Builder\PropertyView;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\ReadWriteMode;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\RequiredCycles;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\SchemaShape;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\Superseded;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\TypeMapper;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\VariantResolver;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\Variants;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
+use MSSTC4PHP\DtoGenerator\Domain\Model\ClassModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
+use MSSTC4PHP\DtoGenerator\Domain\Model\DiscriminatorModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\Identifier;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Discriminator;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\ResolvedSchema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
+use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaGraph;
 
 /**
  * Turns the schema graph into the IR: one class per object schema and one enum per enum schema, including schemas
@@ -119,17 +123,19 @@ final class Action
         // Inline classes are planned while walking, so the walk reaches inline objects nested in inline objects.
         for ($index = 0; ($planned = $registry->plannedAt($index)) !== null; $index++) {
             $compositions[$index] = $allOf->compose($planned[0], $diagnostics)->withCompanions(...$registry->companions($planned[0]));
-            $this->hoist($planned[0], $compositions[$index], $planned[1], $planned[2], $registry, $enums, $diagnostics);
+            $this->hoist($planned[0], $compositions[$index], $planned[1], $planned[2], $registry, $enums, $diagnostics, $input->graph());
         }
 
         $declarations = $registry->declarations();
         $types = new TypeMapper($input->graph(), $declarations, $input->target(), $input->formats());
+        $superseded = new Superseded();
         $builder = new ClassBuilder(
             $this->names,
             $types,
             $input->target(),
             $input->aliases(),
             $registry->properties(),
+            $superseded,
         );
         $models = [];
         $children = [];
@@ -149,11 +155,12 @@ final class Action
 
         $unions = $this->unions($input, $registry, $children, $subclasses, $diagnostics);
         $built = [];
-        foreach (Hierarchy::link($models, $unions, $diagnostics, $types->meet()) as $index => $model) {
+        foreach (Hierarchy::link($models, $unions, $diagnostics, $types->meet(), $superseded) as $index => $model) {
             $built[] = new BuiltClass($model, $registry->planned()[$index][2]);
         }
 
-        $output = new Output($built, $diagnostics, $registry->enums());
+        [$built, $enums] = $this->used($built, $registry->enums(), $superseded);
+        $output = new Output($built, $diagnostics, $enums);
         $models = [];
         $inherited = [];
         foreach ($output->classes() as $class) {
@@ -173,6 +180,69 @@ final class Action
         }
 
         return new Run($output, $classSchemas);
+    }
+
+    /**
+     * Leaves out the classes and enums of the property types the build set aside, unless something else names them.
+     *
+     * @param list<BuiltClass> $classes
+     * @param list<BuiltEnum> $enums
+     *
+     * @return array{list<BuiltClass>, list<BuiltEnum>}
+     */
+    private function used(array $classes, array $enums, Superseded $superseded): array
+    {
+        $models = [];
+        $queue = [];
+        foreach ($classes as $class) {
+            $fqcn = $class->model()->name()->fqcn();
+            $models[$fqcn] = $class->model();
+            if (!$superseded->has($fqcn)) {
+                $queue[] = $fqcn;
+            }
+        }
+
+        $used = [];
+        foreach ($enums as $enum) {
+            $used[$enum->model()->name()->fqcn()] = !$superseded->has($enum->model()->name()->fqcn());
+        }
+
+        $reached = [];
+        while (($fqcn = array_pop($queue)) !== null) {
+            if (isset($reached[$fqcn])) {
+                continue;
+            }
+
+            $reached[$fqcn] = true;
+            $used[$fqcn] = true;
+            $model = $models[$fqcn] ?? null;
+            foreach ($model instanceof ClassModel ? $this->reached($model) : [] as $name) {
+                $queue[] = $name;
+            }
+        }
+
+        return [
+            array_values(array_filter($classes, static fn (BuiltClass $class): bool => $used[$class->model()->name()->fqcn()] ?? false)),
+            array_values(array_filter($enums, static fn (BuiltEnum $enum): bool => $used[$enum->model()->name()->fqcn()])),
+        ];
+    }
+
+    /**
+     * @return list<string> the FQCNs of the classes and enums a class names
+     */
+    private function reached(ClassModel $model): array
+    {
+        $names = $model->parent() instanceof ClassName ? [$model->parent()->fqcn()] : [];
+        $discriminator = $model->discriminator();
+        foreach ($discriminator instanceof DiscriminatorModel ? $discriminator->mapping() : [] as $class) {
+            $names[] = $class->fqcn();
+        }
+
+        foreach ($model->properties() as $property) {
+            array_push($names, ...Superseded::named($property->type()));
+        }
+
+        return $names;
     }
 
     /**
@@ -283,7 +353,7 @@ final class Action
      * Declares the inline objects and enums of a class's properties, looking through arrays (`…Item`), maps (`…Value`)
      * and the members of unions (`…Option<N>`).
      */
-    private function hoist(Schema $owner, Composition $composition, ClassName $ownerName, int $source, Registry $registry, EnumBuilder $enums, Diagnostics $diagnostics): void
+    private function hoist(Schema $owner, Composition $composition, ClassName $ownerName, int $source, Registry $registry, EnumBuilder $enums, Diagnostics $diagnostics, SchemaGraph $graph): void
     {
         /** @var list<array{Schema, ?string, string}> $candidates schema, `<Parent><Property>` (null without usable characters), wire name */
         $candidates = [];
@@ -316,18 +386,34 @@ final class Action
                 // The inline objects at one place of a property in several members of an allOf all apply: one class.
                 $declared = $objects[$wireName][$suffix] ?? null;
                 $object = SchemaShape::isClass($candidate);
-                if ($declared instanceof Schema && $object && !$candidate->extensions()->has('x-php-class-name')) {
+                if ($declared instanceof Schema && $object && $this->joinable($declared, $candidate, $suffix, $graph)) {
                     $registry->join($declared, $candidate);
-
-                    continue;
-                }
-
-                $this->declareInline($candidate, $title, $baseName === null ? null : $baseName . $suffix, $wireName, $namespace, $source, $registry, $enums, $diagnostics);
-                if ($object && !$declared instanceof Schema) {
-                    $objects[$wireName][$suffix] = $candidate;
+                } else {
+                    $this->declareInline($candidate, $title, $baseName === null ? null : $baseName . $suffix, $wireName, $namespace, $source, $registry, $enums, $diagnostics);
+                    if ($object && !$declared instanceof Schema) {
+                        $objects[$wireName][$suffix] = $candidate;
+                    }
                 }
             }
         }
+    }
+
+    /**
+     * Two inline objects of a property make one class only where nothing else tells them apart: not as alternatives
+     * of a union, which would pair them up by position, not where a $ref reaches either (it expects that schema
+     * alone), and not when the second says more than its properties (its own allOf, undeclared properties, x- keys,
+     * keywords of the class), which the class, built from the first, would not see.
+     */
+    private function joinable(Schema $declared, Schema $candidate, string $suffix, SchemaGraph $graph): bool
+    {
+        // An inline schema declared before this is a $ref target: the graph holds it.
+        return preg_match('/^(?:Item|Value)*\z/', $suffix) === 1
+            && !$graph->get($declared->location()) instanceof ResolvedSchema
+            && !$graph->get($candidate->location()) instanceof ResolvedSchema
+            && $candidate->allOf() === [] && $candidate->oneOf() === [] && $candidate->anyOf() === []
+            && $candidate->additionalProperties() === null
+            && $candidate->extensions()->all() === []
+            && array_diff($candidate->keywordNames(), ['title', 'examples', '$comment']) === [];
     }
 
     /**
@@ -376,7 +462,7 @@ final class Action
         }
 
         $diagnostics->warning(
-            sprintf('Class %s is already generated from another schema, so this one becomes %s; set "x-php-class-name" to name it.', $taken->fqcn(), $name->fqcn()),
+            sprintf('Class %s is already generated from %s, so this one becomes %s; set "x-php-class-name" to name it.', $taken->fqcn(), (string) $registry->holder($taken), $name->fqcn()),
             $candidate->location(),
         );
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Domain\Builder;
 
+use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumBacking;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumType;
@@ -22,24 +23,35 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\UnionType;
  */
 final class TypeMeet
 {
-    /** @var list<string> FQCNs of the classes a formatted string becomes */
-    private array $stringClasses;
+    /** The class a string of a date format becomes. */
+    private ClassName $dateTime;
 
-    /**
-     * @param list<string> $stringClasses
-     */
-    public function __construct(array $stringClasses)
+    private Declarations $declarations;
+
+    public function __construct(ClassName $dateTime, Declarations $declarations)
     {
-        $this->stringClasses = $stringClasses;
+        $this->dateTime = $dateTime;
+        $this->declarations = $declarations;
     }
 
     public function of(TypeModel $a, TypeModel $b): ?TypeModel
     {
-        if ($this->admits($a, $b)) {
+        $aAdmitsB = $this->admits($a, $b);
+        $bAdmitsA = $this->admits($b, $a);
+        // Types of the same values (float and float|int) meet in the one written shorter, then first in order, whichever
+        // comes first.
+        if ($aAdmitsB && $bAdmitsA) {
+            $same = [$a, $b];
+            usort($same, static fn (TypeModel $x, TypeModel $y): int => [strlen($x->describe()), $x->describe()] <=> [strlen($y->describe()), $y->describe()]);
+
+            return $same[0];
+        }
+
+        if ($aAdmitsB) {
             return $b;
         }
 
-        if ($this->admits($b, $a)) {
+        if ($bAdmitsA) {
             return $a;
         }
 
@@ -55,17 +67,65 @@ final class TypeMeet
             return $item instanceof TypeModel ? new ListType($item) : null;
         }
 
+        if ($a instanceof MapType && $b instanceof MapType) {
+            $value = $this->of($a->value(), $b->value());
+
+            return $value instanceof TypeModel ? new MapType($value) : null;
+        }
+
+        if (!$a instanceof UnionType && !$b instanceof UnionType) {
+            return null;
+        }
+
+        // A pair of members of another JSON kind shares no value and drops out; a pair that shares values PHP cannot
+        // type (two classes) leaves the meet unknown, rather than narrower than the schema.
         $members = [];
         foreach ($a instanceof UnionType ? $a->members() : [$a] as $left) {
             foreach ($b instanceof UnionType ? $b->members() : [$b] as $right) {
-                $meet = $a instanceof UnionType || $b instanceof UnionType ? $this->of($left, $right) : null;
+                $meet = $this->of($left, $right);
                 if ($meet instanceof TypeModel) {
                     $members[] = $meet;
+                } elseif (!$this->disjoint($left, $right)) {
+                    return null;
                 }
             }
         }
 
         return $members === [] ? null : UnionType::of(...$members);
+    }
+
+    /**
+     * Whether no value is of both types: they are of other JSON kinds. An int and a float always meet before this.
+     */
+    private function disjoint(TypeModel $a, TypeModel $b): bool
+    {
+        $kinds = [$this->kind($a), $this->kind($b)];
+
+        return !in_array(null, $kinds, true) && $kinds[0] !== $kinds[1];
+    }
+
+    /**
+     * The JSON kind of a type's values; null when PHP does not tell (mixed, a class a format or x-php-type names).
+     */
+    private function kind(TypeModel $type): ?string
+    {
+        if ($type instanceof ScalarType) {
+            return ['string' => 'string', 'int' => 'integer', 'float' => 'number', 'bool' => 'boolean'][$type->kind()];
+        }
+
+        if ($type instanceof EnumType) {
+            return $type->backing()->value() === EnumBacking::INT ? 'integer' : 'string';
+        }
+
+        if ($type instanceof ListType) {
+            return 'array';
+        }
+
+        if ($type instanceof MapType || ($type instanceof ClassType && $this->declarations->generates($type->className()))) {
+            return 'object';
+        }
+
+        return $type instanceof ClassType && $type->className()->fqcn() === $this->dateTime->fqcn() ? 'string' : null;
     }
 
     /**
@@ -98,9 +158,10 @@ final class TypeMeet
         }
 
         if ($wide instanceof MapType) {
-            // A class is an object with properties of any type, which a map of any values admits.
+            // A class the build generates is an object with properties of any type, which a map of any values admits; a
+            // class a format or x-php-type names may stand for a value of another JSON type.
             return ($narrow instanceof MapType && $this->admits($wide->value(), $narrow->value()))
-                || ($narrow instanceof ClassType && $wide->value() instanceof MixedType && !$this->isString($narrow));
+                || ($narrow instanceof ClassType && $wide->value() instanceof MixedType && $this->declarations->generates($narrow->className()));
         }
 
         if ($wide instanceof EnumType) {
@@ -122,12 +183,7 @@ final class TypeMeet
             return $wide->phpDoc() === null && $wide->kind() === ($narrow->backing()->value() === EnumBacking::INT ? 'int' : 'string');
         }
 
-        return $wide->phpDoc() === null && $wide->kind() === 'string' && $narrow instanceof ClassType && $this->isString($narrow);
-    }
-
-    private function isString(ClassType $type): bool
-    {
-        return in_array($type->className()->fqcn(), $this->stringClasses, true);
+        return $wide->phpDoc() === null && $wide->kind() === 'string' && $narrow instanceof ClassType && $narrow->className()->fqcn() === $this->dateTime->fqcn();
     }
 
     private function withoutNull(TypeModel $type): TypeModel

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Tests\Unit\Application\Service\Model;
 
+use MSSTC4PHP\DtoGenerator\Application\Service\Model\Build\BuiltEnum;
 use MSSTC4PHP\DtoGenerator\Application\Service\Model\Build\Output;
 use MSSTC4PHP\DtoGenerator\Domain\Model\PropertyModel;
 use MSSTC4PHP\DtoGenerator\Domain\Target\AllOfStrategy;
@@ -157,14 +158,12 @@ final class CompositionTest extends TestCase
             'owner' => ['type' => 'object', 'properties' => [$a => ['type' => 'string']]] + $extra,
             'tags' => ['type' => 'array', 'items' => ['type' => 'object', 'required' => [$a], 'properties' => [$a => ['type' => 'integer']]]],
             'kind' => ['type' => 'object', 'properties' => [$a => ['type' => 'string']]],
-            'either' => ['oneOf' => [['type' => 'object', 'properties' => ['o' . $a => ['type' => 'string']]], ['type' => 'object', 'properties' => ['p' . $a => ['type' => 'string']]]]],
         ]];
         $output = ModelFixture::build([
-            'User' => ['allOf' => [$member('a'), $member('b', ['x-php-class-name' => 'Boss']), $member('c'), array_replace_recursive($member('d'), ['properties' => ['kind' => ['type' => 'string']]])]],
+            'User' => ['allOf' => [$member('a'), $member('b', ['x-php-class-name' => 'Boss']), $member('c', ['title' => 'C']), array_replace_recursive($member('d'), ['properties' => ['kind' => ['type' => 'string']]])]],
         ]);
 
-        self::assertSame(['owner: App\\Dto\\UserOwner|null', 'tags: list<App\\Dto\\UserTagsItem>|null', 'kind: App\\Dto\\UserKind|null', 'either: App\\Dto\\UserEitherOption1|App\\Dto\\UserEitherOption2|null'], ModelFixture::classes($output)['App\\Dto\\User']);
-        self::assertSame(['pa: string|null', 'pb: string|null', 'pc: string|null', 'pd: string|null'], ModelFixture::classes($output)['App\\Dto\\UserEitherOption2']);
+        self::assertSame(['owner: App\\Dto\\UserOwner|null', 'tags: list<App\\Dto\\UserTagsItem>|null', 'kind: App\\Dto\\UserKind|null'], ModelFixture::classes($output)['App\\Dto\\User']);
         self::assertSame(['a: string|null', 'c: string|null', 'd: string|null'], ModelFixture::classes($output)['App\\Dto\\UserOwner']);
         self::assertSame(['a: int', 'b: int', 'c: int', 'd: int'], ModelFixture::classes($output)['App\\Dto\\UserTagsItem']);
         self::assertSame(['a: string|null', 'b: string|null', 'c: string|null'], ModelFixture::classes($output)['App\\Dto\\UserKind']);
@@ -174,23 +173,128 @@ final class CompositionTest extends TestCase
         ], ModelFixture::messages($output));
     }
 
+    /**
+     * @dataProvider unjoinable
+     *
+     * @param array<string, mixed> $second the second member's inline object
+     * @param array<string, array<array-key, mixed>> $others more schemas
+     */
+    public function testKeepsApartInlineObjectsSomethingElseTellsApart(array $second, array $others, string $expected): void
+    {
+        $first = $expected === 'first'
+            ? ['oneOf' => [['type' => 'array', 'items' => ['type' => 'object', 'properties' => ['a' => ['type' => 'string']]]], ['type' => 'string']]]
+            : ['type' => 'object', 'properties' => ['a' => ['type' => 'string']]];
+        $output = ModelFixture::build([
+            'User' => ['allOf' => [
+                ['type' => 'object', 'properties' => ['owner' => $first]],
+                ['type' => 'object', 'properties' => ['owner' => $second]],
+            ]],
+        ] + $others);
+
+        if ($expected === 'first') {
+            self::assertSame(['a: string|null'], ModelFixture::classes($output)['App\\Dto\\UserOwnerOption1Item']);
+            self::assertSame(['b: string|null'], ModelFixture::classes($output)['App\\Dto\\UserOwnerOption1Item2']);
+            self::assertContains('error ' . self::AT . 'User/allOf/1/properties/owner: Property "owner" of App\\Dto\\User is list<App\\Dto\\UserOwnerOption1Item2>|string|null here, but list<App\\Dto\\UserOwnerOption1Item>|string|null in an earlier allOf member.', ModelFixture::messages($output));
+
+            return;
+        }
+
+        self::assertContains($expected, ModelFixture::messages($output));
+    }
+
+    /**
+     * @return iterable<string, array{array<string, mixed>, array<string, array<array-key, mixed>>, string}>
+     */
+    public static function unjoinable(): iterable
+    {
+        $at = self::AT;
+        $object = ['type' => 'object', 'properties' => ['b' => ['type' => 'string']]];
+        $conflict = static fn (string $class): string => "error {$at}User/allOf/1/properties/owner: Property \"owner\" of App\\Dto\\User is App\\Dto\\{$class}|null here, but App\\Dto\\UserOwner|null in an earlier allOf member.";
+
+        yield 'its own allOf' => [$object + ['allOf' => [['$ref' => '#/components/schemas/Mixin']]], ['Mixin' => ['type' => 'object', 'properties' => ['m' => ['type' => 'string']]]], $conflict('UserOwner2')];
+        yield 'undeclared properties' => [$object + ['additionalProperties' => ['type' => 'string']], [], $conflict('UserOwner2')];
+        yield 'an x- key' => [$object + ['x-dto-mutable' => true], [], $conflict('UserOwner2')];
+        yield 'a keyword of the class' => [$object + ['dependentRequired' => ['b' => ['b']]], [], $conflict('UserOwner2')];
+        yield 'a union' => [['oneOf' => [$object, ['type' => 'object', 'properties' => ['c' => ['type' => 'string']]]]], [], "error {$at}User/allOf/1/properties/owner: Property \"owner\" of App\\Dto\\User is App\\Dto\\UserOwnerOption1|App\\Dto\\UserOwnerOption2|null here, but App\\Dto\\UserOwner|null in an earlier allOf member."];
+        yield 'an item of a union' => [['oneOf' => [['type' => 'array', 'items' => $object], ['type' => 'string']]], [], 'first'];
+        yield 'a $ref to the second' => [$object, ['Other' => ['type' => 'object', 'properties' => ['x' => ['$ref' => '#/components/schemas/User/allOf/1/properties/owner']]]], $conflict('Owner')];
+        yield 'a $ref to the first' => [$object, ['Other' => ['type' => 'object', 'properties' => ['x' => ['$ref' => '#/components/schemas/User/allOf/0/properties/owner']]]], "error {$at}User/allOf/1/properties/owner: Property \"owner\" of App\\Dto\\User is App\\Dto\\UserOwner|null here, but App\\Dto\\Owner|null in an earlier allOf member."];
+    }
+
     public function testLeavesToTheParentAPropertyTheChildNarrows(): void
     {
         $at = self::AT;
         $output = ModelFixture::build([
-            'Pet' => ['type' => 'object', 'properties' => ['at' => ['type' => ['string', 'null'], 'format' => 'date-time'], 'n' => ['type' => 'number']]],
+            'Pet' => ['type' => 'object', 'properties' => [
+                'at' => ['type' => ['string', 'null'], 'format' => 'date-time'],
+                'n' => ['type' => 'string'],
+                'kind' => ['type' => 'string'],
+                'size' => ['type' => 'string', 'enum' => ['s', 'm', 'l']],
+            ]],
             'Cat' => ['allOf' => [self::PET, ['type' => 'object', 'required' => ['at'], 'properties' => [
                 'at' => ['type' => 'string', 'format' => 'date-time'],
-                'n' => ['type' => 'integer'],
+                'n' => ['type' => 'string', 'minLength' => 1],
+                'kind' => ['type' => 'string', 'enum' => ['cat']],
+                'size' => ['type' => 'string', 'enum' => ['s']],
                 'meow' => ['type' => 'string'],
             ]]]],
         ]);
 
-        self::assertSame([
-            "warning {$at}Cat/allOf/1/properties/at: Property \"at\" of App\\Dto\\Cat narrows the one App\\Dto\\Pet declares, whose type DateTimeImmutable|null the class keeps.",
-            "warning {$at}Cat/allOf/1/properties/n: Property \"n\" of App\\Dto\\Cat narrows the one App\\Dto\\Pet declares, whose type float|null the class keeps.",
-        ], array_values(array_filter(ModelFixture::messages($output), static fn (string $message): bool => strpos($message, 'narrows') !== false)));
+        $narrows = static fn (string $name, string $type): string => "warning {$at}Cat/allOf/1/properties/{$name}: Property \"{$name}\" of App\\Dto\\Cat narrows the one App\\Dto\\Pet declares, whose type {$type} the class keeps.";
+        self::assertSame(
+            [$narrows('at', 'DateTimeImmutable|null'), $narrows('n', 'string|null'), $narrows('kind', 'string|null'), $narrows('size', 'App\\Dto\\PetSize|null')],
+            array_values(array_filter(ModelFixture::messages($output), static fn (string $message): bool => strpos($message, 'narrows') !== false)),
+        );
         self::assertSame(['meow: string|null'], ModelFixture::classes($output)['App\\Dto\\Cat']);
+    }
+
+    public function testLeavesOutTheInlineTypesItSetsAside(): void
+    {
+        $output = ModelFixture::build([
+            'Pet' => ['type' => 'object', 'properties' => ['kind' => ['type' => 'string']]],
+            'Cat' => ['allOf' => [self::PET, ['type' => 'object', 'properties' => ['kind' => ['type' => 'string', 'enum' => ['cat']], 'meow' => ['type' => 'string']]]]],
+            'Dog' => ['allOf' => [
+                ['type' => 'object', 'properties' => ['state' => ['type' => 'string', 'enum' => ['a', 'b']], 'mode' => ['oneOf' => [['type' => 'string', 'enum' => ['on', 'off']], ['type' => 'integer']]]]],
+                ['type' => 'object', 'properties' => ['mode' => ['type' => 'string', 'enum' => ['on']]]],
+                ['type' => 'object', 'properties' => ['state' => ['type' => 'string', 'enum' => ['a']], 'tags' => ['type' => 'array', 'items' => ['type' => 'string', 'enum' => ['x']]]]],
+                ['type' => 'object', 'properties' => ['tags' => ['type' => 'array', 'items' => ['type' => 'string', 'enum' => ['x', 'y']]]]],
+            ]],
+        ]);
+
+        self::assertSame(['App\\Dto\\DogMode', 'App\\Dto\\DogState2', 'App\\Dto\\DogTagsItem'], array_map(static fn (BuiltEnum $enum): string => $enum->model()->name()->fqcn(), $output->enums()));
+        self::assertSame(['state: App\\Dto\\DogState2|null', 'mode: App\\Dto\\DogMode|null', 'tags: list<App\\Dto\\DogTagsItem>|null'], ModelFixture::classes($output)['App\\Dto\\Dog']);
+    }
+
+    /**
+     * @dataProvider redeclarations
+     *
+     * @param array<string, mixed> $parent
+     * @param array<string, mixed> $child
+     */
+    public function testReportsARedeclarationConstraintsCannotCheck(array $parent, array $child): void
+    {
+        $at = self::AT;
+        $output = ModelFixture::build([
+            'Pet' => ['type' => 'object', 'properties' => ['p' => $parent]],
+            'Cat' => ['allOf' => [self::PET, ['type' => 'object', 'properties' => ['p' => $child]]]],
+            'Meta' => ['type' => 'object', 'properties' => ['id' => ['type' => 'integer']]],
+        ]);
+
+        self::assertContains("error {$at}Cat/allOf/1/properties/p: Property \"p\" of App\\Dto\\Cat is already declared by App\\Dto\\Pet.", ModelFixture::messages($output));
+    }
+
+    /**
+     * @return iterable<string, array{array<string, mixed>, array<string, mixed>}>
+     */
+    public static function redeclarations(): iterable
+    {
+        yield 'a date over a string' => [['type' => 'string'], ['type' => 'string', 'format' => 'date-time']];
+        yield 'an int over a number' => [['type' => 'number'], ['type' => 'integer']];
+        yield 'a class over an object' => [['type' => 'object'], ['$ref' => '#/components/schemas/Meta']];
+        yield 'a list of narrower items' => [['type' => 'array'], ['type' => 'array', 'items' => ['type' => 'string']]];
+        yield 'another default' => [['type' => 'string', 'default' => 'a'], ['type' => 'string', 'default' => 'b']];
+        yield 'a default the parent lacks' => [['type' => 'string'], ['type' => 'string', 'default' => 'b']];
+        yield 'another name' => [['type' => 'string'], ['type' => 'string', 'x-php-name' => 'q']];
     }
 
     public function testMergesAPropertyIntoTheTypeOfTheValuesBothAdmit(): void

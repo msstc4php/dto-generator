@@ -22,9 +22,10 @@ All notable changes to this package are documented here. The format follows
 Found by generating the GitHub, OpenAI and Stripe specifications (GitHub now generates 5842 classes):
 
 - A property several `allOf` members describe with different types gets the narrower one, when one admits every value
-  of the other, instead of an error; inline objects of it in several members become one class.
-- A child's schema that declares a property of its parent again with a type the parent's admits leaves it to the
-  parent, with a warning, instead of an error.
+  of the other, instead of an error; inline objects of it (or of its items) in several members become one class when
+  nothing else tells them apart. Inline classes and enums set aside this way are not generated.
+- A child's schema that declares a property of its parent again and only narrows its values (null, a refinement of the
+  same scalar, the cases of an enum) leaves it to the parent, with a warning, instead of an error.
 - An inline schema whose class name another schema holds takes the name derived from its place, or that name
   numbered from 2, with a warning, instead of an error.
 - Property names and enum values that only a leading sign tells apart (`+1` and `-1`), or a sign alone (`*`), are

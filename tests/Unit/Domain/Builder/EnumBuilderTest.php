@@ -54,6 +54,14 @@ final class EnumBuilderTest extends TestCase
         self::assertSame(['MINUS_X_MINUS_Y' => '-x-y', 'X_Y' => 'x-y'], $this->cases($enum));
     }
 
+    public function testKeepsTheValuesWhoseSpelledCasesMeetAnother(): void
+    {
+        [$enum, $messages] = $this->build(['type' => 'string', 'enum' => ['+1', '-1', 'plus_1']]);
+
+        self::assertNull($enum);
+        self::assertSame(['error /project/api/openapi.yaml#/components/schemas/E/enum/1: Enum values "+1" and "-1" both become case _1.'], $messages);
+    }
+
     public function testKeepsTheNameOfALoneSignedValue(): void
     {
         [$enum] = $this->build(['type' => 'string', 'enum' => ['+1', 'two']]);

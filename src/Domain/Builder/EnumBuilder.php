@@ -10,6 +10,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\DocModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumBacking;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumCase;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumModel;
+use MSSTC4PHP\DtoGenerator\Domain\Model\Identifier;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaType;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
@@ -286,16 +287,20 @@ final class EnumBuilder
         }
 
         $spelled = [];
+        $kept = [];
         foreach ($groups as $case => $indexes) {
-            foreach ($case === '' || count($indexes) > 1 ? $indexes : [] as $index) {
-                $name = $this->names->enumCaseName($this->names->spelled((string) $values[$index]));
+            $spell = $case === '' || count($indexes) > 1;
+            foreach ($indexes as $index) {
+                $name = $spell ? $this->names->enumCaseName($this->names->spelled((string) $values[$index])) : null;
                 if ($name !== null) {
                     $spelled[$index] = $name;
+                } elseif (!$spell) {
+                    $kept[] = $case;
                 }
             }
         }
 
-        return $spelled;
+        return Identifier::distinct($spelled, $kept) ? $spelled : [];
     }
 
     /**

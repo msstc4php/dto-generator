@@ -124,6 +124,14 @@ final class Registry
     }
 
     /**
+     * Where the schema that holds the name is, letter case ignored; null while nothing holds it.
+     */
+    public function holder(ClassName $name): ?string
+    {
+        return $this->taken[Identifier::asciiLower($name->fqcn())] ?? null;
+    }
+
+    /**
      * Whether a schema has claimed the name, letter case ignored.
      */
     public function isTaken(ClassName $name): bool
@@ -186,9 +194,6 @@ final class Registry
     }
 
     /**
-     * An inline schema whose declaration failed with a reported error; its property becomes mixed silently.
-     */
-    /**
      * Another inline object of the same property gets the class of the declared one, which takes its properties too.
      */
     public function join(Schema $declared, Schema $companion): void
@@ -208,6 +213,9 @@ final class Registry
         return $this->companions[$declared->location()->toString()] ?? [];
     }
 
+    /**
+     * An inline schema whose declaration failed with a reported error; its property becomes mixed silently.
+     */
     public function abandon(Schema $schema): void
     {
         $this->abandoned[$schema->location()->toString()] = true;

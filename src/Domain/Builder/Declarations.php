@@ -39,6 +39,14 @@ final class Declarations
         $this->abandoned = $abandoned;
     }
 
+    /**
+     * Whether the build generates the class, as opposed to a class a format or x-php-type names.
+     */
+    public function generates(ClassName $class): bool
+    {
+        return in_array($class->fqcn(), array_map(static fn (ClassName $name): string => $name->fqcn(), $this->classes), true);
+    }
+
     public function classAt(string $key): ?ClassName
     {
         return $this->classes[$key] ?? null;

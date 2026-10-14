@@ -64,6 +64,19 @@ final class Identifier
         return strtr($value, 'abcdefghijklmnopqrstuvwxyz', 'ABCDEFGHIJKLMNOPQRSTUVWXYZ');
     }
 
+    /**
+     * Whether the names, letter case ignored, differ from each other and from the others.
+     *
+     * @param array<array-key, string> $names
+     * @param list<string> $others
+     */
+    public static function distinct(array $names, array $others): bool
+    {
+        $lower = array_map(static fn (string $name): string => self::asciiLower($name), array_values($names));
+
+        return count(array_unique($lower)) === count($lower) && array_intersect($lower, array_map(static fn (string $name): string => self::asciiLower($name), $others)) === [];
+    }
+
     public static function asciiLower(string $value): string
     {
         return strtr($value, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz');

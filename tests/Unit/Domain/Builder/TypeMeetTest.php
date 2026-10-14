@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Tests\Unit\Domain\Builder;
 
+use MSSTC4PHP\DtoGenerator\Domain\Builder\Declarations;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\TypeMeet;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassType;
@@ -25,7 +26,7 @@ final class TypeMeetTest extends TestCase
      */
     public function testTakesTheTypeThatAdmitsOnlyValuesOfBoth(TypeModel $a, TypeModel $b, ?string $expected): void
     {
-        $meet = new TypeMeet(['DateTimeImmutable', 'App\\Money']);
+        $meet = $this->meet();
 
         self::assertSame($expected, $this->members($meet->of($a, $b)));
         self::assertSame($expected, $this->members($meet->of($b, $a)), 'either way round');
@@ -36,7 +37,7 @@ final class TypeMeetTest extends TestCase
      */
     public function testAdmitsTheValuesOfANarrowerType(TypeModel $wide, TypeModel $narrow, bool $expected): void
     {
-        self::assertSame($expected, (new TypeMeet(['DateTimeImmutable']))->admits($wide, $narrow));
+        self::assertSame($expected, $this->meet()->admits($wide, $narrow));
     }
 
     /**
@@ -78,7 +79,25 @@ final class TypeMeetTest extends TestCase
         yield 'two refinements' => [ScalarType::int('positive-int'), ScalarType::int('non-negative-int'), null];
         yield 'an int among numbers' => [ScalarType::float(), $int, 'int'];
         yield 'a date' => [$string, $date, 'DateTimeImmutable'];
-        yield 'a format of the config' => [$string, self::class('App\\Money'), 'App\\Money'];
+        yield 'a class a format or x-php-type names' => [$string, self::class('App\\Money'), null];
+        yield 'such a class for an object' => [new MapType(new MixedType()), self::class('App\\Money'), null];
+        yield 'members that share values PHP cannot type' => [UnionType::of($pet, $int), UnionType::of($owner, $int), null];
+        yield 'a class of unknown values' => [UnionType::of(self::class('App\\Money'), $int), $string, null];
+        yield 'members of other kinds' => [UnionType::of(new ListType($int), $string, ScalarType::bool()), new MapType(new MixedType()), null];
+        yield 'an integer among numbers of a union' => [UnionType::of($string, $int), ScalarType::float(), 'int'];
+        yield 'a date of a union' => [UnionType::of($date, new ListType($int)), $string, 'DateTimeImmutable'];
+        yield 'an enum of a union' => [UnionType::of($level, ScalarType::bool()), $int, 'App\\Level'];
+        $bool = ScalarType::bool();
+        $money = self::class('App\\Money');
+        yield 'a class of a union and a string' => [UnionType::of($pet, $string), UnionType::of($string, $int), 'string'];
+        yield 'a class of unknown values and a string' => [UnionType::of($money, $string), UnionType::of($string, $int), null];
+        yield 'a class of unknown values and a boolean' => [UnionType::of($money, $bool), UnionType::of($bool, $int), null];
+        yield 'a date and a boolean' => [UnionType::of($date, $bool), UnionType::of($bool, $int), 'bool'];
+        yield 'an object of a union' => [UnionType::of($pet, $string), new MapType(new MixedType()), 'App\\Pet'];
+        yield 'unions of the same members' => [UnionType::of($int, ScalarType::float()), UnionType::of(ScalarType::float(), $int), 'float|int'];
+        yield 'two types of the same values' => [ScalarType::float(), UnionType::of(ScalarType::float(), $int), 'float'];
+        yield 'maps that meet by their values' => [new MapType(UnionType::of($int, $string)), new MapType(UnionType::of($string, ScalarType::bool())), 'array<array-key, string>'];
+        yield 'maps of others' => [new MapType($int), new MapType($string), null];
         yield 'a class is no string' => [$string, $pet, null];
         yield 'a string enum' => [$string, $status, 'App\\Status'];
         yield 'an int enum' => [$int, $level, 'App\\Level'];
@@ -116,6 +135,11 @@ final class TypeMeetTest extends TestCase
         sort($members);
 
         return implode('|', $members);
+    }
+
+    private function meet(): TypeMeet
+    {
+        return new TypeMeet(ClassName::fromFqcn('DateTimeImmutable'), new Declarations(['/a#/Pet' => ClassName::fromFqcn('App\\Pet'), '/a#/Owner' => ClassName::fromFqcn('App\\Owner')]));
     }
 
     private static function class(string $fqcn): ClassType
