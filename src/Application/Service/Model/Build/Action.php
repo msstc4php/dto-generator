@@ -117,6 +117,11 @@ final class Action
             $this->hoistFromAlias($alias, $aliasName, $config->sources()[$source]->namespace(), $source, $registry, $enums, $diagnostics);
         }
 
+        // The inline variants of a named discriminated union are classes of their own, extending it.
+        foreach ($registry->planned() as [$schema, $name, $source]) {
+            $this->hoistVariants($schema, $name, $source, $registry, $enums, $diagnostics);
+        }
+
         // Every named class is declared by now, so `allOf` can tell which members it may extend.
         $allOf = new AllOfResolver(new ClassLookup($input->graph(), $registry->declarations()), $config->dto()->allOfStrategy());
         $compositions = [];
@@ -419,6 +424,20 @@ final class Action
     }
 
     /**
+     * An inline object variant of a named discriminated union is a class: its title, or `<Base>Option<N>`. One that
+     * gives the discriminator no single value cannot be mapped, which the union reports and which fails the run.
+     */
+    private function hoistVariants(Schema $union, ClassName $name, int $source, Registry $registry, EnumBuilder $enums, Diagnostics $diagnostics): void
+    {
+        $discriminator = SchemaShape::discriminatorOf($union);
+        foreach ($discriminator instanceof Discriminator ? array_merge($union->oneOf(), $union->anyOf()) : [] as $index => $member) {
+            if ($member->ref() === null && SchemaShape::isClass($member)) {
+                $this->declareInline($member, $this->title($member), $registry->baseOf($name) . 'Option' . ($index + 1), '', $name->namespace(), $source, $registry, $enums, $diagnostics);
+            }
+        }
+    }
+
+    /**
      * A named non-object schema is inlined where it is used, but its inline objects and enums need a name of their own:
      * `<Alias>Item`, `<Alias>Value`, `<Alias>Option<N>`.
      */
@@ -449,7 +468,11 @@ final class Action
 
         if (!$name instanceof ClassName || !$registry->claim($name, $candidate, $diagnostics) || !$this->declare($candidate, $name, $source, SchemaShape::isEnum($candidate), $registry, $enums, $diagnostics)) {
             $registry->abandon($candidate);
+
+            return;
         }
+
+        $this->hoistVariants($candidate, $name, $source, $registry, $enums, $diagnostics);
     }
 
     /**
@@ -501,8 +524,9 @@ final class Action
             return [];
         }
 
-        // A discriminated union becomes a base class only as a named schema (spec §5.3); inline it is a union type.
-        if ((SchemaShape::isClass($schema) && !SchemaShape::isDiscriminated($schema)) || SchemaShape::isEnum($schema)) {
+        // A discriminated union becomes a base class as a named schema (spec §5.3); inline it is a union type, unless an
+        // inline object is among its variants, which only a class of its own can map.
+        if ((SchemaShape::isClass($schema) && !SchemaShape::isDiscriminated($schema)) || SchemaShape::isEnum($schema) || $this->mapsInlineVariants($schema)) {
             return [[$schema, $suffix, null]];
         }
 
@@ -518,6 +542,21 @@ final class Action
         $values = $schema->additionalProperties();
 
         return $values instanceof Schema ? $this->inlines($values, $suffix . 'Value', $diagnostics, $registry) : [];
+    }
+
+    private function mapsInlineVariants(Schema $schema): bool
+    {
+        if (!SchemaShape::isDiscriminated($schema) || $schema->propertyNames() !== [] || $schema->allOf() !== []) {
+            return false;
+        }
+
+        foreach (array_merge($schema->oneOf(), $schema->anyOf()) as $member) {
+            if ($member->ref() === null && SchemaShape::isClass($member)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

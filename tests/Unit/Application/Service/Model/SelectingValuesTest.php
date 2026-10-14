@@ -60,6 +60,20 @@ final class SelectingValuesTest extends TestCase
         );
     }
 
+    public function testAcceptsTheValueOfEveryAncestorThatMapsTheClassItself(): void
+    {
+        $at = static fn (string $name): string => '#/components/schemas/' . $name;
+        $output = ModelFixture::build([
+            'Animal' => ['type' => 'object', 'properties' => ['petType' => ['type' => 'string']], 'discriminator' => ['propertyName' => 'petType', 'mapping' => ['cat' => $at('Cat'), 'feline' => $at('Feline')]]],
+            'Feline' => ['allOf' => [['$ref' => $at('Animal')], ['type' => 'object', 'properties' => ['claws' => ['type' => 'integer']]]], 'discriminator' => ['propertyName' => 'petType', 'mapping' => ['Cat' => $at('Cat')]]],
+            'Cat' => ['allOf' => [['$ref' => $at('Feline')], ['type' => 'object', 'properties' => ['lives' => ['type' => 'integer']]]]],
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        // Animal reads "cat" and builds a Cat as much as Feline reads "Cat"; with two values the constructor has no default.
+        self::assertSame(['App\Dto\Cat' => ["petType: 'Cat'|'cat'"]], ModelFixture::selections($output));
+    }
+
     public function testLetsAnOpenClassAcceptTheValuesOfItsSubclasses(): void
     {
         $output = ModelFixture::build([

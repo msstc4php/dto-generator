@@ -17,7 +17,9 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\Identifier;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ListType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\NullableType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\PropertyModel;
+use MSSTC4PHP\DtoGenerator\Domain\Model\ScalarType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\TypeModel;
+use MSSTC4PHP\DtoGenerator\Domain\Model\UnionType;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\DefaultValue;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
 use MSSTC4PHP\DtoGenerator\Domain\Target\Capability;
@@ -61,6 +63,7 @@ use PhpParser\Node\Stmt\ClassMethod;
 use PhpParser\Node\Stmt\Declare_;
 use PhpParser\Node\Stmt\Expression;
 use PhpParser\Node\Stmt\If_;
+use PhpParser\Node\Stmt\Interface_;
 use PhpParser\Node\Stmt\Nop;
 use PhpParser\Node\Stmt\Property;
 use PhpParser\Node\Stmt\Return_;
@@ -100,16 +103,28 @@ final class PhpParserEmitter implements CodeEmitter
      * @param list<PropertyModel> $inherited
      * @param list<string> $refused lower-cased import aliases to write in full
      *
-     * @return array{Class_, AttributeNames}
+     * @return array{Class_|Interface_, AttributeNames}
      */
     private function declare(ClassModel $class, TargetProfile $target, array $inherited, array $refused, ?ClassModel $parent): array
     {
-        $shape = new ClassShape($class, $inherited, $target->classFormFor($class->mutability()), $target, $parent);
-        $form = $shape->form();
         $types = new TypeRenderer($class->name()->namespace(), $target);
         $names = new AttributeNames($types, $refused);
         $attributes = new AttributeRenderer($types, $this->factory, $names, $target->metadata());
         $annotations = new AnnotationRenderer($types, $names, $target->metadata());
+        if ($class->kind()->isInterface()) {
+            $builder = $this->factory->interface($class->name()->shortName());
+            foreach ($class->interfaces() as $interface) {
+                $builder->extend($types->nameOf($interface));
+            }
+
+            $node = $builder->getNode();
+            $this->describe($node, $class, $attributes, $annotations);
+
+            return [$node, $names];
+        }
+
+        $shape = new ClassShape($class, $inherited, $target->classFormFor($class->mutability()), $target, $parent);
+        $form = $shape->form();
 
         $members = [];
         if (!$form->isPromoted()) {
@@ -145,12 +160,24 @@ final class PhpParserEmitter implements CodeEmitter
             $builder->extend($types->nameOf($parent));
         }
 
+        foreach ($class->interfaces() as $interface) {
+            $builder->implement($types->nameOf($interface));
+        }
+
         $node = $builder->getNode();
         $node->flags = $this->modifiers($class->kind(), $form);
-        $node->attrGroups = $attributes->groups($class->attributes());
-        $this->document($node, DocBlock::render($class->doc()->description(), array_merge($this->deprecation($class->doc()), $annotations->annotations($class->attributes()))));
+        $this->describe($node, $class, $attributes, $annotations);
 
         return [$node, $names];
+    }
+
+    /**
+     * @param Class_|Interface_ $node
+     */
+    private function describe(Node $node, ClassModel $class, AttributeRenderer $attributes, AnnotationRenderer $annotations): void
+    {
+        $node->attrGroups = $attributes->groups($class->attributes());
+        $this->document($node, DocBlock::render($class->doc()->description(), array_merge($this->deprecation($class->doc()), $annotations->annotations($class->attributes()))));
     }
 
     public function emitEnum(EnumModel $enum, TargetProfile $target): string
@@ -561,6 +588,21 @@ final class PhpParserEmitter implements CodeEmitter
     private function defaultValue($value, TypeModel $type, TypeRenderer $types): Expr
     {
         $type = $type instanceof NullableType ? $type->inner() : $type;
+        // A union takes the literal when a member other than an enum holds it, else the case of an enum that has it.
+        if ($type instanceof UnionType) {
+            $literal = false;
+            $enum = null;
+            foreach ($type->members() as $member) {
+                if (!$member instanceof EnumType) {
+                    $literal = $literal || $this->holdsLiteral($value, $member);
+                } elseif (!$enum instanceof EnumType && $member->caseFor($value) !== null) {
+                    $enum = $member;
+                }
+            }
+
+            $type = !$literal && $enum instanceof EnumType ? $enum : $type;
+        }
+
         if ($type instanceof EnumType) {
             $case = $type->caseFor($value);
             if ($case !== null) {
@@ -578,5 +620,20 @@ final class PhpParserEmitter implements CodeEmitter
         }
 
         return ReadableLiteral::of($this->factory->val($value));
+    }
+
+    /**
+     * Whether a type holds the literal; only a string or an int can name an enum case, and the builder has already
+     * checked the default against the union.
+     *
+     * @param JsonValue $value
+     */
+    private function holdsLiteral($value, TypeModel $type): bool
+    {
+        if (!$type instanceof ScalarType) {
+            return false;
+        }
+
+        return is_string($value) ? $type->kind() === 'string' : in_array($type->kind(), ['int', 'float'], true);
     }
 }

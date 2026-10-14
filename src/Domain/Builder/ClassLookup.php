@@ -36,6 +36,14 @@ final class ClassLookup
         return $ref === null ? null : $this->graph->resolve(new ReferenceUse($ref, $member->location()));
     }
 
+    /**
+     * The class declared for an inline schema.
+     */
+    public function classAt(Schema $inline): ?ClassName
+    {
+        return $this->declarations->classAt($inline->location()->toString());
+    }
+
     public function classBehind(ResolvedSchema $named): ?ClassName
     {
         $behind = $this->behind($named);

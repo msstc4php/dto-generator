@@ -137,6 +137,19 @@ final class ClassModelTest extends TestCase
         self::assertSame([$attribute], $class->withAddedAttributes($attribute)->attributes());
         self::assertSame([], $class->attributes());
         self::assertCount(2, $class->withProperties($this->property('id'), $this->property('email'))->properties());
+        self::assertSame(['App\\Item'], array_map(static fn (ClassName $name): string => $name->fqcn(), $class->withInterfaces(ClassName::fromFqcn('App\\Item'))->interfaces()));
+        self::assertSame([], $class->interfaces());
+    }
+
+    public function testImplementsEachInterfaceOnceAndNeverItself(): void
+    {
+        $class = $this->classWith([]);
+        $interfaces = $class->withInterfaces(ClassName::fromFqcn('App\\Item'), ClassName::fromFqcn('App\\Field'), ClassName::fromFqcn('App\\item'))->interfaces();
+
+        self::assertSame(['App\\Item', 'App\\Field'], array_map(static fn (ClassName $name): string => $name->fqcn(), $interfaces));
+        $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('Class App\\User cannot implement itself.');
+        $class->withInterfaces(ClassName::fromFqcn('App\\user'));
     }
 
     public function testWithPropertiesRevalidates(): void

@@ -16,8 +16,27 @@ All notable changes to this package are documented here. The format follows
   whole schema. A remote one under `remoteRefs.allow` is fetched and cached like
   any other.
 - `SchemaReferences::at()`: the schema loaded at a location, such as the schema of an ancestor.
+- A discriminated `oneOf`/`anyOf` with no properties of its own, a variant of which already extends another class
+  (through its own `allOf` or as the variant of another union), is an empty `interface` the variants implement,
+  instead of an error: PHP gives a class one parent but any number of interfaces. A union that has properties, that a
+  class extends through `allOf`, or that is a variant of a union that stays a class, stays a class. Inner unions are
+  decided before the unions that list them; of unions that could each take a shared variant, one that stays a class
+  takes it, else the first by class name; the order of the schemas plays no part. An interface variant of such a union
+  extends it. The variants' constructors check the interface's discriminator values, and have no mutators for the
+  property, as for an abstract base; a class that several unions map with different values accepts each. Extensions
+  see `ClassKind::INTERFACE` (a new value of `ClassKind`) and `ClassModel::interfaces()`; the interface carries the
+  discriminator.
+- Inline object variants of a discriminated `oneOf`/`anyOf` are classes extending the base (their title, or
+  `<Base>Option<N>`), selected by the one value their discriminator property has (`const` or a one-value `enum`, behind
+  a `$ref` or in a member of their `allOf`), instead of an error. An inline union (a property's schema) with such
+  variants is a class named after its place. Two inline variants with one value are an error.
 
 ### Changed
+
+- A class that two discriminated ancestors map with different values (`cat` in `Animal`'s mapping, `Cat` in
+  `Feline`'s) accepts both in its constructor, where it refused the farther one that deserializing through that
+  ancestor gives; with two values its discriminator property has no default any more. A mapping that names a base in
+  between still leaves the check to that base's own discriminator.
 
 Found by generating the GitHub, OpenAI and Stripe specifications (GitHub now generates 5842 classes):
 
@@ -28,6 +47,8 @@ Found by generating the GitHub, OpenAI and Stripe specifications (GitHub now gen
   same scalar, the cases of an enum) leaves it to the parent, with a warning, instead of an error.
 - An inline schema whose class name another schema holds takes the name derived from its place, or that name
   numbered from 2, with a warning, instead of an error.
+- The default of a union property that an enum member and a scalar member both admit stays a literal; one only an
+  enum admits (next to a class or another scalar) is the enum case, where the literal was invalid PHP.
 - Property names and enum values that only a leading sign tells apart (`+1` and `-1`), or a sign alone (`*`), are
   spelled out (`plus1`, `minus1`, `ASTERISK`) instead of an error.
 

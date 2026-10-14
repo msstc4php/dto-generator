@@ -115,6 +115,10 @@ final class ModelFixture
                 $line .= ' extends ' . $parent->fqcn();
             }
 
+            if ($model->interfaces() !== []) {
+                $line .= ' implements ' . implode(', ', array_map(static fn (ClassName $name): string => $name->fqcn(), $model->interfaces()));
+            }
+
             $discriminator = $model->discriminator();
             if ($discriminator instanceof DiscriminatorModel) {
                 $mapping = [];

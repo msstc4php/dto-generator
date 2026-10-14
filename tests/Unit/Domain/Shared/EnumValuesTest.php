@@ -45,7 +45,7 @@ final class EnumValuesTest extends TestCase
             'mutability' => [Mutability::class, ['immutable', 'mutable']],
             'date-time class' => [DateTimeClass::class, ['DateTimeImmutable', 'DateTime']],
             'schema type' => [SchemaType::class, ['string', 'integer', 'number', 'boolean', 'array', 'object', 'null']],
-            'class kind' => [ClassKind::class, ['final', 'open', 'abstract']],
+            'class kind' => [ClassKind::class, ['final', 'open', 'abstract', 'interface']],
             'enum backing' => [EnumBacking::class, ['string', 'int']],
             'severity' => [Severity::class, ['error', 'warning']],
             'allOf strategy' => [AllOfStrategy::class, ['extends', 'merge']],

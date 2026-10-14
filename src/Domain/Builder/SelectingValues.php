@@ -17,8 +17,9 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\ScalarType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\TypeModel;
 
 /**
- * The discriminator values each concrete class accepts: for every discriminator of its ancestors, the mapping keys
- * of the class itself or of an abstract ancestor below the discriminated base, and those of its subclasses.
+ * The discriminator values each concrete class accepts: for every discriminator of its ancestors and of the interfaces
+ * it or they implement, the mapping keys of the class itself or of an abstract ancestor below the discriminated base,
+ * and those of its subclasses.
  */
 final class SelectingValues
 {
@@ -36,13 +37,13 @@ final class SelectingValues
         $own = [];
         $descendants = [];
         foreach ($models as $fqcn => $model) {
-            if (!$model->kind()->isAbstract()) {
+            if (!$model->kind()->isAbstract() && !$model->kind()->isInterface()) {
                 $ancestors = self::ancestors($model, $models);
                 foreach ($ancestors as $ancestor) {
                     $descendants[$ancestor->name()->fqcn()][] = $fqcn;
                 }
 
-                $own[$fqcn] = self::forClass($model, $ancestors, $diagnostics);
+                $own[$fqcn] = self::forClass($model, $ancestors, $models, $diagnostics);
             }
         }
 
@@ -86,14 +87,15 @@ final class SelectingValues
     }
 
     /**
-     * When two discriminators read one property, the nearest decides: an outer mapping can only name the inner base,
-     * whose own discriminator then reads the same value again.
+     * When two discriminators read one property, the nearest decides for a mapping that names a base between them, whose
+     * own discriminator then reads the value again; one that names the class itself adds its values.
      *
      * @param list<ClassModel> $ancestors nearest first
+     * @param array<string, ClassModel> $models
      *
      * @return array<string, array{PropertyModel, DiscriminatorValues}> by property name, root discriminator first
      */
-    private static function forClass(ClassModel $model, array $ancestors, Diagnostics $diagnostics): array
+    private static function forClass(ClassModel $model, array $ancestors, array $models, Diagnostics $diagnostics): array
     {
         $byWireName = [];
         foreach (array_merge([$model], $ancestors) as $class) {
@@ -102,28 +104,83 @@ final class SelectingValues
             }
         }
 
+        $levels = array_merge([$model], $ancestors);
+        // A value that names an interface the class implements selects the class too, as one that names an abstract
+        // ancestor does.
+        $implemented = [];
+        foreach ($levels as $level) {
+            array_push($implemented, ...self::interfaces($level, $models));
+        }
+
         $found = [];
         $between = [];
-        foreach ($ancestors as $base) {
-            $discriminator = $base->discriminator();
-            // A class without the property, or one the mapping leaves out, was reported while linking.
-            $property = $discriminator instanceof DiscriminatorModel ? $byWireName[$discriminator->propertyName()] ?? null : null;
-            if ($discriminator instanceof DiscriminatorModel && $property instanceof PropertyModel && !isset($found[$property->name()])) {
-                $keys = self::keysSelecting($model, $between, $discriminator);
-                $values = $keys === [] ? null : self::typed($keys, $property, $model, $diagnostics);
-                if ($values instanceof DiscriminatorValues) {
-                    $found[$property->name()] = [$property, $values];
-                }
+        // The interfaces of a class discriminate it and its subclasses as its ancestors do, just above it.
+        foreach ($levels as $level) {
+            if ($level !== $model) {
+                self::select($found, $model, $level, $between, $byWireName, $diagnostics);
+                $between[] = $level;
             }
 
-            $between[] = $base;
+            foreach (self::interfaces($level, $models) as $base) {
+                self::select($found, $model, $base, array_merge($between, $implemented), $byWireName, $diagnostics);
+            }
         }
 
         return array_reverse($found, true);
     }
 
     /**
-     * @param list<ClassModel> $between the ancestors below the discriminated base
+     * Adds the values a discriminated base gives the class; after a nearer one, only those it maps to the class itself.
+     *
+     * @param array<string, array{PropertyModel, DiscriminatorValues}> $found
+     * @param list<ClassModel> $between
+     * @param array<string, PropertyModel> $byWireName
+     */
+    private static function select(array &$found, ClassModel $model, ClassModel $base, array $between, array $byWireName, Diagnostics $diagnostics): void
+    {
+        $discriminator = $base->discriminator();
+        // A class without the property, or one the mapping leaves out, was reported while linking.
+        $property = $discriminator instanceof DiscriminatorModel ? $byWireName[$discriminator->propertyName()] ?? null : null;
+        if (!$discriminator instanceof DiscriminatorModel || !$property instanceof PropertyModel) {
+            return;
+        }
+
+        $earlier = $found[$property->name()] ?? null;
+        // A farther base that maps the class itself, not a nearer base, is another way in: its values select it too.
+        $keys = self::keysSelecting($model, $earlier === null ? $between : [], $discriminator);
+        $values = $keys === [] ? null : self::typed($keys, $property, $model, $diagnostics);
+        if ($values instanceof DiscriminatorValues) {
+            $merged = $earlier === null ? [] : $earlier[1]->values();
+            foreach ($values->values() as $value) {
+                if (!in_array($value, $merged, true)) {
+                    $merged[] = $value;
+                }
+            }
+
+            $found[$property->name()] = [$property, self::selection($property, $merged)];
+        }
+    }
+
+    /**
+     * The interfaces a class implements, and those they extend, nearest first.
+     *
+     * @param array<string, ClassModel> $models
+     *
+     * @return list<ClassModel>
+     */
+    private static function interfaces(ClassModel $class, array $models): array
+    {
+        // Hierarchy never lets an interface extend itself, so the walk ends.
+        $found = [];
+        foreach ($class->interfaces() as $interface) {
+            array_push($found, $models[$interface->fqcn()], ...self::interfaces($models[$interface->fqcn()], $models));
+        }
+
+        return $found;
+    }
+
+    /**
+     * @param list<ClassModel> $between the ancestors below the discriminated base, and the interfaces the class implements
      *
      * @return list<int|string>
      */
@@ -132,7 +189,7 @@ final class SelectingValues
         $targets = [$model->name()->fqcn()];
         foreach ($between as $ancestor) {
             // An open ancestor is a class of its own: its value selects it, not its subclasses.
-            if ($ancestor->kind()->isAbstract()) {
+            if ($ancestor->kind()->isAbstract() || $ancestor->kind()->isInterface()) {
                 $targets[] = $ancestor->name()->fqcn();
             }
         }
