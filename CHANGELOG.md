@@ -6,6 +6,8 @@ All notable changes to this package are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-10-14
+
 ### Added
 
 - `ClassContext::ancestors()`: the classes a class extends, nearest first, with their own properties, so an extension
@@ -227,7 +229,8 @@ First release.
 - A manifest per output directory: stale classes are deleted, files without the `@generated` header are never
   overwritten.
 
-[Unreleased]: https://github.com/msstc4php/dto-generator/compare/v1.4.1...HEAD
+[Unreleased]: https://github.com/msstc4php/dto-generator/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/msstc4php/dto-generator/compare/v1.4.1...v1.5.0
 [1.4.1]: https://github.com/msstc4php/dto-generator/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/msstc4php/dto-generator/compare/v1.3.1...v1.4.0
 [1.3.1]: https://github.com/msstc4php/dto-generator/compare/v1.3.0...v1.3.1
