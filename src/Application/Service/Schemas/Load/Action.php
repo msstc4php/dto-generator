@@ -140,7 +140,10 @@ final class Action
 
             $own = new Diagnostics();
             $resolved = $this->resolve($target, $use, [], $input, $own, $graph, $reads, $this->parser);
-            array_map([$failures, 'add'], $own->errors());
+            foreach ($own->errors() as $error) {
+                $failures->add($error);
+            }
+
             if (!$resolved instanceof ResolvedSchema || $own->hasErrors()) {
                 $graph->markFailed($target);
 
