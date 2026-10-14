@@ -183,9 +183,9 @@ final class Hierarchy
     }
 
     /**
-     * Inner unions before the unions that list them, and unions that stay classes before those that may be interfaces,
-     * as they take a variant they share first; the rest by name. The order of the schemas plays no part, so the same
-     * unions always give the same classes and interfaces.
+     * Inner unions before the unions that list them, and a union that stays a class before one that may be an interface
+     * and shares a variant with it, as it takes the variant first; the rest by name. The order of the schemas plays no
+     * part, so the same unions always give the same classes and interfaces.
      *
      * @param array<string, Variants> $unions
      * @param array<string, Variants> $mayBeInterface
@@ -198,9 +198,12 @@ final class Hierarchy
         $order = [];
         $pending = $unions;
         while ($pending !== []) {
-            $ready = array_filter($pending, static fn (Variants $variants, string $base): bool => self::isReady($base, $variants, $pending, $mayBeInterface), ARRAY_FILTER_USE_BOTH);
-            // Bases that are variants of each other form a loop, which adoption reports; take them by name.
-            $next = array_key_first($ready === [] ? $pending : $ready);
+            $classes = array_diff_key($pending, $mayBeInterface);
+            $inner = array_filter($pending, static fn (Variants $variants): bool => !self::listsPending($variants, $pending));
+            $ready = array_filter($inner, static fn (Variants $variants, string $base): bool => !isset($mayBeInterface[$base]) || !self::waitsForAClass($base, $variants, $classes, $pending), ARRAY_FILTER_USE_BOTH);
+            // Waiting for classes can close a loop, which inner-first breaks; unions that list each other, which
+            // adoption reports, are taken by name.
+            $next = array_key_first($ready !== [] ? $ready : ($inner !== [] ? $inner : $pending));
             $order[] = $next;
             unset($pending[$next]);
         }
@@ -210,24 +213,35 @@ final class Hierarchy
 
     /**
      * @param array<string, Variants> $pending
-     * @param array<string, Variants> $mayBeInterface
      */
-    private static function isReady(string $base, Variants $variants, array $pending, array $mayBeInterface): bool
+    private static function listsPending(Variants $variants, array $pending): bool
     {
         foreach ($variants->classes() as $variant) {
             if (isset($pending[$variant->fqcn()])) {
-                return false;
+                return true;
             }
         }
 
-        // A union that stays a class and lists this one waits for it instead.
-        foreach (isset($mayBeInterface[$base]) ? array_diff_key($pending, $mayBeInterface) : [] as $other => $theirs) {
-            if (!self::lists($other, $base, $pending)) {
-                return false;
+        return false;
+    }
+
+    /**
+     * Whether a pending union that stays a class shares a variant with this one and does not list it.
+     *
+     * @param array<string, Variants> $classes
+     * @param array<string, Variants> $pending
+     */
+    private static function waitsForAClass(string $base, Variants $variants, array $classes, array $pending): bool
+    {
+        $own = array_map(static fn (ClassName $variant): string => $variant->fqcn(), $variants->classes());
+        foreach ($classes as $other => $theirs) {
+            $shared = array_intersect($own, array_map(static fn (ClassName $variant): string => $variant->fqcn(), $theirs->classes()));
+            if ($shared !== [] && !self::lists($other, $base, $pending)) {
+                return true;
             }
         }
 
-        return true;
+        return false;
     }
 
     /**
