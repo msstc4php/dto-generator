@@ -54,12 +54,13 @@ final class EnumBuilder
         }
 
         $descriptions = $this->descriptions($schema, $values, $diagnostics);
+        $spelled = $this->spelledCases($values, $varnames);
         $cases = [];
         $taken = [];
         $failed = false;
         foreach ($values as $index => $value) {
             $varname = $varnames[$index] ?? null;
-            $case = $this->names->enumCaseName($varname === null ? $value : $varname[0]);
+            $case = $spelled[$index] ?? $this->names->enumCaseName($varname === null ? $value : $varname[0]);
             if ($case === null && $varname !== null) {
                 $diagnostics->error(
                     sprintf('Name "%s" has no characters usable in a case name.', $varname[0]),
@@ -264,6 +265,41 @@ final class EnumBuilder
         }
 
         return false;
+    }
+
+    /**
+     * Values only their signs tell apart ("+1" and "-1"), or that have no other characters ("*"), get their signs as
+     * words; the names x-enum-varnames gives stay as written.
+     *
+     * @param array<int, int|string> $values
+     * @param array<int, array{string, int}> $varnames
+     *
+     * @return array<int, string> by the index of the value
+     */
+    private function spelledCases(array $values, array $varnames): array
+    {
+        $groups = [];
+        foreach ($values as $index => $value) {
+            if (!isset($varnames[$index])) {
+                $groups[$this->names->enumCaseName($value) ?? ''][] = $index;
+            }
+        }
+
+        $spelled = [];
+        $kept = [];
+        foreach ($groups as $case => $indexes) {
+            $spell = $case === '' || count($indexes) > 1;
+            foreach ($indexes as $index) {
+                $name = $spell ? $this->names->enumCaseName($this->names->spelled((string) $values[$index])) : null;
+                if ($name !== null) {
+                    $spelled[$index] = $name;
+                } elseif (!$spell) {
+                    $kept[] = $case;
+                }
+            }
+        }
+
+        return $this->names->undisputed($spelled, $kept);
     }
 
     /**

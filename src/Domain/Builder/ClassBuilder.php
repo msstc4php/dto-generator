@@ -32,6 +32,8 @@ final class ClassBuilder
 {
     private NameResolver $names;
 
+    private Superseded $superseded;
+
     private TypeMapper $types;
 
     private TargetProfile $target;
@@ -45,8 +47,9 @@ final class ClassBuilder
      * @param list<string> $aliases keys of attributeAliases, which properties may carry
      * @param PropertyView|null $view the view of a direction-dependent class; null keeps every property
      */
-    public function __construct(NameResolver $names, TypeMapper $types, TargetProfile $target, array $aliases = [], ?PropertyView $view = null)
+    public function __construct(NameResolver $names, TypeMapper $types, TargetProfile $target, array $aliases = [], ?PropertyView $view = null, ?Superseded $superseded = null)
     {
+        $this->superseded = $superseded ?? new Superseded();
         $this->names = $names;
         $this->types = $types;
         $this->target = $target;
@@ -84,6 +87,7 @@ final class ClassBuilder
         $view = $this->view instanceof PropertyView && $this->view->appliesTo($schema) ? $this->view : null;
         // The other view's properties are left out quietly, unlike x-php-skip.
         $skipped = self::skippedWireNames($sources) + ($view instanceof PropertyView ? $view->excluded(self::kept($sources)) : []);
+        $spelled = $this->spelledNames($sources, self::skippedWireNames($sources));
         foreach ($sources as [$wireName, $propertySchema]) {
             ExtensionVocabulary::checkProperty($propertySchema, $diagnostics, $this->aliases);
             if (self::isSkipped($propertySchema, $diagnostics) && $composition->isRequired($wireName)) {
@@ -97,14 +101,16 @@ final class ClassBuilder
                 continue;
             }
 
-            $property = $this->property($wireName, $propertySchema, $composition->isRequired($wireName), $diagnostics);
+            $property = $this->property($wireName, $propertySchema, $composition->isRequired($wireName), $spelled, $diagnostics);
             if (!$property instanceof PropertyModel) {
                 continue;
             }
 
             $earlier = $byWireName[$wireName] ?? null;
             if ($earlier instanceof PropertyModel) {
-                if ($earlier->type()->describe() !== $property->type()->describe()) {
+                // Every member of the allOf applies: the property has the type of the values both admit.
+                $meet = $this->types->meet()->of($earlier->type(), $property->type());
+                if (!$meet instanceof TypeModel) {
                     $diagnostics->error(
                         sprintf(
                             'Property "%s" of %s is %s here, but %s in an earlier allOf member.',
@@ -120,6 +126,14 @@ final class ClassBuilder
                         sprintf('Property "%s" of %s has another PHP name or default here than in an earlier allOf member.', $wireName, $name->fqcn()),
                         $propertySchema->location(),
                     );
+                } else {
+                    $this->superseded->add($earlier->type());
+                    $this->superseded->add($property->type());
+                    if ($meet->describe() !== $earlier->type()->describe()) {
+                        $narrower = $meet->describe() === $property->type()->describe() ? $property : $property->withType($meet);
+                        $byWireName[$wireName] = $narrower;
+                        $properties[array_search($earlier, $properties, true)] = $narrower;
+                    }
                 }
 
                 continue;
@@ -230,18 +244,22 @@ final class ClassBuilder
     }
 
     /**
-     * The default as JSON writes it: `1` and `1.0` of a number are the same default.
+     * The default a schema sets, as JSON writes it (`1` and `1.0` of a number are the same); a null one only stands for
+     * a missing value.
      */
     private function defaultOf(PropertyModel $property): string
     {
         $default = $property->default();
 
-        return $default instanceof DefaultValue ? $default->toJson() : '';
+        return $default instanceof DefaultValue && $default->value() !== null ? $default->toJson() : '';
     }
 
-    private function property(string $wireName, Schema $schema, bool $required, Diagnostics $diagnostics): ?PropertyModel
+    /**
+     * @param array<array-key, string> $spelled
+     */
+    private function property(string $wireName, Schema $schema, bool $required, array $spelled, Diagnostics $diagnostics): ?PropertyModel
     {
-        $name = $this->propertyName($wireName, $schema, $diagnostics);
+        $name = $spelled[$wireName] ?? $this->propertyName($wireName, $schema, $diagnostics);
         if ($name === null) {
             return null;
         }
@@ -263,6 +281,43 @@ final class ClassBuilder
             new DocModel($schema->description(), $schema->isDeprecated()),
             $schema->location(),
         );
+    }
+
+    /**
+     * Names that only their signs tell apart ("+1" and "-1"), or that have no other characters ("*"), get their signs
+     * as words, in every view alike; a name one no other matches stays as it is. Spelled names that would meet another
+     * name leave every name as it is, and the collision is reported.
+     *
+     * @param list<array{string, Schema}> $sources
+     * @param array<array-key, string> $skipped by wire name
+     *
+     * @return array<array-key, string> by wire name, a numeric one as an int
+     */
+    private function spelledNames(array $sources, array $skipped): array
+    {
+        $groups = [];
+        foreach ($sources as [$wireName, $schema]) {
+            if (!isset($skipped[$wireName]) && !$schema->extensions()->has('x-php-name')) {
+                $plain = $this->names->propertyName($wireName);
+                $groups[$plain === null ? '' : Identifier::asciiLower($plain)][$wireName] = true;
+            }
+        }
+
+        $spelled = [];
+        $kept = [];
+        foreach ($groups as $plain => $wireNames) {
+            $spell = $plain === '' || count($wireNames) > 1;
+            foreach (array_keys($wireNames) as $wireName) {
+                $name = $spell ? $this->names->propertyName($this->names->spelled((string) $wireName)) : null;
+                if ($name !== null) {
+                    $spelled[$wireName] = $name;
+                } elseif (!$spell) {
+                    $kept[] = $plain;
+                }
+            }
+        }
+
+        return $this->names->undisputed($spelled, $kept);
     }
 
     private function propertyName(string $wireName, Schema $schema, Diagnostics $diagnostics): ?string

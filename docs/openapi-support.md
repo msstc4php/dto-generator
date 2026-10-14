@@ -55,13 +55,16 @@ PHPDoc extractor of Symfony 5.4, mistake `non-empty-string` for a class name; th
 | `enum` of strings or of integers | PHP 8.1+: a backed `enum`. 7.4 and 8.0: a `final class` of constants; the property is `string`/`int` with `@phpstan-var Name::*` |
 | `enum` mixing strings and integers | no PHP enum: a union of the literals (see [Types](#types)), with a warning |
 | `allOf` with one `$ref` plus own properties, `extends` strategy | `class Child extends Base`; `Base` is not `final` |
-| `allOf` with several `$ref`, or the `merge` strategy | one class with all the properties; one property with two types is an error |
+| `allOf` with several `$ref`, or the `merge` strategy | one class with all the properties. A property several members describe gets the narrower type when one admits every value of the other (`string` and a date, `number` and `integer`, `T|null` and `T`, a list of anything and a list of `T`, an object of any properties and a class); inline objects of that property (or of its items or values) in several members become one class with the properties of all, unless a `$ref` reaches one of them, they are alternatives of a union, or the second says more than its properties (its own `allOf`, `additionalProperties`, `x-` keys, keywords of the class); other types are an error |
+| a child's schema declaring a property of its parent again | the parent's property stays, with a warning, when the child only narrows its values (null, a refinement of the same scalar, the cases of an enum) with the same name and default (PHP lets no subclass narrow the type; the Symfony bridge checks the narrowing); a class, a date, a list or a map over the parent's type, or another default, is an error |
 | `oneOf`/`anyOf` with a `discriminator` | an `abstract` base class with the common properties; the variants extend it. The constructor of each variant accepts only the values that select it (`\InvalidArgumentException` otherwise); a class selected by a single value takes it as the default; an open (concrete) class accepts its own values when it is instantiated itself and the values of its subclasses only from them (`parent::__construct()`). No class in a discriminated chain (the discriminated bases, their ancestors and their subclasses) has a `withX()`/`setX()` for a property a discriminator of that chain reads. The rule is per property: a subclass whose own chain does not read it, while its parent's does (a sibling `allOf` subclass of a shared base, or a base with a different discriminator), gets the mutators back. It declares the setter and, on 7.4, 8.0 and 8.5, the cloning wither itself; its subclasses inherit them. On 8.1–8.4 an open class has no withers, so its final subclasses declare the `new self` wither; with `dto.withers: false`, or mutable DTOs with `accessors: public-properties`, there is none to restore |
 | `oneOf`/`anyOf` without a discriminator | a union type |
 | an inline object or enum in a property, its `items` or `additionalProperties` | a named class `<Parent><Property>` (`Order.items[]` → `OrderItemsItem`) |
-| an inline object or enum as a member of a `oneOf`/`anyOf` | a named class: the member's `title` in PascalCase, else `<Parent><Property>Option<N>` (N counts from 1 over `oneOf`, then `anyOf`) |
+| an inline object or enum as a member of a `oneOf`/`anyOf` | a named class: the member's `title` in PascalCase (the title of an inline property schema is not used), else `<Parent><Property>Option<N>` (N counts from 1 over `oneOf`, then `anyOf`) |
 | an inline object or enum in a named alias (`Pets: {type: array, items: {…}}`) | `<Alias>Item`, `<Alias>Value`, `<Alias>Option<N>` |
-| two classes with the same name | an error suggesting `x-php-class-name` |
+| an inline schema whose name another schema already holds | it gives way, with a warning: the name derived from its place when a title gave the first, else that name numbered from 2 (`UserAddress2`) |
+| two classes with the same name otherwise (`x-php-class-name`) | an error suggesting `x-php-class-name` |
+| names that only a leading sign tells apart (`+1`, `-1`), or a sign alone (`*`) | the signs spelled out: `$plus1`, `$minus1`, case `ASTERISK`; a lone `+1` stays `$_1` |
 
 Recursive schemas (trees, graphs) are fine: a `$ref` is a reference to the class, not a copy.
 
@@ -130,7 +133,7 @@ Classes are `final`, except the bases of `allOf` and of discriminated unions. At
 - **Strings in literal types are plain.** A `const` or enum string with quotes, backslashes, `|`, `*`, `{`, `}`, `@`
   or non-ASCII characters keeps the type `string` without the literal.
 - **Hoisted names give way to named schemas.** An inline member whose title or derived name equals a schema in
-  `components/schemas` gets a collision error; the named schema keeps its class.
+  `components/schemas` takes another name (see [Composition](#composition)); the named schema keeps its class.
 - **Remote `$ref`** (`https://…`) works only for the URLs [`remoteRefs.allow`](configuration.md#remoterefs) names;
   anchors (`$anchor`, `#Name`) are not supported.
 - **A bare name in `discriminator.mapping`** is resolved against the file holding the discriminator, not the root

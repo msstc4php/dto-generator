@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MSSTC4PHP\DtoGenerator\Tests\Unit\Application\Service\Model;
 
 use MSSTC4PHP\DtoGenerator\Application\Config\ViewSuffixes;
+use MSSTC4PHP\DtoGenerator\Domain\Model\PropertyModel;
 use MSSTC4PHP\DtoGenerator\Tests\Support\ModelFixture;
 use PHPUnit\Framework\TestCase;
 
@@ -25,6 +26,23 @@ final class BuildViewsTest extends TestCase
         'Cat' => ['allOf' => [['$ref' => '#/components/schemas/Pet'], ['type' => 'object', 'properties' => ['lives' => ['type' => 'integer']]]]],
         'Kennel' => ['type' => 'object', 'properties' => ['pets' => ['type' => 'array', 'items' => ['$ref' => '#/components/schemas/Pet']]]],
     ];
+
+    public function testSpellsSignedNamesAlikeInEveryView(): void
+    {
+        $output = ModelFixture::views([
+            'Reactions' => ['type' => 'object', 'properties' => [
+                '+1' => ['type' => 'integer', 'readOnly' => true],
+                '-1' => ['type' => 'integer'],
+            ]],
+        ]);
+
+        $names = [];
+        foreach ($output->classes() as $class) {
+            $names[$class->model()->name()->shortName()] = array_map(static fn (PropertyModel $property): string => $property->name(), $class->model()->properties());
+        }
+
+        self::assertSame(['ReactionsRead' => ['plus1', 'minus1'], 'ReactionsWrite' => ['minus1']], $names);
+    }
 
     public function testBuildsAReadAndAWriteViewOfEveryDependentClass(): void
     {
@@ -227,9 +245,7 @@ final class BuildViewsTest extends TestCase
             'error /project/api/openapi.yaml#/components/schemas/pet: Class App\Dto\Pet is already generated from /project/api/openapi.yaml#/components/schemas/Pet; set "x-php-class-name" on one of them.',
             'warning /project/api/openapi.yaml#/components/schemas/pet/properties/flag/writeOnly: "writeOnly" must be true or false; it is ignored.',
         ], ModelFixture::messages($named));
-        self::assertSame([
-            'error /project/api/openapi.yaml#/components/schemas/Pet/properties/owner: Class App\Dto\PetOwner is already generated from /project/api/openapi.yaml#/components/schemas/PetOwner; set "x-php-class-name" on one of them.',
-        ], ModelFixture::messages($inline));
+        self::assertSame([], ModelFixture::messages($inline), 'the views name the inline classes apart');
     }
 
     public function testIgnoresTheDirectionOfASkippedProperty(): void

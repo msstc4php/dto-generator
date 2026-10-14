@@ -16,6 +16,13 @@ final class NameResolver
 
     private const ASCII_SEPARATORS = '/[^A-Za-z0-9]+/';
 
+    /** Words for the signs that alone tell names apart, such as "+1" and "-1". */
+    private const SIGNS = [
+        '+' => 'plus', '-' => 'minus', '*' => 'asterisk', '@' => 'at', '#' => 'hash', '$' => 'dollar', '%' => 'percent',
+        '&' => 'and', '=' => 'equals', '~' => 'tilde', '^' => 'caret', '<' => 'less', '>' => 'greater', '!' => 'not',
+        '?' => 'question', '/' => 'slash', '.' => 'dot',
+    ];
+
     public function className(string $schemaName): ?string
     {
         $words = $this->words($schemaName);
@@ -90,6 +97,33 @@ final class NameResolver
         }
 
         return Identifier::asciiLowerFirst($word);
+    }
+
+    /**
+     * A name that starts with a sign, with its signs written as words, for when it has no other characters or only its
+     * signs tell it from another: "+1" becomes "plus 1". A sign within a name ("in-progress") separates words.
+     */
+    public function spelled(string $name): string
+    {
+        return isset(self::SIGNS[$name[0] ?? '']) ? strtr($name, array_map(static fn (string $word): string => ' ' . $word . ' ', self::SIGNS)) : $name;
+    }
+
+    /**
+     * The spelled names no other name meets, letter case ignored; the others stay as they were, and their collision is
+     * reported.
+     *
+     * @template TKey of array-key
+     *
+     * @param array<TKey, string> $spelled
+     * @param list<string> $kept the names left as they are
+     *
+     * @return array<TKey, string>
+     */
+    public function undisputed(array $spelled, array $kept): array
+    {
+        $counts = array_count_values(array_map(static fn (string $name): string => Identifier::asciiLower($name), array_merge(array_values($spelled), $kept)));
+
+        return array_filter($spelled, static fn (string $name): bool => $counts[Identifier::asciiLower($name)] === 1);
     }
 
     /**

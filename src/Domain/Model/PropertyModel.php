@@ -133,6 +133,27 @@ final class PropertyModel
         return $this->additionalProperties;
     }
 
+    /**
+     * The same property with another type: a nullable one is optional, with the default it has or null; another one is
+     * required unless a default other than null sets it.
+     */
+    public function withType(TypeModel $type): self
+    {
+        $required = !$type instanceof NullableType && (!$this->default instanceof DefaultValue || $this->default->value() === null);
+
+        return new self(
+            $this->name,
+            $this->wireName,
+            $type,
+            $required,
+            $required ? null : $this->default ?? new DefaultValue(null),
+            $this->doc,
+            $this->source,
+            $this->attributes,
+            $this->additionalProperties,
+        );
+    }
+
     public function withAddedAttributes(AttributeModel ...$attributes): self
     {
         return new self(

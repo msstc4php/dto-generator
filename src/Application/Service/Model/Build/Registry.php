@@ -58,6 +58,9 @@ final class Registry
     /** @var list<array{Schema, string}> */
     private array $rejected = [];
 
+    /** @var array<string, list<Schema>> by the location of the declared schema */
+    private array $companions = [];
+
     public function __construct(?View $view = null, ?PropertyView $properties = null)
     {
         $this->view = $view;
@@ -121,6 +124,22 @@ final class Registry
     }
 
     /**
+     * Where the schema that holds the name is, letter case ignored; null while nothing holds it.
+     */
+    public function holder(ClassName $name): ?string
+    {
+        return $this->taken[Identifier::asciiLower($name->fqcn())] ?? null;
+    }
+
+    /**
+     * Whether a schema has claimed the name, letter case ignored.
+     */
+    public function isTaken(ClassName $name): bool
+    {
+        return isset($this->taken[Identifier::asciiLower($name->fqcn())]);
+    }
+
+    /**
      * Claims a class or enum name; a second schema claiming it (letter case ignored) is an error.
      */
     public function claim(ClassName $name, Schema $schema, Diagnostics $diagnostics): bool
@@ -172,6 +191,26 @@ final class Registry
     {
         $this->enums[$schema->location()->toString()] = EnumType::of($enum);
         $this->builtEnums[] = new BuiltEnum($enum, $source);
+    }
+
+    /**
+     * Another inline object of the same property gets the class of the declared one, which takes its properties too.
+     */
+    public function join(Schema $declared, Schema $companion): void
+    {
+        $name = $this->classes[$declared->location()->toString()] ?? null;
+        if ($name instanceof ClassName) {
+            $this->classes[$companion->location()->toString()] = $name;
+            $this->companions[$declared->location()->toString()][] = $companion;
+        }
+    }
+
+    /**
+     * @return list<Schema>
+     */
+    public function companions(Schema $declared): array
+    {
+        return $this->companions[$declared->location()->toString()] ?? [];
     }
 
     /**

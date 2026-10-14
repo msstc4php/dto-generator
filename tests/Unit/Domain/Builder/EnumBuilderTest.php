@@ -37,6 +37,40 @@ final class EnumBuilderTest extends TestCase
         self::assertSame(['EUR' => 'EUR', 'in-progress' => 'IN_PROGRESS'], EnumType::of($enum)->cases());
     }
 
+    public function testSpellsTheSignsOfValuesThatHaveNothingElse(): void
+    {
+        [$enum, $messages] = $this->build(['type' => 'string', 'enum' => ['+1', '-1', '*', 'laugh', '+']]);
+
+        self::assertSame([], $messages);
+        self::assertInstanceOf(EnumModel::class, $enum);
+        self::assertSame(['PLUS_1' => '+1', 'MINUS_1' => '-1', 'ASTERISK' => '*', 'LAUGH' => 'laugh', 'PLUS' => '+'], $this->cases($enum));
+    }
+
+    public function testSpellsEverySignOfAValueThatStartsWithOne(): void
+    {
+        [$enum] = $this->build(['type' => 'string', 'enum' => ['-x-y', 'x-y']]);
+
+        self::assertInstanceOf(EnumModel::class, $enum);
+        self::assertSame(['MINUS_X_MINUS_Y' => '-x-y', 'X_Y' => 'x-y'], $this->cases($enum));
+    }
+
+    public function testKeepsTheValueWhoseSpelledCaseMeetsAnother(): void
+    {
+        [$enum, $messages] = $this->build(['type' => 'string', 'enum' => ['+1', '-1', 'plus_1', '*']]);
+
+        self::assertSame([], $messages);
+        self::assertInstanceOf(EnumModel::class, $enum);
+        self::assertSame(['_1' => '+1', 'MINUS_1' => '-1', 'PLUS_1' => 'plus_1', 'ASTERISK' => '*'], $this->cases($enum));
+    }
+
+    public function testKeepsTheNameOfALoneSignedValue(): void
+    {
+        [$enum] = $this->build(['type' => 'string', 'enum' => ['+1', 'two']]);
+
+        self::assertInstanceOf(EnumModel::class, $enum);
+        self::assertSame(['_1' => '+1', 'TWO' => 'two'], $this->cases($enum));
+    }
+
     public function testNamesCasesAfterXEnumVarnames(): void
     {
         [$enum, $messages] = $this->build(['type' => 'integer', 'enum' => [1, 2, null], 'x-enum-varnames' => ['Active', 'Blocked']]);
@@ -152,8 +186,8 @@ final class EnumBuilderTest extends TestCase
                 "error {$at}/enum/1: Enum value 1.5 cannot back a PHP enum; use strings or integers.",
                 "error {$at}/enum/2: Enum value true cannot back a PHP enum; use strings or integers.",
             ]],
-            'unusable value before a collision' => [['enum' => ['***', 'a', 'A']], false, [
-                "error {$at}/enum/0: Enum value \"***\" has no characters usable in a case name.",
+            'unusable value before a collision' => [['enum' => ['§§§', 'a', 'A']], false, [
+                "error {$at}/enum/0: Enum value \"§§§\" has no characters usable in a case name.",
                 "error {$at}/enum/2: Enum values \"a\" and \"A\" both become case A.",
             ]],
             'every collision at once' => [['enum' => ['a', 'A', 'b', 'B']], false, [
@@ -163,7 +197,7 @@ final class EnumBuilderTest extends TestCase
             'empty string' => [['enum' => ['', 'x']], true, []],
             'lowest integer' => [['enum' => [PHP_INT_MIN]], true, []],
             'same case' => [['enum' => ['eur', 'EUR']], false, ["error {$at}/enum/1: Enum values \"eur\" and \"EUR\" both become case EUR."]],
-            'no usable characters' => [['enum' => ['***']], false, ["error {$at}/enum/0: Enum value \"***\" has no characters usable in a case name."]],
+            'no usable characters' => [['enum' => ['§§§']], false, ["error {$at}/enum/0: Enum value \"§§§\" has no characters usable in a case name."]],
             'descriptions not a map' => [['enum' => ['a'], 'x-enum-descriptions' => 'A'], true, ["error {$at}/x-enum-descriptions: \"x-enum-descriptions\" must map enum values to descriptions."]],
             'description for no value' => [['enum' => ['a'], 'x-enum-descriptions' => ['b' => 'B']], true, ["error {$at}/x-enum-descriptions/b: There is no enum value \"b\"."]],
             'description not a string' => [['enum' => ['a'], 'x-enum-descriptions' => ['a' => 5]], true, ["error {$at}/x-enum-descriptions/a: An enum description must be a string."]],
