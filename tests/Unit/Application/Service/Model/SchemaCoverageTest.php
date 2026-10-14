@@ -198,7 +198,54 @@ final class SchemaCoverageTest extends TestCase
         self::assertCount(1, $collisions);
     }
 
-    public function testRefusesInlineMembersOfAnInlineDiscriminatedUnion(): void
+    public function testMakesAClassOfAnInlineDiscriminatedUnionWithInlineVariants(): void
+    {
+        $output = ModelFixture::build([
+            'Holder' => ['type' => 'object', 'properties' => ['pet' => [
+                'oneOf' => [['type' => 'object', 'properties' => ['kind' => ['type' => 'string', 'const' => 'cat']]], ['$ref' => '#/components/schemas/Dog']],
+                'discriminator' => ['propertyName' => 'kind'],
+            ]]],
+            'Dog' => ['type' => 'object', 'properties' => ['kind' => ['type' => 'string', 'const' => 'Dog']]],
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(['pet: App\\Dto\\HolderPet|null'], ModelFixture::classes($output)['App\\Dto\\Holder']);
+        $hierarchy = ModelFixture::hierarchy($output);
+        self::assertSame('abstract by kind {cat: App\\Dto\\HolderPetOption1, Dog: App\\Dto\\Dog}', $hierarchy['App\\Dto\\HolderPet']);
+        self::assertSame('final extends App\\Dto\\HolderPet', $hierarchy['App\\Dto\\HolderPetOption1']);
+        self::assertSame('final extends App\\Dto\\HolderPet', $hierarchy['App\\Dto\\Dog']);
+    }
+
+    public function testMakesAClassOfAnInlineDiscriminatedUnionWithInlineAnyOfVariants(): void
+    {
+        $output = ModelFixture::build([
+            'Holder' => ['type' => 'object', 'properties' => ['pet' => [
+                'anyOf' => [['type' => 'object', 'properties' => ['kind' => ['type' => 'string', 'const' => 'cat']]], ['$ref' => '#/components/schemas/Dog']],
+                'discriminator' => ['propertyName' => 'kind'],
+            ]]],
+            'Dog' => ['type' => 'object', 'properties' => ['kind' => ['type' => 'string', 'const' => 'Dog']]],
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame('abstract by kind {cat: App\\Dto\\HolderPetOption1, Dog: App\\Dto\\Dog}', ModelFixture::hierarchy($output)['App\\Dto\\HolderPet']);
+    }
+
+    public function testKeepsAnInlineDiscriminatedUnionWithoutInlineObjectsAType(): void
+    {
+        $output = ModelFixture::build([
+            'Holder' => ['type' => 'object', 'properties' => ['pet' => [
+                'oneOf' => [['$ref' => '#/components/schemas/Dog'], ['type' => 'string']],
+                'discriminator' => ['propertyName' => 'kind'],
+            ]]],
+            'Dog' => ['type' => 'object', 'properties' => ['kind' => ['type' => 'string', 'const' => 'Dog']]],
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(['pet: App\\Dto\\Dog|string|null'], ModelFixture::classes($output)['App\\Dto\\Holder']);
+        self::assertSame(['App\\Dto\\Holder', 'App\\Dto\\Dog'], array_keys(ModelFixture::classes($output)));
+    }
+
+    public function testRefusesAnInlineVariantWithoutAValue(): void
     {
         $output = ModelFixture::build(['Holder' => ['type' => 'object', 'properties' => ['pet' => [
             'oneOf' => [['type' => 'object', 'properties' => ['kind' => ['type' => 'string']]]],
@@ -206,7 +253,7 @@ final class SchemaCoverageTest extends TestCase
         ]]]]);
 
         self::assertSame(
-            [self::AT . 'Holder/properties/pet/oneOf/0: An inline object in a oneOf or anyOf with a discriminator is not generated: the discriminator mapping needs a $ref. Move it to components/schemas.'],
+            [self::AT . 'Holder/properties/pet/oneOf/0: An inline variant of a discriminated union needs one value of "kind", in "const" or a one-value "enum", as the mapping cannot name it.'],
             ModelFixture::messages($output),
         );
     }
@@ -285,7 +332,7 @@ final class SchemaCoverageTest extends TestCase
             'discriminator' => ['propertyName' => 'kind'],
         ]]]]);
 
-        $message = ': An inline object in a oneOf or anyOf with a discriminator is not generated: the discriminator mapping needs a $ref. Move it to components/schemas.';
+        $message = ': An inline variant of a discriminated union needs one value of "kind", in "const" or a one-value "enum", as the mapping cannot name it.';
         self::assertSame([self::AT . 'Holder/properties/pet/oneOf/0' . $message, self::AT . 'Holder/properties/pet/oneOf/1' . $message], ModelFixture::messages($output));
     }
 
@@ -358,14 +405,12 @@ final class SchemaCoverageTest extends TestCase
     {
         $output = ModelFixture::build(['Holder' => ['type' => 'object', 'properties' => ['pet' => [
             'properties' => ['kind' => ['type' => 'string']],
-            'oneOf' => [['type' => 'object', 'properties' => ['kind' => ['type' => 'string']]]],
+            'oneOf' => [['type' => 'object', 'properties' => ['kind' => ['type' => 'string']]], ['type' => 'object', 'properties' => ['kind' => ['type' => 'string']]]],
             'discriminator' => ['propertyName' => 'kind'],
         ]]]]);
 
-        self::assertSame(
-            [self::AT . 'Holder/properties/pet/oneOf/0: An inline object in a oneOf or anyOf with a discriminator is not generated: the discriminator mapping needs a $ref. Move it to components/schemas.'],
-            ModelFixture::messages($output),
-        );
+        $message = ': An inline object in a oneOf or anyOf with a discriminator is not generated: the discriminator mapping needs a $ref. Move it to components/schemas.';
+        self::assertSame([self::AT . 'Holder/properties/pet/oneOf/0' . $message, self::AT . 'Holder/properties/pet/oneOf/1' . $message], ModelFixture::messages($output));
     }
 
     public function testHoistsNothingBehindXPhpType(): void

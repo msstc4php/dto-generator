@@ -220,6 +220,23 @@ final class PhpParserEmitterTest extends TestCase
         self::assertStringContainsString("\nclass Base\n", $emitter->emit(new ClassModel(ClassName::fromFqcn('App\Dto\Base'), ClassKind::from(ClassKind::OPEN), null, [], $immutable, DocModel::none(), $at), $target));
     }
 
+    public function testEmitsAnInterfaceAndTheClassesThatImplementIt(): void
+    {
+        $emitter = new PhpParserEmitter();
+        $target = EmitterFixture::target('8.2', Mutability::IMMUTABLE);
+        $at = new SchemaLocation('/project/api/openapi.yaml', '/components/schemas/Item');
+        $immutable = Mutability::from(Mutability::IMMUTABLE);
+        $item = new ClassModel(ClassName::fromFqcn('App\Dto\Item'), ClassKind::from(ClassKind::INTERFACE), null, [], $immutable, new DocModel('An item.'), $at, [], new DiscriminatorModel('type', ['call' => ClassName::fromFqcn('App\Dto\Call')]));
+        $call = (new ClassModel(ClassName::fromFqcn('App\Dto\Call'), ClassKind::from(ClassKind::FINAL), null, [], $immutable, DocModel::none(), $at))
+            ->withInterfaces(ClassName::fromFqcn('App\Dto\Item'), ClassName::fromFqcn('App\Other\Field'))
+        ;
+
+        $interface = $emitter->emit($item, $target);
+        self::assertStringContainsString("/**\n * An item.\n */\ninterface Item\n{\n}\n", $interface);
+        self::assertStringNotContainsString('__construct', $interface);
+        self::assertStringContainsString("\nfinal readonly class Call implements Item, \\App\\Other\\Field\n", $emitter->emit($call, $target));
+    }
+
     public function testPrintsStringDefaultsWithControlCharactersDoubleQuoted(): void
     {
         $class = EmitterFixture::model('App\Dto\Note', null, [
@@ -292,6 +309,45 @@ final class PhpParserEmitterTest extends TestCase
             }
 
             PHP, (new PhpParserEmitter())->emitEnum($this->currency(), EmitterFixture::target('8.0', Mutability::IMMUTABLE)));
+    }
+
+    public function testWritesTheDefaultOfAUnionAsTheMemberItFits(): void
+    {
+        $currency = EnumType::of($this->currency());
+        $tag = new ClassType(ClassName::fromFqcn('App\Dto\Tag'));
+        $money = EnumType::of(new EnumModel(
+            ClassName::fromFqcn('App\Dto\Money'),
+            EnumBacking::from(EnumBacking::STRING),
+            [new EnumCase('EUR', 'EUR')],
+            new DocModel(),
+            new SchemaLocation('/project/api/openapi.yaml', '/components/schemas/Money'),
+        ));
+        $level = EnumType::of(new EnumModel(
+            ClassName::fromFqcn('App\Dto\Level'),
+            EnumBacking::from(EnumBacking::INT),
+            [new EnumCase('LOW', 1)],
+            new DocModel(),
+            new SchemaLocation('/project/api/openapi.yaml', '/components/schemas/Level'),
+        ));
+        $class = EmitterFixture::model('App\Dto\Price', null, [
+            EmitterFixture::property('choice', new NullableType(UnionType::of($currency, $tag)), false, new DefaultValue('EUR')),
+            EmitterFixture::property('label', new NullableType(UnionType::of($currency, ScalarType::string())), false, new DefaultValue('EUR')),
+            EmitterFixture::property('code', new NullableType(UnionType::of(ScalarType::int(), $currency)), false, new DefaultValue('EUR')),
+            EmitterFixture::property('either', new NullableType(UnionType::of($currency, $money)), false, new DefaultValue('EUR')),
+            EmitterFixture::property('rank', new NullableType(UnionType::of($level, ScalarType::string())), false, new DefaultValue(1)),
+            EmitterFixture::property('size', new NullableType(UnionType::of($level, ScalarType::int())), false, new DefaultValue(1)),
+            EmitterFixture::property('ratio', new NullableType(UnionType::of($level, ScalarType::float())), false, new DefaultValue(1)),
+        ]);
+
+        $code = (new PhpParserEmitter())->emit($class, EmitterFixture::target('8.2', Mutability::IMMUTABLE));
+
+        self::assertStringContainsString('public Currency|Tag|null $choice = Currency::EUR,', $code);
+        self::assertStringContainsString("public Currency|string|null \$label = 'EUR',", $code);
+        self::assertStringContainsString('public Currency|Money|null $either = Currency::EUR,', $code);
+        self::assertStringContainsString('public int|Currency|null $code = Currency::EUR,', $code);
+        self::assertStringContainsString('public Level|string|null $rank = Level::LOW,', $code);
+        self::assertStringContainsString('public Level|int|null $size = 1,', $code);
+        self::assertStringContainsString('public Level|float|null $ratio = 1,', $code);
     }
 
     public function testEmitsEnumPropertiesAndTheirDefaults(): void

@@ -65,6 +65,8 @@ PHPDoc extractor of Symfony 5.4, mistake `non-empty-string` for a class name; th
 | an inline schema whose name another schema already holds | it gives way, with a warning: the name derived from its place when a title gave the first, else that name numbered from 2 (`UserAddress2`) |
 | two classes with the same name otherwise (`x-php-class-name`) | an error suggesting `x-php-class-name` |
 | names that only a leading sign tells apart (`+1`, `-1`), or a sign alone (`*`) | the signs spelled out: `$plus1`, `$minus1`, case `ASTERISK`; a lone `+1` stays `$_1`, and so does one whose spelled name another name holds (`+1` beside `plus1` stays `$_1`, `-1` becomes `$minus1`) |
+| a `oneOf`/`anyOf` with a `discriminator` and no properties of its own, a variant of which extends another class | an empty `interface` carrying the discriminator; every variant `implements` it, after the class it extends. A variant listed by several such unions implements each |
+| an inline `oneOf`/`anyOf` with a `discriminator` and an inline object variant | a class named like any inline object (`<Parent><Property>`), with the variants extending it as below |
 | an inline object as a variant of a named `oneOf`/`anyOf` with a `discriminator` | a class extending the base: the member's `title`, else `<Base>Option<N>`; its discriminator value is the one value its discriminator property has (`const` or a one-value `enum`, here or in a member of its `allOf`), as `mapping` cannot name an inline schema |
 
 Recursive schemas (trees, graphs) are fine: a `$ref` is a reference to the class, not a copy.
@@ -107,8 +109,10 @@ Classes are `final`, except the bases of `allOf` and of discriminated unions. At
 
 ## Known limitations
 
-- **Inline objects in a `oneOf`/`anyOf` with a discriminator are not generated:** the mapping needs a `$ref`, so an
+- **Inline objects in a discriminated `oneOf`/`anyOf` that also has properties or an `allOf` are not generated:** an
   error asks to move them to `components/schemas`.
+- **A discriminated union with properties of its own, a variant of which extends another class,** is an error: the
+  variant would need two parents.
 - **A missing key is not tracked.** An optional property without its key takes the schema's `default`, else `null`;
   a DTO cannot tell a missing key from an explicit `null`, and an optional property that is not nullable accepts
   `null`. JSON Merge Patch needs the raw request.

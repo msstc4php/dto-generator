@@ -599,6 +599,56 @@ final class CompositionTest extends TestCase
         self::assertArrayNotHasKey('App\\Dto\\EventOption2', ModelFixture::classes($output));
     }
 
+    public function testKeepsAClassBaseForAVariantThatDescendsFromIt(): void
+    {
+        $output = ModelFixture::build([
+            'Pet' => ['oneOf' => [['$ref' => '#/components/schemas/Cat'], ['$ref' => '#/components/schemas/Dog']], 'discriminator' => ['propertyName' => 'kind']],
+            'Cat' => ['allOf' => [['$ref' => '#/components/schemas/Pet'], ['type' => 'object', 'properties' => ['kind' => ['type' => 'string']]]]],
+            'Dog' => ['type' => 'object', 'properties' => ['kind' => ['type' => 'string']]],
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame('abstract by kind {Cat: App\\Dto\\Cat, Dog: App\\Dto\\Dog}', ModelFixture::hierarchy($output)['App\\Dto\\Pet']);
+    }
+
+    public function testMakesAnInterfaceOfAUnionWhoseVariantsExtendOtherClasses(): void
+    {
+        $ref = static fn (string $name): array => ['$ref' => '#/components/schemas/' . $name];
+        $variant = static fn (string $type): array => ['type' => 'object', 'properties' => ['type' => ['type' => 'string', 'const' => $type]]];
+        $output = ModelFixture::build([
+            'OutputItem' => ['oneOf' => [$ref('Call'), $ref('Msg')], 'discriminator' => ['propertyName' => 'type']],
+            'ItemField' => ['oneOf' => [$ref('Call'), $ref('Msg'), $ref('Other')], 'discriminator' => ['propertyName' => 'type']],
+            'ItemResource' => ['oneOf' => [$ref('CallResource'), $ref('Msg')], 'discriminator' => ['propertyName' => 'type']],
+            'Call' => $variant('Call'),
+            'Msg' => $variant('Msg'),
+            'Other' => $variant('Other'),
+            'CallResource' => ['allOf' => [$ref('Call'), ['type' => 'object', 'properties' => ['id' => ['type' => 'string']]]]],
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame([
+            'App\\Dto\\OutputItem' => 'abstract by type {Call: App\\Dto\\Call, Msg: App\\Dto\\Msg}',
+            'App\\Dto\\ItemField' => 'interface by type {Call: App\\Dto\\Call, Msg: App\\Dto\\Msg, Other: App\\Dto\\Other}',
+            'App\\Dto\\ItemResource' => 'interface by type {CallResource: App\\Dto\\CallResource, Msg: App\\Dto\\Msg}',
+            'App\\Dto\\Call' => 'open extends App\\Dto\\OutputItem implements App\\Dto\\ItemField',
+            'App\\Dto\\Msg' => 'final extends App\\Dto\\OutputItem implements App\\Dto\\ItemField, App\\Dto\\ItemResource',
+            'App\\Dto\\Other' => 'final implements App\\Dto\\ItemField',
+            'App\\Dto\\CallResource' => 'final extends App\\Dto\\Call implements App\\Dto\\ItemResource',
+        ], ModelFixture::hierarchy($output));
+    }
+
+    public function testReportsAUnionWithPropertiesWhoseVariantExtendsAnotherClass(): void
+    {
+        $at = self::AT;
+        $output = ModelFixture::build([
+            'Base' => ['type' => 'object', 'properties' => ['x' => ['type' => 'string']]],
+            'Pet' => ['type' => 'object', 'properties' => ['name' => ['type' => 'string']], 'oneOf' => [['$ref' => '#/components/schemas/Cat']], 'discriminator' => ['propertyName' => 'type']],
+            'Cat' => ['allOf' => [['$ref' => '#/components/schemas/Base'], ['type' => 'object', 'properties' => ['type' => ['type' => 'string']]]]],
+        ]);
+
+        self::assertContains("error {$at}Cat: App\\Dto\\Cat already extends App\\Dto\\Base, so it cannot also be a variant of App\\Dto\\Pet.", ModelFixture::messages($output));
+    }
+
     public function testExtendsADiscriminatedBase(): void
     {
         $output = ModelFixture::build([
@@ -729,7 +779,7 @@ final class CompositionTest extends TestCase
         );
     }
 
-    public function testSharesNothingWithAVariantThatHasAnotherParent(): void
+    public function testMakesAnInterfaceOfAUnionAVariantOfWhichHasAnotherParent(): void
     {
         $output = ModelFixture::build([
             'Pet' => ['oneOf' => [['$ref' => '#/components/schemas/Cat'], ['$ref' => '#/components/schemas/Dog']], 'discriminator' => ['propertyName' => 'kind']],
@@ -738,9 +788,10 @@ final class CompositionTest extends TestCase
             'Dog' => ['type' => 'object', 'properties' => ['kind' => ['type' => 'string']]],
         ]);
 
-        self::assertCount(1, ModelFixture::messages($output));
+        self::assertSame([], ModelFixture::messages($output));
         self::assertSame([], ModelFixture::classes($output)['App\Dto\Pet']);
         self::assertSame(['kind: string|null'], ModelFixture::classes($output)['App\Dto\Dog']);
+        self::assertSame('final implements App\Dto\Pet', ModelFixture::hierarchy($output)['App\Dto\Dog']);
     }
 
     public function testKeepsTheVariantsAroundOneItCannotUse(): void
@@ -833,7 +884,7 @@ final class CompositionTest extends TestCase
             ],
             'variant with another parent' => [
                 [
-                    'Pet' => ['oneOf' => [$catRef], 'discriminator' => $discriminator],
+                    'Pet' => ['type' => 'object', 'properties' => ['name' => []], 'oneOf' => [$catRef], 'discriminator' => $discriminator],
                     'Animal' => $cat,
                     'Cat' => ['allOf' => [['$ref' => '#/components/schemas/Animal'], ['properties' => ['lives' => []]]]],
                 ],
@@ -853,16 +904,12 @@ final class CompositionTest extends TestCase
                     'Cat' => ['allOf' => [['$ref' => '#/components/schemas/Dog'], ['properties' => ['c' => []]]]],
                     'Dog' => ['allOf' => [$catRef, ['properties' => ['d' => []]]]],
                 ],
-                [
-                    "error {$at}Cat: App\\Dto\\Cat already extends App\\Dto\\Dog, so it cannot also be a variant of App\\Dto\\Pet.",
-                    "error {$at}Dog: App\\Dto\\Dog already extends App\\Dto\\Cat, so it cannot also be a variant of App\\Dto\\Pet.",
-                    "error {$at}Cat: Class App\\Dto\\Cat extends itself through App\\Dto\\Dog.",
-                ],
+                ["error {$at}Cat: Class App\\Dto\\Cat extends itself through App\\Dto\\Dog."],
             ],
-            'variant of two unions' => [
+            'variant of two unions, the second with properties' => [
                 [
                     'Pet' => ['oneOf' => [$catRef], 'discriminator' => $discriminator],
-                    'Animal' => ['oneOf' => [$catRef], 'discriminator' => $discriminator],
+                    'Animal' => ['type' => 'object', 'properties' => ['name' => []], 'oneOf' => [$catRef], 'discriminator' => $discriminator],
                     'Cat' => $cat,
                 ],
                 ["error {$at}Cat: App\\Dto\\Cat already extends App\\Dto\\Pet, so it cannot also be a variant of App\\Dto\\Animal."],

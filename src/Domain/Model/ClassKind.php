@@ -18,13 +18,21 @@ final class ClassKind extends AbstractEnum
 
     public const ABSTRACT = 'abstract';
 
+    /** The base of a discriminated union whose variants extend other classes: they implement it. */
+    public const INTERFACE = 'interface';
+
     protected static function values(): array
     {
-        return [self::FINAL, self::OPEN, self::ABSTRACT];
+        return [self::FINAL, self::OPEN, self::ABSTRACT, self::INTERFACE];
     }
 
     public function isAbstract(): bool
     {
         return $this->value() === self::ABSTRACT;
+    }
+
+    public function isInterface(): bool
+    {
+        return $this->value() === self::INTERFACE;
     }
 }

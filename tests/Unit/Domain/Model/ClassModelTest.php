@@ -137,6 +137,8 @@ final class ClassModelTest extends TestCase
         self::assertSame([$attribute], $class->withAddedAttributes($attribute)->attributes());
         self::assertSame([], $class->attributes());
         self::assertCount(2, $class->withProperties($this->property('id'), $this->property('email'))->properties());
+        self::assertSame(['App\\Item'], array_map(static fn (ClassName $name): string => $name->fqcn(), $class->withInterfaces(ClassName::fromFqcn('App\\Item'))->interfaces()));
+        self::assertSame([], $class->interfaces());
     }
 
     public function testWithPropertiesRevalidates(): void

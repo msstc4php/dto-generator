@@ -42,6 +42,9 @@ final class ClassModel
     /** @var list<string> */
     private array $restoredMutators;
 
+    /** @var list<ClassName> */
+    private array $interfaces;
+
     /**
      * @param list<PropertyModel> $properties own properties only, in schema order
      * @param list<AttributeModel> $attributes
@@ -49,6 +52,7 @@ final class ClassModel
      * @param list<string> $discriminatedProperties wire names read by a discriminator of an ancestor or a subclass
      * @param list<string> $restoredMutators wire names of inherited properties whose mutators the parent leaves out but
      *                                       no discriminator of this class's chain reads
+     * @param list<ClassName> $interfaces the interfaces of the discriminated unions that list it, in their order
      */
     public function __construct(
         ClassName $name,
@@ -62,17 +66,22 @@ final class ClassModel
         ?DiscriminatorModel $discriminator = null,
         array $discriminatorValues = [],
         array $discriminatedProperties = [],
-        array $restoredMutators = []
+        array $restoredMutators = [],
+        array $interfaces = []
     ) {
         if ($parent instanceof ClassName && $parent->equals($name)) {
             throw new InvalidModel(sprintf('Class %s cannot extend itself.', $name->fqcn()));
         }
 
-        if ($discriminator instanceof DiscriminatorModel && !$kind->isAbstract()) {
-            throw new InvalidModel(sprintf('Only an abstract class can carry a discriminator; %s is %s.', $name->fqcn(), $kind->value()));
+        if ($discriminator instanceof DiscriminatorModel && !$kind->isAbstract() && !$kind->isInterface()) {
+            throw new InvalidModel(sprintf('Only an abstract class or an interface can carry a discriminator; %s is %s.', $name->fqcn(), $kind->value()));
         }
 
-        if ($discriminatorValues !== [] && $kind->isAbstract()) {
+        if ($kind->isInterface() && ($properties !== [] || $parent instanceof ClassName)) {
+            throw new InvalidModel(sprintf('Interface %s declares no property and extends no class.', $name->fqcn()));
+        }
+
+        if ($discriminatorValues !== [] && ($kind->isAbstract() || $kind->isInterface())) {
             throw new InvalidModel(sprintf('Only a concrete class is selected by discriminator values; %s is %s.', $name->fqcn(), $kind->value()));
         }
 
@@ -117,6 +126,8 @@ final class ClassModel
         foreach (array_intersect($this->restoredMutators, $this->discriminatedProperties()) as $wireName) {
             throw new InvalidModel(sprintf('Class %s restores the mutators of "%s", which a discriminator of its chain reads.', $name->fqcn(), $wireName));
         }
+
+        $this->interfaces = $interfaces;
     }
 
     /**
@@ -249,6 +260,7 @@ final class ClassModel
             $this->discriminatorValues,
             $wireNames,
             $this->restoredMutators,
+            $this->interfaces,
         );
     }
 
@@ -258,6 +270,22 @@ final class ClassModel
     public function restoredMutators(): array
     {
         return $this->restoredMutators;
+    }
+
+    /**
+     * @return list<ClassName>
+     */
+    public function interfaces(): array
+    {
+        return $this->interfaces;
+    }
+
+    public function withInterfaces(ClassName ...$interfaces): self
+    {
+        $model = clone $this;
+        $model->interfaces = $interfaces;
+
+        return $model;
     }
 
     public function withRestoredMutators(string ...$wireNames): self
@@ -275,6 +303,7 @@ final class ClassModel
             $this->discriminatorValues,
             $this->discriminatedProperties,
             $wireNames,
+            $this->interfaces,
         );
     }
 
@@ -293,6 +322,7 @@ final class ClassModel
             $values,
             $this->discriminatedProperties,
             $this->restoredMutators,
+            $this->interfaces,
         );
     }
 
@@ -311,6 +341,7 @@ final class ClassModel
             $this->discriminatorValues,
             $this->discriminatedProperties,
             $this->restoredMutators,
+            $this->interfaces,
         );
     }
 
@@ -329,6 +360,7 @@ final class ClassModel
             $this->discriminatorValues,
             $this->discriminatedProperties,
             $this->restoredMutators,
+            $this->interfaces,
         );
     }
 
@@ -347,6 +379,7 @@ final class ClassModel
             $this->discriminatorValues,
             $this->discriminatedProperties,
             $this->restoredMutators,
+            $this->interfaces,
         );
     }
 }

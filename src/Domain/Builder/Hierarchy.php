@@ -31,6 +31,9 @@ final class Hierarchy
 
     private TypeMeet $meet;
 
+    /** @var array<string, Variants> the union bases that are interfaces, by FQCN */
+    private array $interfaces = [];
+
     private Superseded $superseded;
 
     private Diagnostics $diagnostics;
@@ -63,7 +66,7 @@ final class Hierarchy
         $hierarchy->adoptVariants($unions);
         $hierarchy->breakCycles();
         foreach (self::leavesFirst($unions) as $base) {
-            if ($unions[$base]->isListed()) {
+            if ($unions[$base]->isListed() && !isset($hierarchy->interfaces[$base])) {
                 $hierarchy->shareCommonProperties($base, $unions[$base]);
             }
         }
@@ -113,20 +116,43 @@ final class Hierarchy
      */
     private function adoptVariants(array $unions): void
     {
-        // Subclasses found through allOf already have their parent, so only listed variants are adopted.
+        // Subclasses found through allOf already have their parent, so only listed variants are adopted. A union of
+        // nothing but its variants, one of which another class has as a parent already, is an interface instead: PHP
+        // gives a class one parent, but any number of interfaces.
         foreach ($unions as $base => $variants) {
+            // The variants without a parent become the base's children, so one that descends from them reaches it.
+            $adopted = [$base];
+            foreach ($variants->classes() as $variant) {
+                if (($this->parents[$variant->fqcn()] ?? null) === null) {
+                    $adopted[] = $variant->fqcn();
+                }
+            }
+
+            $foreign = false;
             foreach ($variants->classes() as $variant) {
                 $fqcn = $variant->fqcn();
                 if ($fqcn === $base) {
                     $this->diagnostics->error(sprintf('%s lists itself among its variants.', $base), $this->models[$base]->source());
-                } elseif (($this->parents[$fqcn] ?? null) === null) {
-                    $this->parents[$fqcn] = $this->models[$base]->name();
+                } elseif (($this->parents[$fqcn] ?? null) !== null && !$this->reaches($fqcn, $adopted)) {
+                    $foreign = true;
+                }
+            }
+
+            if ($foreign && $variants->isListed() && $this->models[$base]->properties() === [] && ($this->parents[$base] ?? null) === null) {
+                $this->interfaces[$base] = $variants;
+
+                continue;
+            }
+
+            foreach ($variants->classes() as $variant) {
+                if ($variant->fqcn() !== $base && ($this->parents[$variant->fqcn()] ?? null) === null) {
+                    $this->parents[$variant->fqcn()] = $this->models[$base]->name();
                 }
             }
         }
 
         // Only now are all variants adopted, so one may descend from the base through another.
-        foreach ($unions as $base => $variants) {
+        foreach (array_diff_key($unions, $this->interfaces) as $base => $variants) {
             foreach ($variants->classes() as $variant) {
                 $fqcn = $variant->fqcn();
                 $foreign = $this->foreignParent($fqcn, $base);
@@ -138,6 +164,25 @@ final class Hierarchy
                 }
             }
         }
+    }
+
+    /**
+     * Whether the chain of parents of a class reaches one of the classes.
+     *
+     * @param list<string> $targets
+     */
+    private function reaches(string $fqcn, array $targets): bool
+    {
+        $seen = [];
+        for ($parent = $this->parents[$fqcn] ?? null; $parent instanceof ClassName && !isset($seen[$parent->fqcn()]); $parent = $this->parents[$parent->fqcn()] ?? null) {
+            if (in_array($parent->fqcn(), $targets, true)) {
+                return true;
+            }
+
+            $seen[$parent->fqcn()] = $parent;
+        }
+
+        return false;
     }
 
     /**
@@ -221,9 +266,16 @@ final class Hierarchy
         }
 
         foreach ($this->models as $fqcn => $model) {
-            $kind = isset($unions[$fqcn]) ? ClassKind::ABSTRACT : (isset($parents[$fqcn]) ? ClassKind::OPEN : ClassKind::FINAL);
+            $kind = isset($this->interfaces[$fqcn]) ? ClassKind::INTERFACE : (isset($unions[$fqcn]) ? ClassKind::ABSTRACT : (isset($parents[$fqcn]) ? ClassKind::OPEN : ClassKind::FINAL));
             $discriminator = isset($unions[$fqcn]) ? $unions[$fqcn]->discriminator() : null;
             $this->models[$fqcn] = $model->withHierarchy(ClassKind::from($kind), $this->parents[$fqcn], $discriminator);
+        }
+
+        foreach ($this->interfaces as $base => $variants) {
+            foreach ($variants->classes() as $variant) {
+                $model = $this->models[$variant->fqcn()];
+                $this->models[$variant->fqcn()] = $model->withInterfaces(...array_merge($model->interfaces(), [$this->models[$base]->name()]));
+            }
         }
     }
 

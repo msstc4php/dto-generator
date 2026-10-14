@@ -16,6 +16,12 @@ All notable changes to this package are documented here. The format follows
   whole schema. A remote one under `remoteRefs.allow` is fetched and cached like
   any other.
 - `SchemaReferences::at()`: the schema loaded at a location, such as the schema of an ancestor.
+- A discriminated `oneOf`/`anyOf` with no properties of its own, a variant of which already extends another class
+  (through its own `allOf` or as the variant of another union), is an empty `interface` the variants implement,
+  instead of an error: PHP gives a class one parent but any number of interfaces. `ClassKind::INTERFACE` and
+  `ClassModel::interfaces()` describe it to extensions; the interface carries the discriminator.
+- An inline discriminated `oneOf`/`anyOf` (a property's schema) with inline object variants is a class named after its
+  place, with the variants extending it, instead of an error.
 
 ### Changed
 
@@ -30,6 +36,8 @@ Found by generating the GitHub, OpenAI and Stripe specifications (GitHub now gen
   numbered from 2, with a warning, instead of an error.
 - An inline object variant of a named discriminated `oneOf`/`anyOf` is a class extending the base (its title, or
   `<Base>Option<N>`), mapped by the one value its discriminator property has, instead of an error.
+- The default of a union property that an enum member and a scalar member both admit stays a literal; one only an
+  enum admits (next to a class or another scalar) is the enum case, where the literal was invalid PHP.
 - Property names and enum values that only a leading sign tells apart (`+1` and `-1`), or a sign alone (`*`), are
   spelled out (`plus1`, `minus1`, `ASTERISK`) instead of an error.
 
