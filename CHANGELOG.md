@@ -6,6 +6,13 @@ All notable changes to this package are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `$ref`s in the raw schemas of keywords (`not`, `if`, `then`, `else`, `contains`, `propertyNames`, `prefixItems`,
+  `patternProperties`, `dependentSchemas`, `unevaluatedItems`…) are loaded, after every other reference, and
+  `SchemaReferences::follow()` resolves them for extensions. A schema only they reach gets no class of its own; one
+  that cannot be loaded gives a warning instead of an error, as only an extension reads it.
+
 ## [1.5.0] - 2026-10-14
 
 ### Added

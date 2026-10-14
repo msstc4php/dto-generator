@@ -105,7 +105,58 @@ final class Action
             }
         }
 
+        $this->followKeywordReferences($graph, $input, $diagnostics, $reads, $parser);
+
         return new Output($graph->build($diagnostics), $diagnostics, $reads->documents(), $reads->readsRemote() ? $config->remoteRefs()->cacheDir() : null);
+    }
+
+    /**
+     * The `$ref`s in the schemas of keywords (`not`, `propertyNames`…), last: what only they reach gets no source, so
+     * no class of its own, and a reference that cannot be followed is a warning, as only an extension reads it.
+     */
+    private function followKeywordReferences(GraphBuilder $graph, Input $input, Diagnostics $diagnostics, Reads $reads, SchemaParser $parser): void
+    {
+        $quiet = new Diagnostics();
+        /** @var list<array{ReferenceUse, ?SchemaLocation}> $queue each with the schema it names a subschema of, if structural */
+        $queue = [];
+        foreach ($graph->schemas() as $schema) {
+            foreach ($schema->schema()->keywordReferences() as $use) {
+                $queue[] = [$use, null];
+            }
+        }
+
+        while ($queue !== []) {
+            [$use, $from] = array_shift($queue);
+            $target = $this->target($use, $input->config()->remoteRefs(), $quiet);
+            if (!$target instanceof SchemaLocation) {
+                continue;
+            }
+
+            $graph->addReference($use, $from, $target);
+            if ($graph->knows($target)) {
+                continue;
+            }
+
+            $resolved = $this->resolve($target, $use, [], $input, $quiet, $graph, $reads, $parser);
+            if (!$resolved instanceof ResolvedSchema) {
+                $graph->markFailed($target);
+
+                continue;
+            }
+
+            $graph->add($resolved);
+            foreach ($resolved->schema()->references() as $next) {
+                $queue[] = [$next, $resolved->location()];
+            }
+
+            foreach ($resolved->schema()->keywordReferences() as $next) {
+                $queue[] = [$next, null];
+            }
+        }
+
+        foreach ($quiet->all() as $diagnostic) {
+            $diagnostics->warning($diagnostic->message(), $diagnostic->location());
+        }
     }
 
     /**

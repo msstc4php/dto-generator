@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace MSSTC4PHP\DtoGenerator\Contract;
 
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
+use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaBuilder;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaGraph;
+use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
 
 /**
  * Lets an enricher read the schema a `$ref` points to: a property `{$ref: Email}` keeps its keywords, like `format`,
@@ -50,6 +52,18 @@ final class SchemaReferences
     public function chain(Schema $schema): array
     {
         return $this->walk($schema)[0];
+    }
+
+    /**
+     * The schemas a `$ref` written at a place leads through, as chain() lists them after the schema that has it: for
+     * the raw schemas of keywords (`propertyNames: {$ref: Name}`), which the loader follows too. Empty when the
+     * reference does not resolve; the last one still has a `$ref` when a later one does not, or at a cycle.
+     *
+     * @return list<Schema>
+     */
+    public function follow(string $ref, SchemaLocation $at): array
+    {
+        return array_slice($this->chain((new SchemaBuilder($at))->ref($ref)->build()), 1);
     }
 
     /**

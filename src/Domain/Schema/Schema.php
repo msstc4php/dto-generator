@@ -17,6 +17,15 @@ use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
  */
 final class Schema
 {
+    /** Keywords whose value is a schema. */
+    private const SCHEMA_KEYWORDS = [
+        'not', 'if', 'then', 'else', 'contains', 'propertyNames', 'unevaluatedItems', 'unevaluatedProperties', 'items',
+        'additionalProperties', 'additionalItems',
+    ];
+
+    /** Keywords whose value lists or maps schemas. */
+    private const SCHEMAS_KEYWORDS = ['allOf', 'anyOf', 'oneOf', 'prefixItems', 'properties', 'patternProperties', 'dependentSchemas'];
+
     /** @var non-empty-list<non-empty-string> keywords with a dedicated accessor */
     public const STRUCTURAL_KEYWORDS = [
         'type', '$ref', 'format', 'description', 'deprecated', 'default', 'enum', 'properties', 'required',
@@ -347,6 +356,68 @@ final class Schema
         }
 
         return $uses;
+    }
+
+    /**
+     * Every `$ref` in the schemas this schema and its subschemas keep as raw keywords (`not`, `contains`,
+     * `propertyNames`, `prefixItems`…), which an extension reads; the loader follows them after the others, and only
+     * for SchemaReferences, so their targets give no classes of their own.
+     *
+     * @return list<ReferenceUse>
+     */
+    public function keywordReferences(): array
+    {
+        $uses = self::keywordSchemaReferences($this->keywords, $this->location);
+        foreach ($this->subschemas() as $subschema) {
+            array_push($uses, ...$subschema->keywordReferences());
+        }
+
+        return $uses;
+    }
+
+    /**
+     * The `$ref`s in raw schemas, found through the keywords whose values are schemas; the values of other keywords
+     * (`const`, `examples`) are data, whatever keys they hold.
+     *
+     * @param array<array-key, mixed> $keywords a schema's, as JsonValue holds them
+     *
+     * @return list<ReferenceUse>
+     */
+    private static function keywordSchemaReferences(array $keywords, SchemaLocation $at): array
+    {
+        $uses = [];
+        foreach (self::SCHEMA_KEYWORDS as $name) {
+            if (array_key_exists($name, $keywords)) {
+                array_push($uses, ...self::rawSchemaReferences(Json::value($keywords[$name]), $at->child($name)));
+            }
+        }
+
+        foreach (self::SCHEMAS_KEYWORDS as $name) {
+            $schemas = $keywords[$name] ?? null;
+            if (is_array($schemas)) {
+                foreach ($schemas as $key => $schema) {
+                    array_push($uses, ...self::rawSchemaReferences(Json::value($schema), $at->child($name, (string) $key)));
+                }
+            }
+        }
+
+        return $uses;
+    }
+
+    /**
+     * @param JsonValue $schema
+     *
+     * @return list<ReferenceUse>
+     */
+    private static function rawSchemaReferences($schema, SchemaLocation $at): array
+    {
+        if (!is_array($schema)) {
+            return [];
+        }
+
+        $ref = $schema['$ref'] ?? null;
+
+        return array_merge(is_string($ref) && $ref !== '' ? [new ReferenceUse($ref, $at)] : [], self::keywordSchemaReferences($schema, $at));
     }
 
     /**
