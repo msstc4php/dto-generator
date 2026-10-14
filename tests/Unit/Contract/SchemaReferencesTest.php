@@ -114,6 +114,35 @@ final class SchemaReferencesTest extends TestCase
         self::assertSame($loop, $references->resolve($loop));
     }
 
+    public function testFollowsAReferenceWrittenInTheSchemaOfAKeyword(): void
+    {
+        $graph = GraphFixture::load([
+            'Pet' => ['type' => 'object', 'propertyNames' => ['$ref' => '#/components/schemas/Name'], 'not' => ['$ref' => '#/components/schemas/Gone']],
+            'Name' => ['$ref' => '#/components/schemas/Word', 'minLength' => 2],
+            'Word' => ['type' => 'string'],
+        ], [], null, false);
+        $references = new SchemaReferences($graph);
+        $pet = $this->schema($graph, 'Pet')->location();
+
+        self::assertSame([$this->schema($graph, 'Name'), $this->schema($graph, 'Word')], $references->follow('#/components/schemas/Name', $pet->child('propertyNames')));
+        self::assertSame([], $references->follow('#/components/schemas/Gone', $pet->child('not')));
+        self::assertSame([], $references->follow('#/components/schemas/Name', $pet->child('not')), 'only where it is written');
+        self::assertSame([], SchemaReferences::none()->follow('#/components/schemas/Name', $pet->child('propertyNames')));
+    }
+
+    public function testFindsALoadedSchemaByItsLocation(): void
+    {
+        $graph = GraphFixture::load([
+            'Pet' => ['type' => 'object', 'properties' => ['name' => ['type' => 'string']]],
+        ]);
+        $references = new SchemaReferences($graph);
+        $pet = $this->schema($graph, 'Pet');
+
+        self::assertSame($pet, $references->at($pet->location()));
+        self::assertNull($references->at($pet->location()->child('properties', 'name')), 'an inline schema is not loaded on its own');
+        self::assertNull(SchemaReferences::none()->at($pet->location()));
+    }
+
     public function testResolvesNothingWithoutAGraph(): void
     {
         $graph = GraphFixture::load([

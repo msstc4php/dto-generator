@@ -105,7 +105,64 @@ final class Action
             }
         }
 
+        $this->followKeywordReferences($graph, $input, $diagnostics, $reads);
+
         return new Output($graph->build($diagnostics), $diagnostics, $reads->documents(), $reads->readsRemote() ? $config->remoteRefs()->cacheDir() : null);
+    }
+
+    /**
+     * The `$ref`s in the schemas of keywords (`not`, `propertyNames`…), last: what only they reach gets no source, so
+     * no class of its own. Only an extension reads them, so a target that cannot be loaded or read is a warning and
+     * stays out of the graph, and what the parser says about one that can is left to the extension.
+     */
+    private function followKeywordReferences(GraphBuilder $graph, Input $input, Diagnostics $diagnostics, Reads $reads): void
+    {
+        $failures = new Diagnostics();
+        /** @var list<array{ReferenceUse, ?SchemaLocation}> $queue each with the schema it names a subschema of, if structural */
+        $queue = [];
+        foreach ($graph->schemas() as $schema) {
+            foreach ($schema->schema()->keywordReferences() as $use) {
+                $queue[] = [$use, null];
+            }
+        }
+
+        while ($queue !== []) {
+            [$use, $from] = array_shift($queue);
+            $target = $this->target($use, $input->config()->remoteRefs(), $failures);
+            if (!$target instanceof SchemaLocation) {
+                continue;
+            }
+
+            $graph->addReference($use, $from, $target);
+            if ($graph->knows($target)) {
+                continue;
+            }
+
+            $own = new Diagnostics();
+            $resolved = $this->resolve($target, $use, [], $input, $own, $graph, $reads, $this->parser);
+            foreach ($own->errors() as $error) {
+                $failures->add($error);
+            }
+
+            if (!$resolved instanceof ResolvedSchema || $own->hasErrors()) {
+                $graph->markFailed($target);
+
+                continue;
+            }
+
+            $graph->add($resolved);
+            foreach ($resolved->schema()->references() as $next) {
+                $queue[] = [$next, $resolved->location()];
+            }
+
+            foreach ($resolved->schema()->keywordReferences() as $next) {
+                $queue[] = [$next, null];
+            }
+        }
+
+        foreach ($failures->all() as $diagnostic) {
+            $diagnostics->warning($diagnostic->message(), $diagnostic->location());
+        }
     }
 
     /**

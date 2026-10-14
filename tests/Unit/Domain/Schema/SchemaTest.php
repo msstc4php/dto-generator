@@ -250,7 +250,55 @@ final class SchemaTest extends TestCase
 
     public function testASchemaWithoutReferencesListsNone(): void
     {
-        self::assertSame([], $this->builder()->types($this->type(SchemaType::STRING))->build()->references());
+        $schema = $this->builder()->types($this->type(SchemaType::STRING))->build();
+
+        self::assertSame([], $schema->references());
+        self::assertSame([], $schema->keywordReferences());
+    }
+
+    public function testListsTheReferencesInTheSchemasOfItsKeywords(): void
+    {
+        $tags = $this->builder('/properties/tags')
+            ->keyword('contains', ['$ref' => '#/C'])
+            ->keyword('prefixItems', [['$ref' => '#/P0'], ['allOf' => [['items' => ['$ref' => '#/I']]], 'anyOf' => 'none'], true])
+            ->build()
+        ;
+        $schema = $this->builder()
+            ->ref('#/Base')
+            ->keyword('propertyNames', ['$ref' => '#/N', 'not' => ['properties' => ['x' => ['$ref' => '#/X']]]])
+            ->keyword('patternProperties', ['^a/~' => ['$ref' => '#/A'], 'b' => false])
+            ->keyword('dependentSchemas', ['a' => ['if' => ['$ref' => '#/If'], 'then' => ['oneOf' => [['$ref' => '#/T']]]]])
+            ->keyword('if', ['additionalProperties' => ['$ref' => '#/AP'], 'unevaluatedItems' => ['$ref' => '#/U'], 'additionalItems' => ['$ref' => '#/AI']])
+            ->keyword('else', ['else' => ['unevaluatedProperties' => ['$ref' => '#/UP']], '$ref' => 5, 'propertyNames' => ['$ref' => '']])
+            ->keyword('const', ['$ref' => '#/Data'])
+            ->keyword('examples', [['$ref' => '#/Data']])
+            ->keyword('dependentRequired', ['a' => ['$ref']])
+            ->keyword('then', [['$ref' => '#/List']])
+            ->keyword('contentSchema', ['$ref' => '#/Content'])
+            ->keyword('dependencies', ['a' => ['b'], 'c' => ['$ref' => '#/Dep']])
+            ->keyword('contains', ['items' => [['$ref' => '#/Tuple0'], true]])
+            ->property('tags', $tags)
+            ->build()
+        ;
+
+        self::assertSame([
+            'a.json#/if/unevaluatedItems #/U',
+            'a.json#/if/additionalProperties #/AP',
+            'a.json#/if/additionalItems #/AI',
+            'a.json#/else/else/unevaluatedProperties #/UP',
+            'a.json#/contains/items/0 #/Tuple0',
+            'a.json#/propertyNames #/N',
+            'a.json#/propertyNames/not/properties/x #/X',
+            'a.json#/contentSchema #/Content',
+            'a.json#/patternProperties/^a~1~0 #/A',
+            'a.json#/dependentSchemas/a/if #/If',
+            'a.json#/dependentSchemas/a/then/oneOf/0 #/T',
+            'a.json#/dependencies/c #/Dep',
+            'a.json#/properties/tags/contains #/C',
+            'a.json#/properties/tags/prefixItems/0 #/P0',
+            'a.json#/properties/tags/prefixItems/1/allOf/0/items #/I',
+        ], array_map(static fn (ReferenceUse $use): string => $use->location()->toString() . ' ' . $use->ref(), $schema->keywordReferences()));
+        self::assertCount(1, $schema->references());
     }
 
     public function testRequirePropertyRejectsAnUnknownName(): void

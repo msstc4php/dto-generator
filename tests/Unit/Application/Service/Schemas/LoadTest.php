@@ -13,6 +13,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Builder\SchemaParser;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\ClaimedKeyword;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostic;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\KeywordChecks;
+use MSSTC4PHP\DtoGenerator\Domain\Schema\ReferenceUse;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\ResolvedSchema;
 use MSSTC4PHP\DtoGenerator\Tests\Support\ConfigMother;
 use MSSTC4PHP\DtoGenerator\Tests\Support\InMemoryDocumentLoader;
@@ -305,6 +306,16 @@ final class LoadTest extends TestCase
     }
 
     /**
+     * Without the parser's warnings about the keywords no extension claims here.
+     *
+     * @return list<string>
+     */
+    private function referenceMessages(Output $output): array
+    {
+        return array_values(array_filter($this->messages($output), static fn (string $message): bool => strpos($message, 'is not supported and has no effect') === false));
+    }
+
+    /**
      * @return list<array{string, int|null, bool}>
      */
     private function summary(Output $output): array
@@ -426,6 +437,98 @@ final class LoadTest extends TestCase
         self::assertNotNull($resolved);
         self::assertSame('Tag', $resolved->name());
         self::assertNull($output->graph()->resolve($bad));
+    }
+
+    public function testFollowsTheReferencesOfKeywordsWithoutGivingTheirTargetsASource(): void
+    {
+        $output = $this->load(
+            [
+                self::SPEC => $this->spec([
+                    'User' => [
+                        'propertyNames' => ['$ref' => '#/components/schemas/Name'],
+                        'properties' => ['tags' => ['contains' => ['$ref' => '../shared/common.json#/Tag']]],
+                        'not' => ['$ref' => '#/components/schemas/User/properties/tags'],
+                    ],
+                    'Name' => ['type' => 'string'],
+                    'Hidden' => ['type' => 'string'],
+                ]),
+                self::SHARED => [
+                    'Tag' => ['allOf' => [['$ref' => '#/Code']], 'not' => ['$ref' => '#/Banned']],
+                    'Code' => ['type' => 'string'],
+                    'Banned' => ['const' => 'x'],
+                ],
+            ],
+            ConfigMother::source(self::SPEC, ['User', 'Name']),
+        );
+
+        self::assertSame([], $this->referenceMessages($output));
+        self::assertSame([['User', 0, true], ['Name', 0, true], ['tags', null, false], ['Tag', null, false], ['Code', null, false], ['Banned', null, false]], $this->summary($output));
+        $user = $output->graph()->all()[0]->schema();
+        $resolved = array_map(function (ReferenceUse $use) use ($output): string {
+            $target = $output->graph()->resolve($use);
+            self::assertNotNull($target);
+
+            return $target->location()->toString();
+        }, $user->keywordReferences());
+        self::assertSame([
+            '/project/api/openapi.yaml#/components/schemas/User/properties/tags',
+            '/project/api/openapi.yaml#/components/schemas/Name',
+            '/project/shared/common.json#/Tag',
+        ], $resolved);
+    }
+
+    public function testAKeywordReferenceLeavesTheSourceOfASchemaOtherwiseReferenced(): void
+    {
+        $output = $this->load([
+            self::SPEC => $this->spec(['User' => [
+                'not' => ['$ref' => '../shared/common.json#/Money'],
+                'properties' => ['salary' => ['$ref' => '../shared/common.json#/Money']],
+            ]]),
+            self::SHARED => ['Money' => ['type' => 'object']],
+        ]);
+
+        self::assertSame([['User', 0, true], ['Money', 0, false]], $this->summary($output));
+    }
+
+    public function testWarnsAboutAKeywordReferenceThatCannotBeFollowed(): void
+    {
+        $output = $this->load(
+            [self::SPEC => $this->spec(['User' => [
+                'if' => ['$ref' => 'https://example.com/a.json'],
+                'not' => ['$ref' => '#/components/schemas/Nope'],
+                'contains' => ['$ref' => '../missing.json#/A'],
+                'then' => ['$ref' => '#/components/schemas/Tag'],
+                'else' => ['$ref' => '#/components/schemas/Nope'],
+                'properties' => ['tag' => ['$ref' => '#/components/schemas/Tag']],
+            ]])],
+        );
+
+        self::assertSame([
+            'error /project/api/openapi.yaml#/components/schemas/User/properties/tag: $ref "#/components/schemas/Tag" does not resolve: /project/api/openapi.yaml has nothing at "/components/schemas/Tag".',
+            'warning /project/api/openapi.yaml#/components/schemas/User/not: $ref "#/components/schemas/Nope" does not resolve: /project/api/openapi.yaml has nothing at "/components/schemas/Nope".',
+            'warning /project/api/openapi.yaml#/components/schemas/User/if: Remote $ref "https://example.com/a.json" names https://example.com/a.json, which remoteRefs.allow does not cover; add its prefix there, or save the document next to the specification and refer to it by path.',
+            'warning /project/api/openapi.yaml#/components/schemas/User/contains: File "/project/missing.json" does not exist.',
+        ], $this->referenceMessages($output));
+        self::assertSame([['User', 0, true]], $this->summary($output));
+    }
+
+    public function testLeavesOutAKeywordTargetThatIsNoSchemaItCanRead(): void
+    {
+        $output = $this->load([
+            self::SPEC => $this->spec(['User' => [
+                'not' => ['$ref' => '../shared/common.json#/Never'],
+                'if' => ['$ref' => '../shared/common.json#/Text'],
+                'then' => ['$ref' => '../shared/common.json#/Odd'],
+            ]]),
+            self::SHARED => ['Never' => false, 'Text' => 'oops', 'Odd' => ['type' => 'string', 'not' => ['const' => 'x'], 'x-php-nmae' => 'y']],
+        ]);
+
+        self::assertSame([
+            'warning /project/shared/common.json#/Never: The "false" schema is not supported.',
+            'warning /project/shared/common.json#/Text: A schema must be an object.',
+        ], $this->referenceMessages($output));
+        self::assertSame([['User', 0, true], ['Odd', null, false]], $this->summary($output));
+        self::assertSame([], array_values(array_filter($this->messages($output), static fn (string $message): bool => strpos($message, '#/Odd') !== false)), 'the extension reads what it can');
     }
 
     public function testRejectsComponentsThatAreNotAnObject(): void

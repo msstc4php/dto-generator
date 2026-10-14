@@ -64,6 +64,11 @@ final class Action
         foreach ($input->graph()->all() as $resolved) {
             $source = $resolved->source();
             $schema = $resolved->schema();
+            // Without a source the schema gives no type: only an extension reads it, through a keyword of another.
+            if ($source === null) {
+                continue;
+            }
+
             $isClass = SchemaShape::isClass($schema);
             $isEnum = SchemaShape::isEnum($schema);
             if ($isClass) {
@@ -72,10 +77,6 @@ final class Action
                 ExtensionVocabulary::checkEnum($schema, $diagnostics, $input->aliases());
             } else {
                 ExtensionVocabulary::checkAlias($schema, $diagnostics, $input->aliases());
-            }
-
-            if ($source === null) {
-                continue;
             }
 
             if (ClassBuilder::isSkipped($schema, $diagnostics)) {

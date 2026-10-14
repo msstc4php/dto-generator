@@ -58,10 +58,25 @@ final class GraphBuilder
     /** @var array<string, string> reference key → target key */
     private array $edges = [];
 
-    public function addReference(ReferenceUse $use, SchemaLocation $from, SchemaLocation $to): void
+    /**
+     * @param SchemaLocation|null $from the schema the target is a subschema of; none for the schema of a keyword, whose
+     *                                  target takes no source from it
+     */
+    public function addReference(ReferenceUse $use, ?SchemaLocation $from, SchemaLocation $to): void
     {
-        $this->referrers[$to->toString()][] = $from->toString();
+        if ($from instanceof SchemaLocation) {
+            $this->referrers[$to->toString()][] = $from->toString();
+        }
+
         $this->edges[$use->key()] = $to->toString();
+    }
+
+    /**
+     * @return list<ResolvedSchema>
+     */
+    public function schemas(): array
+    {
+        return array_values($this->schemas);
     }
 
     /**

@@ -439,6 +439,22 @@ final class EnrichTest extends TestCase
         self::assertSame(['App\Dto\Order' => ['inline: App\Attr\OnInline'], 'App\Dto\OrderInline' => [], 'App\Dto\OrderLinesItem' => []], $this->attributes($output));
     }
 
+    public function testKeepsAnInlineObjectInlineWhenAKeywordRefersToIt(): void
+    {
+        $output = $this->enrich(
+            ['Order' => ['type' => 'object', 'properties' => [
+                'inline' => ['type' => 'object', 'x-php-attributes' => [['class' => 'App\Attr\OnInline']], 'properties' => ['z' => ['type' => 'string']]],
+                'other' => ['type' => 'object', 'not' => ['$ref' => '#/components/schemas/Order/properties/inline']],
+            ]]],
+            static function (ExtensionRegistry $registry): void {
+                (new CustomAttributes([]))->register($registry, []);
+            },
+        );
+
+        self::assertSame(['inline: App\Attr\OnInline'], $this->attributes($output)['App\Dto\Order']);
+        self::assertSame([], $this->attributes($output)['App\Dto\OrderInline']);
+    }
+
     public function testChecksImportAliasesOfAnnotationsToo(): void
     {
         $output = $this->enrich(['Pet' => self::SCHEMAS['Pet']], self::conflictingAliases(), '7.4', true, MetadataMode::ANNOTATIONS);

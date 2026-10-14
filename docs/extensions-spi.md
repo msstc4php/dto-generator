@@ -134,7 +134,12 @@ final readonly class Payment
 
 Keywords beside a `$ref` (`{$ref: Email, maxLength: 64}`) stay on the property's schema, and the referenced schema has
 its own: read `schema()` first, then `references()->resolve(schema())`, or walk `references()->chain()` when every
-schema on the way must apply.
+schema on the way must apply. A `$ref` in the raw schema of a keyword (`propertyNames: {$ref: Name}`, `not`,
+`contains`, `prefixItems`…) is followed too: `references()->follow($ref, $at)` lists the schemas it leads through,
+where `$at` is the location of that raw schema (`$place->location()->child('propertyNames')`). The loader follows
+these last: a schema only they reach gets no class, and one they cannot reach gives a warning, not an error.
+`references()->at($location)` gives the schema loaded at a location, such as that of an ancestor
+(`ancestors()[0]->source()`), or `null` for an inline one.
 
 ## Attributes
 
