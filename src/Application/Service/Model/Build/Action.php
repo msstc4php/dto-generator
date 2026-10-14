@@ -159,7 +159,7 @@ final class Action
             $built[] = new BuiltClass($model, $registry->planned()[$index][2]);
         }
 
-        [$built, $enums] = $this->used($built, $registry->enums(), $superseded);
+        [$built, $enums] = $this->used($built, $registry->enums(), $superseded, $input->graph());
         $output = new Output($built, $diagnostics, $enums);
         $models = [];
         $inherited = [];
@@ -183,28 +183,29 @@ final class Action
     }
 
     /**
-     * Leaves out the classes and enums of the property types the build set aside, unless something else names them.
+     * Leaves out the inline classes and enums of the property types the build set aside, unless something else names
+     * them; a named schema or a $ref target is always generated.
      *
      * @param list<BuiltClass> $classes
      * @param list<BuiltEnum> $enums
      *
      * @return array{list<BuiltClass>, list<BuiltEnum>}
      */
-    private function used(array $classes, array $enums, Superseded $superseded): array
+    private function used(array $classes, array $enums, Superseded $superseded, SchemaGraph $graph): array
     {
         $models = [];
         $queue = [];
         foreach ($classes as $class) {
             $fqcn = $class->model()->name()->fqcn();
             $models[$fqcn] = $class->model();
-            if (!$superseded->has($fqcn)) {
+            if (!$superseded->has($fqcn) || $graph->get($class->model()->source()) instanceof ResolvedSchema) {
                 $queue[] = $fqcn;
             }
         }
 
         $used = [];
         foreach ($enums as $enum) {
-            $used[$enum->model()->name()->fqcn()] = !$superseded->has($enum->model()->name()->fqcn());
+            $used[$enum->model()->name()->fqcn()] = !$superseded->has($enum->model()->name()->fqcn()) || $graph->get($enum->model()->source()) instanceof ResolvedSchema;
         }
 
         $reached = [];
@@ -389,7 +390,8 @@ final class Action
                 if ($declared instanceof Schema && $object && $this->joinable($declared, $candidate, $suffix, $graph)) {
                     $registry->join($declared, $candidate);
                 } else {
-                    $this->declareInline($candidate, $title, $baseName === null ? null : $baseName . $suffix, $wireName, $namespace, $source, $registry, $enums, $diagnostics);
+                    // An object the class cannot join is reported where the types of the property meet, not renamed.
+                    $this->declareInline($candidate, $title, $baseName === null ? null : $baseName . $suffix, $wireName, $namespace, $source, $registry, $enums, $diagnostics, !$declared instanceof Schema);
                     if ($object && !$declared instanceof Schema) {
                         $objects[$wireName][$suffix] = $candidate;
                     }
@@ -432,7 +434,7 @@ final class Action
      * @param ?string $title the name the member's title gives
      * @param ?string $derived `<Parent><Property>…`; null when the name has no usable characters
      */
-    private function declareInline(Schema $candidate, ?string $title, ?string $derived, string $wireName, string $namespace, int $source, Registry $registry, EnumBuilder $enums, Diagnostics $diagnostics): void
+    private function declareInline(Schema $candidate, ?string $title, ?string $derived, string $wireName, string $namespace, int $source, Registry $registry, EnumBuilder $enums, Diagnostics $diagnostics, bool $warn = true): void
     {
         // A schema reached by $ref from elsewhere may already carry its own name.
         if ($registry->isDeclared($candidate)) {
@@ -442,7 +444,7 @@ final class Action
         $short = $this->inlineName($candidate, $title ?? $derived, $wireName, $diagnostics);
         $name = $short === null ? null : $registry->className($namespace, $short, $candidate);
         if ($name instanceof ClassName && $registry->isTaken($name) && !$candidate->extensions()->has('x-php-class-name')) {
-            $name = $this->freeName($candidate, $name, $title === null ? null : $derived, $namespace, $registry, $diagnostics);
+            $name = $this->freeName($candidate, $name, $title === null ? null : $derived, $namespace, $registry, $warn ? $diagnostics : new Diagnostics());
         }
 
         if (!$name instanceof ClassName || !$registry->claim($name, $candidate, $diagnostics) || !$this->declare($candidate, $name, $source, SchemaShape::isEnum($candidate), $registry, $enums, $diagnostics)) {

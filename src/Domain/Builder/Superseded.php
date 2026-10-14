@@ -18,17 +18,19 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\UnionType;
  */
 final class Superseded
 {
-    /** @var list<string> FQCNs; a class the kept type names too stays, as its own class reaches it */
+    /** @var array<string, string> by FQCN; a class the kept type names too stays, as its own class reaches it */
     private array $names = [];
 
     public function add(TypeModel $type): void
     {
-        array_push($this->names, ...self::named($type));
+        foreach (self::named($type) as $name) {
+            $this->names[$name] = $name;
+        }
     }
 
     public function has(string $fqcn): bool
     {
-        return in_array($fqcn, $this->names, true);
+        return isset($this->names[$fqcn]);
     }
 
     /**

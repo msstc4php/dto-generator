@@ -317,7 +317,7 @@ final class ClassBuilder
             }
         }
 
-        return Identifier::distinct($spelled, $kept) ? $spelled : [];
+        return $this->names->undisputed($spelled, $kept);
     }
 
     private function propertyName(string $wireName, Schema $schema, Diagnostics $diagnostics): ?string

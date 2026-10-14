@@ -109,6 +109,24 @@ final class NameResolver
     }
 
     /**
+     * The spelled names no other name meets, letter case ignored; the others stay as they were, and their collision is
+     * reported.
+     *
+     * @template TKey of array-key
+     *
+     * @param array<TKey, string> $spelled
+     * @param list<string> $kept the names left as they are
+     *
+     * @return array<TKey, string>
+     */
+    public function undisputed(array $spelled, array $kept): array
+    {
+        $counts = array_count_values(array_map(static fn (string $name): string => Identifier::asciiLower($name), array_merge(array_values($spelled), $kept)));
+
+        return array_filter($spelled, static fn (string $name): bool => $counts[Identifier::asciiLower($name)] === 1);
+    }
+
+    /**
      * @return list<string>
      */
     private function words(string $name): array

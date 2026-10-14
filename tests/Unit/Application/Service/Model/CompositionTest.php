@@ -242,7 +242,7 @@ final class CompositionTest extends TestCase
 
         $narrows = static fn (string $name, string $type): string => "warning {$at}Cat/allOf/1/properties/{$name}: Property \"{$name}\" of App\\Dto\\Cat narrows the one App\\Dto\\Pet declares, whose type {$type} the class keeps.";
         self::assertSame(
-            [$narrows('at', 'DateTimeImmutable|null'), $narrows('n', 'string|null'), $narrows('kind', 'string|null'), $narrows('size', 'App\\Dto\\PetSize|null')],
+            [str_replace(' keeps.', ' keeps and does not require it.', $narrows('at', 'DateTimeImmutable|null')), $narrows('n', 'string|null'), $narrows('kind', 'string|null'), $narrows('size', 'App\\Dto\\PetSize|null')],
             array_values(array_filter(ModelFixture::messages($output), static fn (string $message): bool => strpos($message, 'narrows') !== false)),
         );
         self::assertSame(['meow: string|null'], ModelFixture::classes($output)['App\\Dto\\Cat']);
@@ -263,6 +263,37 @@ final class CompositionTest extends TestCase
 
         self::assertSame(['App\\Dto\\DogMode', 'App\\Dto\\DogState2', 'App\\Dto\\DogTagsItem'], array_map(static fn (BuiltEnum $enum): string => $enum->model()->name()->fqcn(), $output->enums()));
         self::assertSame(['state: App\\Dto\\DogState2|null', 'mode: App\\Dto\\DogMode|null', 'tags: list<App\\Dto\\DogTagsItem>|null'], ModelFixture::classes($output)['App\\Dto\\Dog']);
+    }
+
+    public function testGeneratesTheNamedSchemasItSetsAside(): void
+    {
+        $output = ModelFixture::build([
+            'Status' => ['type' => 'string', 'enum' => ['a', 'b', 'c']],
+            'Narrow' => ['type' => 'string', 'enum' => ['a']],
+            'Kind' => ['type' => 'string', 'enum' => ['k']],
+            'Pet' => ['allOf' => [
+                ['type' => 'object', 'properties' => ['s' => ['$ref' => '#/components/schemas/Status']]],
+                ['type' => 'object', 'properties' => ['s' => ['$ref' => '#/components/schemas/Narrow']]],
+            ]],
+            'Base' => ['type' => 'object', 'properties' => ['k' => ['type' => 'string']]],
+            'Kid' => ['allOf' => [['$ref' => '#/components/schemas/Base'], ['type' => 'object', 'properties' => ['k' => ['$ref' => '#/components/schemas/Kind'], 'n' => ['type' => 'string']]]]],
+        ]);
+
+        self::assertSame(['App\\Dto\\Status', 'App\\Dto\\Narrow', 'App\\Dto\\Kind'], array_map(static fn (BuiltEnum $enum): string => $enum->model()->name()->fqcn(), $output->enums()));
+    }
+
+    public function testReportsAnObjectItCannotJoinOnlyWhereTheTypesMeet(): void
+    {
+        $at = self::AT;
+        $output = ModelFixture::build(['User' => ['allOf' => [
+            ['type' => 'object', 'properties' => ['owner' => ['type' => 'object', 'properties' => ['a' => ['type' => 'string']]]]],
+            ['type' => 'object', 'properties' => ['owner' => ['type' => 'object', 'x-dto-mutable' => true, 'properties' => ['b' => ['type' => 'string']]]]],
+        ]]]);
+
+        self::assertSame(
+            ["error {$at}User/allOf/1/properties/owner: Property \"owner\" of App\\Dto\\User is App\\Dto\\UserOwner2|null here, but App\\Dto\\UserOwner|null in an earlier allOf member."],
+            ModelFixture::messages($output),
+        );
     }
 
     /**

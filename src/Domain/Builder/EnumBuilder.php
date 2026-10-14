@@ -10,7 +10,6 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\DocModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumBacking;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumCase;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumModel;
-use MSSTC4PHP\DtoGenerator\Domain\Model\Identifier;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaType;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
@@ -300,7 +299,7 @@ final class EnumBuilder
             }
         }
 
-        return Identifier::distinct($spelled, $kept) ? $spelled : [];
+        return $this->names->undisputed($spelled, $kept);
     }
 
     /**

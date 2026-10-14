@@ -16,6 +16,9 @@ final class Declarations
     /** @var array<string, ClassName> */
     private array $classes;
 
+    /** @var array<string, ClassName> by FQCN */
+    private array $generated = [];
+
     /** @var array<string, EnumType> */
     private array $enums;
 
@@ -34,6 +37,9 @@ final class Declarations
     public function __construct(array $classes = [], array $enums = [], array $skipped = [], array $abandoned = [])
     {
         $this->classes = $classes;
+        foreach ($classes as $class) {
+            $this->generated[$class->fqcn()] = $class;
+        }
         $this->enums = $enums;
         $this->skipped = $skipped;
         $this->abandoned = $abandoned;
@@ -44,7 +50,7 @@ final class Declarations
      */
     public function generates(ClassName $class): bool
     {
-        return in_array($class->fqcn(), array_map(static fn (ClassName $name): string => $name->fqcn(), $this->classes), true);
+        return isset($this->generated[$class->fqcn()]);
     }
 
     public function classAt(string $key): ?ClassName

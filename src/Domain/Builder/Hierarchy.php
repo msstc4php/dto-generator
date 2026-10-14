@@ -370,7 +370,14 @@ final class Hierarchy
                 array_pop($kept);
                 $this->superseded->add($property->type());
                 $this->diagnostics->warning(
-                    sprintf('Property "%s" of %s narrows the one %s declares, whose type %s the class keeps.', $property->wireName(), $fqcn, $byWireName, $inherited->type()->describe()),
+                    sprintf(
+                        'Property "%s" of %s narrows the one %s declares, whose type %s the class keeps%s.',
+                        $property->wireName(),
+                        $fqcn,
+                        $byWireName,
+                        $inherited->type()->describe(),
+                        $property->isRequired() && !$inherited->isRequired() ? ' and does not require it' : '',
+                    ),
                     $property->source(),
                 );
             } elseif ($byWireName !== null) {
