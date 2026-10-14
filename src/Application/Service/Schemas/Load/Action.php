@@ -105,18 +105,19 @@ final class Action
             }
         }
 
-        $this->followKeywordReferences($graph, $input, $diagnostics, $reads, $parser);
+        $this->followKeywordReferences($graph, $input, $diagnostics, $reads);
 
         return new Output($graph->build($diagnostics), $diagnostics, $reads->documents(), $reads->readsRemote() ? $config->remoteRefs()->cacheDir() : null);
     }
 
     /**
      * The `$ref`s in the schemas of keywords (`not`, `propertyNames`…), last: what only they reach gets no source, so
-     * no class of its own, and a reference that cannot be followed is a warning, as only an extension reads it.
+     * no class of its own. Only an extension reads them, so a target that cannot be loaded or read is a warning and
+     * stays out of the graph, and what the parser says about one that can is left to the extension.
      */
-    private function followKeywordReferences(GraphBuilder $graph, Input $input, Diagnostics $diagnostics, Reads $reads, SchemaParser $parser): void
+    private function followKeywordReferences(GraphBuilder $graph, Input $input, Diagnostics $diagnostics, Reads $reads): void
     {
-        $quiet = new Diagnostics();
+        $failures = new Diagnostics();
         /** @var list<array{ReferenceUse, ?SchemaLocation}> $queue each with the schema it names a subschema of, if structural */
         $queue = [];
         foreach ($graph->schemas() as $schema) {
@@ -127,7 +128,7 @@ final class Action
 
         while ($queue !== []) {
             [$use, $from] = array_shift($queue);
-            $target = $this->target($use, $input->config()->remoteRefs(), $quiet);
+            $target = $this->target($use, $input->config()->remoteRefs(), $failures);
             if (!$target instanceof SchemaLocation) {
                 continue;
             }
@@ -137,8 +138,10 @@ final class Action
                 continue;
             }
 
-            $resolved = $this->resolve($target, $use, [], $input, $quiet, $graph, $reads, $parser);
-            if (!$resolved instanceof ResolvedSchema) {
+            $own = new Diagnostics();
+            $resolved = $this->resolve($target, $use, [], $input, $own, $graph, $reads, $this->parser);
+            array_map([$failures, 'add'], $own->errors());
+            if (!$resolved instanceof ResolvedSchema || $own->hasErrors()) {
                 $graph->markFailed($target);
 
                 continue;
@@ -154,7 +157,7 @@ final class Action
             }
         }
 
-        foreach ($quiet->all() as $diagnostic) {
+        foreach ($failures->all() as $diagnostic) {
             $diagnostics->warning($diagnostic->message(), $diagnostic->location());
         }
     }

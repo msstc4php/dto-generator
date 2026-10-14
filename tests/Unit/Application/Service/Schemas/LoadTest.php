@@ -312,7 +312,7 @@ final class LoadTest extends TestCase
      */
     private function referenceMessages(Output $output): array
     {
-        return array_values(array_filter($this->messages($output), static fn (string $message): bool => strpos($message, 'is not supported') === false));
+        return array_values(array_filter($this->messages($output), static fn (string $message): bool => strpos($message, 'is not supported and has no effect') === false));
     }
 
     /**
@@ -510,6 +510,25 @@ final class LoadTest extends TestCase
             'warning /project/api/openapi.yaml#/components/schemas/User/contains: File "/project/missing.json" does not exist.',
         ], $this->referenceMessages($output));
         self::assertSame([['User', 0, true]], $this->summary($output));
+    }
+
+    public function testLeavesOutAKeywordTargetThatIsNoSchemaItCanRead(): void
+    {
+        $output = $this->load([
+            self::SPEC => $this->spec(['User' => [
+                'not' => ['$ref' => '../shared/common.json#/Never'],
+                'if' => ['$ref' => '../shared/common.json#/Text'],
+                'then' => ['$ref' => '../shared/common.json#/Odd'],
+            ]]),
+            self::SHARED => ['Never' => false, 'Text' => 'oops', 'Odd' => ['type' => 'string', 'not' => ['const' => 'x'], 'x-php-nmae' => 'y']],
+        ]);
+
+        self::assertSame([
+            'warning /project/shared/common.json#/Never: The "false" schema is not supported.',
+            'warning /project/shared/common.json#/Text: A schema must be an object.',
+        ], $this->referenceMessages($output));
+        self::assertSame([['User', 0, true], ['Odd', null, false]], $this->summary($output));
+        self::assertSame([], array_values(array_filter($this->messages($output), static fn (string $message): bool => strpos($message, '#/Odd') !== false)), 'the extension reads what it can');
     }
 
     public function testRejectsComponentsThatAreNotAnObject(): void

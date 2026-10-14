@@ -34,7 +34,9 @@ final class Action
         $classes = [];
         foreach ($input->classes() as $built) {
             $source = $built->model()->source();
-            $inline = !$input->graph()->get($source) instanceof ResolvedSchema;
+            // A schema only the keyword of another refers to is loaded on its own, but is still part of that other.
+            $resolved = $input->graph()->get($source);
+            $inline = !$resolved instanceof ResolvedSchema || $resolved->source() === null;
             $ancestors = $this->ancestors($built->model(), $models);
             $model = $this->enrich($built->model(), $run->index()->require($source), $inline, $this->selectingDiscriminator($built->model(), $ancestors), $ancestors, $run);
             $this->checkRendering($model, $input->target()->metadata(), $run->diagnostics());

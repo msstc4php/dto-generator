@@ -19,12 +19,12 @@ final class Schema
 {
     /** Keywords whose value is a schema. */
     private const SCHEMA_KEYWORDS = [
-        'not', 'if', 'then', 'else', 'contains', 'propertyNames', 'unevaluatedItems', 'unevaluatedProperties', 'items',
-        'additionalProperties', 'additionalItems',
+        'not', 'if', 'then', 'else', 'contains', 'propertyNames', 'unevaluatedItems', 'unevaluatedProperties',
+        'additionalProperties', 'additionalItems', 'contentSchema',
     ];
 
-    /** Keywords whose value lists or maps schemas. */
-    private const SCHEMAS_KEYWORDS = ['allOf', 'anyOf', 'oneOf', 'prefixItems', 'properties', 'patternProperties', 'dependentSchemas'];
+    /** Keywords whose value lists or maps schemas; `dependencies` maps lists of names too, which hold no schema. */
+    private const SCHEMAS_KEYWORDS = ['allOf', 'anyOf', 'oneOf', 'prefixItems', 'properties', 'patternProperties', 'dependentSchemas', 'dependencies'];
 
     /** @var non-empty-list<non-empty-string> keywords with a dedicated accessor */
     public const STRUCTURAL_KEYWORDS = [
@@ -390,6 +390,12 @@ final class Schema
             if (array_key_exists($name, $keywords)) {
                 array_push($uses, ...self::rawSchemaReferences(Json::value($keywords[$name]), $at->child($name)));
             }
+        }
+
+        // `items` is a schema, or a list of them in draft 07.
+        $items = Json::value($keywords['items'] ?? null);
+        foreach (is_array($items) && Json::isList($items) ? $items : ['' => $items] as $index => $item) {
+            array_push($uses, ...self::rawSchemaReferences(Json::value($item), $index === '' ? $at->child('items') : $at->child('items', (string) $index)));
         }
 
         foreach (self::SCHEMAS_KEYWORDS as $name) {

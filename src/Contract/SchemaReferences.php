@@ -69,7 +69,7 @@ final class SchemaReferences
 
     /**
      * The schema the run loaded at a location: a component or the target of a reference, such as the schema of a class
-     * (`ClassModel::source()`); null for an inline one, which is part of the schema around it.
+     * (`ClassModel::source()`); null for an inline one no reference leads to, which is part of the schema around it.
      */
     public function at(SchemaLocation $location): ?Schema
     {

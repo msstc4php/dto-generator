@@ -10,8 +10,10 @@ All notable changes to this package are documented here. The format follows
 
 - `$ref`s in the raw schemas of keywords (`not`, `if`, `then`, `else`, `contains`, `propertyNames`, `prefixItems`,
   `patternProperties`, `dependentSchemas`, `unevaluatedItems`…) are loaded, after every other reference, and
-  `SchemaReferences::follow()` resolves them for extensions. A schema only they reach gets no class of its own; one
-  that cannot be loaded gives a warning instead of an error, as only an extension reads it.
+  `SchemaReferences::follow()` resolves them for extensions. A schema only they reach gets no class of its own and its
+  `x-` keys are not checked; one that cannot be loaded or is no schema object (`false`) gives a warning instead of an
+  error and stays out, as only an extension reads it. A remote one under `remoteRefs.allow` is fetched and cached like
+  any other.
 - `SchemaReferences::at()`: the schema loaded at a location, such as the schema of an ancestor.
 
 ## [1.5.0] - 2026-10-14

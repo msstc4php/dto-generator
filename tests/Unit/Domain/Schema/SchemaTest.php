@@ -274,6 +274,9 @@ final class SchemaTest extends TestCase
             ->keyword('examples', [['$ref' => '#/Data']])
             ->keyword('dependentRequired', ['a' => ['$ref']])
             ->keyword('then', [['$ref' => '#/List']])
+            ->keyword('contentSchema', ['$ref' => '#/Content'])
+            ->keyword('dependencies', ['a' => ['b'], 'c' => ['$ref' => '#/Dep']])
+            ->keyword('contains', ['items' => [['$ref' => '#/Tuple0'], true]])
             ->property('tags', $tags)
             ->build()
         ;
@@ -283,11 +286,14 @@ final class SchemaTest extends TestCase
             'a.json#/if/additionalProperties #/AP',
             'a.json#/if/additionalItems #/AI',
             'a.json#/else/else/unevaluatedProperties #/UP',
+            'a.json#/contains/items/0 #/Tuple0',
             'a.json#/propertyNames #/N',
             'a.json#/propertyNames/not/properties/x #/X',
+            'a.json#/contentSchema #/Content',
             'a.json#/patternProperties/^a~1~0 #/A',
             'a.json#/dependentSchemas/a/if #/If',
             'a.json#/dependentSchemas/a/then/oneOf/0 #/T',
+            'a.json#/dependencies/c #/Dep',
             'a.json#/properties/tags/contains #/C',
             'a.json#/properties/tags/prefixItems/0 #/P0',
             'a.json#/properties/tags/prefixItems/1/allOf/0/items #/I',

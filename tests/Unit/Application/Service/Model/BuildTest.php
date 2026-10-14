@@ -10,6 +10,7 @@ use MSSTC4PHP\DtoGenerator\Application\Service\Schemas\Load\Action as LoadSchema
 use MSSTC4PHP\DtoGenerator\Application\Service\Schemas\Load\Input as SchemasInput;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\NameResolver;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\SchemaParser;
+use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostic;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ScalarType;
@@ -29,6 +30,18 @@ use PHPUnit\Framework\TestCase;
 final class BuildTest extends TestCase
 {
     private const AT = '/project/api/openapi.yaml#/components/schemas/';
+
+    public function testLeavesTheExtensionsOfASchemaOnlyAKeywordReachesAlone(): void
+    {
+        $output = ModelFixture::build(
+            ['User' => ['type' => 'object', 'propertyNames' => ['$ref' => '#/components/schemas/Name'], 'properties' => ['id' => ['type' => 'string']]], 'Name' => ['type' => 'string', 'x-php-nmae' => 'x', 'x-php-class-name' => 'N']],
+            [],
+            ['User'],
+        );
+
+        self::assertFalse($output->diagnostics()->hasErrors());
+        self::assertSame([], array_values(array_filter(array_map(static fn (Diagnostic $d): string => $d->toString(), $output->diagnostics()->all()), static fn (string $message): bool => strpos($message, 'Name') !== false)));
+    }
 
     public function testBuildsAClassPerObjectSchema(): void
     {
