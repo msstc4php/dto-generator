@@ -254,6 +254,7 @@ final class SchemaCoverageTest extends TestCase
                     ['type' => 'object', 'properties' => ['type' => ['$ref' => '#/components/schemas/CreatedType']]],
                     ['type' => 'object', 'properties' => ['type' => ['type' => 'string']], 'allOf' => [['properties' => ['type' => ['const' => 'deleted']]]]],
                     ['type' => 'object', 'properties' => ['type' => ['type' => 'integer', 'const' => 7]]],
+                    ['type' => 'object', 'properties' => ['type' => ['type' => ['string', 'null'], 'enum' => [null, 'moved']]]],
                 ],
                 'discriminator' => ['propertyName' => 'type'],
             ],
@@ -261,7 +262,7 @@ final class SchemaCoverageTest extends TestCase
         ]);
 
         self::assertSame([], ModelFixture::messages($output));
-        self::assertSame('abstract by type {created: App\\Dto\\EventOption1, deleted: App\\Dto\\EventOption2, 7: App\\Dto\\EventOption3}', ModelFixture::hierarchy($output)['App\\Dto\\Event']);
+        self::assertSame('abstract by type {created: App\\Dto\\EventOption1, deleted: App\\Dto\\EventOption2, 7: App\\Dto\\EventOption3, moved: App\\Dto\\EventOption4}', ModelFixture::hierarchy($output)['App\\Dto\\Event']);
     }
 
     public function testRefusesTwoInlineVariantsWithOneValue(): void

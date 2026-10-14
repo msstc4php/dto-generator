@@ -18,11 +18,12 @@ All notable changes to this package are documented here. The format follows
 - `SchemaReferences::at()`: the schema loaded at a location, such as the schema of an ancestor.
 - A discriminated `oneOf`/`anyOf` with no properties of its own, a variant of which already extends another class
   (through its own `allOf` or as the variant of another union), is an empty `interface` the variants implement,
-  instead of an error: PHP gives a class one parent but any number of interfaces. A union that a class extends through
-  `allOf`, or that has properties, stays a class. Of unions that could each take a shared variant, a union with
-  properties takes it, else the first by class name; the order of the schemas plays no part. An interface variant of
-  such a union extends it. The variants' constructors check the interface's discriminator values, and have no mutators
-  for the property, as for an abstract base. Extensions see `ClassKind::INTERFACE` (a new value of `ClassKind`) and
+  instead of an error: PHP gives a class one parent but any number of interfaces. A union that has properties, that a
+  class extends through `allOf`, or that is a variant of a union that stays a class, stays a class. Inner unions are
+  decided before the unions that list them; of unions that could each take a shared variant, one that stays a class
+  takes it, else the first by class name; the order of the schemas plays no part. An interface variant of such a union
+  extends it. The variants' constructors check the interface's discriminator values, and have no mutators for the
+  property, as for an abstract base; a class that several unions map with different values accepts each. Extensions see `ClassKind::INTERFACE` (a new value of `ClassKind`) and
   `ClassModel::interfaces()`; the interface carries the discriminator.
 - Inline object variants of a discriminated `oneOf`/`anyOf` are classes extending the base (their title, or
   `<Base>Option<N>`), selected by the one value their discriminator property has (`const` or a one-value `enum`, behind

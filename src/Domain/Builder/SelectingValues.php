@@ -141,12 +141,23 @@ final class SelectingValues
         $discriminator = $base->discriminator();
         // A class without the property, or one the mapping leaves out, was reported while linking.
         $property = $discriminator instanceof DiscriminatorModel ? $byWireName[$discriminator->propertyName()] ?? null : null;
-        if ($discriminator instanceof DiscriminatorModel && $property instanceof PropertyModel && !isset($found[$property->name()])) {
-            $keys = self::keysSelecting($model, $between, $discriminator);
-            $values = $keys === [] ? null : self::typed($keys, $property, $model, $diagnostics);
-            if ($values instanceof DiscriminatorValues) {
-                $found[$property->name()] = [$property, $values];
+        if (!$discriminator instanceof DiscriminatorModel || !$property instanceof PropertyModel) {
+            return;
+        }
+
+        $earlier = $found[$property->name()] ?? null;
+        // A farther base that maps the class itself, not a nearer base, is another way in: its values select it too.
+        $keys = self::keysSelecting($model, $earlier === null ? $between : [], $discriminator);
+        $values = $keys === [] ? null : self::typed($keys, $property, $model, $diagnostics);
+        if ($values instanceof DiscriminatorValues) {
+            $merged = $earlier === null ? [] : $earlier[1]->values();
+            foreach ($values->values() as $value) {
+                if (!in_array($value, $merged, true)) {
+                    $merged[] = $value;
+                }
             }
+
+            $found[$property->name()] = [$property, self::selection($property, $merged)];
         }
     }
 

@@ -758,6 +758,26 @@ final class CompositionTest extends TestCase
         self::assertSame(["family: 'Fish'"], $selections['App\\Dto\\Fish']);
     }
 
+    public function testAcceptsTheValueOfEveryBaseThatMapsAClass(): void
+    {
+        $ref = static fn (string $name): array => ['$ref' => '#/components/schemas/' . $name];
+        $kind = static fn (array $mapping): array => ['propertyName' => 'kind', 'mapping' => $mapping];
+        $variant = ['type' => 'object', 'properties' => ['kind' => ['type' => 'string']]];
+        $output = ModelFixture::build([
+            'Pet' => ['type' => 'object', 'properties' => ['id' => ['type' => 'string']], 'oneOf' => [$ref('Cat')], 'discriminator' => $kind(['cat' => 'Cat'])],
+            'Animal' => ['oneOf' => [$ref('Cat')], 'discriminator' => $kind(['feline' => 'Cat'])],
+            'Item' => ['oneOf' => [$ref('Msg')], 'discriminator' => $kind(['msg' => 'Msg', 'm' => 'Msg'])],
+            'Entry' => ['oneOf' => [$ref('Msg')], 'discriminator' => $kind(['msg' => 'Msg', 'message' => 'Msg'])],
+            'Cat' => $variant,
+            'Msg' => $variant,
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        $selections = ModelFixture::selections($output);
+        self::assertSame(["kind: 'feline'|'cat'"], $selections['App\\Dto\\Cat']);
+        self::assertSame(["kind: 'msg'|'m'|'message'"], $selections['App\\Dto\\Msg']);
+    }
+
     public function testReportsUnionsWhoseInterfacesWouldExtendEachOther(): void
     {
         $ref = static fn (string $name): array => ['$ref' => '#/components/schemas/' . $name];
@@ -804,6 +824,45 @@ final class CompositionTest extends TestCase
         self::assertSame(['warning ' . self::AT . 'Dog: Variant App\\Dto\\Dog has no property "kind", which the discriminator reads.'], ModelFixture::messages($output));
     }
 
+    public function testReportsTheClassesOfAnInterfaceVariantWithoutTheProperty(): void
+    {
+        $ref = static fn (string $name): array => ['$ref' => '#/components/schemas/' . $name];
+        $kindOnly = ['type' => 'object', 'properties' => ['kind' => ['type' => 'string']]];
+        $output = ModelFixture::build([
+            'Kingdom' => ['oneOf' => [$ref('Tank'), $ref('Shark')], 'discriminator' => ['propertyName' => 'family']],
+            'Tank' => ['oneOf' => [$ref('Guppy'), $ref('Eel')], 'discriminator' => ['propertyName' => 'kind']],
+            'Animal' => ['type' => 'object', 'properties' => ['id' => ['type' => 'string']]],
+            'Guppy' => $kindOnly,
+            'Eel' => ['allOf' => [$ref('Animal'), $kindOnly]],
+            'Shark' => ['allOf' => [$ref('Animal'), ['type' => 'object', 'properties' => ['family' => ['type' => 'string']]]]],
+        ]);
+
+        self::assertSame([
+            'warning ' . self::AT . 'Guppy: Variant App\\Dto\\Guppy has no property "family", which the discriminator reads.',
+            'warning ' . self::AT . 'Eel: Variant App\\Dto\\Eel has no property "family", which the discriminator reads.',
+        ], ModelFixture::messages($output));
+    }
+
+    public function testChecksNoInterfaceForTheDiscriminatorProperty(): void
+    {
+        $ref = static fn (string $name): array => ['$ref' => '#/components/schemas/' . $name];
+        $kind = ['propertyName' => 'kind'];
+        $variant = ['type' => 'object', 'properties' => ['kind' => ['type' => 'string']]];
+        $output = ModelFixture::build([
+            'Top' => ['oneOf' => [$ref('Mid'), $ref('Dog')], 'discriminator' => $kind],
+            'Mid' => ['oneOf' => [$ref('Low'), $ref('Bird')], 'discriminator' => $kind],
+            'Low' => ['oneOf' => [$ref('Cat'), $ref('Fish')], 'discriminator' => $kind],
+            'Animal' => ['type' => 'object', 'properties' => ['id' => ['type' => 'string']]],
+            'Cat' => $variant,
+            'Dog' => $variant,
+            'Bird' => $variant,
+            'Fish' => ['allOf' => [$ref('Animal'), $variant]],
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame('interface implements App\\Dto\\Mid by kind {Cat: App\\Dto\\Cat, Fish: App\\Dto\\Fish}', ModelFixture::hierarchy($output)['App\\Dto\\Low']);
+    }
+
     public function testLeavesTheMutatorsOfWhatAnInterfaceDiscriminatesOut(): void
     {
         $ref = static fn (string $name): array => ['$ref' => '#/components/schemas/' . $name];
@@ -827,6 +886,66 @@ final class CompositionTest extends TestCase
         self::assertSame(['kind'], $discriminated['Fish']);
     }
 
+    /**
+     * @return iterable<string, array{array<string, array<string, mixed>>}>
+     */
+    public static function overlappingUnions(): iterable
+    {
+        $ref = static fn (string $name): array => ['$ref' => '#/components/schemas/' . $name];
+        $kind = ['propertyName' => 'kind'];
+        $variant = ['type' => 'object', 'properties' => ['kind' => ['type' => 'string']]];
+        $schemas = [
+            'Inner' => ['oneOf' => [$ref('A'), $ref('B')], 'discriminator' => $kind],
+            'Outer' => ['type' => 'object', 'properties' => ['id' => ['type' => 'string']], 'oneOf' => [$ref('Inner'), $ref('A'), $ref('C')], 'discriminator' => $kind],
+            'A' => $variant,
+            'B' => $variant,
+            'C' => $variant,
+        ];
+
+        yield 'inner first' => [$schemas];
+        yield 'outer first' => [array_reverse($schemas)];
+    }
+
+    /**
+     * @dataProvider overlappingUnions
+     *
+     * @param array<string, array<string, mixed>> $schemas
+     */
+    public function testAdoptsTheInnerUnionBeforeTheClassUnionThatListsItAndItsVariant(array $schemas): void
+    {
+        $output = ModelFixture::build($schemas);
+
+        self::assertSame([], ModelFixture::messages($output));
+        $hierarchy = ModelFixture::hierarchy($output);
+        self::assertSame('abstract extends App\\Dto\\Outer by kind {A: App\\Dto\\A, B: App\\Dto\\B}', $hierarchy['App\\Dto\\Inner']);
+        self::assertSame('final extends App\\Dto\\Inner', $hierarchy['App\\Dto\\A']);
+        self::assertSame('final extends App\\Dto\\Outer', $hierarchy['App\\Dto\\C']);
+    }
+
+    public function testDecidesManyNestedUnionsAlikeInAnyOrder(): void
+    {
+        $ref = static fn (string $name): array => ['$ref' => '#/components/schemas/' . $name];
+        $kind = ['propertyName' => 'kind'];
+        $schemas = ['Animal' => ['type' => 'object', 'properties' => ['id' => ['type' => 'string']]]];
+        // More unions than PHP 7.4 sorts stably (16), each an interface only when its inner one is decided first.
+        foreach (range(1, 12) as $n) {
+            $schemas["Outer{$n}"] = ['oneOf' => [$ref("Inner{$n}"), $ref("Dog{$n}")], 'discriminator' => $kind];
+            $schemas["Inner{$n}"] = ['oneOf' => [$ref("Cat{$n}"), $ref("Fish{$n}")], 'discriminator' => $kind];
+            $schemas["Dog{$n}"] = ['type' => 'object', 'properties' => ['kind' => ['type' => 'string']]];
+            $schemas["Cat{$n}"] = ['type' => 'object', 'properties' => ['kind' => ['type' => 'string']]];
+            $schemas["Fish{$n}"] = ['allOf' => [$ref('Animal'), ['type' => 'object', 'properties' => ['kind' => ['type' => 'string']]]]];
+        }
+
+        foreach ([$schemas, array_reverse($schemas)] as $order) {
+            $output = ModelFixture::build($order);
+
+            self::assertSame([], ModelFixture::messages($output));
+            foreach (range(1, 12) as $n) {
+                self::assertSame("interface implements App\\Dto\\Outer{$n} by kind {Cat{$n}: App\\Dto\\Cat{$n}, Fish{$n}: App\\Dto\\Fish{$n}}", ModelFixture::hierarchy($output)["App\\Dto\\Inner{$n}"]);
+            }
+        }
+    }
+
     public function testReportsAnInterfaceAsTheVariantOfAUnionThatStaysAClass(): void
     {
         $ref = static fn (string $name): array => ['$ref' => '#/components/schemas/' . $name];
@@ -842,7 +961,7 @@ final class CompositionTest extends TestCase
             'Fish' => ['allOf' => [$ref('Animal'), $variant]],
         ]);
 
-        self::assertContains('error ' . self::AT . 'Inner: App\\Dto\\Inner is an interface, as a variant of it extends another class, so it cannot also be a variant of App\\Dto\\Outer.', ModelFixture::messages($output));
+        self::assertContains('error ' . self::AT . 'Outer: App\\Dto\\Outer is an interface, as a variant of it extends another class, so it cannot also be a variant of App\\Dto\\Top.', ModelFixture::messages($output));
     }
 
     public function testReportsAUnionWithPropertiesWhoseVariantExtendsAnotherClass(): void

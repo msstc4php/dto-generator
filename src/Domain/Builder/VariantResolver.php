@@ -146,7 +146,8 @@ final class VariantResolver
             return in_array($at, $seen, true) ? null : $this->valueIn($target->schema(), array_merge($seen, [$at]));
         }
 
-        $values = $declaration->hasKeyword('const') ? [$declaration->keyword('const')] : $declaration->enum() ?? [];
+        // A null next to the value only makes the property nullable, as in OpenAPI 3.0.
+        $values = array_values(array_filter($declaration->hasKeyword('const') ? [$declaration->keyword('const')] : $declaration->enum() ?? [], static fn ($value): bool => $value !== null));
 
         return count($values) === 1 && (is_string($values[0]) || is_int($values[0])) ? (string) $values[0] : null;
     }
