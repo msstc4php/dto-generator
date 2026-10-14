@@ -150,6 +150,78 @@ final class CompositionTest extends TestCase
         );
     }
 
+    public function testMakesOneClassOfTheInlineObjectsOfAPropertyInSeveralMembers(): void
+    {
+        $at = self::AT;
+        $member = static fn (string $a, array $extra = []): array => ['type' => 'object', 'properties' => [
+            'owner' => ['type' => 'object', 'properties' => [$a => ['type' => 'string']]] + $extra,
+            'tags' => ['type' => 'array', 'items' => ['type' => 'object', 'required' => [$a], 'properties' => [$a => ['type' => 'integer']]]],
+            'kind' => ['type' => 'object', 'properties' => [$a => ['type' => 'string']]],
+            'either' => ['oneOf' => [['type' => 'object', 'properties' => ['o' . $a => ['type' => 'string']]], ['type' => 'object', 'properties' => ['p' . $a => ['type' => 'string']]]]],
+        ]];
+        $output = ModelFixture::build([
+            'User' => ['allOf' => [$member('a'), $member('b', ['x-php-class-name' => 'Boss']), $member('c'), array_replace_recursive($member('d'), ['properties' => ['kind' => ['type' => 'string']]])]],
+        ]);
+
+        self::assertSame(['owner: App\\Dto\\UserOwner|null', 'tags: list<App\\Dto\\UserTagsItem>|null', 'kind: App\\Dto\\UserKind|null', 'either: App\\Dto\\UserEitherOption1|App\\Dto\\UserEitherOption2|null'], ModelFixture::classes($output)['App\\Dto\\User']);
+        self::assertSame(['pa: string|null', 'pb: string|null', 'pc: string|null', 'pd: string|null'], ModelFixture::classes($output)['App\\Dto\\UserEitherOption2']);
+        self::assertSame(['a: string|null', 'c: string|null', 'd: string|null'], ModelFixture::classes($output)['App\\Dto\\UserOwner']);
+        self::assertSame(['a: int', 'b: int', 'c: int', 'd: int'], ModelFixture::classes($output)['App\\Dto\\UserTagsItem']);
+        self::assertSame(['a: string|null', 'b: string|null', 'c: string|null'], ModelFixture::classes($output)['App\\Dto\\UserKind']);
+        self::assertSame([
+            "error {$at}User/allOf/1/properties/owner: Property \"owner\" of App\\Dto\\User is App\\Dto\\Boss|null here, but App\\Dto\\UserOwner|null in an earlier allOf member.",
+            "error {$at}User/allOf/3/properties/kind: Property \"kind\" of App\\Dto\\User is string|null here, but App\\Dto\\UserKind|null in an earlier allOf member.",
+        ], ModelFixture::messages($output));
+    }
+
+    public function testLeavesToTheParentAPropertyTheChildNarrows(): void
+    {
+        $at = self::AT;
+        $output = ModelFixture::build([
+            'Pet' => ['type' => 'object', 'properties' => ['at' => ['type' => ['string', 'null'], 'format' => 'date-time'], 'n' => ['type' => 'number']]],
+            'Cat' => ['allOf' => [self::PET, ['type' => 'object', 'required' => ['at'], 'properties' => [
+                'at' => ['type' => 'string', 'format' => 'date-time'],
+                'n' => ['type' => 'integer'],
+                'meow' => ['type' => 'string'],
+            ]]]],
+        ]);
+
+        self::assertSame([
+            "warning {$at}Cat/allOf/1/properties/at: Property \"at\" of App\\Dto\\Cat narrows the one App\\Dto\\Pet declares, whose type DateTimeImmutable|null the class keeps.",
+            "warning {$at}Cat/allOf/1/properties/n: Property \"n\" of App\\Dto\\Cat narrows the one App\\Dto\\Pet declares, whose type float|null the class keeps.",
+        ], array_values(array_filter(ModelFixture::messages($output), static fn (string $message): bool => strpos($message, 'narrows') !== false)));
+        self::assertSame(['meow: string|null'], ModelFixture::classes($output)['App\\Dto\\Cat']);
+    }
+
+    public function testMergesAPropertyIntoTheTypeOfTheValuesBothAdmit(): void
+    {
+        $output = ModelFixture::build([
+            'A' => ['type' => 'object', 'required' => ['done', 'id'], 'properties' => [
+                'at' => ['type' => 'string'],
+                'done' => ['type' => ['string', 'null']],
+                'id' => ['type' => 'number'],
+                'tags' => ['type' => 'array'],
+                'owner' => ['type' => 'object'],
+                'kind' => ['oneOf' => [['type' => 'integer'], ['type' => 'string', 'format' => 'date-time']]],
+            ]],
+            'B' => ['type' => 'object', 'required' => ['done', 'id'], 'properties' => [
+                'at' => ['type' => 'string', 'format' => 'date-time'],
+                'done' => ['type' => 'string', 'format' => 'date'],
+                'id' => ['type' => 'integer'],
+                'tags' => ['type' => 'array', 'items' => ['type' => 'string']],
+                'owner' => ['type' => 'object', 'properties' => ['n' => ['type' => 'string']]],
+                'kind' => ['type' => 'string'],
+            ]],
+            'C' => ['allOf' => [['$ref' => '#/components/schemas/A'], ['$ref' => '#/components/schemas/B']]],
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(
+            ['at: DateTimeImmutable|null', 'done: DateTimeImmutable', 'id: int', 'tags: list<string>|null', 'owner: App\Dto\BOwner|null', 'kind: DateTimeImmutable|null'],
+            ModelFixture::classes($output)['App\Dto\C'],
+        );
+    }
+
     /**
      * @dataProvider problems
      *

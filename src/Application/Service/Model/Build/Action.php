@@ -118,14 +118,15 @@ final class Action
         $compositions = [];
         // Inline classes are planned while walking, so the walk reaches inline objects nested in inline objects.
         for ($index = 0; ($planned = $registry->plannedAt($index)) !== null; $index++) {
-            $compositions[$index] = $allOf->compose($planned[0], $diagnostics);
+            $compositions[$index] = $allOf->compose($planned[0], $diagnostics)->withCompanions(...$registry->companions($planned[0]));
             $this->hoist($planned[0], $compositions[$index], $planned[1], $planned[2], $registry, $enums, $diagnostics);
         }
 
         $declarations = $registry->declarations();
+        $types = new TypeMapper($input->graph(), $declarations, $input->target(), $input->formats());
         $builder = new ClassBuilder(
             $this->names,
-            new TypeMapper($input->graph(), $declarations, $input->target(), $input->formats()),
+            $types,
             $input->target(),
             $input->aliases(),
             $registry->properties(),
@@ -148,7 +149,7 @@ final class Action
 
         $unions = $this->unions($input, $registry, $children, $subclasses, $diagnostics);
         $built = [];
-        foreach (Hierarchy::link($models, $unions, $diagnostics) as $index => $model) {
+        foreach (Hierarchy::link($models, $unions, $diagnostics, $types->meet()) as $index => $model) {
             $built[] = new BuiltClass($model, $registry->planned()[$index][2]);
         }
 
@@ -309,9 +310,22 @@ final class Action
         }
 
         $namespace = $ownerName->namespace();
+        $objects = [];
         foreach ($candidates as [$schema, $baseName, $wireName]) {
             foreach ($this->inlines($schema, '', $diagnostics, $registry) as [$candidate, $suffix, $title]) {
-                $this->declareInline($candidate, $title ?? ($baseName === null ? null : $baseName . $suffix), $wireName, $namespace, $source, $registry, $enums, $diagnostics);
+                // The inline objects at one place of a property in several members of an allOf all apply: one class.
+                $declared = $objects[$wireName][$suffix] ?? null;
+                $object = SchemaShape::isClass($candidate);
+                if ($declared instanceof Schema && $object && !$candidate->extensions()->has('x-php-class-name')) {
+                    $registry->join($declared, $candidate);
+
+                    continue;
+                }
+
+                $this->declareInline($candidate, $title, $baseName === null ? null : $baseName . $suffix, $wireName, $namespace, $source, $registry, $enums, $diagnostics);
+                if ($object && !$declared instanceof Schema) {
+                    $objects[$wireName][$suffix] = $candidate;
+                }
             }
         }
     }
@@ -324,25 +338,49 @@ final class Action
     {
         $base = $this->names->className($aliasName);
         foreach ($this->inlines($alias, '', $diagnostics, $registry) as [$candidate, $suffix, $title]) {
-            $this->declareInline($candidate, $title ?? ($base === null ? null : $base . $suffix), $aliasName, $namespace, $source, $registry, $enums, $diagnostics);
+            $this->declareInline($candidate, $title, $base === null ? null : $base . $suffix, $aliasName, $namespace, $source, $registry, $enums, $diagnostics);
         }
     }
 
     /**
-     * @param ?string $derived `<Parent><Property>…` or the member's title; null when the name has no usable characters
+     * @param ?string $title the name the member's title gives
+     * @param ?string $derived `<Parent><Property>…`; null when the name has no usable characters
      */
-    private function declareInline(Schema $candidate, ?string $derived, string $wireName, string $namespace, int $source, Registry $registry, EnumBuilder $enums, Diagnostics $diagnostics): void
+    private function declareInline(Schema $candidate, ?string $title, ?string $derived, string $wireName, string $namespace, int $source, Registry $registry, EnumBuilder $enums, Diagnostics $diagnostics): void
     {
         // A schema reached by $ref from elsewhere may already carry its own name.
         if ($registry->isDeclared($candidate)) {
             return;
         }
 
-        $short = $this->inlineName($candidate, $derived, $wireName, $diagnostics);
+        $short = $this->inlineName($candidate, $title ?? $derived, $wireName, $diagnostics);
         $name = $short === null ? null : $registry->className($namespace, $short, $candidate);
+        if ($name instanceof ClassName && $registry->isTaken($name) && !$candidate->extensions()->has('x-php-class-name')) {
+            $name = $this->freeName($candidate, $name, $title === null ? null : $derived, $namespace, $registry, $diagnostics);
+        }
+
         if (!$name instanceof ClassName || !$registry->claim($name, $candidate, $diagnostics) || !$this->declare($candidate, $name, $source, SchemaShape::isEnum($candidate), $registry, $enums, $diagnostics)) {
             $registry->abandon($candidate);
         }
+    }
+
+    /**
+     * An inline schema gives way to the schema that holds its name: it takes the name derived from its place, if a title
+     * gave the first one, or the first free name numbered from 2.
+     */
+    private function freeName(Schema $candidate, ClassName $taken, ?string $derived, string $namespace, Registry $registry, Diagnostics $diagnostics): ClassName
+    {
+        $name = $derived === null ? $taken : $registry->className($namespace, $derived, $candidate);
+        for ($number = 2; $registry->isTaken($name); $number++) {
+            $name = $registry->className($namespace, $registry->baseOf($taken) . $number, $candidate);
+        }
+
+        $diagnostics->warning(
+            sprintf('Class %s is already generated from another schema, so this one becomes %s; set "x-php-class-name" to name it.', $taken->fqcn(), $name->fqcn()),
+            $candidate->location(),
+        );
+
+        return $name;
     }
 
     /**

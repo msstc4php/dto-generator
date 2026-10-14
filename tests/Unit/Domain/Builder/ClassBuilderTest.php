@@ -139,9 +139,19 @@ final class ClassBuilderTest extends TestCase
                 ["error {$at}/properties/user_name/x-php-name: \"x-php-name\" must be a PHP identifier other than \"this\" and the superglobals."],
             ],
             'no usable name' => [
-                ['type' => 'object', 'properties' => ['---' => ['type' => 'string'], 'id' => ['type' => 'string']]],
+                ['type' => 'object', 'properties' => ['§§§' => ['type' => 'string'], 'id' => ['type' => 'string']]],
                 ['id' => 'id: string|null = NULL'],
-                ["error {$at}/properties/---: Property name \"---\" has no usable characters; set \"x-php-name\"."],
+                ["error {$at}/properties/§§§: Property name \"§§§\" has no usable characters; set \"x-php-name\"."],
+            ],
+            'names only their signs tell apart' => [
+                ['type' => 'object', 'properties' => ['+1' => ['type' => 'integer'], '-1' => ['type' => 'integer'], '*' => ['type' => 'string'], '2' => ['type' => 'string']]],
+                ['plus1' => '+1: int|null = NULL', 'minus1' => '-1: int|null = NULL', 'asterisk' => '*: string|null = NULL', '_2' => '2: string|null = NULL'],
+                [],
+            ],
+            'a sign alone keeps its name' => [
+                ['type' => 'object', 'properties' => ['+1' => ['type' => 'integer'], 'x' => ['type' => 'integer', 'x-php-name' => '_1']]],
+                ['_1' => '+1: int|null = NULL'],
+                ["error {$at}/properties/x: Property \"x\" becomes \$_1, which \"+1\" already uses; set \"x-php-name\" on one of them."],
             ],
             'skipped property' => [
                 ['type' => 'object', 'properties' => ['secret' => ['type' => 'string', 'x-php-skip' => true], 'id' => ['type' => 'string']]],

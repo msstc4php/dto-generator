@@ -362,19 +362,26 @@ final class BuildTest extends TestCase
         self::assertSame(['App\Dto\Currency', 'App\Dto\UserStatus'], ModelFixture::enums($output));
     }
 
-    public function testRefusesAnInlineNameThatIsTaken(): void
+    public function testNumbersAnInlineNameThatIsTaken(): void
     {
         $at = self::AT;
         $output = ModelFixture::build([
-            'User' => ['type' => 'object', 'properties' => ['address' => ['type' => 'object', 'properties' => ['city' => []]]]],
+            'User' => ['type' => 'object', 'properties' => [
+                'address' => ['type' => 'object', 'properties' => ['city' => []]],
+                'home' => ['type' => 'object', 'x-php-class-name' => 'UserAddress', 'properties' => ['n' => []]],
+            ]],
             'UserAddress' => ['type' => 'object', 'properties' => ['street' => []]],
+            'UserAddress2' => ['type' => 'object', 'properties' => ['zip' => []]],
         ]);
 
         self::assertSame(
-            ["error {$at}User/properties/address: Class App\\Dto\\UserAddress is already generated from {$at}UserAddress; set \"x-php-class-name\" on one of them."],
+            [
+                "warning {$at}User/properties/address: Class App\\Dto\\UserAddress is already generated from another schema, so this one becomes App\\Dto\\UserAddress3; set \"x-php-class-name\" to name it.",
+                "error {$at}User/properties/home: Class App\\Dto\\UserAddress is already generated from {$at}UserAddress; set \"x-php-class-name\" on one of them.",
+            ],
             ModelFixture::messages($output),
         );
-        self::assertSame(['App\Dto\User' => ['address: mixed'], 'App\Dto\UserAddress' => ['street: mixed']], ModelFixture::classes($output));
+        self::assertSame(['address: App\Dto\UserAddress3|null', 'home: mixed'], ModelFixture::classes($output)['App\Dto\User']);
     }
 
     public function testReportsAnEnumItCannotBuildOnce(): void
@@ -415,14 +422,14 @@ final class BuildTest extends TestCase
         $at = self::AT;
         $output = ModelFixture::build(['User' => ['type' => 'object', 'properties' => [
             'hidden' => ['type' => 'object', 'x-php-skip' => true, 'properties' => ['x' => []]],
-            '---' => ['type' => 'object', 'properties' => ['x' => []]],
+            '§§§' => ['type' => 'object', 'properties' => ['x' => []]],
             'grid' => ['type' => 'array', 'items' => ['type' => 'array', 'items' => ['type' => 'object', 'properties' => ['cell' => ['type' => 'string']]]]],
         ]]]);
 
         self::assertSame(
             [
-                "error {$at}User/properties/---: Property name \"---\" gives no class name for its inline schema; set \"x-php-class-name\".",
-                "error {$at}User/properties/---: Property name \"---\" has no usable characters; set \"x-php-name\".",
+                "error {$at}User/properties/§§§: Property name \"§§§\" gives no class name for its inline schema; set \"x-php-class-name\".",
+                "error {$at}User/properties/§§§: Property name \"§§§\" has no usable characters; set \"x-php-name\".",
             ],
             ModelFixture::messages($output),
         );

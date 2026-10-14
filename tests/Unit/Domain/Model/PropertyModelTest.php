@@ -114,6 +114,36 @@ final class PropertyModelTest extends TestCase
         );
     }
 
+    /**
+     * @dataProvider retypings
+     */
+    public function testWithTypeMakesANullableTypeOptionalAndAnotherRequiredUnlessADefaultSetsIt(bool $required, ?DefaultValue $default, TypeModel $type, bool $expectRequired, ?string $expectDefault): void
+    {
+        $source = new SchemaLocation('/s.json', '/p');
+        $property = new PropertyModel('p', 'p', $required ? ScalarType::string() : NullableType::of(ScalarType::string()), $required, $default, new DocModel(), $source);
+        $retyped = $property->withType($type);
+
+        self::assertSame($type, $retyped->type());
+        self::assertSame($expectRequired, $retyped->isRequired());
+        self::assertSame($expectDefault, $retyped->default() instanceof DefaultValue ? $retyped->default()->toJson() : null);
+        self::assertSame($source, $retyped->source());
+    }
+
+    /**
+     * @return iterable<string, array{bool, ?DefaultValue, TypeModel, bool, ?string}>
+     */
+    public static function retypings(): iterable
+    {
+        $int = ScalarType::int();
+        $nullable = NullableType::of($int);
+
+        yield 'optional to a type without null' => [false, new DefaultValue(null), $int, true, null];
+        yield 'optional with a default' => [false, new DefaultValue('x'), $int, false, '"x"'];
+        yield 'required to a nullable type' => [true, null, $nullable, false, 'null'];
+        yield 'optional stays optional' => [false, new DefaultValue('x'), $nullable, false, '"x"'];
+        yield 'required stays required' => [true, null, $int, true, null];
+    }
+
     public function testARequiredPropertyHasNoDefault(): void
     {
         $this->expectException(InvalidModel::class);

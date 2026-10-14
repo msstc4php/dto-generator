@@ -38,6 +38,8 @@ final class TypeMapper
 
     private ConstMapper $consts;
 
+    private TypeMeet $meet;
+
     /** @var array<int|string, TypeModel> */
     private array $formats;
 
@@ -51,6 +53,22 @@ final class TypeMapper
         $this->target = $target;
         $this->formats = $formats;
         $this->consts = new ConstMapper($formats);
+        $stringClasses = [$target->dateTimeClass()->className()];
+        foreach ($formats as $format) {
+            if ($format instanceof ClassType) {
+                $stringClasses[] = $format->className()->fqcn();
+            }
+        }
+
+        $this->meet = new TypeMeet($stringClasses);
+    }
+
+    /**
+     * The meet of the types of a property that several members of an allOf describe.
+     */
+    public function meet(): TypeMeet
+    {
+        return $this->meet;
     }
 
     public function map(Schema $schema, Diagnostics $diagnostics): TypeModel

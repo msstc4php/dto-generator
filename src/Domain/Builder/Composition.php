@@ -82,6 +82,24 @@ final class Composition
         return $sources;
     }
 
+    /**
+     * The composition with the inline objects that other members of an allOf declare for the same property: every one
+     * applies, so the class has the properties of all of them.
+     */
+    public function withCompanions(Schema ...$companions): self
+    {
+        $composition = clone $this;
+        foreach ($companions as $companion) {
+            $composition->parts[] = $companion;
+            $composition->ownParts[] = $companion;
+            foreach ($companion->required() as $wireName) {
+                $composition->required[$wireName] = $wireName;
+            }
+        }
+
+        return $composition;
+    }
+
     public function isRequired(string $wireName): bool
     {
         return isset($this->required[$wireName]);

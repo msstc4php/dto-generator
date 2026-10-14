@@ -227,9 +227,7 @@ final class BuildViewsTest extends TestCase
             'error /project/api/openapi.yaml#/components/schemas/pet: Class App\Dto\Pet is already generated from /project/api/openapi.yaml#/components/schemas/Pet; set "x-php-class-name" on one of them.',
             'warning /project/api/openapi.yaml#/components/schemas/pet/properties/flag/writeOnly: "writeOnly" must be true or false; it is ignored.',
         ], ModelFixture::messages($named));
-        self::assertSame([
-            'error /project/api/openapi.yaml#/components/schemas/Pet/properties/owner: Class App\Dto\PetOwner is already generated from /project/api/openapi.yaml#/components/schemas/PetOwner; set "x-php-class-name" on one of them.',
-        ], ModelFixture::messages($inline));
+        self::assertSame([], ModelFixture::messages($inline), 'the views name the inline classes apart');
     }
 
     public function testIgnoresTheDirectionOfASkippedProperty(): void
