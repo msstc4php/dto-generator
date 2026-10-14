@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Contract;
 
+use MSSTC4PHP\DtoGenerator\Domain\Schema\ResolvedSchema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaBuilder;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaGraph;
@@ -64,6 +65,17 @@ final class SchemaReferences
     public function follow(string $ref, SchemaLocation $at): array
     {
         return array_slice($this->chain((new SchemaBuilder($at))->ref($ref)->build()), 1);
+    }
+
+    /**
+     * The schema the run loaded at a location: a component or the target of a reference, such as the schema of a class
+     * (`ClassModel::source()`); null for an inline one, which is part of the schema around it.
+     */
+    public function at(SchemaLocation $location): ?Schema
+    {
+        $resolved = $this->graph instanceof SchemaGraph ? $this->graph->get($location) : null;
+
+        return $resolved instanceof ResolvedSchema ? $resolved->schema() : null;
     }
 
     /**

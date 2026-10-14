@@ -12,6 +12,7 @@ All notable changes to this package are documented here. The format follows
   `patternProperties`, `dependentSchemas`, `unevaluatedItems`…) are loaded, after every other reference, and
   `SchemaReferences::follow()` resolves them for extensions. A schema only they reach gets no class of its own; one
   that cannot be loaded gives a warning instead of an error, as only an extension reads it.
+- `SchemaReferences::at()`: the schema loaded at a location, such as the schema of an ancestor.
 
 ## [1.5.0] - 2026-10-14
 

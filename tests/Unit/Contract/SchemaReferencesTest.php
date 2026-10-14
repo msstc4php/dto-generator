@@ -130,6 +130,19 @@ final class SchemaReferencesTest extends TestCase
         self::assertSame([], SchemaReferences::none()->follow('#/components/schemas/Name', $pet->child('propertyNames')));
     }
 
+    public function testFindsALoadedSchemaByItsLocation(): void
+    {
+        $graph = GraphFixture::load([
+            'Pet' => ['type' => 'object', 'properties' => ['name' => ['type' => 'string']]],
+        ]);
+        $references = new SchemaReferences($graph);
+        $pet = $this->schema($graph, 'Pet');
+
+        self::assertSame($pet, $references->at($pet->location()));
+        self::assertNull($references->at($pet->location()->child('properties', 'name')), 'an inline schema is not loaded on its own');
+        self::assertNull(SchemaReferences::none()->at($pet->location()));
+    }
+
     public function testResolvesNothingWithoutAGraph(): void
     {
         $graph = GraphFixture::load([

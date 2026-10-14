@@ -138,6 +138,8 @@ schema on the way must apply. A `$ref` in the raw schema of a keyword (`property
 `contains`, `prefixItems`…) is followed too: `references()->follow($ref, $at)` lists the schemas it leads through,
 where `$at` is the location of that raw schema (`$place->location()->child('propertyNames')`). The loader follows
 these last: a schema only they reach gets no class, and one they cannot reach gives a warning, not an error.
+`references()->at($location)` gives the schema loaded at a location, such as that of an ancestor
+(`ancestors()[0]->source()`), or `null` for an inline one.
 
 ## Attributes
 
