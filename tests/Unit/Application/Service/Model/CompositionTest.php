@@ -1031,6 +1031,82 @@ final class CompositionTest extends TestCase
         self::assertSame('final extends App\\Dto\\Z1 implements App\\Dto\\A1', ModelFixture::hierarchy($output)['App\\Dto\\X1']);
     }
 
+    /**
+     * @return iterable<string, array{string, bool}>
+     */
+    public static function namesOfAUnionSharingWithAnInnerOne(): iterable
+    {
+        yield 'before, in order' => ['A1', false];
+        yield 'after, in order' => ['Z9', false];
+        yield 'before, reversed' => ['A1', true];
+        yield 'after, reversed' => ['Z9', true];
+    }
+
+    /**
+     * @dataProvider namesOfAUnionSharingWithAnInnerOne
+     */
+    public function testLetsAClassUnionTakeAVariantItReachesThroughAnInnerUnion(string $sharing, bool $reversed): void
+    {
+        $ref = static fn (string $name): array => ['$ref' => '#/components/schemas/' . $name];
+        $kind = ['propertyName' => 'kind'];
+        $variant = ['type' => 'object', 'properties' => ['kind' => ['type' => 'string']]];
+        $schemas = [
+            'C1' => ['type' => 'object', 'properties' => ['id' => ['type' => 'string']], 'oneOf' => [$ref('M1'), $ref('Q1')], 'discriminator' => $kind],
+            'M1' => ['oneOf' => [$ref('X1'), $ref('W1')], 'discriminator' => $kind],
+            $sharing => ['oneOf' => [$ref('X1'), $ref('Y1')], 'discriminator' => $kind],
+            'Q1' => $variant,
+            'X1' => $variant,
+            'W1' => $variant,
+            'Y1' => $variant,
+        ];
+
+        $output = ModelFixture::build($reversed ? array_reverse($schemas) : $schemas);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame("final extends App\\Dto\\M1 implements App\\Dto\\{$sharing}", ModelFixture::hierarchy($output)['App\\Dto\\X1']);
+        self::assertSame('abstract extends App\\Dto\\C1 by kind {X1: App\\Dto\\X1, W1: App\\Dto\\W1}', ModelFixture::hierarchy($output)['App\\Dto\\M1']);
+    }
+
+    public function testLetsAClassUnionTakeAVariantBeforeAUnionAnotherClassListsSharesIt(): void
+    {
+        $ref = static fn (string $name): array => ['$ref' => '#/components/schemas/' . $name];
+        $kind = ['propertyName' => 'kind'];
+        $variant = ['type' => 'object', 'properties' => ['kind' => ['type' => 'string']]];
+        $class = static fn (array $variants): array => ['type' => 'object', 'properties' => ['id' => ['type' => 'string']], 'oneOf' => $variants, 'discriminator' => $kind];
+        $output = ModelFixture::build([
+            'C1' => $class([$ref('L'), $ref('Q')]),
+            'L' => ['oneOf' => [$ref('X'), $ref('W')], 'discriminator' => $kind],
+            'C2' => $class([$ref('X'), $ref('Z')]),
+            'Q' => $variant,
+            'X' => $variant,
+            'W' => $variant,
+            'Z' => $variant,
+        ]);
+
+        // X cannot extend both C2 and L, which C1 adopts: C2 is a class from the start, so it keeps X.
+        self::assertSame(['error ' . self::AT . 'L: App\\Dto\\L is an interface, as a variant of it extends another class, so it cannot also be a variant of App\\Dto\\C1.'], ModelFixture::messages($output));
+        self::assertSame('final extends App\\Dto\\C2 implements App\\Dto\\L', ModelFixture::hierarchy($output)['App\\Dto\\X']);
+    }
+
+    public function testDecidesUnionsThatOnlyOtherInterfacesListByName(): void
+    {
+        $ref = static fn (string $name): array => ['$ref' => '#/components/schemas/' . $name];
+        $kind = ['propertyName' => 'kind'];
+        $variant = ['type' => 'object', 'properties' => ['kind' => ['type' => 'string']]];
+        $output = ModelFixture::build([
+            'C1' => ['oneOf' => [$ref('B1'), $ref('Q')], 'discriminator' => $kind],
+            'B1' => ['oneOf' => [$ref('X'), $ref('W')], 'discriminator' => $kind],
+            'A2' => ['oneOf' => [$ref('X'), $ref('Y')], 'discriminator' => $kind],
+            'Q' => $variant,
+            'X' => $variant,
+            'W' => $variant,
+            'Y' => $variant,
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame('final extends App\\Dto\\A2 implements App\\Dto\\B1', ModelFixture::hierarchy($output)['App\\Dto\\X']);
+    }
+
     public function testLetsAClassUnionTakeTheUnionsItListsThroughAnother(): void
     {
         $ref = static fn (string $name): array => ['$ref' => '#/components/schemas/' . $name];
