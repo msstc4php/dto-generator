@@ -183,8 +183,9 @@ final class Hierarchy
     }
 
     /**
-     * Inner unions before the unions that list them; of those ready, one that must stay a class first, then by name. The
-     * order of the schemas plays no part, so the same unions always give the same classes and interfaces.
+     * Inner unions before the unions that list them, and unions that stay classes before those that may be interfaces,
+     * as they take a variant they share first; the rest by name. The order of the schemas plays no part, so the same
+     * unions always give the same classes and interfaces.
      *
      * @param array<string, Variants> $unions
      * @param array<string, Variants> $mayBeInterface
@@ -197,24 +198,62 @@ final class Hierarchy
         $order = [];
         $pending = $unions;
         while ($pending !== []) {
-            $ready = array_filter($pending, static function (Variants $variants) use ($pending): bool {
-                foreach ($variants->classes() as $variant) {
-                    if (isset($pending[$variant->fqcn()])) {
-                        return false;
-                    }
-                }
-
-                return true;
-            });
+            $ready = array_filter($pending, static fn (Variants $variants, string $base): bool => self::isReady($base, $variants, $pending, $mayBeInterface), ARRAY_FILTER_USE_BOTH);
             // Bases that are variants of each other form a loop, which adoption reports; take them by name.
-            $ready = $ready === [] ? $pending : $ready;
-            $classes = array_diff_key($ready, $mayBeInterface);
-            $next = array_key_first($classes === [] ? $ready : $classes);
+            $next = array_key_first($ready === [] ? $pending : $ready);
             $order[] = $next;
             unset($pending[$next]);
         }
 
         return $order;
+    }
+
+    /**
+     * @param array<string, Variants> $pending
+     * @param array<string, Variants> $mayBeInterface
+     */
+    private static function isReady(string $base, Variants $variants, array $pending, array $mayBeInterface): bool
+    {
+        foreach ($variants->classes() as $variant) {
+            if (isset($pending[$variant->fqcn()])) {
+                return false;
+            }
+        }
+
+        // A union that stays a class and lists this one waits for it instead.
+        foreach (isset($mayBeInterface[$base]) ? array_diff_key($pending, $mayBeInterface) : [] as $other => $theirs) {
+            if (!self::lists($other, $base, $pending)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Whether a union lists another, or lists a pending union that does.
+     *
+     * @param array<string, Variants> $pending
+     */
+    private static function lists(string $outer, string $inner, array $pending): bool
+    {
+        $seen = [];
+        $queue = [$outer];
+        while ($queue !== []) {
+            foreach ($pending[array_shift($queue)]->classes() as $variant) {
+                $fqcn = $variant->fqcn();
+                if ($fqcn === $inner) {
+                    return true;
+                }
+
+                if (isset($pending[$fqcn]) && !in_array($fqcn, $seen, true)) {
+                    $seen[] = $fqcn;
+                    $queue[] = $fqcn;
+                }
+            }
+        }
+
+        return false;
     }
 
     /**

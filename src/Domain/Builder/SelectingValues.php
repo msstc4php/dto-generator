@@ -87,8 +87,8 @@ final class SelectingValues
     }
 
     /**
-     * When two discriminators read one property, the nearest decides: an outer mapping can only name the inner base,
-     * whose own discriminator then reads the same value again.
+     * When two discriminators read one property, the nearest decides for a mapping that names a base between them, whose
+     * own discriminator then reads the value again; one that names the class itself adds its values.
      *
      * @param list<ClassModel> $ancestors nearest first
      * @param array<string, ClassModel> $models
@@ -130,7 +130,7 @@ final class SelectingValues
     }
 
     /**
-     * Adds the values a discriminated base gives the class, unless a nearer one reads the property already.
+     * Adds the values a discriminated base gives the class; after a nearer one, only those it maps to the class itself.
      *
      * @param array<string, array{PropertyModel, DiscriminatorValues}> $found
      * @param list<ClassModel> $between

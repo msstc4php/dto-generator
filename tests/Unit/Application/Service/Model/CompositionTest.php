@@ -922,6 +922,65 @@ final class CompositionTest extends TestCase
         self::assertSame('final extends App\\Dto\\Outer', $hierarchy['App\\Dto\\C']);
     }
 
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function namesOfAnotherUnion(): iterable
+    {
+        yield 'before the inner union' => ['Aj'];
+        yield 'after the inner union' => ['Zj'];
+    }
+
+    /**
+     * @dataProvider namesOfAnotherUnion
+     */
+    public function testLetsAClassUnionWaitingForItsInnerUnionTakeTheVariantItShares(string $other): void
+    {
+        $ref = static fn (string $name): array => ['$ref' => '#/components/schemas/' . $name];
+        $kind = ['propertyName' => 'kind'];
+        $variant = ['type' => 'object', 'properties' => ['kind' => ['type' => 'string']]];
+        $output = ModelFixture::build([
+            'C' => ['type' => 'object', 'properties' => ['id' => ['type' => 'string']], 'oneOf' => [$ref('I2'), $ref('X')], 'discriminator' => $kind],
+            'I2' => ['oneOf' => [$ref('A'), $ref('B')], 'discriminator' => $kind],
+            $other => ['oneOf' => [$ref('X'), $ref('Y')], 'discriminator' => $kind],
+            'A' => $variant,
+            'B' => $variant,
+            'X' => $variant,
+            'Y' => $variant,
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame("final extends App\\Dto\\C implements App\\Dto\\{$other}", ModelFixture::hierarchy($output)['App\\Dto\\X']);
+    }
+
+    public function testLetsAClassUnionTakeTheUnionsItListsThroughAnother(): void
+    {
+        $ref = static fn (string $name): array => ['$ref' => '#/components/schemas/' . $name];
+        $kind = ['propertyName' => 'kind'];
+        $variant = ['type' => 'object', 'properties' => ['kind' => ['type' => 'string']]];
+        $output = ModelFixture::build([
+            'Bag' => ['oneOf' => [$ref('Inner'), $ref('Dog')], 'discriminator' => $kind],
+            'Inner' => ['oneOf' => [$ref('Cat'), $ref('Fish')], 'discriminator' => $kind],
+            'Cls' => ['type' => 'object', 'properties' => ['id' => ['type' => 'string']], 'oneOf' => [$ref('Mid'), $ref('X')], 'discriminator' => $kind],
+            'Mid' => ['oneOf' => [$ref('Low'), $ref('Y')], 'discriminator' => $kind],
+            'Low' => ['oneOf' => [$ref('A'), $ref('B')], 'discriminator' => $kind],
+            'Animal' => ['type' => 'object', 'properties' => ['id' => ['type' => 'string']]],
+            'Fish' => ['allOf' => [$ref('Animal'), $variant]],
+            'Cat' => $variant,
+            'Dog' => $variant,
+            'X' => $variant,
+            'Y' => $variant,
+            'A' => $variant,
+            'B' => $variant,
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        $hierarchy = ModelFixture::hierarchy($output);
+        self::assertSame('interface implements App\\Dto\\Bag by kind {Cat: App\\Dto\\Cat, Fish: App\\Dto\\Fish}', $hierarchy['App\\Dto\\Inner']);
+        self::assertSame('final extends App\\Dto\\Low', $hierarchy['App\\Dto\\A']);
+        self::assertSame('abstract extends App\\Dto\\Cls by kind {Low: App\\Dto\\Low, Y: App\\Dto\\Y}', $hierarchy['App\\Dto\\Mid']);
+    }
+
     public function testDecidesManyNestedUnionsAlikeInAnyOrder(): void
     {
         $ref = static fn (string $name): array => ['$ref' => '#/components/schemas/' . $name];
@@ -929,7 +988,7 @@ final class CompositionTest extends TestCase
         $schemas = ['Animal' => ['type' => 'object', 'properties' => ['id' => ['type' => 'string']]]];
         // More unions than PHP 7.4 sorts stably (16), each an interface only when its inner one is decided first.
         foreach (range(1, 12) as $n) {
-            $schemas["Outer{$n}"] = ['oneOf' => [$ref("Inner{$n}"), $ref("Dog{$n}")], 'discriminator' => $kind];
+            $schemas["Group{$n}"] = ['oneOf' => [$ref("Inner{$n}"), $ref("Dog{$n}")], 'discriminator' => $kind];
             $schemas["Inner{$n}"] = ['oneOf' => [$ref("Cat{$n}"), $ref("Fish{$n}")], 'discriminator' => $kind];
             $schemas["Dog{$n}"] = ['type' => 'object', 'properties' => ['kind' => ['type' => 'string']]];
             $schemas["Cat{$n}"] = ['type' => 'object', 'properties' => ['kind' => ['type' => 'string']]];
@@ -941,7 +1000,7 @@ final class CompositionTest extends TestCase
 
             self::assertSame([], ModelFixture::messages($output));
             foreach (range(1, 12) as $n) {
-                self::assertSame("interface implements App\\Dto\\Outer{$n} by kind {Cat{$n}: App\\Dto\\Cat{$n}, Fish{$n}: App\\Dto\\Fish{$n}}", ModelFixture::hierarchy($output)["App\\Dto\\Inner{$n}"]);
+                self::assertSame("interface implements App\\Dto\\Group{$n} by kind {Cat{$n}: App\\Dto\\Cat{$n}, Fish{$n}: App\\Dto\\Fish{$n}}", ModelFixture::hierarchy($output)["App\\Dto\\Inner{$n}"]);
             }
         }
     }

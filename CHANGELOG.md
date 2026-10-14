@@ -23,14 +23,20 @@ All notable changes to this package are documented here. The format follows
   decided before the unions that list them; of unions that could each take a shared variant, one that stays a class
   takes it, else the first by class name; the order of the schemas plays no part. An interface variant of such a union
   extends it. The variants' constructors check the interface's discriminator values, and have no mutators for the
-  property, as for an abstract base; a class that several unions map with different values accepts each. Extensions see `ClassKind::INTERFACE` (a new value of `ClassKind`) and
-  `ClassModel::interfaces()`; the interface carries the discriminator.
+  property, as for an abstract base; a class that several unions map with different values accepts each. Extensions
+  see `ClassKind::INTERFACE` (a new value of `ClassKind`) and `ClassModel::interfaces()`; the interface carries the
+  discriminator.
 - Inline object variants of a discriminated `oneOf`/`anyOf` are classes extending the base (their title, or
   `<Base>Option<N>`), selected by the one value their discriminator property has (`const` or a one-value `enum`, behind
   a `$ref` or in a member of their `allOf`), instead of an error. An inline union (a property's schema) with such
   variants is a class named after its place. Two inline variants with one value are an error.
 
 ### Changed
+
+- A class that two discriminated ancestors map with different values (`cat` in `Animal`'s mapping, `Cat` in
+  `Feline`'s) accepts both in its constructor, where it refused the farther one that deserializing through that
+  ancestor gives; with two values its discriminator property has no default any more. A mapping that names a base in
+  between still leaves the check to that base's own discriminator.
 
 Found by generating the GitHub, OpenAI and Stripe specifications (GitHub now generates 5842 classes):
 
