@@ -64,7 +64,8 @@ PHPDoc extractor of Symfony 5.4, mistake `non-empty-string` for a class name; th
 | an inline object or enum in a named alias (`Pets: {type: array, items: {…}}`) | `<Alias>Item`, `<Alias>Value`, `<Alias>Option<N>` |
 | an inline schema whose name another schema already holds | it gives way, with a warning: the name derived from its place when a title gave the first, else that name numbered from 2 (`UserAddress2`) |
 | two classes with the same name otherwise (`x-php-class-name`) | an error suggesting `x-php-class-name` |
-| names that only a leading sign tells apart (`+1`, `-1`), or a sign alone (`*`) | the signs spelled out: `$plus1`, `$minus1`, case `ASTERISK`; a lone `+1` stays `$_1` |
+| names that only a leading sign tells apart (`+1`, `-1`), or a sign alone (`*`) | the signs spelled out: `$plus1`, `$minus1`, case `ASTERISK`; a lone `+1` stays `$_1`, and so does one whose spelled name another name holds (`+1` beside `plus1` stays `$_1`, `-1` becomes `$minus1`) |
+| an inline object as a variant of a named `oneOf`/`anyOf` with a `discriminator` | a class extending the base: the member's `title`, else `<Base>Option<N>`; its discriminator value is the one value its discriminator property has (`const` or a one-value `enum`, here or in a member of its `allOf`), as `mapping` cannot name an inline schema |
 
 Recursive schemas (trees, graphs) are fine: a `$ref` is a reference to the class, not a copy.
 

@@ -559,6 +559,46 @@ final class CompositionTest extends TestCase
         ];
     }
 
+    public function testMakesClassesOfTheInlineVariantsOfANamedUnion(): void
+    {
+        $at = self::AT;
+        $output = ModelFixture::build([
+            'Event' => ['oneOf' => [
+                ['type' => 'object', 'title' => 'Created', 'properties' => ['type' => ['type' => 'string', 'const' => 'created'], 'id' => ['type' => 'string']]],
+                ['type' => 'object', 'properties' => ['type' => ['type' => 'string', 'enum' => ['deleted']], 'at' => ['type' => 'string']]],
+                ['$ref' => '#/components/schemas/Moved'],
+                ['type' => 'object', 'properties' => ['type' => ['type' => 'string', 'enum' => ['a', 'b']]]],
+                ['allOf' => [['properties' => ['type' => ['type' => 'string', 'const' => 'merged']]], ['properties' => ['m' => ['type' => 'string']]]]],
+            ], 'discriminator' => ['propertyName' => 'type']],
+            'Moved' => ['type' => 'object', 'properties' => ['type' => ['type' => 'string']]],
+        ]);
+
+        self::assertSame(
+            ["error {$at}Event/oneOf/3: An inline variant of a discriminated union needs one value of \"type\", in \"const\" or a one-value \"enum\", as the mapping cannot name it."],
+            ModelFixture::messages($output),
+        );
+        $hierarchy = ModelFixture::hierarchy($output);
+        self::assertSame('abstract by type {created: App\\Dto\\Created, deleted: App\\Dto\\EventOption2, Moved: App\\Dto\\Moved, merged: App\\Dto\\EventOption5}', $hierarchy['App\\Dto\\Event']);
+        self::assertSame('final extends App\\Dto\\Event', $hierarchy['App\\Dto\\Created']);
+        self::assertSame('final extends App\\Dto\\Event', $hierarchy['App\\Dto\\EventOption2']);
+    }
+
+    public function testLooksForTheValueOfAnInlineVariantThroughACycle(): void
+    {
+        $at = self::AT;
+        $output = ModelFixture::build([
+            'Event' => ['oneOf' => [
+                ['allOf' => [['$ref' => '#/components/schemas/Loop1'], ['properties' => ['x' => ['type' => 'string']]]]],
+                ['type' => 'string'],
+            ], 'discriminator' => ['propertyName' => 'type']],
+            'Loop1' => ['allOf' => [['$ref' => '#/components/schemas/Loop2']]],
+            'Loop2' => ['allOf' => [['$ref' => '#/components/schemas/Loop1']]],
+        ], [], ['*'], AllOfStrategy::MERGE);
+
+        self::assertContains("error {$at}Event/oneOf/0: An inline variant of a discriminated union needs one value of \"type\", in \"const\" or a one-value \"enum\", as the mapping cannot name it.", ModelFixture::messages($output));
+        self::assertArrayNotHasKey('App\\Dto\\EventOption2', ModelFixture::classes($output));
+    }
+
     public function testExtendsADiscriminatedBase(): void
     {
         $output = ModelFixture::build([
@@ -722,7 +762,7 @@ final class CompositionTest extends TestCase
         ], [], ['*'], AllOfStrategy::EXTENDS, false);
 
         $messages = ModelFixture::messages($output);
-        self::assertContains("error {$at}Pet/oneOf/0: A variant of a discriminated union must be a \$ref to an object schema.", $messages);
+        self::assertContains("error {$at}Pet/oneOf/0: An inline variant of a discriminated union needs one value of \"kind\", in \"const\" or a one-value \"enum\", as the mapping cannot name it.", $messages);
         self::assertContains("error {$at}Pet/discriminator/mapping/dog: Discriminator value \"dog\" maps to a schema that is not one of the variants.", $messages);
         self::assertContains("error {$at}Pet/oneOf/2: A variant of a discriminated union must be a \$ref to an object schema.", $messages);
         self::assertCount(3, $messages);
@@ -771,9 +811,13 @@ final class CompositionTest extends TestCase
         $catRef = ['$ref' => '#/components/schemas/Cat'];
 
         return [
-            'inline variant' => [
+            'inline variant without a value' => [
                 ['Pet' => ['oneOf' => [$catRef, ['type' => 'object', 'properties' => ['a' => []]]], 'discriminator' => $discriminator], 'Cat' => $cat],
-                ["error {$at}Pet/oneOf/1: A variant of a discriminated union must be a \$ref to an object schema."],
+                ["error {$at}Pet/oneOf/1: An inline variant of a discriminated union needs one value of \"kind\", in \"const\" or a one-value \"enum\", as the mapping cannot name it."],
+            ],
+            'inline variant that is no object' => [
+                ['Pet' => ['oneOf' => [$catRef, ['type' => 'string']], 'discriminator' => $discriminator], 'Cat' => $cat],
+                ["error {$at}Pet/oneOf/1: A variant of a discriminated union must be a \$ref to an object schema or an inline object."],
             ],
             'variant that is not a class' => [
                 ['Pet' => ['oneOf' => [$catRef, ['$ref' => '#/components/schemas/Name']], 'discriminator' => $discriminator], 'Cat' => $cat, 'Name' => ['type' => 'string']],
@@ -1292,7 +1336,7 @@ final class CompositionTest extends TestCase
 
         self::assertSame(
             [
-                "error {$at}Empty/oneOf/0: A variant of a discriminated union must be a \$ref to an object schema.",
+                "error {$at}Empty/oneOf/0: An inline variant of a discriminated union needs one value of \"kind\", in \"const\" or a one-value \"enum\", as the mapping cannot name it.",
                 "warning {$at}Cat: Variant App\\Dto\\Cat has no property \"kind\", which the discriminator reads.",
             ],
             ModelFixture::messages($output),

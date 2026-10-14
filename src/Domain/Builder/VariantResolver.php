@@ -42,7 +42,7 @@ final class VariantResolver
         $candidates = [];
         foreach (array_merge($schema->oneOf(), $schema->anyOf()) as $member) {
             if ($member->ref() === null) {
-                $diagnostics->error('A variant of a discriminated union must be a $ref to an object schema.', $member->location());
+                $this->inline($member, $discriminator, $candidates, $diagnostics);
 
                 continue;
             }
@@ -60,10 +60,36 @@ final class VariantResolver
                 continue;
             }
 
-            $candidates[] = [$target, $class, $member->location()];
+            $candidates[] = [$target->name(), $class, $member->location()];
         }
 
         return $this->variants($schema, $discriminator, $candidates, true, $diagnostics);
+    }
+
+    /**
+     * An inline object variant has the class the build declared for it and, as its name for the mapping, the one value
+     * it gives the discriminator property.
+     *
+     * @param list<array{string, ClassName, SchemaLocation}> $candidates
+     */
+    private function inline(Schema $member, Discriminator $discriminator, array &$candidates, Diagnostics $diagnostics): void
+    {
+        if (!SchemaShape::isClass($member)) {
+            $diagnostics->error('A variant of a discriminated union must be a $ref to an object schema or an inline object.', $member->location());
+
+            return;
+        }
+
+        $value = $this->valueOf($member, $discriminator->propertyName(), []);
+        $class = $this->classes->classAt($member);
+        if ($value === null) {
+            $diagnostics->error(
+                sprintf('An inline variant of a discriminated union needs one value of "%s", in "const" or a one-value "enum", as the mapping cannot name it.', $discriminator->propertyName()),
+                $member->location(),
+            );
+        } elseif ($class instanceof ClassName) {
+            $candidates[] = [$value, $class, $member->location()];
+        }
     }
 
     /**
@@ -75,20 +101,46 @@ final class VariantResolver
     {
         $candidates = [];
         foreach ($subclasses as $subclass) {
-            $candidates[] = [$subclass->schema(), $subclass->name(), $subclass->schema()->location()];
+            $candidates[] = [$subclass->schema()->name(), $subclass->name(), $subclass->schema()->location()];
         }
 
         return $this->variants($schema, $discriminator, $candidates, false, $diagnostics);
     }
 
     /**
-     * @param list<array{ResolvedSchema, ClassName, SchemaLocation}> $candidates
+     * The one value a schema gives the property, in `const` or a one-value `enum`, here or in a member of its allOf.
+     *
+     * @param list<string> $seen locations on the way, against $ref cycles
+     */
+    private function valueOf(Schema $schema, string $property, array $seen): ?string
+    {
+        $declaration = $schema->property($property);
+        if ($declaration instanceof Schema) {
+            $values = $declaration->hasKeyword('const') ? [$declaration->keyword('const')] : $declaration->enum() ?? [];
+
+            return count($values) === 1 && is_string($values[0]) ? $values[0] : null;
+        }
+
+        foreach ($schema->allOf() as $part) {
+            $target = $this->classes->target($part);
+            $next = $target instanceof ResolvedSchema ? $target->schema() : $part;
+            $value = in_array($next->location()->toString(), $seen, true) ? null : $this->valueOf($next, $property, array_merge($seen, [$next->location()->toString()]));
+            if ($value !== null) {
+                return $value;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param list<array{string, ClassName, SchemaLocation}> $candidates the name each takes in the mapping by default
      */
     private function variants(Schema $schema, Discriminator $discriminator, array $candidates, bool $listed, Diagnostics $diagnostics): Variants
     {
         $classes = [];
         $names = [];
-        foreach ($candidates as [$target, $class, $at]) {
+        foreach ($candidates as [$name, $class, $at]) {
             if (isset($names[$class->fqcn()])) {
                 $diagnostics->warning(sprintf('Variant %s is listed twice.', $class->fqcn()), $at);
 
@@ -96,7 +148,7 @@ final class VariantResolver
             }
 
             $classes[] = $class;
-            $names[$class->fqcn()] = $target->name();
+            $names[$class->fqcn()] = $name;
         }
 
         $mapping = [];

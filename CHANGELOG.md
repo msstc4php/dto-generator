@@ -28,6 +28,8 @@ Found by generating the GitHub, OpenAI and Stripe specifications (GitHub now gen
   same scalar, the cases of an enum) leaves it to the parent, with a warning, instead of an error.
 - An inline schema whose class name another schema holds takes the name derived from its place, or that name
   numbered from 2, with a warning, instead of an error.
+- An inline object variant of a named discriminated `oneOf`/`anyOf` is a class extending the base (its title, or
+  `<Base>Option<N>`), mapped by the one value its discriminator property has, instead of an error.
 - Property names and enum values that only a leading sign tells apart (`+1` and `-1`), or a sign alone (`*`), are
   spelled out (`plus1`, `minus1`, `ASTERISK`) instead of an error.
 
