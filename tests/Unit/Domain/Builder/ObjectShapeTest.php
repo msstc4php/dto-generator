@@ -45,6 +45,13 @@ final class ObjectShapeTest extends TestCase
         yield 'types in another order' => [['properties' => ['a' => ['type' => ['string', 'null']]]] + $wide, $narrowWith(['type' => ['null', 'string']]), true];
         yield 'lists in another order' => [['properties' => ['a' => ['type' => 'string', 'not' => ['enum' => ['x', 'y']]]]] + $wide, $narrowWith(['type' => 'string', 'not' => ['enum' => ['y', 'x']]]), false];
         yield 'an enum in another order' => [['properties' => ['a' => ['type' => 'string', 'enum' => ['x', 'y']]]] + $wide, $narrowWith(['type' => 'string', 'enum' => ['y', 'x']]), false];
+        yield 'a list or an object of its keys' => [['properties' => ['a' => ['type' => 'string', 'not' => ['const' => ['x', 'y']]]]] + $wide, $narrowWith(['type' => 'string', 'not' => ['const' => [1 => 'y', 0 => 'x']]]), false];
+        yield 'mixed keys in another order' => [['properties' => ['a' => ['type' => 'string', 'not' => ['properties' => ['0' => [], 'abc' => []]]]]] + $wide, $narrowWith(['type' => 'string', 'not' => ['properties' => ['abc' => [], '0' => []]]]), true];
+        yield 'an array default in another key order' => [['properties' => ['a' => ['type' => 'array', 'default' => [['p' => 1, 'q' => 2]]]]] + $wide, $narrowWith(['type' => 'array', 'default' => [['q' => 2, 'p' => 1]]]), true];
+        yield 'enum objects in another key order' => [['properties' => ['a' => ['enum' => [['p' => 1, 'q' => 2], 'x']]]] + $wide, $narrowWith(['enum' => [['q' => 2, 'p' => 1], 'x']]), true];
+        yield 'a nullable wide one' => [['type' => ['object', 'null']] + $wide, self::NARROW, true];
+        yield 'an untyped narrow one' => [$wide, array_diff_key(self::NARROW, ['type' => true]), false];
+        yield 'both untyped' => [['properties' => $wide['properties']], array_diff_key(self::NARROW, ['type' => true]), true];
         yield 'both nullable' => [['type' => ['object', 'null']] + $wide, ['type' => ['object', 'null']] + self::NARROW, true];
         yield 'a nullable narrow one' => [$wide, ['type' => ['object', 'null']] + self::NARROW, false];
         yield 'readOnly' => [['readOnly' => true] + $wide, self::NARROW, false];

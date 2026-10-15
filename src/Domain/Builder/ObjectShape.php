@@ -8,12 +8,15 @@ use MSSTC4PHP\DtoGenerator\Domain\Schema\Discriminator;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaType;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\DefaultValue;
+use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
 
 /**
  * Whether every value one class schema admits, another admits too, read from the schemas alone: the wide one says
  * nothing but its properties and which it requires, and the narrow one has each of them, alike, requires them and
  * admits null only if the wide one does. Anything else the wide one says could forbid what the narrow one allows, so
  * it gives no answer. A `$ref` means the same schema only within one file.
+ *
+ * @phpstan-import-type JsonValue from Json
  */
 final class ObjectShape
 {
@@ -26,8 +29,10 @@ final class ObjectShape
 
     public static function admits(Schema $wide, Schema $narrow): bool
     {
+        // A schema without a type admits values of every type, which one of type object does not.
         if ($wide->location()->file() !== $narrow->location()->file() || !self::isPlainObject($narrow)
             || !self::saysOnlyProperties($wide) || ($narrow->isNullable() && !$wide->isNullable())
+            || ($narrow->nonNullTypes() === [] && $wide->nonNullTypes() !== [])
             || array_diff($wide->required(), $narrow->required()) !== []) {
             return false;
         }
@@ -84,28 +89,35 @@ final class ObjectShape
             $types,
             $schema->ref(),
             $schema->format(),
-            $schema->enum(),
-            $default instanceof DefaultValue ? $default->toJson() : null,
-            self::sorted(array_diff_key($schema->keywords(), array_flip(self::ANNOTATIONS))),
-            self::sorted($schema->extensions()->all()),
+            self::normalized($schema->enum()),
+            $default instanceof DefaultValue ? self::normalized($default->value()) : null,
+            self::normalized(array_diff_key($schema->keywords(), array_flip(self::ANNOTATIONS))),
+            self::normalized($schema->extensions()->all()),
             $itemValues,
         ]);
     }
 
     /**
-     * Objects with their keys in order, as JSON does not order them; lists keep theirs.
+     * A JSON value with the keys of its objects in order, as JSON does not order them, and its lists and objects told
+     * apart, as a PHP array does not: a list keeps its order, an object with integer keys becomes no list by sorting.
      *
-     * @param array<array-key, mixed> $value
+     * @param JsonValue $value
      *
-     * @return array<array-key, mixed>
+     * @return JsonValue
      */
-    private static function sorted(array $value): array
+    private static function normalized($value)
     {
-        $value = array_map(static fn ($item) => is_array($item) ? self::sorted($item) : $item, $value);
-        if ($value !== array_values($value)) {
-            ksort($value);
+        if (!is_array($value)) {
+            return $value;
         }
 
-        return $value;
+        $value = array_map([self::class, 'normalized'], $value);
+        if ($value === array_values($value)) {
+            return ['[]' => $value];
+        }
+
+        ksort($value, SORT_STRING);
+
+        return ['{}' => $value];
     }
 }
