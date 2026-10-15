@@ -37,6 +37,18 @@ final class ObjectShapeTest extends TestCase
         yield 'more properties' => [$wide, self::NARROW, true];
         yield 'other properties allowed' => [['additionalProperties' => true] + $wide, self::NARROW, true];
         yield 'another title' => [['properties' => ['a' => ['type' => 'string', 'title' => 'A']]] + $wide, $narrowWith(['type' => 'string', 'title' => 'B']), true];
+        yield 'annotations' => [['example' => ['a' => 'x'], 'externalDocs' => ['url' => 'https://example.com'], 'xml' => ['name' => 'w']] + $wide, self::NARROW, true];
+        yield 'a discriminator of the narrow one' => [$wide, ['discriminator' => ['propertyName' => 'a']] + self::NARROW, true];
+        yield 'keywords in another order' => [['properties' => ['a' => ['type' => 'string', 'minLength' => 1, 'maxLength' => 9]]] + $wide, $narrowWith(['maxLength' => 9, 'type' => 'string', 'minLength' => 1]), true];
+        yield 'another value of a later keyword' => [['properties' => ['a' => ['type' => 'string', 'minLength' => 1, 'maxLength' => 9]]] + $wide, $narrowWith(['type' => 'string', 'minLength' => 2, 'maxLength' => 9]), false];
+        yield 'objects in another key order' => [['properties' => ['a' => ['type' => 'string', 'minLength' => 1, 'not' => ['minLength' => 2, 'maxLength' => 3]]]] + $wide, $narrowWith(['not' => ['maxLength' => 3, 'minLength' => 2], 'minLength' => 1, 'type' => 'string']), true];
+        yield 'types in another order' => [['properties' => ['a' => ['type' => ['string', 'null']]]] + $wide, $narrowWith(['type' => ['null', 'string']]), true];
+        yield 'lists in another order' => [['properties' => ['a' => ['type' => 'string', 'not' => ['enum' => ['x', 'y']]]]] + $wide, $narrowWith(['type' => 'string', 'not' => ['enum' => ['y', 'x']]]), false];
+        yield 'an enum in another order' => [['properties' => ['a' => ['type' => 'string', 'enum' => ['x', 'y']]]] + $wide, $narrowWith(['type' => 'string', 'enum' => ['y', 'x']]), false];
+        yield 'both nullable' => [['type' => ['object', 'null']] + $wide, ['type' => ['object', 'null']] + self::NARROW, true];
+        yield 'a nullable narrow one' => [$wide, ['type' => ['object', 'null']] + self::NARROW, false];
+        yield 'readOnly' => [['readOnly' => true] + $wide, self::NARROW, false];
+        yield 'not' => [['not' => ['required' => ['b']]] + $wide, self::NARROW, false];
         yield 'another file' => [$wide, self::NARROW, false, 'b.yaml'];
         yield 'a default' => [['default' => ['a' => 'x']] + $wide, self::NARROW, false];
         yield 'an enum' => [['enum' => [['a' => 'x']]] + $wide, self::NARROW, false];

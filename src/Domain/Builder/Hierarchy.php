@@ -497,9 +497,10 @@ final class Hierarchy
                 $this->superseded->add($property->type());
                 $this->diagnostics->warning(
                     sprintf(
-                        'Property "%s" of %s narrows the one %s declares, whose type %s the class keeps%s.',
+                        'Property "%s" of %s %s the one %s declares, whose type %s the class keeps%s.',
                         $property->wireName(),
                         $fqcn,
+                        $this->meet->admits($inherited->type(), $property->type()) ? 'narrows' : 'shares values with',
                         $byWireName,
                         $inherited->type()->describe(),
                         $property->isRequired() && !$inherited->isRequired() ? ' and does not require it' : '',

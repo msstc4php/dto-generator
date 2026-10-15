@@ -231,6 +231,7 @@ final class CompositionTest extends TestCase
                 'kind' => ['type' => 'string'],
                 'size' => ['type' => 'string', 'enum' => ['s', 'm', 'l']],
                 'state' => ['type' => 'string', 'enum' => ['open', 'done', 'lost']],
+                'mode' => ['type' => ['string', 'null'], 'enum' => ['on', 'off', null]],
             ]],
             'Cat' => ['allOf' => [self::PET, ['type' => 'object', 'required' => ['at'], 'properties' => [
                 'at' => ['type' => 'string', 'format' => 'date-time'],
@@ -238,14 +239,15 @@ final class CompositionTest extends TestCase
                 'kind' => ['type' => 'string', 'enum' => ['cat']],
                 'size' => ['type' => 'string', 'enum' => ['s']],
                 'state' => ['type' => ['string', 'null'], 'enum' => ['done', 'lost', 'failed', null]],
+                'mode' => ['type' => 'string', 'enum' => ['off', 'auto']],
                 'meow' => ['type' => 'string'],
             ]]]],
         ]);
 
         $narrows = static fn (string $name, string $type): string => "warning {$at}Cat/allOf/1/properties/{$name}: Property \"{$name}\" of App\\Dto\\Cat narrows the one App\\Dto\\Pet declares, whose type {$type} the class keeps.";
         self::assertSame(
-            [str_replace(' keeps.', ' keeps and does not require it.', $narrows('at', 'DateTimeImmutable|null')), $narrows('n', 'string|null'), $narrows('kind', 'string|null'), $narrows('size', 'App\\Dto\\PetSize|null'), $narrows('state', 'App\\Dto\\PetState|null')],
-            array_values(array_filter(ModelFixture::messages($output), static fn (string $message): bool => strpos($message, 'narrows') !== false)),
+            [str_replace(' keeps.', ' keeps and does not require it.', $narrows('at', 'DateTimeImmutable|null')), $narrows('n', 'string|null'), $narrows('kind', 'string|null'), $narrows('size', 'App\\Dto\\PetSize|null'), str_replace('narrows', 'shares values with', $narrows('state', 'App\\Dto\\PetState|null')), str_replace('narrows', 'shares values with', $narrows('mode', 'App\\Dto\\PetMode|null'))],
+            array_values(array_filter(ModelFixture::messages($output), static fn (string $message): bool => strpos($message, ' the class keeps') !== false)),
         );
         self::assertSame(['meow: string|null'], ModelFixture::classes($output)['App\\Dto\\Cat']);
     }
@@ -393,6 +395,31 @@ final class CompositionTest extends TestCase
         self::assertSame([], ModelFixture::messages($output));
         self::assertSame(["opts: App\\Dto\\{$expected}|null"], ModelFixture::classes($output)['App\\Dto\\Req']);
         self::assertSame(["opts: App\\Dto\\{$expected}|null"], ModelFixture::classes($output)['App\\Dto\\Rev']);
+    }
+
+    public function testMeetsNoClassWhoseSchemaLeavesOutWhatItHolds(): void
+    {
+        $at = self::AT;
+        $narrow = ['type' => 'object', 'properties' => ['a' => ['type' => 'string'], 'b' => ['type' => 'string']]];
+        $joined = ModelFixture::build([
+            'Narrow' => $narrow,
+            'Req' => ['allOf' => [
+                ['type' => 'object', 'properties' => ['opts' => ['type' => 'object', 'properties' => ['a' => ['type' => 'string']]]]],
+                ['type' => 'object', 'properties' => ['opts' => ['type' => 'object', 'properties' => ['c' => ['type' => 'string']]]]],
+                ['type' => 'object', 'properties' => ['opts' => ['$ref' => '#/components/schemas/Narrow']]],
+            ]],
+        ]);
+        $viewed = ModelFixture::views([
+            'Wide' => ['type' => 'object', 'properties' => ['a' => ['type' => 'string']]],
+            'Narrow' => ['properties' => ['a' => ['type' => 'string'], 'b' => ['type' => 'string', 'readOnly' => true]]] + $narrow,
+            'Req' => ['allOf' => [
+                ['type' => 'object', 'properties' => ['opts' => ['$ref' => '#/components/schemas/Wide']]],
+                ['type' => 'object', 'properties' => ['opts' => ['$ref' => '#/components/schemas/Narrow']]],
+            ]],
+        ]);
+
+        self::assertSame(["error {$at}Req/allOf/2/properties/opts: Property \"opts\" of App\\Dto\\Req is App\\Dto\\Narrow|null here, but App\\Dto\\ReqOpts|null in an earlier allOf member."], ModelFixture::messages($joined));
+        self::assertSame(["error {$at}Req/allOf/1/properties/opts: Property \"opts\" of App\\Dto\\ReqRead is App\\Dto\\NarrowRead|null here, but App\\Dto\\Wide|null in an earlier allOf member."], ModelFixture::messages($viewed));
     }
 
     /**
