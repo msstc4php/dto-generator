@@ -6,6 +6,7 @@ namespace MSSTC4PHP\DtoGenerator\Domain\Builder;
 
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumType;
+use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
 
 /**
  * What the build generates, by schema location: the class or enum of a named or inline schema, and the schemas
@@ -28,13 +29,17 @@ final class Declarations
     /** @var array<string, true> */
     private array $abandoned;
 
+    /** @var array<string, Schema> by FQCN */
+    private array $schemas;
+
     /**
      * @param array<string, ClassName> $classes location key → class
      * @param array<string, EnumType> $enums location key → enum
      * @param array<string, true> $skipped location keys of schemas excluded by x-php-skip
      * @param array<string, true> $abandoned location keys of inline schemas whose declaration failed and was reported
+     * @param array<string, Schema> $schemas FQCN → the one schema a class is built from, as written
      */
-    public function __construct(array $classes = [], array $enums = [], array $skipped = [], array $abandoned = [])
+    public function __construct(array $classes = [], array $enums = [], array $skipped = [], array $abandoned = [], array $schemas = [])
     {
         $this->classes = $classes;
         foreach ($classes as $class) {
@@ -43,6 +48,7 @@ final class Declarations
         $this->enums = $enums;
         $this->skipped = $skipped;
         $this->abandoned = $abandoned;
+        $this->schemas = $schemas;
     }
 
     /**
@@ -51,6 +57,15 @@ final class Declarations
     public function generates(ClassName $class): bool
     {
         return isset($this->generated[$class->fqcn()]);
+    }
+
+    /**
+     * The schema a generated class is built from; null when the class takes its properties from several or leaves some
+     * out.
+     */
+    public function schemaOf(ClassName $class): ?Schema
+    {
+        return $this->schemas[$class->fqcn()] ?? null;
     }
 
     public function classAt(string $key): ?ClassName

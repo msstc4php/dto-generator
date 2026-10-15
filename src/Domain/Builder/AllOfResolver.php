@@ -203,7 +203,12 @@ final class AllOfResolver
         }
 
         if (!$this->isObject($schema)) {
-            $diagnostics->error('An allOf member of a class must be an object schema.', $origin->location());
+            $diagnostics->error(
+                $schema->oneOf() === [] && $schema->anyOf() === []
+                    ? 'An allOf member of a class must be an object schema.'
+                    : 'An allOf member of a class must be an object schema, not a oneOf or anyOf: no class adds properties to each variant.',
+                $origin->location(),
+            );
 
             return;
         }

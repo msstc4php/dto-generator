@@ -445,7 +445,8 @@ final class Hierarchy
     /**
      * Whether the child's declaration only narrows the values of the parent's property, which constraints on the
      * parent's type can check: the same name and default, and a type that differs by null, by a refinement of the
-     * same scalar or by the cases of an enum. A class, a date or a list over a scalar or a map is no such narrowing.
+     * same scalar or by the cases of an enum. Every schema applies, so an enum over an enum of some values in common
+     * leaves those. A class, a date or a list over a scalar or a map is no such narrowing.
      */
     private function narrowsValues(PropertyModel $parent, PropertyModel $child): bool
     {
@@ -454,9 +455,11 @@ final class Hierarchy
         $sameKind = $wide->describe() === $narrow->describe()
             || ($wide instanceof ScalarType && $narrow instanceof ScalarType && $wide->kind() === $narrow->kind())
             || $narrow instanceof EnumType;
+        $overlap = $wide instanceof EnumType && $narrow instanceof EnumType && $wide->backing()->value() === $narrow->backing()->value()
+            && array_intersect_key($wide->cases(), $narrow->cases()) !== [];
 
         return $sameKind && $parent->name() === $child->name() && $this->setDefault($parent) === $this->setDefault($child)
-            && $this->meet->admits($parent->type(), $child->type());
+            && ($overlap || $this->meet->admits($parent->type(), $child->type()));
     }
 
     /**
@@ -494,9 +497,10 @@ final class Hierarchy
                 $this->superseded->add($property->type());
                 $this->diagnostics->warning(
                     sprintf(
-                        'Property "%s" of %s narrows the one %s declares, whose type %s the class keeps%s.',
+                        'Property "%s" of %s %s the one %s declares, whose type %s the class keeps%s.',
                         $property->wireName(),
                         $fqcn,
+                        $this->meet->admits($inherited->type(), $property->type()) ? 'narrows' : 'shares values with',
                         $byWireName,
                         $inherited->type()->describe(),
                         $property->isRequired() && !$inherited->isRequired() ? ' and does not require it' : '',

@@ -254,6 +254,14 @@ final class Registry
 
     public function declarations(): Declarations
     {
-        return new Declarations($this->classes, $this->enums, $this->skipped, $this->abandoned);
+        // A view leaves out properties, a companion adds them: the schema no longer tells which objects the class holds.
+        $schemas = [];
+        foreach (!$this->view instanceof View && !$this->properties instanceof PropertyView ? $this->planned : [] as [$schema, $name]) {
+            if ($this->companions($schema) === []) {
+                $schemas[$name->fqcn()] = $schema;
+            }
+        }
+
+        return new Declarations($this->classes, $this->enums, $this->skipped, $this->abandoned, $schemas);
     }
 }

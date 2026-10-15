@@ -230,20 +230,24 @@ final class CompositionTest extends TestCase
                 'n' => ['type' => 'string'],
                 'kind' => ['type' => 'string'],
                 'size' => ['type' => 'string', 'enum' => ['s', 'm', 'l']],
+                'state' => ['type' => 'string', 'enum' => ['open', 'done', 'lost']],
+                'mode' => ['type' => ['string', 'null'], 'enum' => ['on', 'off', null]],
             ]],
             'Cat' => ['allOf' => [self::PET, ['type' => 'object', 'required' => ['at'], 'properties' => [
                 'at' => ['type' => 'string', 'format' => 'date-time'],
                 'n' => ['type' => 'string', 'minLength' => 1],
                 'kind' => ['type' => 'string', 'enum' => ['cat']],
                 'size' => ['type' => 'string', 'enum' => ['s']],
+                'state' => ['type' => ['string', 'null'], 'enum' => ['done', 'lost', 'failed', null]],
+                'mode' => ['type' => 'string', 'enum' => ['off', 'auto']],
                 'meow' => ['type' => 'string'],
             ]]]],
         ]);
 
         $narrows = static fn (string $name, string $type): string => "warning {$at}Cat/allOf/1/properties/{$name}: Property \"{$name}\" of App\\Dto\\Cat narrows the one App\\Dto\\Pet declares, whose type {$type} the class keeps.";
         self::assertSame(
-            [str_replace(' keeps.', ' keeps and does not require it.', $narrows('at', 'DateTimeImmutable|null')), $narrows('n', 'string|null'), $narrows('kind', 'string|null'), $narrows('size', 'App\\Dto\\PetSize|null')],
-            array_values(array_filter(ModelFixture::messages($output), static fn (string $message): bool => strpos($message, 'narrows') !== false)),
+            [str_replace(' keeps.', ' keeps and does not require it.', $narrows('at', 'DateTimeImmutable|null')), $narrows('n', 'string|null'), $narrows('kind', 'string|null'), $narrows('size', 'App\\Dto\\PetSize|null'), str_replace('narrows', 'shares values with', $narrows('state', 'App\\Dto\\PetState|null')), str_replace('narrows', 'shares values with', $narrows('mode', 'App\\Dto\\PetMode|null'))],
+            array_values(array_filter(ModelFixture::messages($output), static fn (string $message): bool => strpos($message, ' the class keeps') !== false)),
         );
         self::assertSame(['meow: string|null'], ModelFixture::classes($output)['App\\Dto\\Cat']);
     }
@@ -325,6 +329,8 @@ final class CompositionTest extends TestCase
         yield 'a list of narrower items' => [['type' => 'array'], ['type' => 'array', 'items' => ['type' => 'string']]];
         yield 'another default' => [['type' => 'string', 'default' => 'a'], ['type' => 'string', 'default' => 'b']];
         yield 'a default the parent lacks' => [['type' => 'string'], ['type' => 'string', 'default' => 'b']];
+        yield 'an enum of other values' => [['type' => 'string', 'enum' => ['a', 'b']], ['type' => 'string', 'enum' => ['c']]];
+        yield 'an enum of other ints' => [['type' => 'string', 'enum' => ['1']], ['type' => 'integer', 'enum' => [1, 2]]];
         yield 'another name' => [['type' => 'string'], ['type' => 'string', 'x-php-name' => 'q']];
     }
 
@@ -355,6 +361,94 @@ final class CompositionTest extends TestCase
             ['at: DateTimeImmutable|null', 'done: DateTimeImmutable', 'id: int', 'tags: list<string>|null', 'owner: App\Dto\BOwner|null', 'kind: DateTimeImmutable|null'],
             ModelFixture::classes($output)['App\Dto\C'],
         );
+    }
+
+    /**
+     * @dataProvider shapes
+     *
+     * @param array<string, mixed> $wide
+     * @param array<string, mixed> $narrow
+     */
+    public function testMergesAClassIntoOneThatHasItsPropertiesAndMore(array $wide, array $narrow, string $expected): void
+    {
+        $at = self::AT;
+        $output = ModelFixture::build([
+            'Ttl' => ['type' => 'string', 'enum' => ['30m']],
+            'Wide' => $wide,
+            'Narrow' => $narrow,
+            'Req' => ['allOf' => [
+                ['type' => 'object', 'properties' => ['opts' => ['$ref' => '#/components/schemas/Wide']]],
+                ['type' => 'object', 'properties' => ['opts' => ['$ref' => '#/components/schemas/Narrow']]],
+            ]],
+            'Rev' => ['allOf' => [
+                ['type' => 'object', 'properties' => ['opts' => ['$ref' => '#/components/schemas/Narrow']]],
+                ['type' => 'object', 'properties' => ['opts' => ['$ref' => '#/components/schemas/Wide']]],
+            ]],
+        ]);
+
+        if ($expected === 'error') {
+            self::assertContains("error {$at}Req/allOf/1/properties/opts: Property \"opts\" of App\\Dto\\Req is App\\Dto\\Narrow|null here, but App\\Dto\\Wide|null in an earlier allOf member.", ModelFixture::messages($output));
+
+            return;
+        }
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(["opts: App\\Dto\\{$expected}|null"], ModelFixture::classes($output)['App\\Dto\\Req']);
+        self::assertSame(["opts: App\\Dto\\{$expected}|null"], ModelFixture::classes($output)['App\\Dto\\Rev']);
+    }
+
+    public function testMeetsNoClassWhoseSchemaLeavesOutWhatItHolds(): void
+    {
+        $at = self::AT;
+        $narrow = ['type' => 'object', 'properties' => ['a' => ['type' => 'string'], 'b' => ['type' => 'string']]];
+        $joined = ModelFixture::build([
+            'Narrow' => $narrow,
+            'Req' => ['allOf' => [
+                ['type' => 'object', 'properties' => ['opts' => ['type' => 'object', 'properties' => ['a' => ['type' => 'string']]]]],
+                ['type' => 'object', 'properties' => ['opts' => ['type' => 'object', 'properties' => ['c' => ['type' => 'string']]]]],
+                ['type' => 'object', 'properties' => ['opts' => ['$ref' => '#/components/schemas/Narrow']]],
+            ]],
+        ]);
+        $viewed = ModelFixture::views([
+            'Wide' => ['type' => 'object', 'properties' => ['a' => ['type' => 'string']]],
+            'Narrow' => ['properties' => ['a' => ['type' => 'string'], 'b' => ['type' => 'string', 'readOnly' => true]]] + $narrow,
+            'Req' => ['allOf' => [
+                ['type' => 'object', 'properties' => ['opts' => ['$ref' => '#/components/schemas/Wide']]],
+                ['type' => 'object', 'properties' => ['opts' => ['$ref' => '#/components/schemas/Narrow']]],
+            ]],
+        ]);
+
+        self::assertSame(["error {$at}Req/allOf/2/properties/opts: Property \"opts\" of App\\Dto\\Req is App\\Dto\\Narrow|null here, but App\\Dto\\ReqOpts|null in an earlier allOf member."], ModelFixture::messages($joined));
+        self::assertSame(["error {$at}Req/allOf/1/properties/opts: Property \"opts\" of App\\Dto\\ReqRead is App\\Dto\\NarrowRead|null here, but App\\Dto\\Wide|null in an earlier allOf member."], ModelFixture::messages($viewed));
+    }
+
+    /**
+     * @return iterable<string, array{array<string, mixed>, array<string, mixed>, string}>
+     */
+    public static function shapes(): iterable
+    {
+        $ttl = ['$ref' => '#/components/schemas/Ttl', 'description' => 'How long.'];
+        $tags = ['type' => 'array', 'items' => ['type' => 'string', 'format' => 'uuid']];
+        $wide = ['type' => 'object', 'title' => 'Options', 'description' => 'Options.', 'required' => ['ttl'], 'properties' => ['ttl' => $ttl, 'tags' => $tags]];
+        $narrow = ['type' => 'object', 'required' => ['ttl', 'more'], 'properties' => ['ttl' => ['$ref' => '#/components/schemas/Ttl', 'description' => 'Other words.'], 'tags' => $tags, 'more' => ['type' => 'boolean']]];
+
+        yield 'more properties' => [$wide, $narrow, 'Narrow'];
+        yield 'the same properties' => [$wide, ['required' => ['ttl']] + $narrow + ['additionalProperties' => false], 'Narrow'];
+        yield 'an empty object' => [['type' => 'object'], $narrow, 'Narrow'];
+        yield 'a narrower allOf' => [$wide, ['allOf' => [['type' => 'object', 'properties' => ['x' => ['type' => 'string']]]]] + $narrow, 'error'];
+        yield 'a property it lacks' => [$wide, ['properties' => ['ttl' => $ttl]] + $narrow, 'error'];
+        yield 'a property it does not require' => [$wide, ['required' => ['more']] + $narrow, 'error'];
+        yield 'another property schema' => [$wide, ['properties' => ['ttl' => $ttl, 'tags' => ['type' => 'array', 'items' => ['type' => 'string']]]] + $narrow, 'error'];
+        yield 'another default' => [$wide, ['properties' => ['ttl' => $ttl + ['default' => '30m'], 'tags' => $tags]] + $narrow, 'error'];
+        yield 'an x- key on a property' => [$wide, ['properties' => ['ttl' => $ttl + ['x-php-name' => 'life'], 'tags' => $tags]] + $narrow, 'error'];
+        yield 'a keyword on a property' => [$wide, ['properties' => ['ttl' => $ttl, 'tags' => $tags + ['minItems' => 1]]] + $narrow, 'error'];
+        yield 'an inline object property' => [['properties' => ['o' => ['type' => 'object']]] + $wide, ['properties' => ['o' => ['type' => 'object'], 'ttl' => $ttl, 'tags' => $tags]] + $narrow, 'error'];
+        yield 'no other properties' => [['additionalProperties' => false] + $wide, $narrow, 'error'];
+        yield 'other properties of a type' => [['additionalProperties' => ['type' => 'string']] + $wide, $narrow, 'error'];
+        yield 'an allOf' => [['allOf' => [['type' => 'object']]] + $wide, $narrow, 'error'];
+        yield 'an x- key' => [['x-dto-mutable' => true] + $wide, $narrow, 'error'];
+        yield 'a keyword' => [['minProperties' => 1] + $wide, $narrow, 'error'];
+        yield 'null' => [['type' => ['object', 'null']] + $wide, $narrow, 'Narrow'];
     }
 
     /**
@@ -438,7 +532,11 @@ final class CompositionTest extends TestCase
             ],
             'member that is a plain union' => [
                 ['Either' => ['oneOf' => [['type' => 'string'], ['type' => 'integer']]], 'Cat' => ['allOf' => [['$ref' => '#/components/schemas/Either'], $lives]]],
-                ["error {$at}Cat/allOf/0: An allOf member of a class must be an object schema."],
+                ["error {$at}Cat/allOf/0: An allOf member of a class must be an object schema, not a oneOf or anyOf: no class adds properties to each variant."],
+            ],
+            'member that is a union of objects' => [
+                ['Pet' => $pet, 'Cat' => ['allOf' => [['anyOf' => [self::PET, ['type' => 'object', 'properties' => ['x' => []]]]], $lives]]],
+                ["error {$at}Cat/allOf/0: An allOf member of a class must be an object schema, not a oneOf or anyOf: no class adds properties to each variant."],
             ],
             'redeclared inherited property' => [
                 ['Pet' => $pet, 'Cat' => ['allOf' => [self::PET, ['properties' => ['name' => ['type' => 'integer']]]]]],
