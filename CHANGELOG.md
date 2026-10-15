@@ -6,6 +6,8 @@ All notable changes to this package are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-10-15
+
 ### Added
 
 - `$ref`s in the raw schemas of keywords (`not`, `if`, `then`, `else`, `contains`, `propertyNames`, `prefixItems`,
@@ -275,7 +277,8 @@ First release.
 - A manifest per output directory: stale classes are deleted, files without the `@generated` header are never
   overwritten.
 
-[Unreleased]: https://github.com/msstc4php/dto-generator/compare/v1.5.0...HEAD
+[Unreleased]: https://github.com/msstc4php/dto-generator/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/msstc4php/dto-generator/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/msstc4php/dto-generator/compare/v1.4.1...v1.5.0
 [1.4.1]: https://github.com/msstc4php/dto-generator/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/msstc4php/dto-generator/compare/v1.3.1...v1.4.0
