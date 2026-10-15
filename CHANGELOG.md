@@ -6,6 +6,18 @@ All notable changes to this package are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- A property two `allOf` members give two classes is of the class that has all the other's properties, with the same
+  schemas, requires the ones it requires and may have more, when the other says nothing but its properties and which
+  it requires, instead of an error. Schemas reached through a `$ref` count only within one file; with a read or write
+  model view the classes do not meet.
+- A child that declares its parent's enum property again with an enum sharing only some of its values leaves the
+  property to the parent, with a warning, instead of an error; the Symfony bridge checks the values both allow.
+- An `allOf` member that is a `oneOf`/`anyOf` reports that no class adds properties to each variant.
+
+Found by generating the OpenAI specification, which now generates with its two WebSocket event unions left out.
+
 ## [1.6.0] - 2026-10-15
 
 ### Added

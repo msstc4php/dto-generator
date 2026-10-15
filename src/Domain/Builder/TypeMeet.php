@@ -15,6 +15,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\NullableType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ScalarType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\TypeModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\UnionType;
+use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
 
 /**
  * The type of the values two schemas both admit, when PHP can say it: every schema of an `allOf` applies, so a property
@@ -169,7 +170,19 @@ final class TypeMeet
                 && array_diff_key($narrow->cases(), $wide->cases()) === [];
         }
 
+        if ($wide instanceof ClassType) {
+            return $narrow instanceof ClassType && $this->classAdmits($wide->className(), $narrow->className());
+        }
+
         return $wide instanceof ScalarType && $this->scalarAdmits($wide, $narrow);
+    }
+
+    private function classAdmits(ClassName $wide, ClassName $narrow): bool
+    {
+        $wideSchema = $this->declarations->schemaOf($wide);
+        $narrowSchema = $this->declarations->schemaOf($narrow);
+
+        return $wideSchema instanceof Schema && $narrowSchema instanceof Schema && ObjectShape::admits($wideSchema, $narrowSchema);
     }
 
     private function scalarAdmits(ScalarType $wide, TypeModel $narrow): bool
