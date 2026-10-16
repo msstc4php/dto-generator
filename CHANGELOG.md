@@ -6,6 +6,8 @@ All notable changes to this package are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-10-16
+
 ### Changed
 
 - A property two `allOf` members give two classes is of the class that has all the other's properties, with the same
@@ -297,7 +299,8 @@ First release.
 - A manifest per output directory: stale classes are deleted, files without the `@generated` header are never
   overwritten.
 
-[Unreleased]: https://github.com/msstc4php/dto-generator/compare/v1.6.0...HEAD
+[Unreleased]: https://github.com/msstc4php/dto-generator/compare/v1.7.0...HEAD
+[1.7.0]: https://github.com/msstc4php/dto-generator/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/msstc4php/dto-generator/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/msstc4php/dto-generator/compare/v1.4.1...v1.5.0
 [1.4.1]: https://github.com/msstc4php/dto-generator/compare/v1.4.0...v1.4.1
