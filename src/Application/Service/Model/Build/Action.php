@@ -527,7 +527,7 @@ final class Action
         }
 
         $diagnostics->warning(
-            sprintf('Class %s is already generated from %s, so this one becomes %s; set "x-php-class-name" to name it.', $taken->fqcn(), (string) $registry->holder($taken), $name->fqcn()),
+            sprintf('Class %s is already generated from %s, so this one becomes %s; set "x-php-class-name" to name it, in the document or "classNames" of the source.', $taken->fqcn(), (string) $registry->holder($taken), $name->fqcn()),
             $candidate->location(),
         );
 
@@ -544,7 +544,7 @@ final class Action
         }
 
         $diagnostics->error(
-            sprintf('Property name "%s" gives no class name for its inline schema; set "x-php-class-name".', $wireName),
+            sprintf('Property name "%s" gives no class name for its inline schema; set "x-php-class-name", in the document or "classNames" of the source.', $wireName),
             $schema->location(),
         );
 
@@ -661,7 +661,7 @@ final class Action
         $name = $this->names->className($schemaName);
         if ($name === null) {
             $diagnostics->error(
-                sprintf('Schema name "%s" has no usable characters; set "x-php-class-name".', $schemaName),
+                sprintf('Schema name "%s" has no usable characters; set "x-php-class-name", in the document or "classNames" of the source.', $schemaName),
                 $schema->location(),
             );
         }

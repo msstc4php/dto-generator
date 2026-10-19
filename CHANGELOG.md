@@ -13,6 +13,10 @@ All notable changes to this package are documented here. The format follows
   with the `extends` strategy), instead of an error. The OpenAI specification now generates whole, without `exclude`.
 - `discoverExtensions: {exclude: [...]}` turns discovery on but leaves out the extensions of the packages it lists, or
   single extension classes, without loading them; an entry that leaves out nothing gives a warning.
+- `classNames` and `propertyNames` of a source set `x-php-class-name` and `x-php-name` on the schemas their keys
+  reference (`'#/components/schemas/fields': FieldList`), so names a document you do not change gives twice (the Jira
+  specification has the schemas `fields` and `Fields`, the properties `issuetype` and `issueType`) can be told apart;
+  a key that names no schema read gives a warning. The errors about such names point to them.
 
 ### Changed
 

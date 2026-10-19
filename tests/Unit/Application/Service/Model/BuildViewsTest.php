@@ -136,7 +136,7 @@ final class BuildViewsTest extends TestCase
         ]);
 
         self::assertSame([
-            'error /project/api/openapi.yaml#/components/schemas/Pet: Class App\Dto\PetRead is already generated from /project/api/openapi.yaml#/components/schemas/PetRead; set "x-php-class-name" on one of them, or change dto.readWriteSuffixes.',
+            'error /project/api/openapi.yaml#/components/schemas/Pet: Class App\Dto\PetRead is already generated from /project/api/openapi.yaml#/components/schemas/PetRead; set "x-php-class-name" on one of them, in the document or "classNames" of the source, or change dto.readWriteSuffixes.',
         ], ModelFixture::messages($output));
     }
 
@@ -150,8 +150,8 @@ final class BuildViewsTest extends TestCase
         ]);
 
         self::assertSame([
-            'error /project/api/openapi.yaml#/components/schemas/Same: Class App\Dto\Plain is already generated from /project/api/openapi.yaml#/components/schemas/Plain; set "x-php-class-name" on one of them.',
-            'error /project/api/openapi.yaml#/components/schemas/Other: Class App\Dto\PetWrite is already generated from /project/api/openapi.yaml#/components/schemas/Pet; set "x-php-class-name" on one of them, or change dto.readWriteSuffixes.',
+            'error /project/api/openapi.yaml#/components/schemas/Same: Class App\Dto\Plain is already generated from /project/api/openapi.yaml#/components/schemas/Plain; set "x-php-class-name" on one of them, in the document or "classNames" of the source.',
+            'error /project/api/openapi.yaml#/components/schemas/Other: Class App\Dto\PetWrite is already generated from /project/api/openapi.yaml#/components/schemas/Pet; set "x-php-class-name" on one of them, in the document or "classNames" of the source, or change dto.readWriteSuffixes.',
         ], ModelFixture::messages($output));
     }
 
@@ -196,7 +196,7 @@ final class BuildViewsTest extends TestCase
 
         // The write build's refusal of PetWrite is the same problem, named after the read view.
         self::assertSame([
-            'error /project/api/openapi.yaml#/components/schemas/pet: Class App\Dto\PetRead is already generated from /project/api/openapi.yaml#/components/schemas/Pet; set "x-php-class-name" on one of them, or change dto.readWriteSuffixes.',
+            'error /project/api/openapi.yaml#/components/schemas/pet: Class App\Dto\PetRead is already generated from /project/api/openapi.yaml#/components/schemas/Pet; set "x-php-class-name" on one of them, in the document or "classNames" of the source, or change dto.readWriteSuffixes.',
         ], ModelFixture::messages($output));
     }
 
@@ -273,7 +273,7 @@ final class BuildViewsTest extends TestCase
 
         self::assertSame(['App\Dto\Pet', 'App\Dto\Holder', 'App\Dto\OtherRead', 'App\Dto\OtherWrite'], array_keys(ModelFixture::classes($named)));
         self::assertSame([
-            'error /project/api/openapi.yaml#/components/schemas/pet: Class App\Dto\Pet is already generated from /project/api/openapi.yaml#/components/schemas/Pet; set "x-php-class-name" on one of them.',
+            'error /project/api/openapi.yaml#/components/schemas/pet: Class App\Dto\Pet is already generated from /project/api/openapi.yaml#/components/schemas/Pet; set "x-php-class-name" on one of them, in the document or "classNames" of the source.',
             'warning /project/api/openapi.yaml#/components/schemas/pet/properties/flag/writeOnly: "writeOnly" must be true or false; it is ignored.',
         ], ModelFixture::messages($named));
         self::assertSame([], ModelFixture::messages($inline), 'the views name the inline classes apart');
@@ -492,7 +492,7 @@ final class BuildViewsTest extends TestCase
         ]);
 
         self::assertSame([
-            'error /project/api/openapi.yaml#/components/schemas/PetRead: Class App\Dto\PetRead is already generated from /project/api/openapi.yaml#/components/schemas/Pet; set "x-php-class-name" on one of them, or change dto.readWriteSuffixes.',
+            'error /project/api/openapi.yaml#/components/schemas/PetRead: Class App\Dto\PetRead is already generated from /project/api/openapi.yaml#/components/schemas/Pet; set "x-php-class-name" on one of them, in the document or "classNames" of the source, or change dto.readWriteSuffixes.',
         ], ModelFixture::messages($output));
     }
 

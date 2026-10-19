@@ -159,7 +159,7 @@ final class Registry
 
             $diagnostics->error(
                 sprintf(
-                    'Class %s is already generated from %s; set "x-php-class-name" on one of them%s%s.',
+                    'Class %s is already generated from %s; set "x-php-class-name" on one of them, in the document or "classNames" of the source%s%s.',
                     $name->fqcn(),
                     $this->taken[$lower],
                     VariantOrigin::isVariant($schema->location()) ? ' (on the schema this one is distributed from or on a referenced variant, or a "title" on an inline one)' : '',

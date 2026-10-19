@@ -511,7 +511,7 @@ final class Hierarchy
                 $this->diagnostics->error(sprintf('Property "%s" of %s is already declared by %s.', $property->wireName(), $fqcn, $byWireName), $property->source());
             } elseif ($byName !== null) {
                 $this->diagnostics->error(
-                    sprintf('Property "%s" of %s becomes $%s, which %s already declares; set "x-php-name".', $property->wireName(), $fqcn, $property->name(), $byName),
+                    sprintf('Property "%s" of %s becomes $%s, which %s already declares; set "x-php-name", in the document or "propertyNames" of the source.', $property->wireName(), $fqcn, $property->name(), $byName),
                     $property->source(),
                 );
             }

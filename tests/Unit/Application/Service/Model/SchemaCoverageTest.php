@@ -428,8 +428,8 @@ final class SchemaCoverageTest extends TestCase
         self::assertSame(['id: int|null'], $classes['App\Dto\PetsItem']);
         $messages = ModelFixture::messages($output);
         self::assertCount(2, $messages);
-        self::assertSame(str_replace('error ', 'warning ', self::AT) . 'Shape/oneOf/0: Class App\Dto\User is already generated from /project/api/openapi.yaml#/components/schemas/User, so this one becomes App\Dto\ShapeOption1; set "x-php-class-name" to name it.', $messages[0]);
-        self::assertSame(str_replace('error ', 'warning ', self::AT) . 'Pets/items: Class App\Dto\PetsItem is already generated from /project/api/openapi.yaml#/components/schemas/PetsItem, so this one becomes App\Dto\PetsItem2; set "x-php-class-name" to name it.', $messages[1]);
+        self::assertSame(str_replace('error ', 'warning ', self::AT) . 'Shape/oneOf/0: Class App\Dto\User is already generated from /project/api/openapi.yaml#/components/schemas/User, so this one becomes App\Dto\ShapeOption1; set "x-php-class-name" to name it, in the document or "classNames" of the source.', $messages[0]);
+        self::assertSame(str_replace('error ', 'warning ', self::AT) . 'Pets/items: Class App\Dto\PetsItem is already generated from /project/api/openapi.yaml#/components/schemas/PetsItem, so this one becomes App\Dto\PetsItem2; set "x-php-class-name" to name it, in the document or "classNames" of the source.', $messages[1]);
     }
 
     public function testTypesAUnionOfConstMembers(): void

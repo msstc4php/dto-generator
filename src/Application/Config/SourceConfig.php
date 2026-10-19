@@ -21,11 +21,15 @@ final class SourceConfig
     /** @var list<string> */
     private array $exclude;
 
+    /** @var list<NameOverride> */
+    private array $names;
+
     /**
      * @param list<string> $include glob patterns over component schema names
      * @param list<string> $exclude glob patterns over component schema names
+     * @param list<NameOverride> $names
      */
-    public function __construct(string $spec, string $namespace, string $outputDir, array $include, array $exclude)
+    public function __construct(string $spec, string $namespace, string $outputDir, array $include, array $exclude, array $names = [])
     {
         if (!Path::isAbsolute($spec) || !Path::isAbsolute($outputDir)) {
             throw new InvalidArgumentException('Source paths must be absolute.');
@@ -40,11 +44,12 @@ final class SourceConfig
         $this->outputDir = Path::normalize($outputDir);
         $this->include = $include;
         $this->exclude = $exclude;
+        $this->names = $names;
     }
 
     public function withOutputDir(string $outputDir): self
     {
-        return new self($this->spec, $this->namespace, $outputDir, $this->include, $this->exclude);
+        return new self($this->spec, $this->namespace, $outputDir, $this->include, $this->exclude, $this->names);
     }
 
     /**
@@ -79,6 +84,14 @@ final class SourceConfig
     public function exclude(): array
     {
         return $this->exclude;
+    }
+
+    /**
+     * @return list<NameOverride>
+     */
+    public function names(): array
+    {
+        return $this->names;
     }
 
     /**

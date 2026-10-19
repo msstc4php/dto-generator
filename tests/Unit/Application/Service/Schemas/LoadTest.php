@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Tests\Unit\Application\Service\Schemas;
 
+use MSSTC4PHP\DtoGenerator\Application\Config\NameOverride;
 use MSSTC4PHP\DtoGenerator\Application\Config\SourceConfig;
 use MSSTC4PHP\DtoGenerator\Application\Port\DocumentLoadFailed;
 use MSSTC4PHP\DtoGenerator\Application\Service\Schemas\Load\Action;
@@ -13,8 +14,11 @@ use MSSTC4PHP\DtoGenerator\Domain\Builder\SchemaParser;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\ClaimedKeyword;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostic;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\KeywordChecks;
+use MSSTC4PHP\DtoGenerator\Domain\Schema\Reference;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\ReferenceUse;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\ResolvedSchema;
+use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
+use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
 use MSSTC4PHP\DtoGenerator\Tests\Support\ConfigMother;
 use MSSTC4PHP\DtoGenerator\Tests\Support\InMemoryDocumentLoader;
 use PHPUnit\Framework\TestCase;
@@ -324,6 +328,86 @@ final class LoadTest extends TestCase
             static fn (ResolvedSchema $schema): array => [$schema->name(), $schema->source(), $schema->isSelected()],
             $output->graph()->all(),
         );
+    }
+
+    public function testWritesTheConfiguredNamesIntoTheSchemasAsTheyAreRead(): void
+    {
+        $fields = ['properties' => ['issuetype' => ['type' => 'string'], 'issueType' => ['$ref' => '../shared/common.json#/Type']]];
+        $output = $this->load(
+            [
+                self::SPEC => $this->spec(['field' => ['type' => 'object'], 'fields' => ['type' => 'object', 'x-php-class-name' => 'Mine'], 'Fields' => $fields, 'Both' => ['allOf' => [['$ref' => '#/components/schemas/Fields'], ['properties' => ['a' => ['type' => 'object']]]]]]),
+                self::SHARED => ['Type' => ['type' => 'object']],
+            ],
+            $this->named(
+                ['*'],
+                [NameOverride::CLASS_NAME, '#/components/schemas/fields', 'FieldList'],
+                [NameOverride::CLASS_NAME, '#/components/schemas/Both/allOf/1/properties/a', 'BothA'],
+                [NameOverride::CLASS_NAME, '../shared/common.json#/Type', 'IssueType'],
+                [NameOverride::PROPERTY_NAME, '#/components/schemas/Fields/properties/issueType', 'issueTypeObject'],
+            ),
+        );
+
+        $schemas = [];
+        foreach ($output->graph()->all() as $schema) {
+            $schemas[$schema->name()] = $schema->schema();
+        }
+
+        self::assertSame([], $this->messages($output));
+        self::assertSame('FieldList', $schemas['fields']->extensions()->get('x-php-class-name'));
+        self::assertFalse($schemas['field']->extensions()->has('x-php-class-name'));
+        self::assertSame('issueTypeObject', $this->property($schemas['Fields'], 'issueType')->extensions()->get('x-php-name'));
+        self::assertFalse($this->property($schemas['Fields'], 'issuetype')->extensions()->has('x-php-name'));
+        self::assertSame('BothA', $this->property($schemas['Both']->allOf()[1], 'a')->extensions()->get('x-php-class-name'));
+        self::assertSame('IssueType', $schemas['Type']->extensions()->get('x-php-class-name'));
+    }
+
+    public function testWarnsOfANameGivenToNoSchemaItReads(): void
+    {
+        $output = $this->load(
+            [self::SPEC => $this->spec(['Tag' => ['type' => 'object', 'allOf' => [['type' => 'object']]], 'Skipped' => ['type' => 'object']])],
+            $this->named(
+                ['Tag'],
+                [NameOverride::CLASS_NAME, '#/components/schemas/Pet', 'A'],
+                [NameOverride::CLASS_NAME, '#/components/schemas/Tag/type/x', 'B'],
+                [NameOverride::CLASS_NAME, '#/components/schemas/Tag/allOf', 'C'],
+                [NameOverride::CLASS_NAME, '#/components/schemas/Skipped', 'D'],
+                [NameOverride::CLASS_NAME, '../shared/common.json#/Type', 'E'],
+                [NameOverride::CLASS_NAME, '#/components/schemas/Tag/allOf/0', 'F'],
+            ),
+        );
+
+        self::assertSame(
+            [
+                'warning /project/dto-generator.yaml#/n/0: No schema read is at /project/api/openapi.yaml#/components/schemas/Pet; the name is not used.',
+                'warning /project/dto-generator.yaml#/n/1: No schema read is at /project/api/openapi.yaml#/components/schemas/Tag/type/x; the name is not used.',
+                'warning /project/dto-generator.yaml#/n/2: No schema read is at /project/api/openapi.yaml#/components/schemas/Tag/allOf; the name is not used.',
+                'warning /project/dto-generator.yaml#/n/3: No schema read is at /project/api/openapi.yaml#/components/schemas/Skipped; the name is not used.',
+                'warning /project/dto-generator.yaml#/n/4: No schema read is at /project/shared/common.json#/Type; the name is not used.',
+            ],
+            $this->messages($output),
+        );
+    }
+
+    /**
+     * @param list<string> $include
+     * @param array{NameOverride::CLASS_NAME|NameOverride::PROPERTY_NAME, string, string} ...$names keyword, reference and name
+     */
+    private function named(array $include, array ...$names): SourceConfig
+    {
+        $overrides = [];
+        foreach ($names as $index => [$keyword, $ref, $name]) {
+            $overrides[] = new NameOverride($keyword, Reference::target($ref, new SchemaLocation(self::SPEC)), $name, new SchemaLocation('/project/dto-generator.yaml', '/n/' . $index));
+        }
+
+        return new SourceConfig(self::SPEC, 'App\\Dto', '/project/src/Dto', $include, [], $overrides);
+    }
+
+    private function property(Schema $schema, string $name): Schema
+    {
+        $property = $schema->property($name);
+        self::assertInstanceOf(Schema::class, $property);
+
+        return $property;
     }
 
     public function testKeepsLoadingAfterABrokenOrDuplicateSource(): void

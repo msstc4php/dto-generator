@@ -8,6 +8,7 @@ use InvalidArgumentException;
 use MSSTC4PHP\DtoGenerator\Application\Config\ConfigFactory;
 use MSSTC4PHP\DtoGenerator\Application\Config\ExcludedExtension;
 use MSSTC4PHP\DtoGenerator\Application\Config\GeneratorConfig;
+use MSSTC4PHP\DtoGenerator\Application\Config\NameOverride;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostic;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
@@ -503,6 +504,51 @@ final class ConfigFactoryTest extends TestCase
         self::assertSame(
             ['/sources/0/include/0', '/sources/0/exclude/0'],
             array_map(static fn (Diagnostic $error): string => substr($error->location()->toString(), strlen(self::PATH . '#')), $diagnostics->errors()),
+        );
+    }
+
+    public function testReadsTheNamesASourceGivesItsSchemas(): void
+    {
+        $diagnostics = new Diagnostics();
+        $config = (new ConfigFactory())->create(['version' => 1, 'sources' => [[
+            'spec' => '../api/a.yaml', 'namespace' => 'App\Dto', 'outputDir' => 'src',
+            'classNames' => ['#/components/schemas/fields' => 'FieldList', 'common.json#/Type' => 'IssueType'],
+            'propertyNames' => ['#/components/schemas/Fields/properties/issueType' => 'issueTypeObject'],
+        ]]], self::PATH, $diagnostics);
+
+        self::assertSame([], $diagnostics->all());
+        self::assertInstanceOf(GeneratorConfig::class, $config);
+        self::assertSame(
+            [
+                ['x-php-class-name', '/project/api/a.yaml#/components/schemas/fields', 'FieldList', self::PATH . '#/sources/0/classNames/#~1components~1schemas~1fields'],
+                ['x-php-class-name', '/project/api/common.json#/Type', 'IssueType', self::PATH . '#/sources/0/classNames/common.json#~1Type'],
+                ['x-php-name', '/project/api/a.yaml#/components/schemas/Fields/properties/issueType', 'issueTypeObject', self::PATH . '#/sources/0/propertyNames/#~1components~1schemas~1Fields~1properties~1issueType'],
+            ],
+            array_map(
+                static fn (NameOverride $name): array => [$name->keyword(), $name->target()->toString(), $name->name(), $name->declaredAt()->toString()],
+                $config->sources()[0]->names(),
+            ),
+        );
+    }
+
+    public function testReportsMalformedNamesOfASource(): void
+    {
+        $diagnostics = new Diagnostics();
+        $config = (new ConfigFactory())->create(['version' => 1, 'sources' => [[
+            'spec' => 'a.yaml', 'namespace' => 'App\Dto', 'outputDir' => 'src',
+            'classNames' => ['#anchor' => 'A', '#/a' => 1, '#/b' => '', '#/c' => 'C'],
+            'propertyNames' => ['x'],
+        ]]], self::PATH, $diagnostics);
+
+        self::assertNull($config);
+        self::assertSame(
+            [
+                'error ' . self::PATH . '#/sources/0/classNames/#anchor: Expected a reference to a schema of the specification, like "#/components/schemas/Pet": $ref "#anchor": only JSON pointer fragments are supported, not anchors.',
+                'error ' . self::PATH . '#/sources/0/classNames/#~1a: Expected a non-empty string.',
+                'error ' . self::PATH . '#/sources/0/classNames/#~1b: Expected a non-empty string.',
+                'error ' . self::PATH . '#/sources/0/propertyNames: "propertyNames" must be an object.',
+            ],
+            array_map(static fn (Diagnostic $error): string => $error->toString(), $diagnostics->all()),
         );
     }
 
