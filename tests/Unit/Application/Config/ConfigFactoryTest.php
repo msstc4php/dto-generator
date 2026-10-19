@@ -161,8 +161,9 @@ final class ConfigFactoryTest extends TestCase
             'bad verifyClasses' => [['version' => 1, 'verifyClasses' => 'yes', 'sources' => [$source]], 'must be "auto", true or false', '/verifyClasses'],
             'discoverExtensions not bool' => [['version' => 1, 'discoverExtensions' => 'yes', 'sources' => [$source]], '"discoverExtensions" must be true, false or an object', '/discoverExtensions'],
             'discoverExtensions null' => [['version' => 1, 'discoverExtensions' => null, 'sources' => [$source]], '"discoverExtensions" must be true, false or an object', '/discoverExtensions'],
-            'exclude after a bad entry' => [['version' => 1, 'discoverExtensions' => ['exclude' => [1, 'Not A Class']], 'sources' => [$source]], 'not "Not A Class"', '/discoverExtensions/exclude/1'],
-            'exclude reserved class' => [['version' => 1, 'discoverExtensions' => ['exclude' => ['App\\List']], 'sources' => [$source]], 'not "App\\List": ', '/discoverExtensions/exclude/0'],
+            'exclude after a bad entry' => [['version' => 1, 'discoverExtensions' => ['exclude' => [1, 'Not A Class']], 'sources' => [$source]], 'class: "Not A Class" is not a valid class name', '/discoverExtensions/exclude/1'],
+            'exclude reserved class' => [['version' => 1, 'discoverExtensions' => ['exclude' => ['App\\List']], 'sources' => [$source]], '"List" is a reserved word', '/discoverExtensions/exclude/0'],
+            'remoteRefs prefix after a bad entry' => [['version' => 1, 'remoteRefs' => ['allow' => [1, 'schemas.example.com/']], 'sources' => [$source]], 'A remote $ref prefix must be an absolute http or https URL', '/remoteRefs/allow/1'],
             'extension after a bad entry' => [['version' => 1, 'extensions' => [1, 'Not A Class'], 'sources' => [$source]], 'is not a valid class name', '/extensions/1'],
             'discoverExtensions list' => [['version' => 1, 'discoverExtensions' => ['a/b'], 'sources' => [$source]], '"discoverExtensions" must be true, false or an object', '/discoverExtensions'],
             'discoverExtensions key' => [['version' => 1, 'discoverExtensions' => ['skip' => []], 'sources' => [$source]], 'Unknown key "skip"', '/discoverExtensions/skip'],
@@ -491,6 +492,18 @@ final class ConfigFactoryTest extends TestCase
         yield 'off' => [false, false, []];
         yield 'an empty object' => [[], true, []];
         yield 'packages and classes' => [['exclude' => ['acme/money-ext', '\Vendor\Ext\Audit', 'a.b-c/d_e--f']], true, ['0 acme/money-ext', '1 Vendor\Ext\Audit', '2 a.b-c/d_e--f']];
+    }
+
+    public function testKeepsTheValidPatternsOfASourceAsAList(): void
+    {
+        $diagnostics = new Diagnostics();
+        $config = (new ConfigFactory())->create(['version' => 1, 'sources' => [['spec' => 'a.yaml', 'namespace' => 'App\Dto', 'outputDir' => 'src', 'include' => [1, 'User*'], 'exclude' => [2, 'UserInternal']]]], self::PATH, $diagnostics);
+
+        self::assertNull($config);
+        self::assertSame(
+            ['/sources/0/include/0', '/sources/0/exclude/0'],
+            array_map(static fn (Diagnostic $error): string => substr($error->location()->toString(), strlen(self::PATH . '#')), $diagnostics->errors()),
+        );
     }
 
     public function testRequiresAnAbsoluteConfigPath(): void

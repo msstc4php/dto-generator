@@ -371,7 +371,7 @@ final class ConfigFactory
         try {
             return [ExcludedExtension::extension($index, ClassName::fromFqcn($entry))];
         } catch (InvalidModel $exception) {
-            $section->report(sprintf('Expected a package name in lower case (vendor/name) or an extension class, not "%s": %s', $entry, $exception->getMessage()), 'exclude', (string) $index);
+            $section->report(sprintf('Expected a package name in lower case (vendor/name) or an extension class: %s', $exception->getMessage()), 'exclude', (string) $index);
 
             return [];
         }
