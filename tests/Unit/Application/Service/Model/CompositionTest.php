@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Tests\Unit\Application\Service\Model;
 
+use LogicException;
 use MSSTC4PHP\DtoGenerator\Application\Service\Model\Build\BuiltEnum;
 use MSSTC4PHP\DtoGenerator\Application\Service\Model\Build\Output;
 use MSSTC4PHP\DtoGenerator\Domain\Model\PropertyModel;
 use MSSTC4PHP\DtoGenerator\Domain\Target\AllOfStrategy;
+use MSSTC4PHP\DtoGenerator\Tests\Support\GraphFixture;
 use MSSTC4PHP\DtoGenerator\Tests\Support\ModelFixture;
 use PHPUnit\Framework\TestCase;
 
@@ -559,6 +561,67 @@ final class CompositionTest extends TestCase
         }
     }
 
+    public function testNamesWhatVariantsShareAfterTheirSchema(): void
+    {
+        $object = static fn (array $properties): array => ['type' => 'object', 'properties' => $properties];
+        $output = ModelFixture::build([
+            'A' => $object(['a' => ['type' => 'string']]),
+            'B' => $object(['b' => ['type' => 'integer']]),
+            'S' => ['allOf' => [
+                ['anyOf' => [['$ref' => '#/components/schemas/A'], $object(['own' => $object(['o' => ['type' => 'string']])])]],
+                $object(['meta' => $object(['m' => ['type' => 'string']]), 'kind' => ['type' => 'string', 'enum' => ['x', 'y']]]),
+            ]],
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(['meta: App\\Dto\\SMeta|null', 'kind: App\\Dto\\SKind|null'], ModelFixture::classes($output)['App\\Dto\\SA']);
+        self::assertSame(['own: App\\Dto\\SOption2Own|null', 'meta: App\\Dto\\SMeta|null', 'kind: App\\Dto\\SKind|null'], ModelFixture::classes($output)['App\\Dto\\SOption2']);
+    }
+
+    public function testNamesVariantsWithTheSameTitleByPosition(): void
+    {
+        $object = static fn (array $properties): array => ['type' => 'object', 'properties' => $properties];
+        $output = ModelFixture::build([
+            'S' => ['x-php-class-name' => 'Renamed', 'allOf' => [
+                ['oneOf' => [$object(['p' => ['type' => 'string']]) + ['title' => 'T'], $object(['q' => ['type' => 'string']]) + ['title' => 'T'], $object(['r' => ['type' => 'string']]) + ['title' => 'U']]],
+                $object(['x' => ['type' => 'string']]),
+            ]],
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(['App\\Dto\\RenamedOption1', 'App\\Dto\\RenamedOption2', 'App\\Dto\\RenamedU'], array_keys(ModelFixture::classes($output)));
+    }
+
+    public function testReportsAClassNameOfADistributedSchemaThatIsNoIdentifier(): void
+    {
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessage(self::AT . 'S/x-php-class-name: "x-php-class-name" must be a PHP identifier that is not a reserved word.');
+
+        $object = static fn (array $properties): array => ['type' => 'object', 'properties' => $properties];
+        GraphFixture::load([
+            'A' => $object(['a' => ['type' => 'string']]),
+            'S' => ['x-php-class-name' => 'Sub\\Bad', 'allOf' => [['anyOf' => [['$ref' => '#/components/schemas/A'], $object(['q' => ['type' => 'string']])]], $object(['x' => ['type' => 'string']])]],
+        ]);
+    }
+
+    public function testKeepsWhatAppliesToTheWholeValueOnTheUnion(): void
+    {
+        $object = static fn (array $properties): array => ['type' => 'object', 'properties' => $properties];
+        $output = ModelFixture::views([
+            'A' => $object(['a' => ['type' => 'string']]),
+            'B' => $object(['b' => ['type' => 'integer']]),
+            'E' => ['anyOf' => [['$ref' => '#/components/schemas/A'], ['$ref' => '#/components/schemas/B']]],
+            'H' => $object([
+                'id' => ['type' => 'string'],
+                'alone' => ['allOf' => [['$ref' => '#/components/schemas/E']], 'readOnly' => true],
+            ]),
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(['id: string|null', 'alone: App\\Dto\\A|App\\Dto\\B|null'], ModelFixture::classes($output)['App\\Dto\\HRead']);
+        self::assertSame(['id: string|null'], ModelFixture::classes($output)['App\\Dto\\HWrite']);
+    }
+
     /**
      * @return iterable<string, array{string}>
      */
@@ -581,9 +644,19 @@ final class CompositionTest extends TestCase
             'Twice' => ['allOf' => [$union, $union, $object(['x' => ['type' => 'string']])]],
             'Required' => ['allOf' => [$union + ['required' => ['a']], $object(['x' => ['type' => 'string']])]],
             'Typed' => ['allOf' => [['type' => 'string'] + $union, $object(['x' => ['type' => 'string']])]],
+            'Itself' => ['allOf' => [['anyOf' => [['$ref' => '#/components/schemas/A'], ['$ref' => '#/components/schemas/Itself']]], $object(['x' => ['type' => 'string']])]],
+            'Back' => ['allOf' => [['anyOf' => [['$ref' => '#/components/schemas/Through'], ['$ref' => '#/components/schemas/B']]], $object(['x' => ['type' => 'string']])]],
+            'Through' => ['allOf' => [['$ref' => '#/components/schemas/Back'], $object(['t' => ['type' => 'string']])]],
+            'Nested' => ['allOf' => [['anyOf' => [['$ref' => '#/components/schemas/A'], ['anyOf' => [['$ref' => '#/components/schemas/Nested']]]]], $object(['x' => ['type' => 'string']])]],
+            'Nullable' => ['allOf' => [['anyOf' => [['$ref' => '#/components/schemas/A'], ['type' => 'null']]], $object(['x' => ['type' => 'string']])]],
+            'Mixed' => ['allOf' => [$union, ['oneOf' => [['type' => 'string'], ['type' => 'integer']]], $object(['x' => ['type' => 'string']])]],
+            'Both' => ['allOf' => [['oneOf' => [['$ref' => '#/components/schemas/A']], 'anyOf' => [['$ref' => '#/components/schemas/B']]], $object(['x' => ['type' => 'string']])]],
+            'Skipped' => ['x-php-skip' => true, 'allOf' => [$union, $object(['x' => ['type' => 'string']])]],
+            'Holder' => $object(['skipped' => ['$ref' => '#/components/schemas/Skipped']]),
         ]);
 
-        self::assertSame([$error('Scalars'), $error('Twice'), $error('Twice', 1), $error('Required'), $error('Typed')], ModelFixture::messages($output));
+        self::assertSame([$error('Scalars'), $error('Twice'), $error('Twice', 1), $error('Required'), $error('Typed'), $error('Itself'), $error('Back'), $error('Nested'), $error('Nullable'), $error('Mixed'), $error('Mixed', 1), $error('Both'), "warning {$at}Holder/properties/skipped: \$ref points to a schema excluded by \"x-php-skip\"."], ModelFixture::messages($output));
+        self::assertSame(['skipped: mixed'], ModelFixture::classes($output)['App\\Dto\\Holder']);
     }
 
     public function testMeetsNoClassWithOneOfAView(): void

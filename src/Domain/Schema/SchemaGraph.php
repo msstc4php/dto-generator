@@ -53,7 +53,18 @@ final class SchemaGraph
     {
         $given = [];
         foreach ($schemas as $schema) {
-            $given[$schema->location()->toString()] = $schema;
+            $key = $schema->location()->toString();
+            if (isset($given[$key])) {
+                throw new InvalidModel(sprintf('Schema %s is given twice.', $key));
+            }
+
+            $given[$key] = $schema;
+        }
+
+        foreach (array_intersect_key($edges, $this->edges) as $use => $target) {
+            if ($this->edges[$use] !== $target) {
+                throw new InvalidModel(sprintf('Reference %s already points to %s.', $use, $this->edges[$use]));
+            }
         }
 
         $all = [];

@@ -173,6 +173,13 @@ Attributes appear in a fixed order: built-in `x-php-attributes` first, then exte
 - The generator enriches a class before its properties, so an enricher that is both may carry what it read from the
   class's schema over to them.
 
+## Distributed `allOf`
+
+The schemas extensions see are those the build sees: an `allOf` with a union of objects is already written as the union
+of a schema per variant (see [OpenAPI support](openapi-support.md)). Such a variant's `ClassModel::source()` is
+`…/<Schema>/x-dto-variant/<member>/<variant>`, and the `$ref`s to it are its location as a string; neither is a place in
+the document, so read the schema through `SchemaReferences`, not the raw document.
+
 ## Errors
 
 Report schema problems through `diagnostics()` with the schema's location (`$schema->location()->child('x-example')`).

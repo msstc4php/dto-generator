@@ -109,7 +109,7 @@ final class Action
         $this->followKeywordReferences($graph, $input, $diagnostics, $reads);
 
         // Every later stage sees an allOf of a union of objects as the union of the objects it makes.
-        return new Output(UnionDistribution::of($graph->build($diagnostics)), $diagnostics, $reads->documents(), $reads->readsRemote() ? $config->remoteRefs()->cacheDir() : null);
+        return new Output(UnionDistribution::of($graph->build($diagnostics), $diagnostics), $diagnostics, $reads->documents(), $reads->readsRemote() ? $config->remoteRefs()->cacheDir() : null);
     }
 
     /**

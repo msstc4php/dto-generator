@@ -20,6 +20,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Builder\RequiredCycles;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\SchemaShape;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\Superseded;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\TypeMapper;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\UnionDistribution;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\VariantResolver;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\Variants;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
@@ -378,12 +379,16 @@ final class Action
         }
 
         $excluded = $registry->excluded($owner, $composition);
+        // A part every variant of a distributed allOf shares names its classes after the schema it comes from.
+        $entry = $graph->get($owner->location());
+        $sharedBase = $entry instanceof ResolvedSchema ? $this->names->className(UnionDistribution::owner($entry)) : null;
         foreach ($composition->ownParts() as $part) {
+            $parentBase = $sharedBase !== null && UnionDistribution::isShared($owner->location(), $part->location()) ? $sharedBase : $registry->baseOf($ownerName);
             foreach ($part->propertyNames() as $wireName) {
                 $property = $part->requireProperty($wireName);
                 if (($kept[$wireName] ?? false) && !isset($excluded[$wireName])) {
                     $base = $this->names->className($wireName);
-                    $candidates[] = [$property, $base === null ? null : $registry->baseOf($ownerName) . $base, $wireName];
+                    $candidates[] = [$property, $base === null ? null : $parentBase . $base, $wireName];
                 }
             }
         }

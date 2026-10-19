@@ -67,6 +67,53 @@ final class SchemaGraphTest extends TestCase
         $this->resolved('/api/openapi.yaml', '', '', 0);
     }
 
+    public function testReplacesAndAddsSchemasAndReferences(): void
+    {
+        $user = $this->resolved('/api/openapi.yaml', '/components/schemas/User', 'User', 0);
+        $money = $this->resolved('/api/common.json', '/Money', 'Money', null);
+        $kept = new ReferenceUse('common.json#/Money', $user->location());
+        $graph = new SchemaGraph([$user, $money], [$kept->key() => $money->location()->toString()]);
+        $newUser = $this->resolved('/api/openapi.yaml', '/components/schemas/User', 'Person', 0);
+        $added = $this->resolved('/api/openapi.yaml', '/components/schemas/Added', 'Added', 0);
+        $use = new ReferenceUse('#/components/schemas/Added', $user->location());
+
+        $with = $graph->with([$added, $newUser], [$use->key() => $added->location()->toString(), $kept->key() => $money->location()->toString()]);
+
+        self::assertSame([$newUser, $money, $added], $with->all());
+        self::assertSame($added, $with->resolve($use));
+        self::assertSame($money, $with->resolve($kept));
+        self::assertSame([$user, $money], $graph->all());
+    }
+
+    public function testRejectsASchemaGivenTwice(): void
+    {
+        $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('is given twice');
+
+        $user = $this->resolved('/api/openapi.yaml', '/components/schemas/User', 'User', 0);
+        (new SchemaGraph([$user]))->with([$user, $user]);
+    }
+
+    public function testRejectsAReferenceThatPointsElsewhereAlready(): void
+    {
+        $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('already points to');
+
+        $user = $this->resolved('/api/openapi.yaml', '/components/schemas/User', 'User', 0);
+        $money = $this->resolved('/api/common.json', '/Money', 'Money', null);
+        $use = new ReferenceUse('common.json#/Money', $user->location());
+        (new SchemaGraph([$user, $money], [$use->key() => $money->location()->toString()]))->with([], [$use->key() => $user->location()->toString()]);
+    }
+
+    public function testRejectsAnAddedReferenceToAnUnknownSchema(): void
+    {
+        $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('points to an unknown schema');
+
+        $user = $this->resolved('/api/openapi.yaml', '/components/schemas/User', 'User', 0);
+        (new SchemaGraph([$user]))->with([], [(new ReferenceUse('#/x', $user->location()))->key() => '/api/openapi.yaml#/x']);
+    }
+
     private function resolved(string $file, string $pointer, string $name, ?int $source): ResolvedSchema
     {
         return new ResolvedSchema((new SchemaBuilder(new SchemaLocation($file, $pointer)))->build(), $source, $name, $source !== null);

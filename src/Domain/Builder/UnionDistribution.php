@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Domain\Builder;
 
+use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
+use MSSTC4PHP\DtoGenerator\Domain\Model\Identifier;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Discriminator;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Extensions;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\ReferenceUse;
@@ -17,17 +19,23 @@ use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
 /**
  * Writes an object whose `allOf` has a union of objects as the union of that object with each variant:
  * `allOf: [anyOf: [A, B], E]` is `anyOf: [allOf: [A, E], allOf: [B, E]]`, as for `oneOf`. Each of those is a class, which
- * no union of variants could be. A union with a discriminator, of anything but objects, or two unions in one `allOf`
- * stay as written, which the build reports.
+ * no union of variants could be. A union with a discriminator, of anything but objects, beside another union, alone in
+ * the `allOf` or with a variant that leads back to the schema stays as written, which the build reports.
  *
  * @phpstan-import-type JsonValue from Json
  */
 final class UnionDistribution
 {
-    /** Where a variant written with the rest of the `allOf` lives: no place of the document holds it. */
-    public const SEGMENT = 'x-dto-variant';
+    /** Where a variant written with the rest of the `allOf` lives (`…/x-dto-variant/<member>/<variant>`): no place of the document. */
+    private const SEGMENT = 'x-dto-variant';
+
+    private const ONE_OF = 'oneOf';
+
+    private const ANY_OF = 'anyOf';
 
     private SchemaGraph $graph;
+
+    private Diagnostics $diagnostics;
 
     /** @var list<ResolvedSchema> the variants of named schemas, named themselves */
     private array $added = [];
@@ -35,17 +43,18 @@ final class UnionDistribution
     /** @var array<string, string> the references to them */
     private array $edges = [];
 
-    private function __construct(SchemaGraph $graph)
+    private function __construct(SchemaGraph $graph, Diagnostics $diagnostics)
     {
         $this->graph = $graph;
+        $this->diagnostics = $diagnostics;
     }
 
-    public static function of(SchemaGraph $graph): SchemaGraph
+    public static function of(SchemaGraph $graph, Diagnostics $diagnostics): SchemaGraph
     {
-        $counter = count($graph->all());
-        // An allOf that names a distributed schema distributes in the next round; each round removes one level.
-        for ($round = 0; $round <= $counter; $round++) {
-            $distribution = new self($graph);
+        // An allOf that names a distributed schema distributes in the next round. No variant leads back to the schema
+        // it is distributed over, so the rounds end.
+        do {
+            $distribution = new self($graph, $diagnostics);
             $changed = [];
             foreach ($graph->all() as $resolved) {
                 $schema = $distribution->rewrite($resolved->schema(), $resolved);
@@ -54,14 +63,34 @@ final class UnionDistribution
                 }
             }
 
-            if ($changed === []) {
-                break;
-            }
-
             $graph = $graph->with(array_merge($changed, $distribution->added), $distribution->edges);
-        }
+        } while ($changed !== []);
 
         return $graph;
+    }
+
+    /**
+     * Whether a part of a variant's class comes from the schema the variant was distributed from, not from the variant:
+     * the classes of its inline objects take the name of that schema, the same for every variant.
+     */
+    public static function isShared(SchemaLocation $variant, SchemaLocation $part): bool
+    {
+        if (preg_match('{^(.*)/' . self::SEGMENT . '/(\d+)/\d+$}D', $variant->pointer(), $match) !== 1 || $part->file() !== $variant->file()) {
+            return false;
+        }
+
+        // The slash keeps `allOf/1` from matching `allOf/10`.
+        $pointer = $part->pointer() . '/';
+
+        return strpos($pointer, $match[1] . '/') === 0 && strpos($pointer, $match[1] . '/allOf/' . $match[2] . '/') !== 0;
+    }
+
+    /**
+     * The name of the schema a named variant was distributed from, which the classes of the parts it shares take.
+     */
+    public static function owner(ResolvedSchema $variant): string
+    {
+        return explode(' ', $variant->name(), 2)[0];
     }
 
     private function rewrite(Schema $schema, ?ResolvedSchema $named): Schema
@@ -99,58 +128,73 @@ final class UnionDistribution
      */
     private function distributed(Schema $schema, ?ResolvedSchema $named): ?Schema
     {
-        if (!SchemaShape::mayBeObject($schema) || SchemaShape::hasUnion($schema) || $schema->discriminator() instanceof Discriminator) {
+        // A lone union only annotates it, as a lone $ref does: there is nothing to add to each variant.
+        if (!SchemaShape::mayBeObject($schema) || SchemaShape::hasUnion($schema) || $schema->discriminator() instanceof Discriminator
+            || $schema->extensions()->has('x-php-skip')
+            || ($schema->propertyNames() === [] && $schema->required() === [] && count($schema->allOf()) < 2)) {
             return null;
         }
 
         $unions = [];
         foreach ($schema->allOf() as $index => $member) {
-            $union = $this->unionOf($member);
-            if ($union !== null) {
-                $unions[$index] = $union;
+            if (SchemaShape::hasUnion($this->end($member))) {
+                $unions[$index] = $this->unionOf($member, $schema->location());
             }
         }
 
-        if (count($unions) !== 1) {
+        $index = array_key_first($unions);
+        $union = $index === null ? null : $unions[$index];
+        if (count($unions) !== 1 || $union === null) {
             return null;
         }
 
-        $index = array_key_first($unions);
-        [$kind, $variants] = $unions[$index];
-        $extensions = $this->withoutClassName($schema->extensions());
+        [$kind, $variants] = $union;
+        $extensions = $schema->extensions()->all();
+        unset($extensions['x-php-class-name']);
+        $owner = $named instanceof ResolvedSchema ? $this->ownerName($named) : null;
+        $names = $this->variantNames($variants);
         $members = [];
         foreach ($variants as $position => $variant) {
             $allOf = array_merge(array_slice($schema->allOf(), 0, $index), [$variant], array_slice($schema->allOf(), $index + 1));
             $keywords = $schema->keywords();
             unset($keywords['title']);
-            $location = $schema->location()->child(self::SEGMENT, (string) $position);
-            $member = $this->schema($schema, $location, $schema->nonNullTypes(), $this->properties($schema), $schema->required(), $schema->items(), $schema->additionalProperties(), $allOf, [], [], $keywords, $extensions);
-            $members[] = $named instanceof ResolvedSchema ? $this->named($member, $named, $this->nameOf($variant) ?? 'Option' . ($position + 1), $kind, $position) : $member;
+            $location = $schema->location()->child(self::SEGMENT, (string) $index, (string) $position);
+            $member = $this->schema($schema, $location, $schema->nonNullTypes(), $this->properties($schema), $schema->required(), $schema->items(), $schema->additionalProperties(), $allOf, [], [], $keywords, new Extensions($extensions));
+            $members[] = $named instanceof ResolvedSchema ? $this->named($member, $named, $owner . ' ' . $names[$position], $kind, $position) : $member;
         }
 
-        return $this->schema($schema, $schema->location(), $schema->types(), [], [], null, null, [], $kind === 'oneOf' ? $members : [], $kind === 'anyOf' ? $members : [], [], $extensions);
+        // What applies to the value as a whole (readOnly, a description) stays on the union.
+        return $this->schema($schema, $schema->location(), $schema->types(), [], [], null, null, [], $kind === self::ONE_OF ? $members : [], $kind === self::ANY_OF ? $members : [], $schema->keywords(), new Extensions());
+    }
+
+    private function end(Schema $member): Schema
+    {
+        $chain = $this->graph->chain($member);
+
+        return $chain[count($chain) - 1];
     }
 
     /**
-     * The variants of a union of objects without a discriminator, written in the member or behind its `$ref`.
+     * The variants of a union of objects without a discriminator, written in the member or behind its `$ref`, none of
+     * which leads back to the schema.
      *
      * @return array{'oneOf'|'anyOf', list<Schema>}|null
      */
-    private function unionOf(Schema $member): ?array
+    private function unionOf(Schema $member, SchemaLocation $owner): ?array
     {
-        $chain = $this->graph->chain($member);
-        $union = $chain[count($chain) - 1];
-        if (!SchemaShape::mayBeObject($union) || $union->allOf() !== [] || $union->discriminator() !== null
+        $union = $this->end($member);
+        if (!SchemaShape::mayBeObject($union) || $union->allOf() !== [] || $union->discriminator() instanceof Discriminator
             || $union->propertyNames() !== [] || $union->required() !== [] || $union->additionalProperties() !== null
             || ($union->oneOf() === []) === ($union->anyOf() === [])) {
             return null;
         }
 
-        $kind = $union->oneOf() !== [] ? 'oneOf' : 'anyOf';
-        $variants = $kind === 'oneOf' ? $union->oneOf() : $union->anyOf();
+        $kind = $union->oneOf() !== [] ? self::ONE_OF : self::ANY_OF;
+        $variants = $kind === self::ONE_OF ? $union->oneOf() : $union->anyOf();
         foreach ($variants as $variant) {
-            $chain = $this->graph->chain($variant);
-            if (!SchemaShape::mayBeObject($chain[count($chain) - 1]) || SchemaShape::isEnum($chain[count($chain) - 1])) {
+            $end = $this->end($variant);
+            $onlyNull = $end->types() !== [] && $end->nonNullTypes() === [];
+            if ($onlyNull || !SchemaShape::mayBeObject($end) || SchemaShape::isEnum($end) || $this->leadsTo($variant, $owner)) {
                 return null;
             }
         }
@@ -159,17 +203,79 @@ final class UnionDistribution
     }
 
     /**
+     * Whether a schema reaches the location through `$ref`s and the members of its compositions.
+     */
+    private function leadsTo(Schema $schema, SchemaLocation $location): bool
+    {
+        $seen = [];
+        for ($pending = [$schema]; $pending !== [];) {
+            $current = array_pop($pending);
+            foreach ($this->graph->chain($current) as $link) {
+                $key = $link->location()->toString();
+                if ($key === $location->toString()) {
+                    return true;
+                }
+
+                if (!isset($seen[$key])) {
+                    $seen[$key] = $key;
+                    array_push($pending, ...$link->allOf(), ...$link->oneOf(), ...$link->anyOf());
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * The name of each variant: its schema name or title, `Option<N>` without one or when another variant has it.
+     *
+     * @param list<Schema> $variants
+     *
+     * @return list<string>
+     */
+    private function variantNames(array $variants): array
+    {
+        $names = array_map(fn (Schema $variant): ?string => $this->nameOf($variant), $variants);
+        $counts = array_count_values(array_filter($names, 'is_string'));
+        $unique = [];
+        foreach ($names as $position => $name) {
+            $unique[] = $name !== null && $counts[$name] === 1 ? $name : 'Option' . ($position + 1);
+        }
+
+        return $unique;
+    }
+
+    /**
+     * The named schema's x-php-class-name, when it is a PHP identifier, else its name.
+     */
+    private function ownerName(ResolvedSchema $named): string
+    {
+        $extensions = $named->schema()->extensions();
+        if (!$extensions->has('x-php-class-name')) {
+            return $named->name();
+        }
+
+        $override = $extensions->get('x-php-class-name');
+        if (is_string($override) && Identifier::isValid($override) && !Identifier::isReserved($override)) {
+            return $override;
+        }
+
+        $this->diagnostics->error('"x-php-class-name" must be a PHP identifier that is not a reserved word.', $named->location()->child('x-php-class-name'));
+
+        return $named->name();
+    }
+
+    /**
      * A variant of a named schema is a named schema of its own, `<Name> <Variant>`, so an allOf naming it extends it.
      *
      * @param 'oneOf'|'anyOf' $kind
      */
-    private function named(Schema $variant, ResolvedSchema $owner, string $variantName, string $kind, int $position): Schema
+    private function named(Schema $variant, ResolvedSchema $owner, string $name, string $kind, int $position): Schema
     {
-        $className = $owner->schema()->extensions()->has('x-php-class-name') ? $owner->schema()->extensions()->get('x-php-class-name') : null;
-        $this->added[] = new ResolvedSchema($variant, $owner->source(), (is_string($className) ? $className : $owner->name()) . ' ' . $variantName, $owner->isSelected());
+        $this->added[] = new ResolvedSchema($variant, $owner->source(), $name, $owner->isSelected());
         $ref = $variant->location()->toString();
         $at = $owner->location()->child($kind, (string) $position);
-        $this->edges[(new ReferenceUse($ref, $at))->key()] = $variant->location()->toString();
+        $this->edges[(new ReferenceUse($ref, $at))->key()] = $ref;
 
         return new Schema($at, [], $ref, null, null, $owner->schema()->isDeprecated(), null, null, [], [], null, null, [], [], [], null, [], new Extensions());
     }
@@ -186,14 +292,6 @@ final class UnionDistribution
         $title = $variant->hasKeyword('title') ? $variant->keyword('title') : null;
 
         return is_string($title) ? $title : null;
-    }
-
-    private function withoutClassName(Extensions $extensions): Extensions
-    {
-        $values = $extensions->all();
-        unset($values['x-php-class-name']);
-
-        return new Extensions($values);
     }
 
     /**
