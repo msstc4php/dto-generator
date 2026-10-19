@@ -136,7 +136,12 @@ final class LoadTest extends TestCase
     public function testWarnsOfAnExclusionThatLeavesOutNothing(): void
     {
         $discovery = new FixedExtensionDiscovery(['acme/pkg' => [MarkingExtension::class]]);
-        $excluded = [ExcludedExtension::package(0, 'acme/pkg'), ExcludedExtension::package(1, 'acme/pk'), ExcludedExtension::extension(2, ClassName::fromFqcn('App\Gone'))];
+        $excluded = [
+            ExcludedExtension::package(0, 'acme/pkg'),
+            ExcludedExtension::package(1, 'acme/pk'),
+            ExcludedExtension::extension(2, ClassName::fromFqcn('App\Gone')),
+            ExcludedExtension::extension(3, ClassName::fromFqcn(MarkingExtension::class)),
+        ];
 
         $output = (new Action($this->loader([]), static fn (): array => [], $discovery))(new Input($this->config([], true, $excluded)));
 

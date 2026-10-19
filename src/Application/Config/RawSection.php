@@ -114,7 +114,7 @@ final class RawSection
     /**
      * @param list<string> $default
      *
-     * @return list<string>
+     * @return array<non-negative-int, string> by their index in the list, so a problem with one entry points at it
      */
     public function stringList(string $key, array $default): array
     {
@@ -137,7 +137,7 @@ final class RawSection
                 continue;
             }
 
-            $strings[] = $item;
+            $strings[$index] = $item;
         }
 
         return $strings;

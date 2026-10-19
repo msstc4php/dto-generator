@@ -15,8 +15,11 @@ final class ExcludedExtension
     /** @var non-negative-int */
     private int $index;
 
-    /** the package name or the class */
+    /** the package name or the class, as written */
     private string $name;
+
+    /** what a discovered package or class is compared with: class names are case-insensitive in PHP */
+    private string $key;
 
     private bool $isClass;
 
@@ -27,6 +30,7 @@ final class ExcludedExtension
     {
         $this->index = $index;
         $this->name = $name;
+        $this->key = $isClass ? Identifier::asciiLower($name) : $name;
         $this->isClass = $isClass;
     }
 
@@ -57,8 +61,7 @@ final class ExcludedExtension
 
     public function excludes(string $package, ClassName $class): bool
     {
-        // Class names are case-insensitive in PHP; Composer package names are lower case.
-        return $this->isClass ? Identifier::asciiLower($this->name) === Identifier::asciiLower($class->fqcn()) : $this->name === $package;
+        return $this->key === ($this->isClass ? Identifier::asciiLower($class->fqcn()) : $package);
     }
 
     public function describe(): string

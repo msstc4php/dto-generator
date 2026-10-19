@@ -349,7 +349,7 @@ final class ConfigFactory
             return [true, $excluded];
         }
 
-        if ($raw !== null && !is_bool($raw)) {
+        if ($root->has('discoverExtensions') && !is_bool($raw)) {
             $root->error('discoverExtensions', 'must be true, false or an object with "exclude"');
         }
 
@@ -371,7 +371,7 @@ final class ConfigFactory
         try {
             return [ExcludedExtension::extension($index, ClassName::fromFqcn($entry))];
         } catch (InvalidModel $exception) {
-            $section->report(sprintf('Expected a package name in lower case (vendor/name) or an extension class, not "%s".', $entry), 'exclude', (string) $index);
+            $section->report(sprintf('Expected a package name in lower case (vendor/name) or an extension class, not "%s": %s', $entry, $exception->getMessage()), 'exclude', (string) $index);
 
             return [];
         }
@@ -388,8 +388,8 @@ final class ConfigFactory
             $spec = $section->requiredString('spec');
             $namespace = $section->requiredString('namespace');
             $outputDir = $section->requiredString('outputDir');
-            $include = $section->stringList('include', ['*']);
-            $exclude = $section->stringList('exclude', []);
+            $include = array_values($section->stringList('include', ['*']));
+            $exclude = array_values($section->stringList('exclude', []));
 
             if ($namespace !== null) {
                 try {

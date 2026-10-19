@@ -39,12 +39,12 @@ final class ExtensionSettings
      */
     public function __construct(array $classes, bool $discover, array $config, array $aliases, ?bool $verifyClasses, array $excluded = [])
     {
-        $this->excluded = $excluded;
         $this->classes = $classes;
         $this->discover = $discover;
         $this->config = $config;
         $this->aliases = $aliases;
         $this->verifyClasses = $verifyClasses;
+        $this->excluded = $excluded;
     }
 
     /**
