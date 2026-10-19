@@ -127,6 +127,9 @@ final class ExplicitYamlKeysTest extends TestCase
         yield 'a question mark in a sequence item' => ["x:\n- ?\n? k\n: 1\n"];
         yield 'a key in a sequence item' => ["x:\n  - ? k\n    : v\n? j\n: 1\n"];
         yield 'a value without a key' => ["a:\n  : v\n? k\n: 1\n"];
+        yield 'a value without a key in a sequence item' => ["x:\n- : v\n? k\n: 1\n"];
+        yield 'a value without a key in a flow mapping' => ["x: {a, : v}\n? k\n: 1\n"];
+        yield 'a value without a key after an anchor' => ["x:\n  &a : v\n? k\n: 1\n"];
         yield 'a question mark as a value' => ["a: ? x\n? k\n: 1\n"];
         yield 'a merge of a mapping with a key after a question mark' => ["a: &x\n  ? k\n  : 1\nb:\n  <<: *x\n"];
     }
@@ -189,8 +192,7 @@ final class ExplicitYamlKeysTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
 
         // Reason: the test hands the constructor what its types rule out, to see it refused.
-        // @phpstan-ignore-next-line argument.type
-        new RewrittenYaml('text', $nonce, $keys);
+        new RewrittenYaml('text', $nonce, $keys); // @phpstan-ignore argument.type, argument.type
     }
 
     /**

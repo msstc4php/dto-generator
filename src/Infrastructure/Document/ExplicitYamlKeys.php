@@ -20,9 +20,11 @@ final class ExplicitYamlKeys
 {
     /**
      * A "?" indicator at the start of a line, after the dashes of sequence items, in a flow collection or where a value
-     * goes, or a ":" indicator alone at the start of a line; it reads no comment, a "#" may be quoted.
+     * goes, or a ":" indicator of an empty key, which no pair consumed, at the start of a line, after sequence dashes, in
+     * a flow collection or after node properties; it reads no comment, a "#" may be quoted.
      */
-    private const QUESTION = '/(?:^|[\[{,]|:[ \t]|[!&]\S*[ \t])[ \t]*(?:-[ \t]+)*\?(?:[ \t,\]}]|$)|^[ \t]*:(?:[ \t]|$)/';
+    private const QUESTION = '/(?:^|[\[{,]|:[ \t]|[!&]\S*[ \t])[ \t]*(?:-[ \t]+)*\?(?:[ \t,\]}]|$)'
+        . '|(?:^|[\[{,]|[!&]\S*[ \t])[ \t]*(?:-[ \t]+)*:(?:[ \t,\]}]|$)/';
 
     /** Node properties, then a block scalar indicator with its chomping and indentation, then a comment. */
     private const BLOCK_HEADER = '(?:[!&]\S*[ \t]+)*[|>][-+0-9]*[ \t]*(?:#.*)?';
