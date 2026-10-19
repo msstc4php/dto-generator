@@ -158,6 +158,39 @@ final class FileDocumentLoaderTest extends TestCase
         }
     }
 
+    public function testReadsKeysWrittenAfterAQuestionMark(): void
+    {
+        $yaml = "components:\n  schemas:\n    ? a.very.long.name\n    : type: object\n      properties:\n        sid: {type: string}\n"
+            . "    ? 'quoted: name'\n    :\n      type: string\n    ? 'it''s'\n    : plain\n    ? with \"quotes\" and: colon\n    : [1]\n    after: 1\n"
+            . "  text: |\n    ? not a key\n    : not a value\n";
+
+        $root = (new FileDocumentLoader())->load($this->file('explicit.yaml', $yaml))->root();
+
+        self::assertSame(
+            [
+                'components' => [
+                    'schemas' => [
+                        'a.very.long.name' => ['type' => 'object', 'properties' => ['sid' => ['type' => 'string']]],
+                        'quoted: name' => ['type' => 'string'],
+                        "it's" => 'plain',
+                        'with "quotes" and: colon' => [1],
+                        'after' => 1,
+                    ],
+                    'text' => "? not a key\n: not a value\n",
+                ],
+            ],
+            $root,
+        );
+    }
+
+    public function testStillRejectsAComplexKey(): void
+    {
+        $this->expectException(DocumentLoadFailed::class);
+        $this->expectExceptionMessage('Complex mappings are not supported');
+
+        (new FileDocumentLoader())->load($this->file('complex.yaml', "? [a, b]\n: value\n? {a: b}\n: value\n"));
+    }
+
     public function testRejectsYamlAliasesThatExpandBeyondTheLimit(): void
     {
         // Each level aliases the previous one six times: 6^8 values from under a kilobyte.
