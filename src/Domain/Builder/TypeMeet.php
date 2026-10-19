@@ -183,8 +183,10 @@ final class TypeMeet
         $narrowSchema = $this->declarations->schemaOf($narrow);
 
         // A variant checks its discriminator values, which its schema does not tell: only a subclass keeps the check.
-        return $this->declarations->extends($narrow, $wide)
-            || (!$this->declarations->isVariant($wide) && $wideSchema instanceof Schema && $narrowSchema instanceof Schema && ObjectShape::admits($wideSchema, $narrowSchema));
+        $sameShape = !$this->declarations->isVariant($wide) && $wideSchema instanceof Schema && $narrowSchema instanceof Schema
+            && ObjectShape::admits($wideSchema, $narrowSchema);
+
+        return $this->declarations->extends($narrow, $wide) || $sameShape;
     }
 
     private function scalarAdmits(ScalarType $wide, TypeModel $narrow): bool

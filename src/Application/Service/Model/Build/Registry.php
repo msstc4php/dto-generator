@@ -258,7 +258,7 @@ final class Registry
 
     public function declarations(): Declarations
     {
-        return new Declarations($this->classes, $this->enums, $this->skipped, $this->abandoned, $this->schemas());
+        return new Declarations($this->classes, $this->enums, $this->skipped, $this->abandoned);
     }
 
     /**
@@ -272,12 +272,12 @@ final class Registry
         $declarations = $this->declarations();
         $schemas = $this->schemas();
         $ancestors = [];
+        // Only classes whose schemas tell what they hold meet, also as subclasses: views and companions stay out.
         foreach (array_keys($schemas) as $fqcn) {
-            // A class the schema leaves out holds what its schema does not tell.
             $ancestors[$fqcn] = array_intersect_key($this->ancestors($fqcn, $parents), $schemas);
         }
 
-        return $declarations->withHierarchy($ancestors, $this->variants(new ClassLookup($graph, $declarations)));
+        return $declarations->withHierarchy($schemas, $ancestors, $this->variants(new ClassLookup($graph, $declarations)));
     }
 
     /**
@@ -298,7 +298,7 @@ final class Registry
     }
 
     /**
-     * The classes a discriminated schema lists, which its mapping may only name.
+     * The classes a discriminated schema lists, by `$ref` or inline; its mapping may only name them.
      *
      * @return array<string, string> FQCNs by themselves
      */
@@ -308,7 +308,7 @@ final class Registry
         foreach ($this->planned as [$schema]) {
             foreach ($schema->discriminator() instanceof Discriminator ? array_merge($schema->oneOf(), $schema->anyOf()) : [] as $member) {
                 $target = $lookup->target($member);
-                $class = $target instanceof ResolvedSchema ? $lookup->classBehind($target) : null;
+                $class = $target instanceof ResolvedSchema ? $lookup->classBehind($target) : $lookup->classAt($member);
                 if ($class instanceof ClassName) {
                     $variants[$class->fqcn()] = $class->fqcn();
                 }

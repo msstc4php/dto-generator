@@ -30,7 +30,7 @@ final class Declarations
     private array $abandoned;
 
     /** @var array<string, Schema> by FQCN */
-    private array $schemas;
+    private array $schemas = [];
 
     /** @var array<string, array<string, string>> FQCN → the FQCNs of its ancestors, by themselves */
     private array $ancestors = [];
@@ -43,9 +43,8 @@ final class Declarations
      * @param array<string, EnumType> $enums location key → enum
      * @param array<string, true> $skipped location keys of schemas excluded by x-php-skip
      * @param array<string, true> $abandoned location keys of inline schemas whose declaration failed and was reported
-     * @param array<string, Schema> $schemas FQCN → the one schema a class is built from, as written
      */
-    public function __construct(array $classes = [], array $enums = [], array $skipped = [], array $abandoned = [], array $schemas = [])
+    public function __construct(array $classes = [], array $enums = [], array $skipped = [], array $abandoned = [])
     {
         $this->classes = $classes;
         foreach ($classes as $class) {
@@ -54,7 +53,6 @@ final class Declarations
         $this->enums = $enums;
         $this->skipped = $skipped;
         $this->abandoned = $abandoned;
-        $this->schemas = $schemas;
     }
 
     /**
@@ -75,12 +73,17 @@ final class Declarations
     }
 
     /**
+     * What tells which objects each class holds, once every class is composed; without it no two classes meet.
+     *
+     * @param array<string, Schema> $schemas FQCN → the one schema a class is built from, as written
      * @param array<string, array<string, string>> $ancestors FQCN → the FQCNs of the classes it extends, by themselves
-     * @param array<string, string> $variants the FQCNs of the classes discriminated unions list or map, by themselves
+     * @param array<string, string> $variants the FQCNs of the classes a discriminated union lists, by `$ref` or inline,
+     *                                        by themselves (its mapping may only name them)
      */
-    public function withHierarchy(array $ancestors, array $variants): self
+    public function withHierarchy(array $schemas, array $ancestors, array $variants): self
     {
         $declarations = clone $this;
+        $declarations->schemas = $schemas;
         $declarations->ancestors = $ancestors;
         $declarations->variants = $variants;
 
@@ -96,7 +99,7 @@ final class Declarations
     }
 
     /**
-     * Whether a discriminated union lists or maps the class, which then accepts only the values that select it.
+     * Whether a discriminated union lists the class, which then accepts only the values that select it.
      */
     public function isVariant(ClassName $class): bool
     {

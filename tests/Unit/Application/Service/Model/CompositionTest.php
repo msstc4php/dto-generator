@@ -418,7 +418,7 @@ final class CompositionTest extends TestCase
         ], [], ['*'], $strategy);
 
         if ($expected === 'error') {
-            self::assertContains("error {$at}Req/allOf/1/properties/opts: Property \"opts\" of App\\Dto\\Req is App\\Dto\\Narrow|null here, but App\\Dto\\Wide|null in an earlier allOf member.", ModelFixture::messages($output));
+            self::assertNotSame([], preg_grep('{^error ' . preg_quote($at, '{') . 'Req/allOf/1/properties/opts: Property "opts" of App\\\\Dto\\\\Req is App\\\\Dto\\\\Narrow\\|null here, but App\\\\Dto\\\\\\w+\\|null in an earlier allOf member\\.$}', ModelFixture::messages($output)));
 
             return;
         }
@@ -473,6 +473,35 @@ final class CompositionTest extends TestCase
             'Union' => ['anyOf' => [['$ref' => '#/components/schemas/Other'], ['$ref' => '#/components/schemas/Wide']], 'discriminator' => ['propertyName' => 'kind', 'mapping' => ['w' => '#/components/schemas/Wide', 'o' => '#/components/schemas/Other']]],
             'Other' => ['type' => 'object', 'required' => ['kind'], 'properties' => ['kind' => ['type' => 'string']]],
         ], AllOfStrategy::EXTENDS, 'error'];
+        $variant = ['type' => 'object', 'required' => ['kind'], 'properties' => ['kind' => ['type' => 'string']]];
+        $holding = ['type' => 'object', 'required' => ['kind'], 'properties' => ['kind' => ['type' => 'string'], 'b' => ['type' => 'integer']]];
+        yield 'a variant through an alias' => [[
+            'Wide' => $variant,
+            'Narrow' => $holding,
+            'Alias' => ['$ref' => '#/components/schemas/Wide'],
+            'Union' => ['oneOf' => [['$ref' => '#/components/schemas/Alias'], ['$ref' => '#/components/schemas/Other']], 'discriminator' => ['propertyName' => 'kind']],
+            'Other' => $variant,
+        ], AllOfStrategy::EXTENDS, 'error'];
+        yield "a nested union's inline variant" => [[
+            'Narrow' => ['type' => 'object', 'required' => ['kind', 'type'], 'properties' => ['kind' => ['type' => 'string', 'enum' => ['a']], 'type' => ['type' => 'string'], 'b' => ['type' => 'integer']]],
+            'Outer' => ['oneOf' => [['$ref' => '#/components/schemas/Inner'], ['$ref' => '#/components/schemas/Other']], 'discriminator' => ['propertyName' => 'type']],
+            'Other' => ['type' => 'object', 'required' => ['type'], 'properties' => ['type' => ['type' => 'string']]],
+            'Inner' => ['oneOf' => [
+                ['type' => 'object', 'required' => ['kind', 'type'], 'properties' => ['kind' => ['type' => 'string', 'enum' => ['a']], 'type' => ['type' => 'string']]],
+                ['type' => 'object', 'required' => ['kind', 'type'], 'properties' => ['kind' => ['type' => 'string', 'enum' => ['w']], 'type' => ['type' => 'string']]],
+            ], 'discriminator' => ['propertyName' => 'kind']],
+            'Req' => ['allOf' => [
+                ['type' => 'object', 'properties' => ['opts' => ['$ref' => '#/components/schemas/Inner/oneOf/0']]],
+                ['type' => 'object', 'properties' => ['opts' => ['$ref' => '#/components/schemas/Narrow']]],
+            ]],
+            'Rev' => ['type' => 'object'],
+        ], AllOfStrategy::EXTENDS, 'error'];
+        yield 'a variant of an inline union' => [[
+            'Wide' => $variant,
+            'Narrow' => $holding,
+            'Holder' => ['type' => 'object', 'properties' => ['u' => ['oneOf' => [['$ref' => '#/components/schemas/Wide'], ['$ref' => '#/components/schemas/Other']], 'discriminator' => ['propertyName' => 'kind']]]],
+            'Other' => $variant,
+        ], AllOfStrategy::EXTENDS, 'Narrow'];
         yield 'a class with fewer properties' => [[
             'Wide' => ['type' => 'object', 'required' => ['kind'], 'properties' => ['kind' => ['type' => 'string']]],
             'Narrow' => ['type' => 'object', 'required' => ['kind'], 'properties' => ['kind' => ['type' => 'string'], 'b' => ['type' => 'integer']]],
