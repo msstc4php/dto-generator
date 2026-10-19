@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MSSTC4PHP\DtoGenerator\Application\Service\Model\Build;
 
 use MSSTC4PHP\DtoGenerator\Domain\Builder\ClassBuilder;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\ClassLookup;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\Composition;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\Declarations;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\PropertyView;
@@ -14,7 +15,10 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\Identifier;
+use MSSTC4PHP\DtoGenerator\Domain\Schema\Discriminator;
+use MSSTC4PHP\DtoGenerator\Domain\Schema\ResolvedSchema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
+use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaGraph;
 
 /**
  * The names claimed during one build, the classes still to build and the enums already built.
@@ -254,7 +258,75 @@ final class Registry
 
     public function declarations(): Declarations
     {
-        // A view leaves out properties, a companion adds them: the schema no longer tells which objects the class holds.
+        return new Declarations($this->classes, $this->enums, $this->skipped, $this->abandoned);
+    }
+
+    /**
+     * The declarations once every class is composed, the only ones under which two classes meet: the schemas of the
+     * classes that hold what they say, the classes each class extends, whose objects it holds too, and the variants of
+     * discriminated unions, which a union gives a value of the discriminator their schemas do not tell.
+     *
+     * @param array<string, ClassName> $parents FQCN → the class it extends
+     */
+    public function declarationsWithHierarchy(SchemaGraph $graph, array $parents): Declarations
+    {
+        $declarations = $this->declarations();
+        $schemas = $this->schemas();
+        $ancestors = [];
+        // Only classes whose schemas tell what they hold meet, also as subclasses: views and companions stay out.
+        foreach (array_keys($schemas) as $fqcn) {
+            $ancestors[$fqcn] = array_intersect_key($this->ancestors($fqcn, $parents), $schemas);
+        }
+
+        return $declarations->withHierarchy($schemas, $ancestors, $this->variants(new ClassLookup($graph, $declarations)));
+    }
+
+    /**
+     * @param array<string, ClassName> $parents
+     *
+     * @return array<string, string> FQCNs by themselves
+     */
+    private function ancestors(string $fqcn, array $parents): array
+    {
+        $ancestors = [];
+        $parent = $parents[$fqcn] ?? null;
+        while ($parent instanceof ClassName && !isset($ancestors[$parent->fqcn()])) {
+            $ancestors[$parent->fqcn()] = $parent->fqcn();
+            $parent = $parents[$parent->fqcn()] ?? null;
+        }
+
+        return $ancestors;
+    }
+
+    /**
+     * The classes a discriminated schema lists, by `$ref` or inline; its mapping may only name them.
+     *
+     * @return array<string, string> FQCNs by themselves
+     */
+    private function variants(ClassLookup $lookup): array
+    {
+        $variants = [];
+        foreach ($this->planned as [$schema]) {
+            foreach (SchemaShape::discriminatorOf($schema) instanceof Discriminator ? array_merge($schema->oneOf(), $schema->anyOf()) : [] as $member) {
+                $target = $lookup->target($member);
+                $class = $target instanceof ResolvedSchema ? $lookup->classBehind($target) : $lookup->classAt($member);
+                if ($class instanceof ClassName) {
+                    $variants[$class->fqcn()] = $class->fqcn();
+                }
+            }
+        }
+
+        return $variants;
+    }
+
+    /**
+     * The schema of each class that holds what it says, by FQCN: a view leaves out properties, a companion adds them,
+     * and the schema no longer tells which objects the class holds.
+     *
+     * @return array<string, Schema>
+     */
+    private function schemas(): array
+    {
         $schemas = [];
         foreach (!$this->view instanceof View && !$this->properties instanceof PropertyView ? $this->planned : [] as [$schema, $name]) {
             if ($this->companions($schema) === []) {
@@ -262,6 +334,6 @@ final class Registry
             }
         }
 
-        return new Declarations($this->classes, $this->enums, $this->skipped, $this->abandoned, $schemas);
+        return $schemas;
     }
 }

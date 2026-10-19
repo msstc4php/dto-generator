@@ -397,6 +397,132 @@ final class CompositionTest extends TestCase
         self::assertSame(["opts: App\\Dto\\{$expected}|null"], ModelFixture::classes($output)['App\\Dto\\Rev']);
     }
 
+    /**
+     * @dataProvider subclasses
+     *
+     * @param array<string, array<array-key, mixed>> $schemas
+     */
+    public function testMeetsAClassWithOneWhoseAllOfHasIt(array $schemas, string $strategy, string $expected, string $wide = 'Wide'): void
+    {
+        $at = self::AT;
+        $output = ModelFixture::build($schemas + [
+            'Wide' => ['type' => 'object', 'properties' => ['a' => ['type' => 'string']]],
+            'Req' => ['allOf' => [
+                ['type' => 'object', 'properties' => ['opts' => ['$ref' => '#/components/schemas/Wide']]],
+                ['type' => 'object', 'properties' => ['opts' => ['$ref' => '#/components/schemas/Narrow']]],
+            ]],
+            'Rev' => ['allOf' => [
+                ['type' => 'object', 'properties' => ['opts' => ['$ref' => '#/components/schemas/Narrow']]],
+                ['type' => 'object', 'properties' => ['opts' => ['$ref' => '#/components/schemas/Wide']]],
+            ]],
+        ], [], ['*'], $strategy);
+
+        if ($expected === 'error') {
+            self::assertContains("error {$at}Req/allOf/1/properties/opts: Property \"opts\" of App\\Dto\\Req is App\\Dto\\Narrow|null here, but App\\Dto\\{$wide}|null in an earlier allOf member.", ModelFixture::messages($output));
+
+            return;
+        }
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(["opts: App\\Dto\\{$expected}|null"], ModelFixture::classes($output)['App\\Dto\\Req']);
+        self::assertSame(["opts: App\\Dto\\{$expected}|null"], ModelFixture::classes($output)['App\\Dto\\Rev']);
+    }
+
+    /**
+     * @return iterable<string, array{0: array<string, array<array-key, mixed>>, 1: string, 2: string, 3?: string}>
+     */
+    public static function subclasses(): iterable
+    {
+        $more = ['type' => 'object', 'properties' => ['b' => ['type' => 'integer']]];
+        $narrow = ['allOf' => [['$ref' => '#/components/schemas/Wide'], $more]];
+        $closed = ['type' => 'object', 'additionalProperties' => false, 'properties' => ['a' => ['type' => 'string']]];
+        $discriminated = [
+            'type' => 'object',
+            'required' => ['kind'],
+            'properties' => ['kind' => ['type' => 'string']],
+            'oneOf' => [['$ref' => '#/components/schemas/A'], ['$ref' => '#/components/schemas/B']],
+            'discriminator' => ['propertyName' => 'kind'],
+        ];
+        $variants = [
+            'A' => ['type' => 'object', 'required' => ['kind'], 'properties' => ['kind' => ['type' => 'string', 'enum' => ['A']]]],
+            'B' => ['type' => 'object', 'required' => ['kind'], 'properties' => ['kind' => ['type' => 'string', 'enum' => ['B']]]],
+        ];
+
+        yield 'a parent' => [['Narrow' => $narrow], AllOfStrategy::EXTENDS, 'Narrow'];
+        yield 'a parent of a parent' => [['Narrow' => ['allOf' => [['$ref' => '#/components/schemas/Mid'], $more]], 'Mid' => ['allOf' => [['$ref' => '#/components/schemas/Wide'], ['type' => 'object', 'properties' => ['c' => ['type' => 'integer']]]]]], AllOfStrategy::EXTENDS, 'Narrow'];
+        yield 'a parent through an alias' => [['Narrow' => ['allOf' => [['$ref' => '#/components/schemas/Alias'], $more]], 'Alias' => ['$ref' => '#/components/schemas/Wide']], AllOfStrategy::EXTENDS, 'Narrow'];
+        yield 'a parent through a skipped wrapper' => [['Narrow' => ['allOf' => [['$ref' => '#/components/schemas/Mid'], $more]], 'Mid' => ['x-php-skip' => true, 'allOf' => [['$ref' => '#/components/schemas/Wide']]]], AllOfStrategy::EXTENDS, 'Narrow'];
+        yield 'a parent with a cycle' => [['Narrow' => ['allOf' => [['$ref' => '#/components/schemas/Wide'], ['type' => 'object', 'properties' => ['self' => ['$ref' => '#/components/schemas/Narrow']]]]]], AllOfStrategy::EXTENDS, 'Narrow'];
+        yield 'a closed parent' => [['Wide' => $closed, 'Narrow' => $narrow], AllOfStrategy::EXTENDS, 'Narrow'];
+        // A merged class keeps only the properties of a member, not its discriminator or other constraints.
+        yield 'a merged member' => [['Narrow' => $narrow], AllOfStrategy::MERGE, 'error'];
+        yield 'one of several members' => [['Narrow' => ['allOf' => [['$ref' => '#/components/schemas/Base'], ['$ref' => '#/components/schemas/Wide'], $more]], 'Base' => ['type' => 'object', 'properties' => ['z' => ['type' => 'string']]]], AllOfStrategy::EXTENDS, 'error'];
+        yield "an inline member's member" => [['Narrow' => ['allOf' => [['allOf' => [['$ref' => '#/components/schemas/Wide']]], $more]]], AllOfStrategy::EXTENDS, 'error'];
+        yield 'an unrelated class' => [['Narrow' => ['type' => 'object', 'properties' => ['w' => ['$ref' => '#/components/schemas/Wide']]]], AllOfStrategy::EXTENDS, 'error'];
+        yield 'a union of it' => [['Narrow' => $discriminated, 'A' => ['allOf' => [['$ref' => '#/components/schemas/Wide'], $variants['A']]], 'B' => $variants['B']], AllOfStrategy::EXTENDS, 'error'];
+        // A variant checks the values that select it, which its schema does not tell.
+        yield 'a variant with fewer properties' => [[
+            'Wide' => ['type' => 'object', 'required' => ['kind'], 'properties' => ['kind' => ['type' => 'string']]],
+            'Narrow' => ['type' => 'object', 'required' => ['kind'], 'properties' => ['kind' => ['type' => 'string'], 'b' => ['type' => 'integer']]],
+            'Union' => ['oneOf' => [['$ref' => '#/components/schemas/Wide'], ['$ref' => '#/components/schemas/Other']], 'discriminator' => ['propertyName' => 'kind', 'mapping' => ['w' => '#/components/schemas/Wide', 'o' => '#/components/schemas/Other']]],
+            'Other' => ['type' => 'object', 'required' => ['kind'], 'properties' => ['kind' => ['type' => 'string']]],
+        ], AllOfStrategy::EXTENDS, 'error'];
+        yield 'an anyOf variant with fewer properties' => [[
+            'Wide' => ['type' => 'object', 'required' => ['kind'], 'properties' => ['kind' => ['type' => 'string']]],
+            'Narrow' => ['type' => 'object', 'required' => ['kind'], 'properties' => ['kind' => ['type' => 'string'], 'b' => ['type' => 'integer']]],
+            'Union' => ['anyOf' => [['$ref' => '#/components/schemas/Other'], ['$ref' => '#/components/schemas/Wide']], 'discriminator' => ['propertyName' => 'kind', 'mapping' => ['w' => '#/components/schemas/Wide', 'o' => '#/components/schemas/Other']]],
+            'Other' => ['type' => 'object', 'required' => ['kind'], 'properties' => ['kind' => ['type' => 'string']]],
+        ], AllOfStrategy::EXTENDS, 'error'];
+        $variant = ['type' => 'object', 'required' => ['kind'], 'properties' => ['kind' => ['type' => 'string']]];
+        $holding = ['type' => 'object', 'required' => ['kind'], 'properties' => ['kind' => ['type' => 'string'], 'b' => ['type' => 'integer']]];
+        yield 'a variant through an alias' => [[
+            'Wide' => $variant,
+            'Narrow' => $holding,
+            'Alias' => ['$ref' => '#/components/schemas/Wide'],
+            'Union' => ['oneOf' => [['$ref' => '#/components/schemas/Alias'], ['$ref' => '#/components/schemas/Other']], 'discriminator' => ['propertyName' => 'kind']],
+            'Other' => $variant,
+        ], AllOfStrategy::EXTENDS, 'error'];
+        yield "a nested union's inline variant" => [[
+            'Narrow' => ['type' => 'object', 'required' => ['kind', 'type'], 'properties' => ['kind' => ['type' => 'string', 'enum' => ['a']], 'type' => ['type' => 'string'], 'b' => ['type' => 'integer']]],
+            'Outer' => ['oneOf' => [['$ref' => '#/components/schemas/Inner'], ['$ref' => '#/components/schemas/Other']], 'discriminator' => ['propertyName' => 'type']],
+            'Other' => ['type' => 'object', 'required' => ['type'], 'properties' => ['type' => ['type' => 'string']]],
+            'Inner' => ['oneOf' => [
+                ['type' => 'object', 'required' => ['kind', 'type'], 'properties' => ['kind' => ['type' => 'string', 'enum' => ['a']], 'type' => ['type' => 'string']]],
+                ['type' => 'object', 'required' => ['kind', 'type'], 'properties' => ['kind' => ['type' => 'string', 'enum' => ['w']], 'type' => ['type' => 'string']]],
+            ], 'discriminator' => ['propertyName' => 'kind']],
+            'Req' => ['allOf' => [
+                ['type' => 'object', 'properties' => ['opts' => ['$ref' => '#/components/schemas/Inner/oneOf/0']]],
+                ['type' => 'object', 'properties' => ['opts' => ['$ref' => '#/components/schemas/Narrow']]],
+            ]],
+            'Rev' => ['type' => 'object'],
+        ], AllOfStrategy::EXTENDS, 'error', '_0'];
+        yield 'a variant of an inline union' => [[
+            'Wide' => $variant,
+            'Narrow' => $holding,
+            'Holder' => ['type' => 'object', 'properties' => ['u' => ['oneOf' => [['$ref' => '#/components/schemas/Wide'], ['$ref' => '#/components/schemas/Other']], 'discriminator' => ['propertyName' => 'kind']]]],
+            'Other' => $variant,
+        ], AllOfStrategy::EXTENDS, 'Narrow'];
+        yield 'a class with fewer properties' => [[
+            'Wide' => ['type' => 'object', 'required' => ['kind'], 'properties' => ['kind' => ['type' => 'string']]],
+            'Narrow' => ['type' => 'object', 'required' => ['kind'], 'properties' => ['kind' => ['type' => 'string'], 'b' => ['type' => 'integer']]],
+        ], AllOfStrategy::EXTENDS, 'Narrow'];
+    }
+
+    public function testMeetsNoClassWithOneOfAView(): void
+    {
+        $at = self::AT;
+        $viewed = ModelFixture::views([
+            'Wide' => ['type' => 'object', 'properties' => ['a' => ['type' => 'string']]],
+            'Req' => ['allOf' => [
+                ['type' => 'object', 'properties' => ['opts' => ['$ref' => '#/components/schemas/Wide']]],
+                ['type' => 'object', 'properties' => ['opts' => ['$ref' => '#/components/schemas/Narrow']]],
+            ]],
+            'Narrow' => ['allOf' => [['$ref' => '#/components/schemas/Wide'], ['type' => 'object', 'properties' => ['b' => ['type' => 'string', 'readOnly' => true]]]]],
+        ]);
+
+        self::assertSame(["error {$at}Req/allOf/1/properties/opts: Property \"opts\" of App\\Dto\\ReqRead is App\\Dto\\NarrowRead|null here, but App\\Dto\\Wide|null in an earlier allOf member."], ModelFixture::messages($viewed));
+    }
+
     public function testMeetsNoClassWhoseSchemaLeavesOutWhatItHolds(): void
     {
         $at = self::AT;

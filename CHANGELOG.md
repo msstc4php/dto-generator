@@ -6,6 +6,17 @@ All notable changes to this package are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- A property two `allOf` members give two classes is of the class that extends the other (`allOf: [$ref: Wide, …]`
+  with the `extends` strategy, also through other classes), instead of an error. A class merged from `Wide` does not
+  count: it keeps nothing of `Wide` but its properties. With a read or write model view the classes do not meet.
+
+### Fixed
+
+- A class that has all the properties of a variant of a discriminated union no longer meets it in an `allOf`: the
+  variant accepts only the discriminator values that select it, which its schema does not tell.
+
 ### Added
 
 - `discoverExtensions: {exclude: [...]}` turns discovery on but leaves out the extensions of the packages it lists, or
