@@ -508,6 +508,84 @@ final class CompositionTest extends TestCase
         ], AllOfStrategy::EXTENDS, 'Narrow'];
     }
 
+    /**
+     * @dataProvider strategies
+     */
+    public function testWritesAnAllOfOfAUnionOfObjectsAsTheUnionOfItsVariants(string $strategy): void
+    {
+        $object = static fn (array $properties): array => ['type' => 'object', 'properties' => $properties];
+        $output = ModelFixture::build([
+            'A' => $object(['a' => ['type' => 'string']]),
+            'B' => $object(['b' => ['type' => 'integer']]),
+            'Event' => ['anyOf' => [['$ref' => '#/components/schemas/A'], ['$ref' => '#/components/schemas/B']]],
+            'Stream' => ['allOf' => [['$ref' => '#/components/schemas/Event'], $object(['stream_id' => ['type' => 'string']])]],
+            'Outer' => ['allOf' => [['$ref' => '#/components/schemas/Stream'], $object(['more' => ['type' => 'string']])]],
+            'Holder' => $object([
+                'stream' => ['$ref' => '#/components/schemas/Stream'],
+                'inline' => ['allOf' => [$object(['x' => ['type' => 'string']]), ['$ref' => '#/components/schemas/Event'], ['required' => ['x']]]],
+            ]),
+            'Named' => [
+                'x-php-class-name' => 'Renamed',
+                'required' => ['n'],
+                'properties' => ['n' => ['type' => 'string']],
+                'allOf' => [['oneOf' => [['$ref' => '#/components/schemas/A'], $object(['e' => ['type' => 'string']]) + ['title' => 'Extra'], $object(['o' => ['type' => 'string']])]]],
+            ],
+        ], [], ['*'], $strategy);
+        $extends = $strategy === AllOfStrategy::EXTENDS;
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(
+            [
+                'App\\Dto\\A' => ['a: string|null'],
+                'App\\Dto\\B' => ['b: int|null'],
+                'App\\Dto\\Holder' => ['stream: App\\Dto\\StreamA|App\\Dto\\StreamB|null', 'inline: App\\Dto\\HolderInlineOption1|App\\Dto\\HolderInlineOption2|null'],
+                'App\\Dto\\StreamA' => $extends ? ['stream_id: string|null'] : ['a: string|null', 'stream_id: string|null'],
+                'App\\Dto\\StreamB' => $extends ? ['stream_id: string|null'] : ['b: int|null', 'stream_id: string|null'],
+                'App\\Dto\\RenamedA' => $extends ? ['n: string'] : ['a: string|null', 'n: string'],
+                'App\\Dto\\RenamedExtra' => ['e: string|null', 'n: string'],
+                'App\\Dto\\RenamedOption3' => ['o: string|null', 'n: string'],
+                'App\\Dto\\OuterStreamA' => $extends ? ['more: string|null'] : ['a: string|null', 'stream_id: string|null', 'more: string|null'],
+                'App\\Dto\\OuterStreamB' => $extends ? ['more: string|null'] : ['b: int|null', 'stream_id: string|null', 'more: string|null'],
+                'App\\Dto\\HolderInlineOption1' => $extends ? ['x: string'] : ['x: string', 'a: string|null'],
+                'App\\Dto\\HolderInlineOption2' => $extends ? ['x: string'] : ['x: string', 'b: int|null'],
+            ],
+            ModelFixture::classes($output),
+        );
+        if ($extends) {
+            $hierarchy = ModelFixture::hierarchy($output);
+            self::assertSame('open extends App\\Dto\\A', $hierarchy['App\\Dto\\StreamA']);
+            self::assertSame('final extends App\\Dto\\StreamB', $hierarchy['App\\Dto\\OuterStreamB']);
+            self::assertSame('final extends App\\Dto\\B', $hierarchy['App\\Dto\\HolderInlineOption2']);
+        }
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function strategies(): iterable
+    {
+        yield AllOfStrategy::EXTENDS => [AllOfStrategy::EXTENDS];
+        yield AllOfStrategy::MERGE => [AllOfStrategy::MERGE];
+    }
+
+    public function testLeavesAnAllOfOfAnotherUnionAsWritten(): void
+    {
+        $at = self::AT;
+        $object = static fn (array $properties): array => ['type' => 'object', 'properties' => $properties];
+        $union = ['anyOf' => [['$ref' => '#/components/schemas/A'], ['$ref' => '#/components/schemas/B']]];
+        $error = static fn (string $schema, int $member = 0): string => "error {$at}{$schema}/allOf/{$member}: An allOf member of a class must be an object schema, not a oneOf or anyOf: no class adds properties to each variant.";
+        $output = ModelFixture::build([
+            'A' => $object(['a' => ['type' => 'string']]),
+            'B' => $object(['b' => ['type' => 'integer']]),
+            'Scalars' => ['allOf' => [['oneOf' => [['type' => 'string'], $object(['c' => ['type' => 'string']])]], $object(['x' => ['type' => 'string']])]],
+            'Twice' => ['allOf' => [$union, $union, $object(['x' => ['type' => 'string']])]],
+            'Required' => ['allOf' => [$union + ['required' => ['a']], $object(['x' => ['type' => 'string']])]],
+            'Typed' => ['allOf' => [['type' => 'string'] + $union, $object(['x' => ['type' => 'string']])]],
+        ]);
+
+        self::assertSame([$error('Scalars'), $error('Twice'), $error('Twice', 1), $error('Required'), $error('Typed')], ModelFixture::messages($output));
+    }
+
     public function testMeetsNoClassWithOneOfAView(): void
     {
         $at = self::AT;
@@ -658,10 +736,6 @@ final class CompositionTest extends TestCase
             ],
             'member that is a plain union' => [
                 ['Either' => ['oneOf' => [['type' => 'string'], ['type' => 'integer']]], 'Cat' => ['allOf' => [['$ref' => '#/components/schemas/Either'], $lives]]],
-                ["error {$at}Cat/allOf/0: An allOf member of a class must be an object schema, not a oneOf or anyOf: no class adds properties to each variant."],
-            ],
-            'member that is a union of objects' => [
-                ['Pet' => $pet, 'Cat' => ['allOf' => [['anyOf' => [self::PET, ['type' => 'object', 'properties' => ['x' => []]]]], $lives]]],
                 ["error {$at}Cat/allOf/0: An allOf member of a class must be an object schema, not a oneOf or anyOf: no class adds properties to each variant."],
             ],
             'redeclared inherited property' => [

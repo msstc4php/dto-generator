@@ -43,6 +43,31 @@ final class SchemaGraph
         $this->edges = $edges;
     }
 
+    /**
+     * The graph with these schemas in place of those at their locations or beside them, and these references too.
+     *
+     * @param list<ResolvedSchema> $schemas
+     * @param array<string, string> $edges {@see ReferenceUse::key()} → location key of the schema it resolves to
+     */
+    public function with(array $schemas, array $edges = []): self
+    {
+        $given = [];
+        foreach ($schemas as $schema) {
+            $given[$schema->location()->toString()] = $schema;
+        }
+
+        $all = [];
+        foreach ($this->schemas as $key => $schema) {
+            $all[] = $given[$key] ?? $schema;
+        }
+
+        foreach (array_diff_key($given, $this->schemas) as $schema) {
+            $all[] = $schema;
+        }
+
+        return new self($all, $edges + $this->edges);
+    }
+
     public function get(SchemaLocation $location): ?ResolvedSchema
     {
         return $this->schemas[$location->toString()] ?? null;

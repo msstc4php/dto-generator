@@ -26,6 +26,10 @@ All notable changes to this package are documented here. The format follows
 
 ### Added
 
+- An `allOf` with one member that is a `oneOf`/`anyOf` of objects without a discriminator, written there or behind a
+  `$ref`, is the union of a class per variant with the rest of the `allOf` (`<Schema><Variant>`, extending the variant
+  with the `extends` strategy), instead of an error. The OpenAI specification now generates whole, without `exclude`.
+
 - `discoverExtensions: {exclude: [...]}` turns discovery on but leaves out the extensions of the packages it lists, or
   single extension classes, without loading them; an entry that leaves out nothing gives a warning.
 
