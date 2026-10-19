@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MSSTC4PHP\DtoGenerator\Application\Service\Extension\Load;
 
 use Closure;
+use MSSTC4PHP\DtoGenerator\Application\Config\ExcludedExtension;
 use MSSTC4PHP\DtoGenerator\Application\Config\GeneratorConfig;
 use MSSTC4PHP\DtoGenerator\Application\Extension\Registry;
 use MSSTC4PHP\DtoGenerator\Application\Port\ExtensionDiscovery;
@@ -20,7 +21,7 @@ use Throwable;
 
 /**
  * Registers the extensions of a run (spec §8): the built-in ones first, then those the config lists, in its order, then
- * those installed packages declare.
+ * those installed packages declare, but for the ones discoverExtensions.exclude leaves out.
  *
  * @phpstan-import-type AttributeDeclaration from AttributeModel
  */
@@ -115,12 +116,16 @@ final class Action
         $order = array_keys($extensions);
         usort($order, static fn (int $a, int $b): int => [$extensions[$a]->package(), $a] <=> [$extensions[$b]->package(), $b]);
 
+        $excluded = $config->extensions()->excluded();
+        $used = [];
         $loaded = [];
         foreach ($order as $index) {
             $discovered = $extensions[$index];
             $class = $discovered->className();
+            $exclusions = array_filter($excluded, static fn (ExcludedExtension $entry): bool => $entry->excludes($discovered->package(), $class));
+            $used += $exclusions;
             $key = Identifier::asciiLower($class->fqcn());
-            if (isset($listed[$key])) {
+            if ($exclusions !== [] || isset($listed[$key])) {
                 continue;
             }
 
@@ -130,6 +135,10 @@ final class Action
             } catch (ExtensionFailed $exception) {
                 $diagnostics->error(sprintf('Extension %s, discovered in package %s, cannot be loaded: %s', $class->fqcn(), $discovered->package(), $exception->getMessage()), $at);
             }
+        }
+
+        foreach (array_diff_key($excluded, $used) as $entry) {
+            $diagnostics->warning(sprintf('No discovered extension is excluded by "%s".', $entry->describe()), $at->child('exclude', (string) $entry->index()));
         }
 
         return $loaded;

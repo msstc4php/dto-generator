@@ -48,7 +48,7 @@ Hex-подход, адаптированный под библиотеку; пр
 - `Infrastructure/Environment/ComposerProject::nearest()` — каталог ближайшего вверх `composer.json`; общий для `AutoloadClassVerifierLocator` и `ComposerLockPackages`.
 - Порт `Application/Port/ProjectPackages` (+ `ProjectPackagesUnusable`) → `ComposerLockPackages`: `packages` и `packages-dev` из `composer.lock` проекта, версии как записаны. `Generate\Action::packages()` передаёт их в `EnrichInput`; непригодный lock — warning на `<lock>#`, пакетов нет.
 - Порт `Application/Port/ExtensionDiscovery` (DTO `DiscoveredExtension`, `DiscoveredExtensions` с проблемами) → `InstalledJsonExtensionDiscovery`: `installed.json` установки, из которой запущен генератор (каталог `Composer\InstalledVersions`), форматы Composer 1 и 2.
-- `Extension\Load\Action(loader, builtIn, discovery)`: встроенные → явные → обнаруженные (по пакету, внутри — по порядку объявления; usort с индексом ради стабильности на 7.4). Обнаруженный класс, уже загруженный (без учёта регистра), пропускается. Проблемы обнаружения — warning, ошибки загрузки — error на `#/discoverExtensions`. При `discoverExtensions: false` обнаружение не вызывается.
+- `Extension\Load\Action(loader, builtIn, discovery)`: встроенные → явные → обнаруженные (по пакету, внутри — по порядку объявления; usort с индексом ради стабильности на 7.4). Обнаруженный класс, уже загруженный (без учёта регистра), пропускается. Проблемы обнаружения — warning, ошибки загрузки — error на `#/discoverExtensions`. При `discoverExtensions: false` обнаружение не вызывается; `ExtensionSettings::excluded()` (`Config\ExcludedExtension`, пакет или класс) отсекает обнаруженные до загрузки.
 
 Этап 5b:
 

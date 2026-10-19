@@ -190,4 +190,5 @@ Declare it in your package's `composer.json`, and the generator loads it when yo
 }
 ```
 
-Projects can turn discovery off with `discoverExtensions: false` and list extensions in `extensions` instead.
+Projects can turn discovery off with `discoverExtensions: false` and list extensions in `extensions` instead, or leave
+out single packages or extensions with `discoverExtensions: {exclude: [...]}`.

@@ -324,7 +324,57 @@ final class ConfigFactory
             $config[$name] = $configSection->raw($name);
         }
 
-        return new ExtensionSettings($classes, $root->bool('discoverExtensions', true), $config, $aliases, is_bool($verify) ? $verify : null);
+        [$discover, $excluded] = $this->discovery($root);
+
+        return new ExtensionSettings($classes, $discover, $config, $aliases, is_bool($verify) ? $verify : null, $excluded);
+    }
+
+    /**
+     * discoverExtensions: true, false or an object of what discovery leaves out, which turns it on.
+     *
+     * @return array{bool, list<ExcludedExtension>}
+     */
+    private function discovery(RawSection $root): array
+    {
+        $raw = $root->raw('discoverExtensions');
+        if (is_array($raw) && ($raw === [] || !Json::isList($raw))) {
+            $section = $root->section('discoverExtensions');
+            $section->rejectUnknownKeys(['exclude']);
+
+            $excluded = [];
+            foreach ($section->stringList('exclude', []) as $index => $entry) {
+                $excluded = array_merge($excluded, $this->excludedExtension($index, $entry, $section));
+            }
+
+            return [true, $excluded];
+        }
+
+        if ($raw !== null && !is_bool($raw)) {
+            $root->error('discoverExtensions', 'must be true, false or an object with "exclude"');
+        }
+
+        return [$raw !== false, []];
+    }
+
+    /**
+     * @param non-negative-int $index
+     *
+     * @return list<ExcludedExtension> the entry, or none when it names neither a package nor a class
+     */
+    private function excludedExtension(int $index, string $entry, RawSection $section): array
+    {
+        // Composer's own pattern for a package name.
+        if (preg_match('{^[a-z0-9]([_.-]?[a-z0-9]+)*/[a-z0-9](([_.]|-{1,2})?[a-z0-9]+)*$}D', $entry) === 1) {
+            return [ExcludedExtension::package($index, $entry)];
+        }
+
+        try {
+            return [ExcludedExtension::extension($index, ClassName::fromFqcn($entry))];
+        } catch (InvalidModel $exception) {
+            $section->report(sprintf('Expected a package name in lower case (vendor/name) or an extension class, not "%s".', $entry), 'exclude', (string) $index);
+
+            return [];
+        }
     }
 
     /**

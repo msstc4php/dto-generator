@@ -27,7 +27,7 @@ attributeAliases:                # x- keys that expand into attributes
   x-audit: { class: App\Attr\Audited, args: { level: '{value}' } }
 
 verifyClasses: auto              # auto | true | false
-discoverExtensions: true         # load extensions declared by installed packages
+discoverExtensions: true         # load extensions declared by installed packages; or { exclude: [acme/pkg] }
 extensions:                      # extension classes to load explicitly
   - App\Generator\MyExtension
 extensionConfig:                 # one section per extension, by its name()
@@ -152,6 +152,16 @@ image sets `DTO_GENERATOR_VERIFY_CLASSES=0` for that reason.
 - **`discoverExtensions`** (default `true`) — also load the extensions that installed packages declare in
   `extra.dto-generator.extensions` of their `composer.json`. Discovery sees the `vendor` directory the generator itself
   is installed in: a global installation or one in a separate `tools/` project does not see the project's packages.
+  An object turns discovery on and leaves out what its `exclude` lists: a package name (`acme/money-extension`, lower
+  case as Composer writes it) leaves out every extension the package declares, a class (`Acme\Money\MoneyExtension`,
+  in any case) one extension. An excluded extension is not loaded at all, so an extension that cannot be loaded or is
+  named like another stops failing the run. An entry that leaves out nothing gives a warning. Listing a class in
+  `extensions` still loads it; warnings about malformed declarations of an excluded package remain.
+
+  ```yaml
+  discoverExtensions:
+    exclude: [acme/money-extension, Vendor\Audit\AuditExtension]
+  ```
 - **`extensionConfig`** — a section per extension, keyed by the extension's `name()`, passed to it as is. The
   [Symfony bridge](https://github.com/msstc4symfony/dto-generator-bridge#configuration) reads `symfony`.
 

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MSSTC4PHP\DtoGenerator\Tests\Unit\Application\Service\Extension;
 
 use Closure;
+use MSSTC4PHP\DtoGenerator\Application\Config\ExcludedExtension;
 use MSSTC4PHP\DtoGenerator\Application\Config\ExtensionSettings;
 use MSSTC4PHP\DtoGenerator\Application\Config\GeneratorConfig;
 use MSSTC4PHP\DtoGenerator\Application\Port\ExtensionFailed;
@@ -110,6 +111,44 @@ final class LoadTest extends TestCase
         self::assertSame([], $this->messages($output));
     }
 
+    public function testLeavesOutTheExcludedPackagesAndExtensions(): void
+    {
+        $order = [];
+        // The loader knows none of the excluded classes, so an attempt to load one would be reported.
+        $loader = $this->loader(['App\Kept' => $this->recording('kept', $order), 'App\First' => $this->recording('first', $order)]);
+        $discovery = new FixedExtensionDiscovery([
+            'broken/pkg' => ['App\Broken1', 'App\Broken2'],
+            'mixed/pkg' => ['App\Kept', 'app\TWIN'],
+            'listed/pkg' => ['App\First'],
+        ]);
+        $excluded = [
+            ExcludedExtension::package(0, 'broken/pkg'),
+            ExcludedExtension::extension(1, ClassName::fromFqcn('App\Twin')),
+            ExcludedExtension::extension(2, ClassName::fromFqcn('App\First')),
+        ];
+
+        $output = (new Action($loader, static fn (): array => [], $discovery))(new Input($this->config([ClassName::fromFqcn('App\First')], true, $excluded)));
+
+        self::assertSame(['first', 'kept'], $order);
+        self::assertSame([], $this->messages($output));
+    }
+
+    public function testWarnsOfAnExclusionThatLeavesOutNothing(): void
+    {
+        $discovery = new FixedExtensionDiscovery(['acme/pkg' => [MarkingExtension::class]]);
+        $excluded = [ExcludedExtension::package(0, 'acme/pkg'), ExcludedExtension::package(1, 'acme/pk'), ExcludedExtension::extension(2, ClassName::fromFqcn('App\Gone'))];
+
+        $output = (new Action($this->loader([]), static fn (): array => [], $discovery))(new Input($this->config([], true, $excluded)));
+
+        self::assertSame(
+            [
+                'warning ' . self::CONFIG . '/discoverExtensions/exclude/1: No discovered extension is excluded by "acme/pk".',
+                'warning ' . self::CONFIG . '/discoverExtensions/exclude/2: No discovered extension is excluded by "App\Gone".',
+            ],
+            $this->messages($output),
+        );
+    }
+
     public function testReportsTheProblemsOfDiscoveryAndExtensionsItCannotLoad(): void
     {
         $order = [];
@@ -166,10 +205,11 @@ final class LoadTest extends TestCase
 
     /**
      * @param list<ClassName> $classes
+     * @param list<ExcludedExtension> $excluded
      */
-    private function config(array $classes, bool $discover): GeneratorConfig
+    private function config(array $classes, bool $discover, array $excluded = []): GeneratorConfig
     {
-        return ConfigMother::configWithExtensions(new ExtensionSettings($classes, $discover, [], [], null), ConfigMother::source(GraphFixture::SPEC));
+        return ConfigMother::configWithExtensions(new ExtensionSettings($classes, $discover, [], [], null, $excluded), ConfigMother::source(GraphFixture::SPEC));
     }
 
     /**
