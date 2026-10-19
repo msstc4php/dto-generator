@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Infrastructure\Document;
 
+use InvalidArgumentException;
+
 /**
  * A YAML text whose keys written after "?" are written before their ":" instead, each with a mark of this text: a
  * character of the Unicode private use area around a number no document can guess and the key's own number.
@@ -26,6 +28,10 @@ final class RewrittenYaml
      */
     public function __construct(string $text, string $nonce, int $keys)
     {
+        if (preg_match('/^[0-9a-f]+$/D', $nonce) !== 1 || $keys < 1) {
+            throw new InvalidArgumentException('A rewritten text needs a hexadecimal nonce and at least one key.');
+        }
+
         $this->text = $text;
         $this->nonce = $nonce;
         $this->keys = $keys;
@@ -33,6 +39,9 @@ final class RewrittenYaml
 
     /**
      * The mark of the key with the number.
+     *
+     * @param non-empty-string $nonce
+     * @param non-negative-int $number
      */
     public static function mark(string $nonce, int $number): string
     {

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Tests\Unit\Infrastructure\Document;
 
+use InvalidArgumentException;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Document\DocumentDecoder;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Document\ExplicitYamlKeys;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Document\RewrittenYaml;
@@ -53,7 +54,6 @@ final class ExplicitYamlKeysTest extends TestCase
         yield 'a sibling key in a sequence item' => ["l:\n  - a: x\n    ? k\n    : v\n", ['l' => [['a' => 'x', 'k' => 'v']]]];
         yield 'a block after a comment holding a colon' => ["p: # see: |\n  ? k\n  : v\n", ['p' => ['k' => 'v']]];
         yield 'the character of the marks' => ["a: \u{E000}0\u{E000}\n? k\n: 1\n", ['a' => "\u{E000}0\u{E000}", 'k' => 1]];
-        yield 'a comment holding a question mark' => ["# see [? x]\n? k\n: 1 # or {? y}\n", ['k' => 1]];
         yield 'a block of a key holding a hash' => ["a#b: |\n  t:\n  ? x\n  : y\n'a # b': |\n  ? x\n? k\n: 1\n", ['a#b' => "t:\n? x\n: y\n", 'a # b' => "? x\n", 'k' => 1]];
     }
 
@@ -121,6 +121,13 @@ final class ExplicitYamlKeysTest extends TestCase
         yield 'a forged mark beside a quoted scalar' => ["a: 'x\n  y\n  ? z\n  : w'\n\"\\uE0009\\uE000k\": 1\n? j\n: 2\n"];
         yield 'a forged mark beside a plain scalar' => ["a: x\n  y\n  ? z\n  : w\n\"\\uE0009\\uE000k\": 1\n? j\n: 2\n"];
         yield 'an alias of a mapping with a key after a question mark' => ["a: &x\n  ? k\n  : 1\nb: *x\n"];
+        yield 'a comment holding a question mark' => ["# see [? x]\n? k\n: 1\n"];
+        yield 'a key after a quoted hash in a flow sequence' => ["x: [ \"a #\", ? b ]\n? k\n: 1\n"];
+        yield 'a question mark before a comma' => ["x: [a, ?]\n? k\n: 1\n"];
+        yield 'a question mark in a sequence item' => ["x:\n- ?\n? k\n: 1\n"];
+        yield 'a key in a sequence item' => ["x:\n  - ? k\n    : v\n? j\n: 1\n"];
+        yield 'a value without a key' => ["a:\n  : v\n? k\n: 1\n"];
+        yield 'a question mark as a value' => ["a: ? x\n? k\n: 1\n"];
         yield 'a merge of a mapping with a key after a question mark' => ["a: &x\n  ? k\n  : 1\nb:\n  <<: *x\n"];
     }
 
@@ -146,7 +153,7 @@ final class ExplicitYamlKeysTest extends TestCase
      */
     public function testRefusesWhatHoldsAMarkOtherwiseThanAsAKeyOnce(array $decoded): void
     {
-        self::assertNull((new RewrittenYaml('', 'n0nce', 1))->restore($decoded));
+        self::assertNull((new RewrittenYaml('', '0a1b', 1))->restore($decoded));
     }
 
     /**
@@ -154,24 +161,45 @@ final class ExplicitYamlKeysTest extends TestCase
      */
     public static function wrongMarks(): iterable
     {
-        $mark = RewrittenYaml::mark('n0nce', 0);
+        $mark = RewrittenYaml::mark('0a1b', 0);
 
         yield 'a mark missing' => [['k' => 1]];
         yield 'a mark twice' => [[$mark . 'k' => 1, 'n' => [$mark . 'k' => 2]]];
         yield 'a mark in a value' => [['a' => 'x' . $mark . 'k: 1']];
         yield 'a key twice' => [[$mark . 'k' => 1, 'k' => 2]];
-        yield 'a mark of another text' => [[RewrittenYaml::mark('other', 0) . 'k' => 1]];
-        yield 'a mark of another key' => [[RewrittenYaml::mark('n0nce', 1) . 'k' => 1, 'n' => [$mark . 'j' => 2, RewrittenYaml::mark('n0nce', 1) . 'i' => 3]]];
+        yield 'a mark of another text' => [[RewrittenYaml::mark('ffff', 0) . 'k' => 1]];
+        yield 'a mark of another key' => [[RewrittenYaml::mark('0a1b', 1) . 'k' => 1, 'n' => [$mark . 'j' => 2, RewrittenYaml::mark('0a1b', 1) . 'i' => 3]]];
     }
 
     public function testTakesTheMarksOff(): void
     {
-        $rewritten = new RewrittenYaml('text', 'n0nce', 2);
-        $first = RewrittenYaml::mark('n0nce', 0);
+        $rewritten = new RewrittenYaml('text', '0a1b', 2);
+        $first = RewrittenYaml::mark('0a1b', 0);
 
         self::assertSame('text', $rewritten->text());
-        self::assertSame(['a' => ['k' => 1, 'n' => ['j' => 'v']]], $rewritten->restore(['a' => [$first . 'k' => 1, 'n' => [RewrittenYaml::mark('n0nce', 1) . 'j' => 'v']]]));
-        self::assertSame('near "k", "' . RewrittenYaml::mark('other', 0) . '"', $rewritten->withoutMarks('near "' . $first . 'k", "' . RewrittenYaml::mark('other', 0) . '"'));
+        self::assertSame(['a' => ['k' => 1, 'n' => ['j' => 'v']]], $rewritten->restore(['a' => [$first . 'k' => 1, 'n' => [RewrittenYaml::mark('0a1b', 1) . 'j' => 'v']]]));
+        self::assertSame('near "k", "' . RewrittenYaml::mark('ffff', 0) . '"', $rewritten->withoutMarks('near "' . $first . 'k", "' . RewrittenYaml::mark('ffff', 0) . '"'));
+    }
+
+    /**
+     * @dataProvider invalidRewrites
+     */
+    public function testNeedsAHexadecimalNonceAndAKey(string $nonce, int $keys): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+
+        // Reason: the test hands the constructor what its types rule out, to see it refused.
+        // @phpstan-ignore-next-line argument.type
+        new RewrittenYaml('text', $nonce, $keys);
+    }
+
+    /**
+     * @return iterable<string, array{string, int}>
+     */
+    public static function invalidRewrites(): iterable
+    {
+        yield 'a nonce of other characters' => ['a.b', 1];
+        yield 'no key' => ['0a1b', 0];
     }
 
     public function testMarksEachTextAnew(): void

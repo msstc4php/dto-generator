@@ -20,6 +20,8 @@ final class DocumentDecoder
 
     private const MAX_VALUES_OF_ANY_SIZE = 1000000;
 
+    private const REWRITTEN = ' Keys written after "?" were rewritten first, so the text quoted is the rewritten one.';
+
     /**
      * @param bool $json JSON, else YAML
      *
@@ -101,7 +103,7 @@ final class DocumentDecoder
         try {
             $decoded = $this->parse($rewritten->text());
         } catch (ParseException $failure) {
-            throw UndecodableDocument::malformed($rewritten->withoutMarks($failure->getMessage()) . ' Keys written after "?" were rewritten first, so the text quoted is the rewritten one.');
+            throw UndecodableDocument::malformed($rewritten->withoutMarks($failure->getMessage()) . self::REWRITTEN);
         }
 
         if (!is_array($decoded)) {
