@@ -101,7 +101,7 @@ final class NameOverrides
                     sprintf(
                         'No schema read is at %s; the name is not used.%s',
                         $target->toString(),
-                        $target->pointer() === '' ? ' A key names a schema by a $ref such as "#/components/schemas/Pet".' : '',
+                        $target->pointer() === '' ? ' To name a schema inside the file, add its JSON pointer ("common.json#/Type").' : '',
                     ),
                     $override->declaredAt(),
                 );

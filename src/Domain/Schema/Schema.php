@@ -391,7 +391,7 @@ final class Schema
                 $index++;
             } elseif ($segment === 'items') {
                 // A list of item schemas in draft 07; no keyword is a number.
-                $index += isset($segments[$index + 1]) && ctype_digit($segments[$index + 1]) ? 1 : 0;
+                $index += isset($segments[$index + 1]) && preg_match('/\A\d+\z/', $segments[$index + 1]) === 1 ? 1 : 0;
             } elseif (!in_array($segment, self::SCHEMA_KEYWORDS, true)) {
                 return false;
             }

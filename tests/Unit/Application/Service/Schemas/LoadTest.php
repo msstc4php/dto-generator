@@ -395,7 +395,7 @@ final class LoadTest extends TestCase
                 $at . '1: No schema read is at /project/api/openapi.yaml#/components/schemas/Tag/type/x; the name is not used.',
                 $at . '2: No schema read is at /project/api/openapi.yaml#/components/schemas/Tag/allOf; the name is not used.',
                 $at . '3: No schema read is at /project/api/openapi.yaml#/components/schemas/Skipped; the name is not used.',
-                $at . '4: No schema read is at /project/shared/common.json#; the name is not used. A key names a schema by a $ref such as "#/components/schemas/Pet".',
+                $at . '4: No schema read is at /project/shared/common.json#; the name is not used. To name a schema inside the file, add its JSON pointer ("common.json#/Type").',
                 $at . '5: No schema read is at /project/api/openapi.yaml#/components/schemas/Tag/default; the name is not used.',
                 $at . '6: No schema read is at /project/api/openapi.yaml#/components/schemas/Tag/const; the name is not used.',
                 $at . '7: No schema read is at /project/api/openapi.yaml#/components/schemas/Tag/properties; the name is not used.',

@@ -555,10 +555,10 @@ final class ConfigFactoryTest extends TestCase
     public function testChecksTheNamesOfASourceWithOtherErrors(): void
     {
         $diagnostics = new Diagnostics();
-        (new ConfigFactory())->create(['version' => 1, 'sources' => [['spec' => 'a.yaml', 'outputDir' => 'src', 'classNames' => ['#/a' => '']]]], self::PATH, $diagnostics);
+        (new ConfigFactory())->create(['version' => 1, 'sources' => [['spec' => 'a.yaml', 'outputDir' => 'src', 'classNames' => ['#/a' => '', '#anchor' => 'A']]]], self::PATH, $diagnostics);
 
         self::assertSame(
-            ['/sources/0', '/sources/0/classNames/#~1a'],
+            ['/sources/0', '/sources/0/classNames/#~1a', '/sources/0/classNames/#anchor'],
             array_map(static fn (Diagnostic $error): string => substr($error->location()->toString(), strlen(self::PATH . '#')), $diagnostics->errors()),
         );
     }

@@ -442,19 +442,18 @@ final class ConfigFactory
                 continue;
             }
 
-            if ($spec === null) {
-                continue;
-            }
-
             try {
-                $target = Reference::target($ref, new SchemaLocation($spec));
+                // Without a specification the key is still checked, against any path.
+                $target = Reference::target($ref, new SchemaLocation($spec ?? '/'));
             } catch (InvalidModel $exception) {
                 $section->report(sprintf('Expected a reference to a schema of the specification, like "#/components/schemas/Pet": %s', $exception->getMessage()), $ref);
 
                 continue;
             }
 
-            $overrides[] = new NameOverride($keyword, $target, $name, $section->location($ref));
+            if ($spec !== null) {
+                $overrides[] = new NameOverride($keyword, $target, $name, $section->location($ref));
+            }
         }
 
         return $overrides;

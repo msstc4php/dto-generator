@@ -196,6 +196,7 @@ extensions by package name. Attributes are written in that order.
   `x-php-name` there, over one it has, and is checked like one: an error about it points where the keyword would be in
   the document (`…/fields/x-php-class-name`). A key that names no schema the generator reads (a typo, a schema left
   out, or a place that holds no schema, such as a `default`) gives a warning, and two names for one schema an error.
+  A schema only a keyword such as `not` or `if` holds gets no class, so a name for it is not used either.
 
   ```yaml
   sources:
