@@ -30,7 +30,10 @@ All notable changes to this package are documented here. The format follows
 ### Fixed
 
 - A class that a class of only the read or only the write model extends (an `allOf` of it and more properties in a
-  `readOnly` or `writeOnly` property) is generated open, instead of an error that the two builds disagree on it.
+  `readOnly` or `writeOnly` property) is generated open, in both models, instead of an error that the two builds
+  disagree on it. Being open, its properties are `protected` and, on PHP 8.1–8.4, it has no `withX()`.
+- A YAML document with keys written after `?` (Twilio writes its long schema names so) is read: a key that is a plain
+  or quoted scalar is taken as such; symfony/yaml rejected the whole document.
 - A class that has all the properties of a variant of a discriminated union no longer meets it in an `allOf`: the
   variant accepts only the discriminator values that select it, which its schema does not tell.
 
