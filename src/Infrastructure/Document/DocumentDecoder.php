@@ -44,13 +44,25 @@ final class DocumentDecoder
             throw UndecodableDocument::notAnObject();
         }
 
-        $limit = max(self::MAX_VALUES_PER_BYTE * strlen($content), self::MAX_VALUES_OF_ANY_SIZE);
-        $budget = $limit;
-        if (!$json && self::exceeds($decoded, $budget)) {
-            throw UndecodableDocument::malformed(sprintf('its YAML aliases expand to more than %d values.', $limit));
+        if (!$json) {
+            $this->checkSize($decoded, $content);
         }
 
         return $decoded;
+    }
+
+    /**
+     * @param array<array-key, mixed> $decoded
+     *
+     * @throws UndecodableDocument
+     */
+    private function checkSize(array $decoded, string $content): void
+    {
+        $limit = max(self::MAX_VALUES_PER_BYTE * strlen($content), self::MAX_VALUES_OF_ANY_SIZE);
+        $budget = $limit;
+        if (self::exceeds($decoded, $budget)) {
+            throw UndecodableDocument::malformed(sprintf('its YAML aliases expand to more than %d values.', $limit));
+        }
     }
 
     /**
@@ -75,6 +87,11 @@ final class DocumentDecoder
                 $decoded = $this->parse($rewritten);
             } catch (ParseException $failure) {
                 throw UndecodableDocument::malformed(ExplicitYamlKeys::withoutMarks($failure->getMessage()) . ' Keys written after "?" were rewritten first.');
+            }
+
+            // Taking the marks off walks every value an alias repeats: the size is checked first.
+            if (is_array($decoded)) {
+                $this->checkSize($decoded, $content);
             }
 
             // A line taken for a pair that was part of something else leaves its key unread: the document stays rejected.

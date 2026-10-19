@@ -199,6 +199,20 @@ final class FileDocumentLoaderTest extends TestCase
         (new FileDocumentLoader())->load($this->file('complex.yaml', "? [a, b]\n: value\n? {a: b}\n: value\n"));
     }
 
+    public function testRejectsAliasesThatExpandBeyondTheLimitBeforeTakingTheMarksOff(): void
+    {
+        $this->expectException(DocumentLoadFailed::class);
+        $this->expectExceptionMessage('aliases expand to more than');
+
+        // A key after "?" sends the document through the rewrite, whose result is walked to take the marks off.
+        $yaml = "openapi: 3.1.0\n? k\n: v\nl0: &l0 [1, 2, 3, 4, 5, 6]\n";
+        for ($level = 1; $level <= 8; $level++) {
+            $yaml .= sprintf("l%d: &l%1\$d [%s]\n", $level, implode(', ', array_fill(0, 6, '*l' . ($level - 1))));
+        }
+
+        (new FileDocumentLoader())->load($this->file('marked-bomb.yaml', $yaml));
+    }
+
     public function testRejectsYamlAliasesThatExpandBeyondTheLimit(): void
     {
         // Each level aliases the previous one six times: 6^8 values from under a kilobyte.
