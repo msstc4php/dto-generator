@@ -15,10 +15,11 @@ final class VariantLevel
 
     private SchemaLocation $variant;
 
+    /** @var non-empty-string */
     private string $name;
 
     /**
-     * @param string $name the variant's own name: its schema name or title, `Option<N>` without one
+     * @param non-empty-string $name the variant's own name: its schema name or title, `Option<N>` without one
      */
     public function __construct(SchemaLocation $union, SchemaLocation $variant, string $name)
     {
@@ -37,6 +38,9 @@ final class VariantLevel
         return $this->variant;
     }
 
+    /**
+     * @return non-empty-string
+     */
     public function name(): string
     {
         return $this->name;

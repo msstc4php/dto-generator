@@ -45,6 +45,26 @@ final class NameResolverTest extends TestCase
     }
 
     /**
+     * @dataProvider pascalCaseNames
+     */
+    public function testJoinsWordsInPascalCaseWithoutTheGuardsOfAWholeName(string $name, ?string $expected): void
+    {
+        self::assertSame($expected, (new NameResolver())->pascalCase($name));
+    }
+
+    /**
+     * @return iterable<string, array{string, ?string}>
+     */
+    public static function pascalCaseNames(): iterable
+    {
+        yield 'a reserved word' => ['list', 'List'];
+        yield 'a leading digit' => ['2fa', '2fa'];
+        yield 'separated words' => ['foo-bar', 'FooBar'];
+        yield 'no letters' => ['+', null];
+        yield 'nothing' => ['', null];
+    }
+
+    /**
      * @dataProvider propertyNames
      */
     public function testDerivesCamelCasePropertyNames(string $wireName, ?string $expected): void

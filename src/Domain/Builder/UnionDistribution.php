@@ -143,7 +143,8 @@ final class UnionDistribution
             unset($keywords['title']);
             $location = $schema->location()->child(VariantOrigin::SEGMENT, (string) $index, (string) $position);
             // An x-php-class-name of the schema starts the names of its variants as written.
-            $memberExtensions = $override === null ? $extensions : ['x-php-class-name' => $override . $this->names->pascalCase($names[$position])] + $extensions;
+            $className = $override . $this->names->pascalCase($names[$position]);
+            $memberExtensions = $override === null ? $extensions : ['x-php-class-name' => Identifier::isReserved($className) ? $className . '_' : $className] + $extensions;
             $member = $this->schema($schema, $location, $schema->nonNullTypes(), $this->properties($schema), $schema->required(), $schema->items(), $schema->additionalProperties(), $allOf, [], [], $keywords, new Extensions($memberExtensions));
             $this->origins[$location->toString()] = $origin->withLevel(new VariantLevel($schema->allOf()[$index]->location(), $variant->location(), $names[$position]));
             $members[] = $named instanceof ResolvedSchema ? $this->named($member, $named, $named->name() . ' ' . $names[$position], [$kind, $position]) : $member;
@@ -219,7 +220,7 @@ final class UnionDistribution
      *
      * @param list<Schema> $variants
      *
-     * @return list<string>
+     * @return list<non-empty-string>
      */
     private function variantNames(array $variants, ?ResolvedSchema $named, Schema $member): array
     {
@@ -229,7 +230,8 @@ final class UnionDistribution
         $names = [];
         foreach ($variants as $variant) {
             $name = $this->nameOf($variant);
-            $names[] = $name !== null && $repeated !== null && strpos($name, $repeated) === 0 ? (string) substr($name, strlen($repeated)) : $name;
+            $name = $name !== null && $repeated !== null && strpos($name, $repeated) === 0 ? (string) substr($name, strlen($repeated)) : $name;
+            $names[] = $name === '' ? null : $name;
         }
 
         // Names alike once they are part of a class name are none, as names without letters or digits are.

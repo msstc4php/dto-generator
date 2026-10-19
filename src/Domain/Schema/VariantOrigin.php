@@ -48,6 +48,9 @@ final class VariantOrigin
     /**
      * The name of the variant taken last; null at the root.
      */
+    /**
+     * @return non-empty-string|null
+     */
     public function variant(): ?string
     {
         $variants = $this->variants();
@@ -58,7 +61,7 @@ final class VariantOrigin
     /**
      * The names of the variants taken, first union first.
      *
-     * @return list<string>
+     * @return list<non-empty-string>
      */
     public function variants(): array
     {
@@ -69,7 +72,7 @@ final class VariantOrigin
      * The names of the variants a part of the class comes with, which every class with them shares: none for a part
      * of the root itself, the first variant's for a part written in it, and so on. Null for a part from elsewhere.
      *
-     * @return list<string>|null
+     * @return list<non-empty-string>|null
      */
     public function variantsOf(SchemaLocation $part): ?array
     {
@@ -79,7 +82,7 @@ final class VariantOrigin
 
         $names = [];
         foreach ($this->levels as $level) {
-            if (!self::isWithin($part, $level->union()) || !self::isWithin($part, $level->variant())) {
+            if (!$this->isWithin($part, $level->union()) || !$this->isWithin($part, $level->variant())) {
                 break;
             }
 

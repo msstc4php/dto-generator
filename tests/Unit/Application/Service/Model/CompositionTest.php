@@ -694,10 +694,10 @@ final class CompositionTest extends TestCase
     public function testNamesWhatVariantsShareAlikeInAnyOrder(array $variants, array $classes, bool $inline = false): void
     {
         $object = static fn (array $properties): array => ['type' => 'object', 'properties' => $properties];
-        $distributed = ['allOf' => [['anyOf' => $variants], $object(['e' => $object(['ee' => ['type' => 'string']])])]];
+        $common = $object(['e' => $object(['ee' => ['type' => 'string']])]);
         $shared = $classes[count($classes) - 1];
         foreach ([$variants, array_reverse($variants)] as $order) {
-            $schema = ['allOf' => [['anyOf' => $order], $distributed['allOf'][1]]];
+            $schema = ['allOf' => [['anyOf' => $order], $common]];
             $output = ModelFixture::build([
                 'List' => $object(['l' => ['type' => 'string']]),
                 'B' => $object(['b' => ['type' => 'string']]),
@@ -738,6 +738,13 @@ final class CompositionTest extends TestCase
 
         self::assertSame([], ModelFixture::messages($output));
         self::assertSame(['App\\Dto\\A', 'App\\Dto\\B', 'App\\Dto\\My_DtoA', 'App\\Dto\\My_DtoB', 'App\\Dto\\MyDtoE'], array_keys(ModelFixture::classes($output)));
+
+        $reserved = ModelFixture::build([
+            'S' => ['x-php-class-name' => 'Se', 'allOf' => [['anyOf' => [$object(['a' => ['type' => 'string']]) + ['title' => 'lf'], $object(['b' => ['type' => 'string']]) + ['title' => 'b']]], $object(['e' => ['type' => 'string']])]],
+        ]);
+
+        self::assertSame([], ModelFixture::messages($reserved));
+        self::assertSame(['App\\Dto\\SeLf_', 'App\\Dto\\SeB'], array_keys(ModelFixture::classes($reserved)));
     }
 
     public function testNamesVariantsWithTheSameTitleByPosition(): void

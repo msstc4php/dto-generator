@@ -384,7 +384,7 @@ final class Action
         $root = $origin instanceof VariantOrigin ? $this->rootOf($origin, $registry->baseOf($ownerName)) : null;
         $baseOf = function (Schema $part) use ($origin, $root, $registry, $ownerName): string {
             $variants = $origin instanceof VariantOrigin && $root !== null ? $origin->variantsOf($part->location()) : null;
-            $shared = $variants === null ? null : $root . implode('', array_map(fn (string $variant): string => (string) $this->names->pascalCase($variant), $variants));
+            $shared = $variants === null ? null : $root . $this->variantSuffix($variants);
 
             return $shared ?? $registry->baseOf($ownerName);
         };
@@ -424,12 +424,23 @@ final class Action
     }
 
     /**
+     * What the names of the variants taken add to a class name; the names of a variant class and of what it shares end
+     * with it alike.
+     *
+     * @param list<string> $variants
+     */
+    private function variantSuffix(array $variants): string
+    {
+        return implode('', array_map(fn (string $variant): string => (string) $this->names->pascalCase($variant), $variants));
+    }
+
+    /**
      * The name of the classes of the schema a variant was distributed from: the variant class's without the names of the
      * variants it took, which its name ends with; null when it does not (an x-php-class-name of the variant's own).
      */
     private function rootOf(VariantOrigin $origin, string $ownBase): ?string
     {
-        $taken = implode('', array_map(fn (string $variant): string => (string) $this->names->pascalCase($variant), $origin->variants()));
+        $taken = $this->variantSuffix($origin->variants());
 
         return substr($ownBase, -strlen($taken)) === $taken ? (string) substr($ownBase, 0, -strlen($taken)) : null;
     }
