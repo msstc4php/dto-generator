@@ -783,12 +783,45 @@ final class CompositionTest extends TestCase
             'H' => $object([
                 'id' => ['type' => 'string'],
                 'alone' => ['allOf' => [['$ref' => '#/components/schemas/E']], 'readOnly' => true],
+                'more' => ['allOf' => [['$ref' => '#/components/schemas/E'], $object(['x' => ['type' => 'string']])], 'writeOnly' => true],
             ]),
         ]);
 
         self::assertSame([], ModelFixture::messages($output));
         self::assertSame(['id: string|null', 'alone: App\\Dto\\A|App\\Dto\\B|null'], ModelFixture::classes($output)['App\\Dto\\HRead']);
-        self::assertSame(['id: string|null'], ModelFixture::classes($output)['App\\Dto\\HWrite']);
+        self::assertSame(['id: string|null', 'more: App\\Dto\\HMoreA|App\\Dto\\HMoreB|null'], ModelFixture::classes($output)['App\\Dto\\HWrite']);
+        self::assertSame('final extends App\\Dto\\A', ModelFixture::hierarchy($output)['App\\Dto\\HMoreA']);
+        self::assertSame('open', ModelFixture::hierarchy($output)['App\\Dto\\A']);
+    }
+
+    /**
+     * @return iterable<string, array{string, string, string}>
+     */
+    public static function oneViewOnly(): iterable
+    {
+        yield 'readOnly' => ['readOnly', 'App\\Dto\\HRead', 'App\\Dto\\HWrite'];
+        yield 'writeOnly' => ['writeOnly', 'App\\Dto\\HWrite', 'App\\Dto\\HRead'];
+    }
+
+    /**
+     * @dataProvider oneViewOnly
+     */
+    public function testSharesTheOpenClassThatOnlyOneViewExtends(string $keyword, string $extending, string $other): void
+    {
+        $object = static fn (array $properties): array => ['type' => 'object', 'properties' => $properties];
+        $output = ModelFixture::views([
+            'A' => $object(['a' => ['type' => 'string']]),
+            'H' => $object([
+                'id' => ['type' => 'string'],
+                'more' => ['allOf' => [['$ref' => '#/components/schemas/A'], $object(['x' => ['type' => 'string']])], $keyword => true],
+            ]),
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(['id: string|null', 'more: App\\Dto\\HMore|null'], ModelFixture::classes($output)[$extending]);
+        self::assertSame(['id: string|null'], ModelFixture::classes($output)[$other]);
+        self::assertSame('final extends App\\Dto\\A', ModelFixture::hierarchy($output)['App\\Dto\\HMore']);
+        self::assertSame('open', ModelFixture::hierarchy($output)['App\\Dto\\A']);
     }
 
     /**

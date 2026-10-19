@@ -13,6 +13,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Builder\ReadWriteMode;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\ViewDependence;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostic;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
+use MSSTC4PHP\DtoGenerator\Domain\Model\ClassKind;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\DiscriminatorModel;
@@ -82,6 +83,7 @@ final class Views
         }
 
         $renamed = [];
+        $opened = [];
         foreach ($write->classes() as $class) {
             $model = $class->model();
             $fqcn = $model->name()->fqcn();
@@ -90,13 +92,16 @@ final class Views
             if (!$earlier instanceof ClassModel) {
                 $classes[] = $class;
                 $renamed[$fqcn] = $readAt[$model->source()->toString()] ?? $fqcn;
-            } elseif ($earlier->source()->equals($model->source()) && $this->shape($earlier) !== $this->shape($model)) {
-                $diagnostics->error(
-                    sprintf('%s comes out differently in the read and the write build, which is a defect of the generator; please report it.', $fqcn),
-                    $model->source(),
-                );
+            } elseif ($earlier->source()->equals($model->source())) {
+                $open = $this->reconcile($earlier, $class, $diagnostics);
+                if ($open instanceof BuiltClass) {
+                    $opened[$fqcn] = $open;
+                }
             }
         }
+
+        // A class that a class of one view extends is open in that view only; the class both share stays open.
+        $classes = array_map(static fn (BuiltClass $class): BuiltClass => $opened[$class->model()->name()->fqcn()] ?? $class, $classes);
 
         $known = [];
         foreach ($read->diagnostics()->all() as $diagnostic) {
@@ -222,6 +227,41 @@ final class Views
         $diagnostics->merge($more);
 
         return new Output($output->classes(), $diagnostics, $output->enums());
+    }
+
+    /**
+     * A shared class that only one build extends is open there and final in the other: both keep the open one.
+     *
+     * @return BuiltClass|null the write build's class to keep instead of the read build's; null keeps the read one, and
+     *                         a disagreement of any other kind is reported
+     */
+    private function reconcile(ClassModel $read, BuiltClass $write, Diagnostics $diagnostics): ?BuiltClass
+    {
+        $readShape = $this->shape($read);
+        $writeShape = $this->shape($write->model());
+        if ($readShape === $writeShape) {
+            return null;
+        }
+
+        $kinds = [$readShape[0], $writeShape[0]];
+        if (in_array($kinds, [[ClassKind::FINAL, ClassKind::OPEN], [ClassKind::OPEN, ClassKind::FINAL]], true)
+            && array_slice($readShape, 1) === array_slice($writeShape, 1) && $this->sameBesidesTheShape($read, $write->model())) {
+            return $kinds[1] === ClassKind::OPEN ? $write : null;
+        }
+
+        $diagnostics->error(
+            sprintf('%s comes out differently in the read and the write build, which is a defect of the generator; please report it.', $read->name()->fqcn()),
+            $read->source(),
+        );
+
+        return null;
+    }
+
+    private function sameBesidesTheShape(ClassModel $read, ClassModel $write): bool
+    {
+        // PHPStan forbids "==": value objects are compared serialized.
+        return [$read->discriminatedProperties(), $read->restoredMutators()] === [$write->discriminatedProperties(), $write->restoredMutators()]
+            && serialize([$read->discriminatorValues(), $read->attributes()]) === serialize([$write->discriminatorValues(), $write->attributes()]);
     }
 
     /**
