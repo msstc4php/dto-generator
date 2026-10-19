@@ -47,7 +47,11 @@ final class ExplicitYamlKeysTest extends TestCase
         yield 'a block in a nested sequence' => ["l:\n  - - |\n      ? x\n      : y\n? k\n: 1\n", ['l' => [["? x\n: y\n"]], 'k' => 1]];
         yield 'a value in a wider column' => ["? k\n:   - a\n    - b\n? m\n:   a:\n      b: 1\n    c: 2\n", ['k' => ['a', 'b'], 'm' => ['a' => ['b' => 1], 'c' => 2]]];
         yield 'a comment after a tab' => ["? a\t# c\n: 1\n", ['a' => 1]];
-        yield 'keys without values' => ["? k\n? j\nn: 1\n? last", ['k' => null, 'j' => null, 'n' => 1, 'last' => null]];
+        yield 'tabs around a block indicator' => ["a: |\t\n  ? x\n  : y\nl:\n  -\t|\n    ? x\n? k\n: 1\n", ['a' => "? x\n: y\n", 'l' => ["? x\n"], 'k' => 1]];
+        yield 'a trailing backslash' => ["? k\n: C:\\dir\\\n? j\n:\n  v: 1\n", ['k' => 'C:\\dir\\', 'j' => ['v' => 1]]];
+        yield 'a block of a key in a sequence item' => ["l:\n  - a: |\n      t\n    ? k\n    : v\n", ['l' => [['a' => "t\n", 'k' => 'v']]]];
+        yield 'a sibling key in a sequence item' => ["l:\n  - a: x\n    ? k\n    : v\n", ['l' => [['a' => 'x', 'k' => 'v']]]];
+        yield 'a block after a comment holding a colon' => ["p: # see: |\n  ? k\n  : v\n", ['p' => ['k' => 'v']]];
         yield 'CRLF' => ["t: |\r\n  ? x\r\n  : y\r\nz:\r\n  ? k\r\n  :\r\n    v: 1\r\n", ['t' => "? x\n: y\n", 'z' => ['k' => ['v' => 1]]]];
         yield 'a block after a dash' => ["l:\n  - |\n    ? x\n    : y\n", ['l' => ["? x\n: y\n"]]];
         yield 'a block indicator in a value' => ["d: a ->\n? k\n: 1\n", ['d' => 'a ->', 'k' => 1]];
@@ -79,6 +83,12 @@ final class ExplicitYamlKeysTest extends TestCase
         yield 'an explicit key as a key' => ["? ? a\n: v"];
         yield 'a key ending with a colon' => ["? a:\n: v"];
         yield 'no explicit key' => ["a: 1\nb:\n  - c"];
+        yield 'a key without a value line' => ["? k\n? j\nn: 1"];
+        yield 'a key continued on the next line' => ["s:\n  ? long key\n    continued\n  : 'a: b'"];
+        yield 'a comment before the value line' => ["? k\n  # c\n: x: 1"];
+        yield 'an empty line before the value line' => ["? k\n\n: a: 1"];
+        yield 'a line of a multi-line scalar' => ["a: x\n  ? y\n  : z"];
+        yield 'a line of a multi-line quoted scalar' => ["a: \"x\n  ? y\n  : z\""];
     }
 
     public function testKeepsTheLineNumbers(): void
