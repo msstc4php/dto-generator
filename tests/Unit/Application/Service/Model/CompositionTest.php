@@ -540,7 +540,7 @@ final class CompositionTest extends TestCase
             [
                 'App\\Dto\\A' => ['a: string|null'],
                 'App\\Dto\\B' => ['b: int|null'],
-                'App\\Dto\\Holder' => ['stream: App\\Dto\\StreamA|App\\Dto\\StreamB|null', 'inline: App\\Dto\\HolderInlineOption1|App\\Dto\\HolderInlineOption2|null'],
+                'App\\Dto\\Holder' => ['stream: App\\Dto\\StreamA|App\\Dto\\StreamB|null', 'inline: App\\Dto\\HolderInlineA|App\\Dto\\HolderInlineB|null'],
                 'App\\Dto\\StreamA' => $extends ? ['stream_id: string|null'] : ['a: string|null', 'stream_id: string|null'],
                 'App\\Dto\\StreamB' => $extends ? ['stream_id: string|null'] : ['b: int|null', 'stream_id: string|null'],
                 'App\\Dto\\RenamedA' => $extends ? ['n: string'] : ['a: string|null', 'n: string'],
@@ -548,8 +548,8 @@ final class CompositionTest extends TestCase
                 'App\\Dto\\RenamedOption3' => ['o: string|null', 'n: string'],
                 'App\\Dto\\OuterStreamA' => $extends ? ['more: string|null'] : ['a: string|null', 'stream_id: string|null', 'more: string|null'],
                 'App\\Dto\\OuterStreamB' => $extends ? ['more: string|null'] : ['b: int|null', 'stream_id: string|null', 'more: string|null'],
-                'App\\Dto\\HolderInlineOption1' => $extends ? ['x: string'] : ['x: string', 'a: string|null'],
-                'App\\Dto\\HolderInlineOption2' => $extends ? ['x: string'] : ['x: string', 'b: int|null'],
+                'App\\Dto\\HolderInlineA' => $extends ? ['x: string'] : ['x: string', 'a: string|null'],
+                'App\\Dto\\HolderInlineB' => $extends ? ['x: string'] : ['x: string', 'b: int|null'],
             ],
             ModelFixture::classes($output),
         );
@@ -557,7 +557,7 @@ final class CompositionTest extends TestCase
             $hierarchy = ModelFixture::hierarchy($output);
             self::assertSame('open extends App\\Dto\\A', $hierarchy['App\\Dto\\StreamA']);
             self::assertSame('final extends App\\Dto\\StreamB', $hierarchy['App\\Dto\\OuterStreamB']);
-            self::assertSame('final extends App\\Dto\\B', $hierarchy['App\\Dto\\HolderInlineOption2']);
+            self::assertSame('final extends App\\Dto\\B', $hierarchy['App\\Dto\\HolderInlineB']);
         }
     }
 
@@ -621,7 +621,7 @@ final class CompositionTest extends TestCase
         ]);
         $classes = ModelFixture::classes($output);
 
-        self::assertSame(["error {$at}Taken/x-dto-variant/0/0: Class App\\Dto\\SA is already generated from {$at}SA; set \"x-php-class-name\" on one of them (on the schema this one is distributed from, or a \"title\" on its variant)."], ModelFixture::messages($output));
+        self::assertSame(["error {$at}Taken/x-dto-variant/0/0: Class App\\Dto\\SA is already generated from {$at}SA; set \"x-php-class-name\" on one of them (on the schema this one is distributed from or on a referenced variant, or a \"title\" on an inline one)."], ModelFixture::messages($output));
         foreach (['SATC', 'SATD', 'SBTC', 'SBTD'] as $variant) {
             self::assertContains('meta: App\\Dto\\SMeta|null', $classes['App\\Dto\\' . $variant]);
         }
@@ -629,6 +629,60 @@ final class CompositionTest extends TestCase
         foreach (['MyThingA', 'MyThingB'] as $variant) {
             self::assertSame(['meta: App\\Dto\\MyThingMeta|null', 'additionalProperties: array<array-key, App\\Dto\\MyThingAdditionalProperty>'], $classes['App\\Dto\\' . $variant]);
         }
+    }
+
+    public function testNamesEveryClassOfANestedDistributionOnce(): void
+    {
+        $object = static fn (array $properties): array => ['type' => 'object', 'properties' => $properties];
+        $ref = static fn (string $name): array => ['$ref' => '#/components/schemas/' . $name];
+        $output = ModelFixture::build([
+            'A' => $object(['a' => ['type' => 'string']]),
+            'B' => $object(['b' => ['type' => 'string']]),
+            'C' => $object(['c' => ['type' => 'string']]),
+            'D' => $object(['d' => ['type' => 'string']]),
+            'U1' => ['anyOf' => [$ref('U2'), $ref('A')]],
+            'U2' => ['anyOf' => [$ref('U3'), $ref('B')]],
+            'U3' => ['anyOf' => [$ref('C'), $ref('D')]],
+            'S' => ['allOf' => [$ref('U1'), $object(['e' => $object(['ee' => ['type' => 'string']])])]],
+            'T' => ['allOf' => [$ref('S'), $object(['t' => ['type' => 'string']])]],
+            'ZS' => ['allOf' => [$ref('S'), $object(['z' => ['type' => 'string']])]],
+            'Holder' => $object([
+                'p' => ['allOf' => [['anyOf' => [$ref('A'), $ref('U3')]], $object(['e' => $object(['ee' => ['type' => 'string']])])]],
+                'list' => ['type' => 'array', 'items' => ['allOf' => [['anyOf' => [$ref('A'), $object(['x' => ['type' => 'string']]) + ['title' => 'extra item']]], $object(['e' => $object(['ee' => ['type' => 'string']])])]]],
+            ]),
+            'Batch' => ['type' => 'array', 'items' => ['allOf' => [['anyOf' => [$ref('A'), $ref('B')]], $object(['e' => $object(['ee' => ['type' => 'string']])])]]],
+            'Uses' => $object(['batch' => $ref('Batch')]),
+            'Inner' => ['allOf' => [
+                ['anyOf' => [['title' => 'X', 'type' => 'object', 'properties' => ['q' => $object(['qq' => ['type' => 'string']])], 'allOf' => [['anyOf' => [$ref('C'), $ref('D')]]]], $ref('B')]],
+                $object(['i' => ['type' => 'string']]),
+            ]],
+        ]);
+        $classes = ModelFixture::classes($output);
+
+        self::assertSame([], ModelFixture::messages($output));
+        foreach (['TSA', 'TSU2B', 'TSU2U3C', 'TSU2U3D'] as $class) {
+            self::assertSame(['t: string|null'], $classes['App\\Dto\\' . $class]);
+        }
+
+        self::assertSame(['z: string|null'], $classes['App\\Dto\\ZSSA']);
+        foreach (['SA', 'SU2B', 'SU2U3C', 'SU2U3D'] as $class) {
+            self::assertSame(['e: App\\Dto\\SE|null'], $classes['App\\Dto\\' . $class]);
+        }
+
+        self::assertSame(['p: App\\Dto\\HolderPA|App\\Dto\\HolderPU3C|App\\Dto\\HolderPU3D|null', 'list: list<App\\Dto\\HolderListItemA|App\\Dto\\HolderListItemExtraItem>|null'], $classes['App\\Dto\\Holder']);
+        self::assertSame(['e: App\\Dto\\HolderListItemE|null'], $classes['App\\Dto\\HolderListItemA']);
+        self::assertSame(['x: string|null', 'e: App\\Dto\\HolderListItemE|null'], $classes['App\\Dto\\HolderListItemExtraItem']);
+
+        foreach (['BatchItemA', 'BatchItemB'] as $class) {
+            self::assertSame(['e: App\\Dto\\BatchItemE|null'], $classes['App\\Dto\\' . $class]);
+        }
+
+        foreach (['HolderPA', 'HolderPU3C', 'HolderPU3D'] as $class) {
+            self::assertSame(['e: App\\Dto\\HolderPE|null'], $classes['App\\Dto\\' . $class]);
+        }
+
+        self::assertSame(['c: string|null', 'q: App\\Dto\\InnerXQ|null', 'i: string|null'], $classes['App\\Dto\\InnerXC']);
+        self::assertSame(['d: string|null', 'q: App\\Dto\\InnerXQ|null', 'i: string|null'], $classes['App\\Dto\\InnerXD']);
     }
 
     public function testNamesVariantsWithTheSameTitleByPosition(): void

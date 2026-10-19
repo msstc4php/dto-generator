@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace MSSTC4PHP\DtoGenerator\Domain\Schema;
 
 /**
- * Where a schema that an `allOf` of a union was distributed into comes from: the schema written in the document, the
- * name the classes of the parts every variant shares start with, and the members of its `allOf` that were unions.
+ * Where a schema that an `allOf` of a union was distributed into comes from: the schema written in the document, and
+ * for each union distributed on the way the member that held it and the variant taken.
  *
  * @api
  */
@@ -17,19 +17,16 @@ final class VariantOrigin
 
     private SchemaLocation $root;
 
-    private string $base;
-
-    /** @var list<SchemaLocation> */
-    private array $unions;
+    /** @var list<array{SchemaLocation, SchemaLocation, string}> union member, variant taken, its name */
+    private array $levels;
 
     /**
-     * @param list<SchemaLocation> $unions
+     * @param list<array{SchemaLocation, SchemaLocation, string}> $levels union member, variant taken, its name
      */
-    public function __construct(SchemaLocation $root, string $base, array $unions = [])
+    public function __construct(SchemaLocation $root, array $levels = [])
     {
         $this->root = $root;
-        $this->base = $base;
-        $this->unions = $unions;
+        $this->levels = $levels;
     }
 
     /**
@@ -40,37 +37,65 @@ final class VariantOrigin
         return strpos($location->pointer() . '/', '/' . self::SEGMENT . '/') !== false;
     }
 
-    public function withUnion(SchemaLocation $union): self
+    /**
+     * The origin of a variant of one more union.
+     *
+     * @param SchemaLocation $union the member of the allOf that was the union
+     * @param SchemaLocation $variant the variant taken, as the union lists it
+     * @param string $name the variant's own name: its schema name or title, `Option<N>` without one
+     */
+    public function withVariant(SchemaLocation $union, SchemaLocation $variant, string $name): self
     {
-        return new self($this->root, $this->base, array_merge($this->unions, [$union]));
-    }
-
-    public function base(): string
-    {
-        return $this->base;
+        return new self($this->root, array_merge($this->levels, [[$union, $variant, $name]]));
     }
 
     /**
-     * Whether a part of the variant's class is the root's own, not its variant's: every variant shares it.
+     * The name of the variant taken last; null at the root.
      */
-    public function shares(SchemaLocation $part): bool
+    public function variant(): ?string
     {
-        if ($part->file() !== $this->root->file() || !$this->isWithin($part, $this->root)) {
-            return false;
+        $variants = $this->variants();
+
+        return $variants === [] ? null : $variants[count($variants) - 1];
+    }
+
+    /**
+     * The names of the variants taken, first union first.
+     *
+     * @return list<string>
+     */
+    public function variants(): array
+    {
+        return array_map(static fn (array $level): string => $level[2], $this->levels);
+    }
+
+    /**
+     * The names of the variants a part of the class comes with, which every class with them shares: none for a part
+     * of the root itself, the first variant's for a part written in it, and so on. Null for a part from elsewhere.
+     *
+     * @return list<string>|null
+     */
+    public function variantsOf(SchemaLocation $part): ?array
+    {
+        if (!$this->isWithin($part, $this->root)) {
+            return null;
         }
 
-        foreach ($this->unions as $union) {
-            if ($this->isWithin($part, $union)) {
-                return false;
+        $names = [];
+        foreach ($this->levels as [$union, $variant, $name]) {
+            if (!$this->isWithin($part, $union) || !$this->isWithin($part, $variant)) {
+                break;
             }
+
+            $names[] = $name;
         }
 
-        return true;
+        return $names;
     }
 
     private function isWithin(SchemaLocation $part, SchemaLocation $location): bool
     {
         // The slash keeps `allOf/1` from holding `allOf/10`.
-        return strpos($part->pointer() . '/', $location->pointer() . '/') === 0;
+        return $part->file() === $location->file() && strpos($part->pointer() . '/', $location->pointer() . '/') === 0;
     }
 }

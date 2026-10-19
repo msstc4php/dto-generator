@@ -21,7 +21,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
  * Writes an object whose `allOf` has a union of objects as the union of that object with each variant:
  * `allOf: [anyOf: [A, B], E]` is `anyOf: [allOf: [A, E], allOf: [B, E]]`, as for `oneOf`. Each of those is a class, which
  * no union of variants could be. A union with a discriminator, of anything but objects, beside another union, alone in
- * the `allOf` or with a variant that leads back to the schema stays as written, which the build reports.
+ * the `allOf` or with a variant that leads back to the union stays as written, which the build reports.
  *
  * @phpstan-import-type JsonValue from Json
  */
@@ -129,8 +129,9 @@ final class UnionDistribution
         [$kind, $variants] = $union;
         $extensions = $schema->extensions()->all();
         unset($extensions['x-php-class-name']);
-        $owner = $named instanceof ResolvedSchema ? $this->ownerName($named) : null;
-        $names = $this->variantNames($variants);
+        $owner = $named instanceof ResolvedSchema ? $this->ownerName($named) : '';
+        $names = $this->variantNames($variants, $named, $schema->allOf()[$index]);
+        $origin = $this->graph->originOf($schema->location()) ?? new VariantOrigin($schema->location());
         $members = [];
         foreach ($variants as $position => $variant) {
             $allOf = array_merge(array_slice($schema->allOf(), 0, $index), [$variant], array_slice($schema->allOf(), $index + 1));
@@ -138,7 +139,8 @@ final class UnionDistribution
             unset($keywords['title']);
             $location = $schema->location()->child(VariantOrigin::SEGMENT, (string) $index, (string) $position);
             $member = $this->schema($schema, $location, $schema->nonNullTypes(), $this->properties($schema), $schema->required(), $schema->items(), $schema->additionalProperties(), $allOf, [], [], $keywords, new Extensions($extensions));
-            $members[] = $named instanceof ResolvedSchema ? $this->named($member, $named, (string) $owner, $names[$position], [$kind, $position], $schema->allOf()[$index]->location()) : $member;
+            $this->origins[$location->toString()] = $origin->withVariant($schema->allOf()[$index]->location(), $variant->location(), $names[$position]);
+            $members[] = $named instanceof ResolvedSchema ? $this->named($member, $named, $owner . ' ' . $names[$position], [$kind, $position]) : $member;
         }
 
         // What applies to the value as a whole (readOnly, a description) stays on the union.
@@ -154,7 +156,7 @@ final class UnionDistribution
 
     /**
      * The variants of a union of objects without a discriminator, written in the member or behind its `$ref`, none of
-     * which leads back to the union, or to the schema, whose allOf leads to the union.
+     * which leads back to the union (the schema leads to it too, through its allOf).
      *
      * @return array{'oneOf'|'anyOf', list<Schema>}|null
      */
@@ -205,19 +207,29 @@ final class UnionDistribution
     }
 
     /**
-     * The name of each variant: its schema name or title, `Option<N>` without one or when another variant has it.
+     * The name of each variant: its schema name or title, `Option<N>` without one or when another variant has it (letter
+     * case aside). A schema whose name ends with the union's, as when it extends a schema distributed one round earlier,
+     * does not repeat it.
      *
      * @param list<Schema> $variants
      *
      * @return list<string>
      */
-    private function variantNames(array $variants): array
+    private function variantNames(array $variants, ?ResolvedSchema $named, Schema $member): array
     {
-        $names = array_map(fn (Schema $variant): ?string => $this->nameOf($variant), $variants);
-        $counts = array_count_values(array_filter($names, 'is_string'));
+        $union = $this->graph->get($this->end($member)->location());
+        $suffix = $union instanceof ResolvedSchema ? ' ' . $union->name() : null;
+        $repeated = $named instanceof ResolvedSchema && $suffix !== null && substr($named->name(), -strlen($suffix)) === $suffix ? ltrim($suffix) . ' ' : null;
+        $names = [];
+        foreach ($variants as $variant) {
+            $name = $this->nameOf($variant);
+            $names[] = $name !== null && $repeated !== null && strpos($name, $repeated) === 0 ? (string) substr($name, strlen($repeated)) : $name;
+        }
+
+        $counts = array_count_values(array_map([Identifier::class, 'asciiLower'], array_filter($names, 'is_string')));
         $unique = [];
         foreach ($names as $position => $name) {
-            $unique[] = $name !== null && $counts[$name] === 1 ? $name : 'Option' . ($position + 1);
+            $unique[] = $name !== null && $counts[Identifier::asciiLower($name)] === 1 ? $name : 'Option' . ($position + 1);
         }
 
         return $unique;
@@ -246,15 +258,12 @@ final class UnionDistribution
     /**
      * A variant of a named schema is a named schema of its own, `<Name> <Variant>`, so an allOf naming it extends it.
      *
-     * @param string $base the owner's x-php-class-name or name
      * @param array{'oneOf'|'anyOf', int} $at where the union lists the variant
      */
-    private function named(Schema $variant, ResolvedSchema $owner, string $base, string $variantName, array $at, SchemaLocation $union): Schema
+    private function named(Schema $variant, ResolvedSchema $owner, string $name, array $at): Schema
     {
         [$kind, $position] = $at;
-        $this->added[] = new ResolvedSchema($variant, $owner->source(), $base . ' ' . $variantName, $owner->isSelected());
-        $origin = $this->graph->originOf($owner->location()) ?? new VariantOrigin($owner->location(), $base);
-        $this->origins[$variant->location()->toString()] = $origin->withUnion($union);
+        $this->added[] = new ResolvedSchema($variant, $owner->source(), $name, $owner->isSelected());
         $ref = $variant->location()->toString();
         $at = $owner->location()->child($kind, (string) $position);
         $this->edges[(new ReferenceUse($ref, $at))->key()] = $ref;
@@ -264,6 +273,12 @@ final class UnionDistribution
 
     private function nameOf(Schema $variant): ?string
     {
+        // A variant written inline by an earlier round carries the name of the variant it holds.
+        $origin = $this->graph->originOf($variant->location());
+        if ($origin instanceof VariantOrigin && $variant->ref() === null) {
+            return $origin->variant();
+        }
+
         $ref = $variant->ref();
         if ($ref !== null) {
             $target = $this->graph->resolve(new ReferenceUse($ref, $variant->location()));

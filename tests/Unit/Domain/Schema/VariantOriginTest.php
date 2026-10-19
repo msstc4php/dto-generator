@@ -14,43 +14,64 @@ final class VariantOriginTest extends TestCase
 
     /**
      * @dataProvider parts
+     *
+     * @param list<string>|null $variants
      */
-    public function testTellsWhatEveryVariantShares(string $part, bool $shared, string $file = '/api.yaml'): void
+    public function testTellsTheVariantsAPartComesWith(string $part, ?array $variants, string $file = '/api.yaml'): void
     {
-        $origin = (new VariantOrigin(new SchemaLocation('/api.yaml', self::S), 'S'))
-            ->withUnion(new SchemaLocation('/api.yaml', self::S . '/allOf/1'))
-            ->withUnion(new SchemaLocation('/api.yaml', self::S . '/allOf/3'))
+        $origin = (new VariantOrigin(new SchemaLocation('/api.yaml', self::S)))
+            ->withVariant(new SchemaLocation('/api.yaml', self::S . '/allOf/1'), new SchemaLocation('/api.yaml', self::S . '/allOf/1/anyOf/0'), 'A')
+            ->withVariant(new SchemaLocation('/api.yaml', self::S . '/allOf/1/anyOf/0'), new SchemaLocation('/api.yaml', self::S . '/allOf/1/anyOf/0/x-dto-variant/0/1'), 'C')
         ;
 
-        self::assertSame('S', $origin->base());
-        self::assertSame($shared, $origin->shares(new SchemaLocation($file, $part)));
+        self::assertSame(['A', 'C'], $origin->variants());
+        self::assertSame('C', $origin->variant());
+        self::assertSame($variants, $origin->variantsOf(new SchemaLocation($file, $part)));
     }
 
     /**
-     * @return iterable<string, array{0: string, 1: bool, 2?: string}>
+     * @return iterable<string, array{0: string, 1: list<string>|null, 2?: string}>
      */
     public static function parts(): iterable
     {
-        yield 'the schema' => [self::S, true];
-        yield 'a variant' => [self::S . '/x-dto-variant/1/0', true];
-        yield 'another member' => [self::S . '/allOf/0', true];
-        yield 'a member numbered alike' => [self::S . '/allOf/10', true];
-        yield 'a property' => [self::S . '/properties/meta', true];
-        yield 'the first union' => [self::S . '/allOf/1', false];
-        yield 'an inline variant' => [self::S . '/allOf/1/anyOf/0', false];
-        yield 'the second union' => [self::S . '/allOf/3/oneOf/2', false];
-        yield 'another schema named alike' => [self::S . '2/allOf/0', false];
-        yield 'elsewhere' => ['/components/schemas/A', false];
-        yield 'another file' => [self::S . '/allOf/0', false, '/other.yaml'];
+        yield 'the schema' => [self::S, []];
+        yield 'another member' => [self::S . '/allOf/0', []];
+        yield 'a member numbered alike' => [self::S . '/allOf/10/properties/p', []];
+        yield 'a property' => [self::S . '/properties/meta', []];
+        yield 'a property of the first variant' => [self::S . '/allOf/1/anyOf/0/properties/q', ['A']];
+        yield 'a part of the second variant' => [self::S . '/allOf/1/anyOf/0/x-dto-variant/0/1/properties/r', ['A', 'C']];
+        yield 'another variant of the first union' => [self::S . '/allOf/1/anyOf/1/properties/q', []];
+        yield 'another schema named alike' => [self::S . '2/allOf/0', null];
+        yield 'elsewhere' => ['/components/schemas/A', null];
+        yield 'another file' => [self::S . '/allOf/0', null, '/other.yaml'];
+    }
+
+    public function testHasNoVariantAtTheRoot(): void
+    {
+        $origin = new VariantOrigin(new SchemaLocation('/api.yaml', self::S));
+
+        self::assertNull($origin->variant());
+        self::assertSame([], $origin->variants());
+        self::assertSame([], $origin->variantsOf(new SchemaLocation('/api.yaml', self::S . '/allOf/1/anyOf/0')));
+    }
+
+    public function testStopsAtTheFirstVariantAPartDoesNotComeWith(): void
+    {
+        $origin = (new VariantOrigin(new SchemaLocation('/api.yaml', self::S)))
+            ->withVariant(new SchemaLocation('/api.yaml', self::S . '/allOf/1'), new SchemaLocation('/api.yaml', self::S . '/allOf/1/anyOf/0'), 'A')
+            ->withVariant(new SchemaLocation('/api.yaml', self::S . '/allOf/2'), new SchemaLocation('/api.yaml', self::S . '/allOf/2/anyOf/1'), 'C')
+        ;
+
+        self::assertSame([], $origin->variantsOf(new SchemaLocation('/api.yaml', self::S . '/allOf/2/anyOf/1/properties/p')));
     }
 
     public function testTellsAVariantByItsLocation(): void
     {
         self::assertTrue(VariantOrigin::isVariant(new SchemaLocation('/api.yaml', self::S . '/x-dto-variant/0/1')));
         self::assertTrue(VariantOrigin::isVariant(new SchemaLocation('/api.yaml', self::S . '/x-dto-variant/0/1/properties/p')));
+        self::assertTrue(VariantOrigin::isVariant(new SchemaLocation('/api.yaml', self::S . '/x-dto-variant')));
         self::assertFalse(VariantOrigin::isVariant(new SchemaLocation('/api.yaml', self::S . '/x-dto-variants/0')));
         self::assertFalse(VariantOrigin::isVariant(new SchemaLocation('/api.yaml', self::S . '/properties/x-dto-variant-of')));
         self::assertFalse(VariantOrigin::isVariant(new SchemaLocation('/api.yaml', self::S . '/properties/my-x-dto-variant/0')));
-        self::assertTrue(VariantOrigin::isVariant(new SchemaLocation('/api.yaml', self::S . '/x-dto-variant')));
     }
 }
