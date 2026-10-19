@@ -11,6 +11,7 @@ use MSSTC4PHP\DtoGenerator\Application\Port\DocumentLoadFailed;
 use MSSTC4PHP\DtoGenerator\Application\Port\RemoteDocuments;
 use MSSTC4PHP\DtoGenerator\Application\Port\RemoteRequest;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\SchemaParser;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\UnionDistribution;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
 use MSSTC4PHP\DtoGenerator\Domain\Exception\InvalidModel;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\JsonPointer;
@@ -107,7 +108,8 @@ final class Action
 
         $this->followKeywordReferences($graph, $input, $diagnostics, $reads);
 
-        return new Output($graph->build($diagnostics), $diagnostics, $reads->documents(), $reads->readsRemote() ? $config->remoteRefs()->cacheDir() : null);
+        // Every later stage sees an allOf of a union of objects as the union of the objects it makes.
+        return new Output(UnionDistribution::of($graph->build($diagnostics), $diagnostics), $diagnostics, $reads->documents(), $reads->readsRemote() ? $config->remoteRefs()->cacheDir() : null);
     }
 
     /**

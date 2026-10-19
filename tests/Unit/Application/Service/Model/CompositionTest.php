@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Tests\Unit\Application\Service\Model;
 
+use LogicException;
 use MSSTC4PHP\DtoGenerator\Application\Service\Model\Build\BuiltEnum;
 use MSSTC4PHP\DtoGenerator\Application\Service\Model\Build\Output;
 use MSSTC4PHP\DtoGenerator\Domain\Model\PropertyModel;
 use MSSTC4PHP\DtoGenerator\Domain\Target\AllOfStrategy;
+use MSSTC4PHP\DtoGenerator\Tests\Support\GraphFixture;
 use MSSTC4PHP\DtoGenerator\Tests\Support\ModelFixture;
 use PHPUnit\Framework\TestCase;
 
@@ -508,6 +510,324 @@ final class CompositionTest extends TestCase
         ], AllOfStrategy::EXTENDS, 'Narrow'];
     }
 
+    /**
+     * @dataProvider strategies
+     */
+    public function testWritesAnAllOfOfAUnionOfObjectsAsTheUnionOfItsVariants(string $strategy): void
+    {
+        $object = static fn (array $properties): array => ['type' => 'object', 'properties' => $properties];
+        $output = ModelFixture::build([
+            'A' => $object(['a' => ['type' => 'string']]),
+            'B' => $object(['b' => ['type' => 'integer']]),
+            'Event' => ['anyOf' => [['$ref' => '#/components/schemas/A'], ['$ref' => '#/components/schemas/B']]],
+            'Stream' => ['allOf' => [['$ref' => '#/components/schemas/Event'], $object(['stream_id' => ['type' => 'string']])]],
+            'Outer' => ['allOf' => [['$ref' => '#/components/schemas/Stream'], $object(['more' => ['type' => 'string']])]],
+            'Holder' => $object([
+                'stream' => ['$ref' => '#/components/schemas/Stream'],
+                'inline' => ['allOf' => [$object(['x' => ['type' => 'string']]), ['$ref' => '#/components/schemas/Event'], ['required' => ['x']]]],
+            ]),
+            'Named' => [
+                'x-php-class-name' => 'Renamed',
+                'required' => ['n'],
+                'properties' => ['n' => ['type' => 'string']],
+                'allOf' => [['oneOf' => [['$ref' => '#/components/schemas/A'], $object(['e' => ['type' => 'string']]) + ['title' => 'Extra'], $object(['o' => ['type' => 'string']])]]],
+            ],
+        ], [], ['*'], $strategy);
+        $extends = $strategy === AllOfStrategy::EXTENDS;
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(
+            [
+                'App\\Dto\\A' => ['a: string|null'],
+                'App\\Dto\\B' => ['b: int|null'],
+                'App\\Dto\\Holder' => ['stream: App\\Dto\\StreamA|App\\Dto\\StreamB|null', 'inline: App\\Dto\\HolderInlineA|App\\Dto\\HolderInlineB|null'],
+                'App\\Dto\\StreamA' => $extends ? ['stream_id: string|null'] : ['a: string|null', 'stream_id: string|null'],
+                'App\\Dto\\StreamB' => $extends ? ['stream_id: string|null'] : ['b: int|null', 'stream_id: string|null'],
+                'App\\Dto\\RenamedA' => $extends ? ['n: string'] : ['a: string|null', 'n: string'],
+                'App\\Dto\\RenamedExtra' => ['e: string|null', 'n: string'],
+                'App\\Dto\\RenamedOption3' => ['o: string|null', 'n: string'],
+                'App\\Dto\\OuterStreamA' => $extends ? ['more: string|null'] : ['a: string|null', 'stream_id: string|null', 'more: string|null'],
+                'App\\Dto\\OuterStreamB' => $extends ? ['more: string|null'] : ['b: int|null', 'stream_id: string|null', 'more: string|null'],
+                'App\\Dto\\HolderInlineA' => $extends ? ['x: string'] : ['x: string', 'a: string|null'],
+                'App\\Dto\\HolderInlineB' => $extends ? ['x: string'] : ['x: string', 'b: int|null'],
+            ],
+            ModelFixture::classes($output),
+        );
+        if ($extends) {
+            $hierarchy = ModelFixture::hierarchy($output);
+            self::assertSame('open extends App\\Dto\\A', $hierarchy['App\\Dto\\StreamA']);
+            self::assertSame('final extends App\\Dto\\StreamB', $hierarchy['App\\Dto\\OuterStreamB']);
+            self::assertSame('final extends App\\Dto\\B', $hierarchy['App\\Dto\\HolderInlineB']);
+        }
+    }
+
+    public function testNamesWhatVariantsShareAfterTheirSchema(): void
+    {
+        $object = static fn (array $properties): array => ['type' => 'object', 'properties' => $properties];
+        $output = ModelFixture::build([
+            'A' => $object(['a' => ['type' => 'string']]),
+            'B' => $object(['b' => ['type' => 'integer']]),
+            'S' => ['allOf' => [
+                ['anyOf' => [['$ref' => '#/components/schemas/A'], $object(['own' => $object(['o' => ['type' => 'string']])])]],
+                $object(['meta' => $object(['m' => ['type' => 'string']]), 'kind' => ['type' => 'string', 'enum' => ['x', 'y']]]),
+            ]],
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(['meta: App\\Dto\\SMeta|null', 'kind: App\\Dto\\SKind|null'], ModelFixture::classes($output)['App\\Dto\\SA']);
+        self::assertSame(['own: App\\Dto\\SOption2Own|null', 'meta: App\\Dto\\SMeta|null', 'kind: App\\Dto\\SKind|null'], ModelFixture::classes($output)['App\\Dto\\SOption2']);
+    }
+
+    public function testStopsWhereAUnionLeadsBackToItself(): void
+    {
+        $at = self::AT;
+        $object = static fn (array $properties): array => ['type' => 'object', 'properties' => $properties];
+        $ref = static fn (string $name): array => ['$ref' => '#/components/schemas/' . $name];
+        $error = 'An allOf member of a class must be an object schema, not a oneOf or anyOf: no class adds properties to each variant.';
+        $output = ModelFixture::build([
+            'A' => $object(['a' => ['type' => 'string']]),
+            'C' => $object(['c' => ['type' => 'string']]),
+            'Self' => ['anyOf' => [$ref('Self'), $ref('A')]],
+            'OnSelf' => ['allOf' => [$ref('Self'), $object(['x' => ['type' => 'string']])]],
+            'V' => ['anyOf' => [$ref('W'), $ref('A')]],
+            'W' => ['anyOf' => [$ref('V'), $ref('C')]],
+            'OnPair' => ['allOf' => [['anyOf' => [$ref('V'), $object(['y' => ['type' => 'string']])]], $object(['x' => ['type' => 'string']])]],
+        ]);
+
+        self::assertSame(["error {$at}OnSelf/allOf/0: {$error}", "error {$at}OnPair/allOf/0/anyOf/0: {$error}"], ModelFixture::messages($output));
+        self::assertSame(['App\\Dto\\A', 'App\\Dto\\C', 'App\\Dto\\OnSelf', 'App\\Dto\\OnPairV', 'App\\Dto\\OnPairOption2'], array_keys(ModelFixture::classes($output)));
+    }
+
+    public function testNamesWhatVariantsShareAfterTheSchemaTheyComeFromThroughEveryRound(): void
+    {
+        $at = self::AT;
+        $object = static fn (array $properties): array => ['type' => 'object', 'properties' => $properties];
+        $ref = static fn (string $name): array => ['$ref' => '#/components/schemas/' . $name];
+        $output = ModelFixture::build([
+            'A' => $object(['a' => ['type' => 'string']]),
+            'B' => $object(['b' => ['type' => 'integer']]),
+            'C' => $object(['c' => ['type' => 'string']]),
+            'D' => $object(['d' => ['type' => 'string']]),
+            'T' => ['allOf' => [['anyOf' => [$ref('C'), $ref('D')]], $object(['t' => ['type' => 'string']])]],
+            'S' => ['allOf' => [$ref('T'), ['anyOf' => [$ref('A'), $ref('B')]], $object(['meta' => $object(['m' => ['type' => 'string']])])]],
+            'My Thing' => [
+                'type' => 'object',
+                'properties' => ['meta' => $object(['m' => ['type' => 'string']])],
+                'additionalProperties' => $object(['v' => ['type' => 'string']]),
+                'allOf' => [['anyOf' => [$ref('A'), $ref('B')]]],
+            ],
+            'SA' => $object(['z' => ['type' => 'string']]),
+            'Taken' => ['allOf' => [['anyOf' => [$ref('A'), $ref('B')]], $object(['x' => ['type' => 'string']])], 'x-php-class-name' => 'S'],
+        ]);
+        $classes = ModelFixture::classes($output);
+
+        self::assertSame(["error {$at}Taken/x-dto-variant/0/0: Class App\\Dto\\SA is already generated from {$at}SA; set \"x-php-class-name\" on one of them (on the schema this one is distributed from or on a referenced variant, or a \"title\" on an inline one)."], ModelFixture::messages($output));
+        foreach (['SATC', 'SATD', 'SBTC', 'SBTD'] as $variant) {
+            self::assertContains('meta: App\\Dto\\SMeta|null', $classes['App\\Dto\\' . $variant]);
+        }
+
+        foreach (['MyThingA', 'MyThingB'] as $variant) {
+            self::assertSame(['meta: App\\Dto\\MyThingMeta|null', 'additionalProperties: array<array-key, App\\Dto\\MyThingAdditionalProperty>'], $classes['App\\Dto\\' . $variant]);
+        }
+    }
+
+    public function testNamesEveryClassOfANestedDistributionOnce(): void
+    {
+        $object = static fn (array $properties): array => ['type' => 'object', 'properties' => $properties];
+        $ref = static fn (string $name): array => ['$ref' => '#/components/schemas/' . $name];
+        $output = ModelFixture::build([
+            'A' => $object(['a' => ['type' => 'string']]),
+            'B' => $object(['b' => ['type' => 'string']]),
+            'C' => $object(['c' => ['type' => 'string']]),
+            'D' => $object(['d' => ['type' => 'string']]),
+            'U1' => ['anyOf' => [$ref('U2'), $ref('A')]],
+            'U2' => ['anyOf' => [$ref('U3'), $ref('B')]],
+            'U3' => ['anyOf' => [$ref('C'), $ref('D')]],
+            'S' => ['allOf' => [$ref('U1'), $object(['e' => $object(['ee' => ['type' => 'string']])])]],
+            'T' => ['allOf' => [$ref('S'), $object(['t' => ['type' => 'string']])]],
+            'ZS' => ['allOf' => [$ref('S'), $object(['z' => ['type' => 'string']])]],
+            'Holder' => $object([
+                'p' => ['allOf' => [['anyOf' => [$ref('A'), $ref('U3')]], $object(['e' => $object(['ee' => ['type' => 'string']])])]],
+                'list' => ['type' => 'array', 'items' => ['allOf' => [['anyOf' => [$ref('A'), $object(['x' => ['type' => 'string']]) + ['title' => 'extra item']]], $object(['e' => $object(['ee' => ['type' => 'string']])])]]],
+            ]),
+            'Batch' => ['type' => 'array', 'items' => ['allOf' => [['anyOf' => [$ref('A'), $ref('B')]], $object(['e' => $object(['ee' => ['type' => 'string']])])]]],
+            'Uses' => $object(['batch' => $ref('Batch')]),
+            'Inner' => ['allOf' => [
+                ['anyOf' => [['title' => 'X', 'type' => 'object', 'properties' => ['q' => $object(['qq' => ['type' => 'string']])], 'allOf' => [['anyOf' => [$ref('C'), $ref('D')]]]], $ref('B')]],
+                $object(['i' => ['type' => 'string']]),
+            ]],
+        ]);
+        $classes = ModelFixture::classes($output);
+
+        self::assertSame([], ModelFixture::messages($output));
+        foreach (['TSA', 'TSU2B', 'TSU2U3C', 'TSU2U3D'] as $class) {
+            self::assertSame(['t: string|null'], $classes['App\\Dto\\' . $class]);
+        }
+
+        self::assertSame(['z: string|null'], $classes['App\\Dto\\ZSSA']);
+        foreach (['SA', 'SU2B', 'SU2U3C', 'SU2U3D'] as $class) {
+            self::assertSame(['e: App\\Dto\\SE|null'], $classes['App\\Dto\\' . $class]);
+        }
+
+        self::assertSame(['p: App\\Dto\\HolderPA|App\\Dto\\HolderPU3C|App\\Dto\\HolderPU3D|null', 'list: list<App\\Dto\\HolderListItemA|App\\Dto\\HolderListItemExtraItem>|null'], $classes['App\\Dto\\Holder']);
+        self::assertSame(['e: App\\Dto\\HolderListItemE|null'], $classes['App\\Dto\\HolderListItemA']);
+        self::assertSame(['x: string|null', 'e: App\\Dto\\HolderListItemE|null'], $classes['App\\Dto\\HolderListItemExtraItem']);
+
+        foreach (['BatchItemA', 'BatchItemB'] as $class) {
+            self::assertSame(['e: App\\Dto\\BatchItemE|null'], $classes['App\\Dto\\' . $class]);
+        }
+
+        foreach (['HolderPA', 'HolderPU3C', 'HolderPU3D'] as $class) {
+            self::assertSame(['e: App\\Dto\\HolderPE|null'], $classes['App\\Dto\\' . $class]);
+        }
+
+        self::assertSame(['c: string|null', 'q: App\\Dto\\InnerXQ|null', 'i: string|null'], $classes['App\\Dto\\InnerXC']);
+        self::assertSame(['d: string|null', 'q: App\\Dto\\InnerXQ|null', 'i: string|null'], $classes['App\\Dto\\InnerXD']);
+    }
+
+    /**
+     * @dataProvider variantOrders
+     *
+     * @param list<array<array-key, mixed>> $variants
+     * @param list<string> $classes the variant classes, the classes of what they share last
+     */
+    public function testNamesWhatVariantsShareAlikeInAnyOrder(array $variants, array $classes, bool $inline = false): void
+    {
+        $object = static fn (array $properties): array => ['type' => 'object', 'properties' => $properties];
+        $common = $object(['e' => $object(['ee' => ['type' => 'string']])]);
+        $shared = $classes[count($classes) - 1];
+        foreach ([$variants, array_reverse($variants)] as $order) {
+            $schema = ['allOf' => [['anyOf' => $order], $common]];
+            $output = ModelFixture::build([
+                'List' => $object(['l' => ['type' => 'string']]),
+                'B' => $object(['b' => ['type' => 'string']]),
+                'A' => $object(['a' => ['type' => 'string']]) + ['x-php-class-name' => 'Aye'],
+            ] + ($inline ? ['H' => $object(['p' => $schema])] : ['S' => $schema]));
+            $generated = ModelFixture::classes($output);
+
+            self::assertSame([], ModelFixture::messages($output));
+            foreach (array_slice($classes, 0, -1) as $class) {
+                self::assertContains("e: App\\Dto\\{$shared}|null", $generated['App\\Dto\\' . $class]);
+            }
+        }
+    }
+
+    /**
+     * @return iterable<string, array{0: list<array<array-key, mixed>>, 1: list<string>, 2?: bool}>
+     */
+    public static function variantOrders(): iterable
+    {
+        $titled = static fn (string $title, string $property): array => ['type' => 'object', 'title' => $title, 'properties' => [$property => ['type' => 'string']]];
+        $ref = static fn (string $name): array => ['$ref' => '#/components/schemas/' . $name];
+
+        yield 'a reserved word' => [[$ref('List'), $ref('B')], ['SList', 'SB', 'SE']];
+        yield 'a class name of the variant' => [[$ref('A'), $ref('B')], ['SAye', 'SB', 'SE']];
+        yield 'a leading digit' => [[$titled('2fa', 'x'), $ref('B')], ['HP2fa', 'HPB', 'HPE'], true];
+        yield 'names without letters' => [[$titled('+', 'x'), $titled('-', 'y')], ['SOption1', 'SOption2', 'SE']];
+        yield 'names alike as class names' => [[$titled('foo bar', 'x'), $titled('foo-bar', 'y')], ['SOption1', 'SOption2', 'SE']];
+    }
+
+    public function testStartsTheNamesOfVariantsWithTheClassNameOfTheirSchema(): void
+    {
+        $object = static fn (array $properties): array => ['type' => 'object', 'properties' => $properties];
+        $output = ModelFixture::build([
+            'A' => $object(['a' => ['type' => 'string']]),
+            'B' => $object(['b' => ['type' => 'string']]),
+            'S' => ['x-php-class-name' => 'My_Dto', 'allOf' => [['anyOf' => [['$ref' => '#/components/schemas/A'], ['$ref' => '#/components/schemas/B']]], $object(['e' => $object(['ee' => ['type' => 'string']])])]],
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(['App\\Dto\\A', 'App\\Dto\\B', 'App\\Dto\\My_DtoA', 'App\\Dto\\My_DtoB', 'App\\Dto\\MyDtoE'], array_keys(ModelFixture::classes($output)));
+
+        $reserved = ModelFixture::build([
+            'S' => ['x-php-class-name' => 'Se', 'allOf' => [['anyOf' => [$object(['a' => ['type' => 'string']]) + ['title' => 'lf'], $object(['b' => ['type' => 'string']]) + ['title' => 'b']]], $object(['e' => ['type' => 'string']])]],
+        ]);
+
+        self::assertSame([], ModelFixture::messages($reserved));
+        self::assertSame(['App\\Dto\\SeLf_', 'App\\Dto\\SeB'], array_keys(ModelFixture::classes($reserved)));
+    }
+
+    public function testNamesVariantsWithTheSameTitleByPosition(): void
+    {
+        $object = static fn (array $properties): array => ['type' => 'object', 'properties' => $properties];
+        $output = ModelFixture::build([
+            'S' => ['x-php-class-name' => 'Renamed', 'allOf' => [
+                ['oneOf' => [$object(['p' => ['type' => 'string']]) + ['title' => 'T'], $object(['q' => ['type' => 'string']]) + ['title' => 'T'], $object(['r' => ['type' => 'string']]) + ['title' => 'u']]],
+                $object(['x' => ['type' => 'string']]),
+            ]],
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(['App\\Dto\\RenamedOption1', 'App\\Dto\\RenamedOption2', 'App\\Dto\\RenamedU'], array_keys(ModelFixture::classes($output)));
+    }
+
+    public function testReportsAClassNameOfADistributedSchemaThatIsNoIdentifier(): void
+    {
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessage(self::AT . 'S/x-php-class-name: "x-php-class-name" must be a PHP identifier that is not a reserved word.');
+
+        $object = static fn (array $properties): array => ['type' => 'object', 'properties' => $properties];
+        GraphFixture::load([
+            'A' => $object(['a' => ['type' => 'string']]),
+            'S' => ['x-php-class-name' => 'Sub\\Bad', 'allOf' => [['anyOf' => [['$ref' => '#/components/schemas/A'], $object(['q' => ['type' => 'string']])]], $object(['x' => ['type' => 'string']])]],
+        ]);
+    }
+
+    public function testKeepsWhatAppliesToTheWholeValueOnTheUnion(): void
+    {
+        $object = static fn (array $properties): array => ['type' => 'object', 'properties' => $properties];
+        $output = ModelFixture::views([
+            'A' => $object(['a' => ['type' => 'string']]),
+            'B' => $object(['b' => ['type' => 'integer']]),
+            'E' => ['anyOf' => [['$ref' => '#/components/schemas/A'], ['$ref' => '#/components/schemas/B']]],
+            'H' => $object([
+                'id' => ['type' => 'string'],
+                'alone' => ['allOf' => [['$ref' => '#/components/schemas/E']], 'readOnly' => true],
+            ]),
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(['id: string|null', 'alone: App\\Dto\\A|App\\Dto\\B|null'], ModelFixture::classes($output)['App\\Dto\\HRead']);
+        self::assertSame(['id: string|null'], ModelFixture::classes($output)['App\\Dto\\HWrite']);
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function strategies(): iterable
+    {
+        yield AllOfStrategy::EXTENDS => [AllOfStrategy::EXTENDS];
+        yield AllOfStrategy::MERGE => [AllOfStrategy::MERGE];
+    }
+
+    public function testLeavesAnAllOfOfAnotherUnionAsWritten(): void
+    {
+        $at = self::AT;
+        $object = static fn (array $properties): array => ['type' => 'object', 'properties' => $properties];
+        $union = ['anyOf' => [['$ref' => '#/components/schemas/A'], ['$ref' => '#/components/schemas/B']]];
+        $error = static fn (string $schema, int $member = 0): string => "error {$at}{$schema}/allOf/{$member}: An allOf member of a class must be an object schema, not a oneOf or anyOf: no class adds properties to each variant.";
+        $output = ModelFixture::build([
+            'A' => $object(['a' => ['type' => 'string']]),
+            'B' => $object(['b' => ['type' => 'integer']]),
+            'Scalars' => ['allOf' => [['oneOf' => [['type' => 'string'], $object(['c' => ['type' => 'string']])]], $object(['x' => ['type' => 'string']])]],
+            'Twice' => ['allOf' => [$union, $union, $object(['x' => ['type' => 'string']])]],
+            'Required' => ['allOf' => [$union + ['required' => ['a']], $object(['x' => ['type' => 'string']])]],
+            'Typed' => ['allOf' => [['type' => 'string'] + $union, $object(['x' => ['type' => 'string']])]],
+            'Itself' => ['allOf' => [['anyOf' => [['$ref' => '#/components/schemas/A'], ['$ref' => '#/components/schemas/Itself']]], $object(['x' => ['type' => 'string']])]],
+            'Back' => ['allOf' => [['anyOf' => [['$ref' => '#/components/schemas/Through'], ['$ref' => '#/components/schemas/B']]], $object(['x' => ['type' => 'string']])]],
+            'Through' => ['allOf' => [['$ref' => '#/components/schemas/Back'], $object(['t' => ['type' => 'string']])]],
+            'Nested' => ['allOf' => [['anyOf' => [['$ref' => '#/components/schemas/A'], ['anyOf' => [['$ref' => '#/components/schemas/Nested']]]]], $object(['x' => ['type' => 'string']])]],
+            'Nullable' => ['allOf' => [['anyOf' => [['$ref' => '#/components/schemas/A'], ['type' => 'null']]], $object(['x' => ['type' => 'string']])]],
+            'Mixed' => ['allOf' => [$union, ['oneOf' => [['type' => 'string'], ['type' => 'integer']]], $object(['x' => ['type' => 'string']])]],
+            'Both' => ['allOf' => [['oneOf' => [['$ref' => '#/components/schemas/A']], 'anyOf' => [['$ref' => '#/components/schemas/B']]], $object(['x' => ['type' => 'string']])]],
+            'Skipped' => ['x-php-skip' => true, 'allOf' => [$union, $object(['x' => ['type' => 'string']])]],
+            'Holder' => $object(['skipped' => ['$ref' => '#/components/schemas/Skipped']]),
+        ]);
+
+        self::assertSame([$error('Scalars'), $error('Twice'), $error('Twice', 1), $error('Required'), $error('Typed'), $error('Itself'), $error('Back'), $error('Nested'), $error('Nullable'), $error('Mixed'), $error('Mixed', 1), $error('Both'), "warning {$at}Holder/properties/skipped: \$ref points to a schema excluded by \"x-php-skip\"."], ModelFixture::messages($output));
+        self::assertSame(['skipped: mixed'], ModelFixture::classes($output)['App\\Dto\\Holder']);
+    }
+
     public function testMeetsNoClassWithOneOfAView(): void
     {
         $at = self::AT;
@@ -658,10 +978,6 @@ final class CompositionTest extends TestCase
             ],
             'member that is a plain union' => [
                 ['Either' => ['oneOf' => [['type' => 'string'], ['type' => 'integer']]], 'Cat' => ['allOf' => [['$ref' => '#/components/schemas/Either'], $lives]]],
-                ["error {$at}Cat/allOf/0: An allOf member of a class must be an object schema, not a oneOf or anyOf: no class adds properties to each variant."],
-            ],
-            'member that is a union of objects' => [
-                ['Pet' => $pet, 'Cat' => ['allOf' => [['anyOf' => [self::PET, ['type' => 'object', 'properties' => ['x' => []]]]], $lives]]],
                 ["error {$at}Cat/allOf/0: An allOf member of a class must be an object schema, not a oneOf or anyOf: no class adds properties to each variant."],
             ],
             'redeclared inherited property' => [

@@ -32,6 +32,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Schema\Discriminator;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\ResolvedSchema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaGraph;
+use MSSTC4PHP\DtoGenerator\Domain\Schema\VariantOrigin;
 
 /**
  * Turns the schema graph into the IR: one class per object schema and one enum per enum schema, including schemas
@@ -114,7 +115,7 @@ final class Action
 
         // Only once every named schema holds its name, so a derived or titled inline name never takes one.
         foreach ($aliases as [$alias, $aliasName, $source]) {
-            $this->hoistFromAlias($alias, $aliasName, $config->sources()[$source]->namespace(), $source, $registry, $enums, $diagnostics);
+            $this->hoistFromAlias($alias, $aliasName, $config->sources()[$source]->namespace(), $source, $registry, $enums, $diagnostics, $input->graph());
         }
 
         // The inline variants of a named discriminated union are classes of their own, extending it.
@@ -378,25 +379,34 @@ final class Action
         }
 
         $excluded = $registry->excluded($owner, $composition);
+        // A part every variant of a distributed allOf shares names its classes after the schema it comes from.
+        $origin = $graph->originOf($owner->location());
+        $root = $origin instanceof VariantOrigin ? $this->rootOf($origin, $registry->baseOf($ownerName)) : null;
+        $baseOf = function (Schema $part) use ($origin, $root, $registry, $ownerName): string {
+            $variants = $origin instanceof VariantOrigin && $root !== null ? $origin->variantsOf($part->location()) : null;
+            $shared = $variants === null ? null : $root . $this->variantSuffix($variants);
+
+            return $shared ?? $registry->baseOf($ownerName);
+        };
         foreach ($composition->ownParts() as $part) {
             foreach ($part->propertyNames() as $wireName) {
                 $property = $part->requireProperty($wireName);
                 if (($kept[$wireName] ?? false) && !isset($excluded[$wireName])) {
                     $base = $this->names->className($wireName);
-                    $candidates[] = [$property, $base === null ? null : $registry->baseOf($ownerName) . $base, $wireName];
+                    $candidates[] = [$property, $base === null ? null : $baseOf($property) . $base, $wireName];
                 }
             }
         }
 
         $additional = $owner->additionalProperties();
         if ($additional instanceof Schema && $registry->admits($owner, $additional)) {
-            $candidates[] = [$additional, $registry->baseOf($ownerName) . 'AdditionalProperty', 'additionalProperties'];
+            $candidates[] = [$additional, $baseOf($additional) . 'AdditionalProperty', 'additionalProperties'];
         }
 
         $namespace = $ownerName->namespace();
         $objects = [];
         foreach ($candidates as [$schema, $baseName, $wireName]) {
-            foreach ($this->inlines($schema, '', $diagnostics, $registry) as [$candidate, $suffix, $title]) {
+            foreach ($this->inlines($schema, '', $diagnostics, $registry, $graph) as [$candidate, $suffix, $title]) {
                 // The inline objects at one place of a property in several members of an allOf all apply: one class.
                 $declared = $objects[$wireName][$suffix] ?? null;
                 $object = SchemaShape::isClass($candidate);
@@ -411,6 +421,28 @@ final class Action
                 }
             }
         }
+    }
+
+    /**
+     * What the names of the variants taken add to a class name; the names of a variant class and of what it shares end
+     * with it alike.
+     *
+     * @param list<string> $variants
+     */
+    private function variantSuffix(array $variants): string
+    {
+        return implode('', array_map(fn (string $variant): string => (string) $this->names->pascalCase($variant), $variants));
+    }
+
+    /**
+     * The name of the classes of the schema a variant was distributed from: the variant class's without the names of the
+     * variants it took, which its name ends with; null when it does not (an x-php-class-name of the variant's own).
+     */
+    private function rootOf(VariantOrigin $origin, string $ownBase): ?string
+    {
+        $taken = $this->variantSuffix($origin->variants());
+
+        return substr($ownBase, -strlen($taken)) === $taken ? (string) substr($ownBase, 0, -strlen($taken)) : null;
     }
 
     /**
@@ -449,10 +481,10 @@ final class Action
      * A named non-object schema is inlined where it is used, but its inline objects and enums need a name of their own:
      * `<Alias>Item`, `<Alias>Value`, `<Alias>Option<N>`.
      */
-    private function hoistFromAlias(Schema $alias, string $aliasName, string $namespace, int $source, Registry $registry, EnumBuilder $enums, Diagnostics $diagnostics): void
+    private function hoistFromAlias(Schema $alias, string $aliasName, string $namespace, int $source, Registry $registry, EnumBuilder $enums, Diagnostics $diagnostics, SchemaGraph $graph): void
     {
         $base = $this->names->className($aliasName);
-        foreach ($this->inlines($alias, '', $diagnostics, $registry) as [$candidate, $suffix, $title]) {
+        foreach ($this->inlines($alias, '', $diagnostics, $registry, $graph) as [$candidate, $suffix, $title]) {
             $this->declareInline($candidate, $title, $base === null ? null : $base . $suffix, $aliasName, $namespace, $source, $registry, $enums, $diagnostics);
         }
     }
@@ -525,7 +557,7 @@ final class Action
      *
      * @return list<array{Schema, string, ?string}> schema, suffix of the derived name, name from the title
      */
-    private function inlines(Schema $schema, string $suffix, Diagnostics $diagnostics, Registry $registry): array
+    private function inlines(Schema $schema, string $suffix, Diagnostics $diagnostics, Registry $registry, SchemaGraph $graph): array
     {
         // x-php-type maps the whole value to an existing class, so nothing under it is generated.
         if ($schema->extensions()->has('x-php-type')) {
@@ -539,17 +571,17 @@ final class Action
         }
 
         if (SchemaShape::hasUnion($schema) && $schema->allOf() === [] && ($schema->propertyNames() === [] || SchemaShape::isDiscriminated($schema))) {
-            return $this->unionMembers($schema, $suffix, $diagnostics, $registry);
+            return $this->unionMembers($schema, $suffix, $diagnostics, $registry, $graph);
         }
 
         $items = $schema->items();
         if ($items instanceof Schema) {
-            return $this->inlines($items, $suffix . 'Item', $diagnostics, $registry);
+            return $this->inlines($items, $suffix . 'Item', $diagnostics, $registry, $graph);
         }
 
         $values = $schema->additionalProperties();
 
-        return $values instanceof Schema ? $this->inlines($values, $suffix . 'Value', $diagnostics, $registry) : [];
+        return $values instanceof Schema ? $this->inlines($values, $suffix . 'Value', $diagnostics, $registry, $graph) : [];
     }
 
     private function mapsInlineVariants(Schema $schema): bool
@@ -570,9 +602,11 @@ final class Action
     /**
      * Members are numbered across `oneOf` and then `anyOf`, as the type mapper joins them into one union.
      *
+     * A variant of a distributed allOf takes the name of the variant it holds.
+     *
      * @return list<array{Schema, string, ?string}>
      */
-    private function unionMembers(Schema $schema, string $suffix, Diagnostics $diagnostics, Registry $registry): array
+    private function unionMembers(Schema $schema, string $suffix, Diagnostics $diagnostics, Registry $registry, SchemaGraph $graph): array
     {
         $found = [];
         foreach (array_merge($schema->oneOf(), $schema->anyOf()) as $index => $member) {
@@ -587,7 +621,10 @@ final class Action
                 continue;
             }
 
-            foreach ($this->inlines($member, $suffix . 'Option' . ($index + 1), $diagnostics, $registry) as [$candidate, $candidateSuffix, $title]) {
+            $origin = $graph->originOf($member->location());
+            $name = $origin instanceof VariantOrigin ? $origin->variant() : null;
+            $variant = $name === null ? null : $this->names->pascalCase($name);
+            foreach ($this->inlines($member, $suffix . ($variant ?? 'Option' . ($index + 1)), $diagnostics, $registry, $graph) as [$candidate, $candidateSuffix, $title]) {
                 $found[] = [$candidate, $candidateSuffix, $candidate === $member ? $this->title($member) : $title];
             }
         }

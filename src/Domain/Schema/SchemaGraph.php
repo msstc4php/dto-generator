@@ -19,6 +19,9 @@ final class SchemaGraph
     /** @var array<string, string> */
     private array $edges;
 
+    /** @var array<string, VariantOrigin> by location key */
+    private array $origins = [];
+
     /**
      * @param list<ResolvedSchema> $schemas
      * @param array<string, string> $edges {@see ReferenceUse::key()} → location key of the schema it resolved to
@@ -41,6 +44,51 @@ final class SchemaGraph
         }
 
         $this->edges = $edges;
+    }
+
+    /**
+     * The graph with these schemas in place of those at their locations or beside them, and these references too.
+     *
+     * @param list<ResolvedSchema> $schemas
+     * @param array<string, string> $edges {@see ReferenceUse::key()} → location key of the schema it resolves to
+     * @param array<string, VariantOrigin> $origins location key → where a schema distributed from an allOf comes from
+     */
+    public function with(array $schemas, array $edges = [], array $origins = []): self
+    {
+        $given = [];
+        foreach ($schemas as $schema) {
+            $key = $schema->location()->toString();
+            if (isset($given[$key])) {
+                throw new InvalidModel(sprintf('Schema %s is given twice.', $key));
+            }
+
+            $given[$key] = $schema;
+        }
+
+        foreach (array_intersect_key($edges, $this->edges) as $use => $target) {
+            if ($this->edges[$use] !== $target) {
+                throw new InvalidModel(sprintf('Reference %s already points to %s.', $use, $this->edges[$use]));
+            }
+        }
+
+        $all = [];
+        foreach ($this->schemas as $key => $schema) {
+            $all[] = $given[$key] ?? $schema;
+        }
+
+        foreach (array_diff_key($given, $this->schemas) as $schema) {
+            $all[] = $schema;
+        }
+
+        $graph = new self($all, $edges + $this->edges);
+        $graph->origins = $origins + $this->origins;
+
+        return $graph;
+    }
+
+    public function originOf(SchemaLocation $location): ?VariantOrigin
+    {
+        return $this->origins[$location->toString()] ?? null;
     }
 
     public function get(SchemaLocation $location): ?ResolvedSchema

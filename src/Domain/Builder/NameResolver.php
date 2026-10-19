@@ -25,17 +25,25 @@ final class NameResolver
 
     public function className(string $schemaName): ?string
     {
-        $words = $this->words($schemaName);
-        if ($words === []) {
+        $words = $this->pascalCase($schemaName);
+        if ($words === null) {
             return null;
         }
 
-        $name = $this->guardDigit(implode('', array_map(
-            static fn (string $word): string => Identifier::asciiUpperFirst($word),
-            $words,
-        )));
+        $name = $this->guardDigit($words);
 
         return Identifier::isReserved($name) ? $name . '_' : $name;
+    }
+
+    /**
+     * The words of a name joined in PascalCase, as a part of a class name: no guard for a leading digit or a reserved
+     * word, which only a whole name needs.
+     */
+    public function pascalCase(string $name): ?string
+    {
+        $words = $this->words($name);
+
+        return $words === [] ? null : implode('', array_map(static fn (string $word): string => Identifier::asciiUpperFirst($word), $words));
     }
 
     public function propertyName(string $wireName): ?string
