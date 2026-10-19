@@ -186,7 +186,7 @@ final class FileDocumentLoaderTest extends TestCase
     public function testTellsAnErrorAfterRewritingKeys(): void
     {
         $this->expectException(DocumentLoadFailed::class);
-        $this->expectExceptionMessage('Keys written after "?" were rewritten first.');
+        $this->expectExceptionMessage('Keys written after "?" were rewritten first, so the text quoted is the rewritten one.');
 
         (new FileDocumentLoader())->load($this->file('rewritten.yaml', "? k\n: v\nbad: [\n"));
     }

@@ -44,10 +44,6 @@ final class DocumentDecoder
             throw UndecodableDocument::notAnObject();
         }
 
-        if (!$json) {
-            $this->checkSize($decoded, $content);
-        }
-
         return $decoded;
     }
 
@@ -74,34 +70,52 @@ final class DocumentDecoder
     private function yaml(string $content)
     {
         try {
-            return $this->parse($content);
+            $decoded = $this->parse($content);
         } catch (ParseException $exception) {
-            // symfony/yaml reads no key after "?", which generators write for long keys (Twilio); it fails on them with
-            // one message or another.
-            $rewritten = preg_match('/^[ \t]*\?[ \t]/m', $content) === 1 ? ExplicitYamlKeys::rewrite($content) : $content;
-            if ($rewritten === $content) {
-                throw $exception;
-            }
-
-            try {
-                $decoded = $this->parse($rewritten);
-            } catch (ParseException $failure) {
-                throw UndecodableDocument::malformed(ExplicitYamlKeys::withoutMarks($failure->getMessage()) . ' Keys written after "?" were rewritten first.');
-            }
-
-            // Taking the marks off walks every value an alias repeats: the size is checked first.
-            if (is_array($decoded)) {
-                $this->checkSize($decoded, $content);
-            }
-
-            // A line taken for a pair that was part of something else leaves its key unread: the document stays rejected.
-            $restored = is_array($decoded) ? ExplicitYamlKeys::restore($decoded, $rewritten) : null;
-            if ($restored === null) {
-                throw $exception;
-            }
-
-            return $restored;
+            return $this->withKeysAfterQuestionMarks($content, $exception);
         }
+
+        if (is_array($decoded)) {
+            $this->checkSize($decoded, $content);
+        }
+
+        return $decoded;
+    }
+
+    /**
+     * symfony/yaml reads no key after "?", which generators write for long keys (Twilio); it fails on them with one
+     * message or another. A text it would read otherwise than it means stays rejected with the first error.
+     *
+     * @return array<array-key, mixed>
+     *
+     * @throws ParseException
+     * @throws UndecodableDocument
+     */
+    private function withKeysAfterQuestionMarks(string $content, ParseException $exception): array
+    {
+        $rewritten = preg_match('/^[ \t]*\?[ \t]/m', $content) === 1 ? ExplicitYamlKeys::rewrite($content) : null;
+        if (!$rewritten instanceof RewrittenYaml) {
+            throw $exception;
+        }
+
+        try {
+            $decoded = $this->parse($rewritten->text());
+        } catch (ParseException $failure) {
+            throw UndecodableDocument::malformed($rewritten->withoutMarks($failure->getMessage()) . ' Keys written after "?" were rewritten first, so the text quoted is the rewritten one.');
+        }
+
+        if (!is_array($decoded)) {
+            throw $exception;
+        }
+
+        // Taking the marks off walks every value an alias repeats: the size is checked first.
+        $this->checkSize($decoded, $content);
+        $restored = $rewritten->restore($decoded);
+        if ($restored === null) {
+            throw $exception;
+        }
+
+        return $restored;
     }
 
     /**
