@@ -62,20 +62,40 @@ final class DocumentDecoder
     private function yaml(string $content)
     {
         try {
-            // Without PARSE_OBJECT symfony/yaml never instantiates "!php/object" tags.
-            return Yaml::parse($content);
+            return $this->parse($content);
         } catch (ParseException $exception) {
-            // symfony/yaml reads no key after "?", which generators write for long keys (Twilio).
-            if (strpos($exception->getMessage(), 'Complex mappings are not supported') === false) {
+            // symfony/yaml reads no key after "?", which generators write for long keys (Twilio); it fails on them with
+            // one message or another.
+            $rewritten = preg_match('/^[ \t]*\?[ \t]/m', $content) === 1 ? ExplicitYamlKeys::rewrite($content) : $content;
+            if ($rewritten === $content) {
                 throw $exception;
             }
 
             try {
-                return Yaml::parse(ExplicitYamlKeys::rewrite($content));
-            } catch (ParseException $rewritten) {
-                throw UndecodableDocument::malformed($rewritten->getMessage() . ' Keys written after "?" were rewritten first.');
+                $decoded = $this->parse($rewritten);
+            } catch (ParseException $failure) {
+                throw UndecodableDocument::malformed(ExplicitYamlKeys::withoutMarks($failure->getMessage()) . ' Keys written after "?" were rewritten first.');
             }
+
+            // A line taken for a pair that was part of something else leaves its key unread: the document stays rejected.
+            $restored = is_array($decoded) ? ExplicitYamlKeys::restore($decoded, $rewritten) : null;
+            if ($restored === null) {
+                throw $exception;
+            }
+
+            return $restored;
         }
+    }
+
+    /**
+     * @return mixed
+     *
+     * @throws ParseException
+     */
+    private function parse(string $yaml)
+    {
+        // Without PARSE_OBJECT symfony/yaml never instantiates "!php/object" tags.
+        return Yaml::parse($yaml);
     }
 
     /**

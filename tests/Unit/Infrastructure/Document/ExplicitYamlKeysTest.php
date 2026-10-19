@@ -6,12 +6,13 @@ namespace MSSTC4PHP\DtoGenerator\Tests\Unit\Infrastructure\Document;
 
 use MSSTC4PHP\DtoGenerator\Infrastructure\Document\DocumentDecoder;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Document\ExplicitYamlKeys;
+use MSSTC4PHP\DtoGenerator\Infrastructure\Document\UndecodableDocument;
 use PHPUnit\Framework\TestCase;
-use Symfony\Component\Yaml\Exception\ParseException;
-use Symfony\Component\Yaml\Yaml;
 
 final class ExplicitYamlKeysTest extends TestCase
 {
+    private const MARK = "\u{E000}";
+
     /**
      * @dataProvider documents
      *
@@ -19,11 +20,7 @@ final class ExplicitYamlKeysTest extends TestCase
      */
     public function testReadsKeysWrittenAfterAQuestionMark(string $yaml, array $expected): void
     {
-        $rewritten = ExplicitYamlKeys::rewrite($yaml);
-
-        // One pass leaves nothing to rewrite, so the decoder reads the text as it is.
-        self::assertSame($rewritten, ExplicitYamlKeys::rewrite($rewritten));
-        self::assertSame($expected, (new DocumentDecoder())->decode($rewritten, false));
+        self::assertSame($expected, (new DocumentDecoder())->decode($yaml, false));
     }
 
     /**
@@ -39,7 +36,11 @@ final class ExplicitYamlKeysTest extends TestCase
         yield 'a folded block value' => ["? k\n: >-\n  a\n  b\n", ['k' => 'a b']];
         yield 'quoted keys' => ["? 'it''s: k'\n: 1\n? \"a \\\"b\\\"\"\n: 2\n", ["it's: k" => 1, 'a "b"' => 2]];
         yield 'comments after keys' => ["? k # note\n: 1\n? 'q' # note\n: 2\nn: 3\n", ['k' => 1, 'q' => 2, 'n' => 3]];
-        yield 'a key with signs' => ["? a/b c\\d.e-f\n: 1\n", ['a/b c\\d.e-f' => 1]];
+        yield 'a key with signs' => ["? a/b c\\d.e-f#g\n: 1\n", ['a/b c\\d.e-f#g' => 1]];
+        yield 'CRLF' => ["t: |\r\n  ? x\r\n  : y\r\nz:\r\n  ? k\r\n  :\r\n    v: 1\r\n", ['t' => "? x\n: y\n", 'z' => ['k' => ['v' => 1]]]];
+        yield 'a block after a dash' => ["l:\n  - |\n    ? x\n    : y\n? k\n: 1\n", ['l' => ["? x\n: y\n"], 'k' => 1]];
+        yield 'a block indicator in a value' => ["d: a ->\n? k\n: 1\n", ['d' => 'a ->', 'k' => 1]];
+        yield 'nested keys' => ["? a\n: ? b\n  : 1\n", ['a' => ['b' => 1]]];
         yield 'a keep block before a key' => ["a: |+\n  text\n? k\n: |\n  x\n", ['a' => "text\n", 'k' => "x\n"]];
         yield 'an anchored block' => ["t: &a |\n  ? x\n  : y\n? k\n: 1\nu: *a\n", ['t' => "? x\n: y\n", 'k' => 1, 'u' => "? x\n: y\n"]];
         yield 'an anchored block value' => ["? k\n: &b |\n  ? x\nu: *b\n", ['k' => "? x\n", 'u' => "? x\n"]];
@@ -52,10 +53,7 @@ final class ExplicitYamlKeysTest extends TestCase
         yield 'a block of a key in a sequence item' => ["l:\n  - a: |\n      t\n    ? k\n    : v\n", ['l' => [['a' => "t\n", 'k' => 'v']]]];
         yield 'a sibling key in a sequence item' => ["l:\n  - a: x\n    ? k\n    : v\n", ['l' => [['a' => 'x', 'k' => 'v']]]];
         yield 'a block after a comment holding a colon' => ["p: # see: |\n  ? k\n  : v\n", ['p' => ['k' => 'v']]];
-        yield 'CRLF' => ["t: |\r\n  ? x\r\n  : y\r\nz:\r\n  ? k\r\n  :\r\n    v: 1\r\n", ['t' => "? x\n: y\n", 'z' => ['k' => ['v' => 1]]]];
-        yield 'a block after a dash' => ["l:\n  - |\n    ? x\n    : y\n", ['l' => ["? x\n: y\n"]]];
-        yield 'a block indicator in a value' => ["d: a ->\n? k\n: 1\n", ['d' => 'a ->', 'k' => 1]];
-        yield 'nested keys' => ["? a\n: ? b\n  : 1\n", ['a' => ['b' => 1]]];
+        yield 'a block of a key holding a hash' => ["a#b: |\n  t:\n  ? x\n  : y\n'a # b': |\n  ? x\n? k\n: 1\n", ['a#b' => "t:\n? x\n: y\n", 'a # b' => "? x\n", 'k' => 1]];
     }
 
     /**
@@ -88,14 +86,82 @@ final class ExplicitYamlKeysTest extends TestCase
         yield 'a comment before the value line' => ["? k\n  # c\n: x: 1"];
         yield 'an empty line before the value line' => ["? k\n\n: a: 1"];
         yield 'a line of a multi-line scalar' => ["a: x\n  ? y\n  : z"];
-        yield 'a line of a multi-line quoted scalar' => ["a: \"x\n  ? y\n  : z\""];
+        yield 'a number' => ["? 0x1F\n: v"];
+        yield 'a boolean' => ["? true\n: v"];
+        yield 'null' => ["? ~\n: v"];
+        yield 'a document that is a block' => ["--- |\n? x\n: y"];
+    }
+
+    /**
+     * @dataProvider misread
+     */
+    public function testRejectsADocumentItWouldMisread(string $yaml): void
+    {
+        $this->expectException(UndecodableDocument::class);
+        $this->expectExceptionMessage('Complex mappings are not supported');
+
+        (new DocumentDecoder())->decode($yaml, false);
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function misread(): iterable
+    {
+        yield 'lines of a quoted scalar' => ["a: 'x\n  y\n  ? z\n  : w'\n? k\n: 1\n"];
+        yield 'lines of a quoted scalar after a colon' => ["a: 'x:\n  ? y\n  : z'\n? k\n: 1\n"];
+        yield 'lines of a double-quoted scalar' => ["a: \"x:\n  ? 'y'\n  : z\"\n? k\n: 1\n"];
+        yield 'lines of a quoted item' => ["l:\n  - 'a\n    b\n  ? c\n  : d'\n? k\n: 1\n"];
+        yield 'lines of a quoted scalar before a collection' => ["a: 'x\n  y\n  ? z\n  : - w'\n? k\n: 1\n"];
+        yield 'the mark itself' => ["a: \u{E000}\n? k\n: 1\n"];
+    }
+
+    public function testRejectsAnInvalidContinuationOfAScalar(): void
+    {
+        $this->expectException(UndecodableDocument::class);
+
+        (new DocumentDecoder())->decode("a: x\n  y\n  ? z\n  : w\n", false);
     }
 
     public function testKeepsTheLineNumbers(): void
     {
-        $this->expectException(ParseException::class);
-        $this->expectExceptionMessage('line 7');
+        $this->expectException(UndecodableDocument::class);
+        $this->expectExceptionMessageMatches('/line 7 .*rewritten first/');
 
-        Yaml::parse(ExplicitYamlKeys::rewrite("? a\n:\n  v: 1\n? b\n: |\n  x\n bad: [\n"));
+        (new DocumentDecoder())->decode("? a\n:\n  v: 1\n? b\n: |\n  x\n bad: [\n", false);
+    }
+
+    /**
+     * @dataProvider wrongMarks
+     *
+     * @param array<array-key, mixed> $decoded
+     */
+    public function testRefusesWhatHoldsAMarkOtherwiseThanAsAKeyOnce(array $decoded, string $rewritten): void
+    {
+        self::assertNull(ExplicitYamlKeys::restore($decoded, $rewritten));
+    }
+
+    /**
+     * @return iterable<string, array{array<array-key, mixed>, string}>
+     */
+    public static function wrongMarks(): iterable
+    {
+        $mark = self::MARK . '0' . self::MARK;
+
+        yield 'a mark missing' => [['k' => 1], $mark . 'k: 1'];
+        yield 'a mark twice' => [[$mark . 'k' => 1, 'n' => [$mark . 'k' => 2]], $mark . 'k: 1'];
+        yield 'a mark in a value' => [['a' => 'x' . $mark . 'k: 1'], $mark . 'k: 1'];
+        yield 'a mark in a nested value' => [['a' => ['b' => $mark . 'k']], $mark . 'k'];
+        yield 'a key twice' => [[$mark . 'k' => 1, 'k' => 2], $mark . 'k: 1'];
+        yield 'a mark inside a key' => [['a' . $mark . 'k' => 1], $mark . 'k: 1'];
+    }
+
+    public function testTakesTheMarksOff(): void
+    {
+        $first = self::MARK . '0' . self::MARK;
+        $second = self::MARK . '1' . self::MARK;
+
+        self::assertSame(['a' => ['k' => 1, 'n' => ['j' => 'v']]], ExplicitYamlKeys::restore(['a' => [$first . 'k' => 1, 'n' => [$second . 'j' => 'v']]], $first . $second));
+        self::assertSame('near "k"', ExplicitYamlKeys::withoutMarks('near "' . $first . 'k"'));
     }
 }
