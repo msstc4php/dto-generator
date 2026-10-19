@@ -6,6 +6,12 @@ All notable changes to this package are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- A property two `allOf` members give two classes is of the class whose `allOf` has the other (`allOf: [$ref: Wide,
+  …]`, also through its members' members and aliases), with either `allOfStrategy`, instead of an error; with a read
+  or write model view the classes do not meet.
+
 ### Added
 
 - `discoverExtensions: {exclude: [...]}` turns discovery on but leaves out the extensions of the packages it lists, or
