@@ -4,11 +4,17 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Tests\Unit\Application\Service\Model;
 
+use Closure;
 use MSSTC4PHP\DtoGenerator\Application\Config\ViewSuffixes;
+use MSSTC4PHP\DtoGenerator\Application\Service\Model\Build\BuiltClass;
+use MSSTC4PHP\DtoGenerator\Application\Service\Model\Build\Output;
 use MSSTC4PHP\DtoGenerator\Application\Service\Model\Build\Run;
 use MSSTC4PHP\DtoGenerator\Application\Service\Model\Build\View;
 use MSSTC4PHP\DtoGenerator\Application\Service\Model\Build\Views;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\ReadWriteMode;
+use MSSTC4PHP\DtoGenerator\Domain\Model\AttributeModel;
+use MSSTC4PHP\DtoGenerator\Domain\Model\ClassModel;
+use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaGraph;
 use MSSTC4PHP\DtoGenerator\Domain\Target\ReadWriteModels;
 use MSSTC4PHP\DtoGenerator\Tests\Support\ModelFixture;
@@ -87,6 +93,40 @@ final class ViewsTest extends TestCase
         self::assertSame([], ModelFixture::messages($merged));
         self::assertSame('open', ModelFixture::hierarchy($merged)['App\\Dto\\Tag']);
         self::assertSame('final extends App\\Dto\\Tag', ModelFixture::hierarchy($merged)['App\\Dto\\Sub']);
+    }
+
+    /**
+     * @dataProvider leftOutOfTheShape
+     *
+     * @param Closure(ClassModel): ClassModel $change
+     */
+    public function testReportsAnOpenClassThatDiffersInWhatItsShapeLeavesOut(Closure $change): void
+    {
+        $tag = ['type' => 'object', 'properties' => ['a' => ['type' => 'string']]];
+        $sub = ['allOf' => [['$ref' => '#/components/schemas/Tag'], ['type' => 'object', 'properties' => ['b' => ['type' => 'string']]]]];
+        $write = ModelFixture::build(['Tag' => $tag, 'Sub' => $sub]);
+        $changed = new Output(
+            array_map(static fn (BuiltClass $class): BuiltClass => $class->model()->name()->shortName() === 'Tag' ? new BuiltClass($change($class->model()), $class->source()) : $class, $write->classes()),
+            $write->diagnostics(),
+            $write->enums(),
+        );
+
+        $merged = $this->views()->merge(ModelFixture::build(['Tag' => $tag]), $changed);
+
+        self::assertContains(
+            'error /project/api/openapi.yaml#/components/schemas/Tag: App\Dto\Tag comes out differently in the read and the write build, which is a defect of the generator; please report it.',
+            ModelFixture::messages($merged),
+        );
+    }
+
+    /**
+     * @return iterable<string, array{Closure(ClassModel): ClassModel}>
+     */
+    public static function leftOutOfTheShape(): iterable
+    {
+        yield 'discriminated properties' => [static fn (ClassModel $model): ClassModel => $model->withDiscriminatedProperties('a')];
+        yield 'restored mutators' => [static fn (ClassModel $model): ClassModel => $model->withRestoredMutators('a')];
+        yield 'attributes' => [static fn (ClassModel $model): ClassModel => $model->withAddedAttributes(new AttributeModel(ClassName::fromFqcn('App\\Marker')))];
     }
 
     /**

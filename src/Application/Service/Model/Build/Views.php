@@ -230,8 +230,10 @@ final class Views
     }
 
     /**
-     * A shared class the two builds agree on but that one extends: open in that build and final in the other, the class
-     * both share is the open one, which the write build gives when it is that build. Anything else is a defect.
+     * A shared class that only one build extends is open there and final in the other: both keep the open one.
+     *
+     * @return BuiltClass|null the write build's class to keep instead of the read build's; null keeps the read one, and
+     *                         a disagreement of any other kind is reported
      */
     private function reconcile(ClassModel $read, BuiltClass $write, Diagnostics $diagnostics): ?BuiltClass
     {
@@ -242,11 +244,8 @@ final class Views
         }
 
         $kinds = [$readShape[0], $writeShape[0]];
-        if (array_slice($readShape, 1) === array_slice($writeShape, 1)
-            && [$read->discriminatedProperties(), $read->restoredMutators()] === [$write->model()->discriminatedProperties(), $write->model()->restoredMutators()]
-            // Value objects: equal when their properties are.
-            && serialize([$read->discriminatorValues(), $read->attributes()]) === serialize([$write->model()->discriminatorValues(), $write->model()->attributes()])
-            && in_array($kinds, [[ClassKind::FINAL, ClassKind::OPEN], [ClassKind::OPEN, ClassKind::FINAL]], true)) {
+        if (in_array($kinds, [[ClassKind::FINAL, ClassKind::OPEN], [ClassKind::OPEN, ClassKind::FINAL]], true)
+            && array_slice($readShape, 1) === array_slice($writeShape, 1) && $this->sameBesidesTheShape($read, $write->model())) {
             return $kinds[1] === ClassKind::OPEN ? $write : null;
         }
 
@@ -256,6 +255,13 @@ final class Views
         );
 
         return null;
+    }
+
+    private function sameBesidesTheShape(ClassModel $read, ClassModel $write): bool
+    {
+        // PHPStan forbids "==": value objects are compared serialized.
+        return [$read->discriminatedProperties(), $read->restoredMutators()] === [$write->discriminatedProperties(), $write->restoredMutators()]
+            && serialize([$read->discriminatorValues(), $read->attributes()]) === serialize([$write->discriminatorValues(), $write->attributes()]);
     }
 
     /**
