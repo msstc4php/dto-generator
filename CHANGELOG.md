@@ -12,6 +12,11 @@ All notable changes to this package are documented here. The format follows
   with the `extends` strategy, also through other classes), instead of an error. A class merged from `Wide` does not
   count: it keeps nothing of `Wide` but its properties. With a read or write model view the classes do not meet.
 
+- A variant of a discriminated `oneOf`/`anyOf` that the `mapping` leaves out is selected by the one value its
+  discriminator property allows (`const` or a one-value `enum`), unless another variant has that value, instead of by
+  its schema name, which such a property never holds. Such unions without a mapping (the OpenAI specification has
+  hundreds of variants like that) select their variants instead of none.
+
 ### Fixed
 
 - A class that has all the properties of a variant of a discriminated union no longer meets it in an `allOf`: the

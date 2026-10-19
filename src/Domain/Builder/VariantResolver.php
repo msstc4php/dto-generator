@@ -16,7 +16,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
 
 /**
  * The variants of a discriminated schema (spec §5.3) and the discriminator value of each: the explicit mapping first,
- * the schema name for every variant it leaves out.
+ * for every variant it leaves out the one value its property allows, else the schema name.
  */
 final class VariantResolver
 {
@@ -60,7 +60,7 @@ final class VariantResolver
                 continue;
             }
 
-            $candidates[] = [$target->name(), $class, $member->location(), false];
+            $candidates[] = [$target->name(), $class, $member->location(), $target->schema()];
         }
 
         return $this->variants($schema, $discriminator, $candidates, true, $diagnostics);
@@ -70,7 +70,7 @@ final class VariantResolver
      * An inline object variant has the class the build declared for it and, as its name for the mapping, the one value
      * it gives the discriminator property.
      *
-     * @param list<array{string, ClassName, SchemaLocation, bool}> $candidates
+     * @param list<array{string, ClassName, SchemaLocation, ?Schema}> $candidates
      */
     private function inline(Schema $member, Discriminator $discriminator, array &$candidates, Diagnostics $diagnostics): void
     {
@@ -88,7 +88,7 @@ final class VariantResolver
                 $member->location(),
             );
         } elseif ($class instanceof ClassName) {
-            $candidates[] = [$value, $class, $member->location(), true];
+            $candidates[] = [$value, $class, $member->location(), null];
         }
     }
 
@@ -101,7 +101,7 @@ final class VariantResolver
     {
         $candidates = [];
         foreach ($subclasses as $subclass) {
-            $candidates[] = [$subclass->schema()->name(), $subclass->name(), $subclass->schema()->location(), false];
+            $candidates[] = [$subclass->schema()->name(), $subclass->name(), $subclass->schema()->location(), $subclass->schema()->schema()];
         }
 
         return $this->variants($schema, $discriminator, $candidates, false, $diagnostics);
@@ -153,15 +153,18 @@ final class VariantResolver
     }
 
     /**
-     * @param list<array{string, ClassName, SchemaLocation, bool}> $candidates the name each takes in the mapping by default,
-     *                                                                         and whether the variant gives it inline
+     * @param list<array{string, ClassName, SchemaLocation, ?Schema}> $candidates the name each takes in the mapping by
+     *                                                                            default, and the schema of a variant
+     *                                                                            named by it (null for one inline, which
+     *                                                                            gives its value)
      */
     private function variants(Schema $schema, Discriminator $discriminator, array $candidates, bool $listed, Diagnostics $diagnostics): Variants
     {
         $classes = [];
         $names = [];
         $inline = [];
-        foreach ($candidates as [$name, $class, $at, $given]) {
+        $schemas = [];
+        foreach ($candidates as [$name, $class, $at, $named]) {
             if (isset($names[$class->fqcn()])) {
                 $diagnostics->warning(sprintf('Variant %s is listed twice.', $class->fqcn()), $at);
 
@@ -170,7 +173,9 @@ final class VariantResolver
 
             $classes[] = $class;
             $names[$class->fqcn()] = $name;
-            if ($given) {
+            if ($named instanceof Schema) {
+                $schemas[$class->fqcn()] = $named;
+            } else {
                 $inline[$class->fqcn()] = $at;
             }
         }
@@ -219,7 +224,9 @@ final class VariantResolver
                 continue;
             }
 
-            $mapping[$name] = $class;
+            // A schema name the property cannot hold would select nothing: the one value it holds is what the document means.
+            $value = isset($schemas[$class->fqcn()]) ? $this->valueOf($schemas[$class->fqcn()], $discriminator->propertyName(), []) : null;
+            $mapping[$value === null || isset($mapping[$value]) ? $name : $value] = $class;
         }
 
         return new Variants($classes, $mapping === [] ? null : new DiscriminatorModel($discriminator->propertyName(), $mapping), $listed);

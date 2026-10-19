@@ -209,6 +209,38 @@ final class SelectingValuesTest extends TestCase
         self::assertSame(['App\Dto\Cat' => ["kind: 'cat' unchecked"], 'App\Dto\One' => ['value: 1']], ModelFixture::selections($output));
     }
 
+    public function testGivesAVariantTheMappingLeavesOutTheOneValueItsPropertyAllows(): void
+    {
+        $at = self::AT;
+        $role = static fn (array $schema): array => ['type' => 'object', 'required' => ['role'], 'properties' => ['role' => $schema]];
+        $output = ModelFixture::build([
+            'Message' => [
+                'oneOf' => [['$ref' => '#/components/schemas/Developer'], ['$ref' => '#/components/schemas/System'], ['$ref' => '#/components/schemas/Free'], ['$ref' => '#/components/schemas/Taken']],
+                'discriminator' => ['propertyName' => 'role', 'mapping' => ['user' => '#/components/schemas/Free']],
+            ],
+            'Developer' => $role(['type' => 'string', 'enum' => ['developer']]),
+            'System' => $role(['$ref' => '#/components/schemas/SystemRole']),
+            'SystemRole' => ['const' => 'system'],
+            'Free' => $role(['type' => 'string']),
+            'Taken' => $role(['type' => 'string', 'enum' => ['user']]),
+            'Animal' => ['type' => 'object', 'required' => ['kind'], 'properties' => ['kind' => ['type' => 'string']], 'discriminator' => ['propertyName' => 'kind']],
+            'Dog' => ['allOf' => [['$ref' => '#/components/schemas/Animal'], ['type' => 'object', 'required' => ['kind'], 'properties' => ['kind' => ['type' => 'string', 'enum' => ['dog']]]]]],
+        ]);
+
+        self::assertSame(
+            [
+                "warning {$at}Dog/allOf/1/properties/kind: Property \"kind\" of App\\Dto\\Dog narrows the one App\\Dto\\Animal declares, whose type string the class keeps.",
+                "warning {$at}Taken: Discriminator value \"Taken\" is not a value of property \"role\", so it does not select App\\Dto\\Taken.",
+            ],
+            ModelFixture::messages($output),
+        );
+        self::assertSame('abstract by role {user: App\\Dto\\Free, developer: App\\Dto\\Developer, system: App\\Dto\\System, Taken: App\\Dto\\Taken}', ModelFixture::hierarchy($output)['App\\Dto\\Message']);
+        self::assertSame(
+            ['App\\Dto\\Developer' => ["role: 'developer' unchecked"], 'App\\Dto\\System' => ["role: 'system' unchecked"], 'App\\Dto\\Free' => ["role: 'user'"], 'App\\Dto\\Dog' => ["kind: 'dog'"]],
+            ModelFixture::selections($output),
+        );
+    }
+
     public function testDoesNotCheckADiscriminatorOfAnotherType(): void
     {
         $at = self::AT;

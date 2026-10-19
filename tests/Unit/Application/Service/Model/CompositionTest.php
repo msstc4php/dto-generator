@@ -851,13 +851,13 @@ final class CompositionTest extends TestCase
         $output = ModelFixture::build($schemas);
         $reversed = ModelFixture::hierarchy(ModelFixture::build(array_reverse($schemas)));
 
-        // CallResource inherits the type of Call, which the implicit name in ItemResource's mapping does not match.
-        self::assertSame(['warning ' . self::AT . 'CallResource: Discriminator value "CallResource" is not a value of property "type", so it does not select App\\Dto\\CallResource.'], ModelFixture::messages($output));
+        // CallResource inherits the one type of Call, which selects it in ItemResource rather than its schema name.
+        self::assertSame([], ModelFixture::messages($output));
         // Of the unions that could each be the class, the first by name is; the order of the schemas plays no part.
         self::assertSame([
             'App\\Dto\\OutputItem' => 'interface by type {Call: App\\Dto\\Call, Msg: App\\Dto\\Msg}',
             'App\\Dto\\ItemField' => 'abstract by type {Call: App\\Dto\\Call, Msg: App\\Dto\\Msg, Other: App\\Dto\\Other}',
-            'App\\Dto\\ItemResource' => 'interface by type {CallResource: App\\Dto\\CallResource, Msg: App\\Dto\\Msg}',
+            'App\\Dto\\ItemResource' => 'interface by type {Call: App\\Dto\\CallResource, Msg: App\\Dto\\Msg}',
             'App\\Dto\\Call' => 'open extends App\\Dto\\ItemField implements App\\Dto\\OutputItem',
             'App\\Dto\\Msg' => 'final extends App\\Dto\\ItemField implements App\\Dto\\ItemResource, App\\Dto\\OutputItem',
             'App\\Dto\\Other' => 'final extends App\\Dto\\ItemField',
