@@ -402,7 +402,7 @@ final class CompositionTest extends TestCase
      *
      * @param array<string, array<array-key, mixed>> $schemas
      */
-    public function testMeetsAClassWithOneWhoseAllOfHasIt(array $schemas, string $strategy, string $expected): void
+    public function testMeetsAClassWithOneWhoseAllOfHasIt(array $schemas, string $strategy, string $expected, string $wide = 'Wide'): void
     {
         $at = self::AT;
         $output = ModelFixture::build($schemas + [
@@ -418,7 +418,7 @@ final class CompositionTest extends TestCase
         ], [], ['*'], $strategy);
 
         if ($expected === 'error') {
-            self::assertNotSame([], preg_grep('{^error ' . preg_quote($at, '{') . 'Req/allOf/1/properties/opts: Property "opts" of App\\\\Dto\\\\Req is App\\\\Dto\\\\Narrow\\|null here, but App\\\\Dto\\\\\\w+\\|null in an earlier allOf member\\.$}', ModelFixture::messages($output)));
+            self::assertContains("error {$at}Req/allOf/1/properties/opts: Property \"opts\" of App\\Dto\\Req is App\\Dto\\Narrow|null here, but App\\Dto\\{$wide}|null in an earlier allOf member.", ModelFixture::messages($output));
 
             return;
         }
@@ -429,7 +429,7 @@ final class CompositionTest extends TestCase
     }
 
     /**
-     * @return iterable<string, array{array<string, array<array-key, mixed>>, string, string}>
+     * @return iterable<string, array{0: array<string, array<array-key, mixed>>, 1: string, 2: string, 3?: string}>
      */
     public static function subclasses(): iterable
     {
@@ -495,7 +495,7 @@ final class CompositionTest extends TestCase
                 ['type' => 'object', 'properties' => ['opts' => ['$ref' => '#/components/schemas/Narrow']]],
             ]],
             'Rev' => ['type' => 'object'],
-        ], AllOfStrategy::EXTENDS, 'error'];
+        ], AllOfStrategy::EXTENDS, 'error', '_0'];
         yield 'a variant of an inline union' => [[
             'Wide' => $variant,
             'Narrow' => $holding,

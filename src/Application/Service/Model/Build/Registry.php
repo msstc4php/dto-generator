@@ -262,8 +262,9 @@ final class Registry
     }
 
     /**
-     * The declarations once every class is composed: the classes each class extends, whose objects it holds too, and the
-     * variants of discriminated unions, which a union gives a value of the discriminator their schemas do not tell.
+     * The declarations once every class is composed, the only ones under which two classes meet: the schemas of the
+     * classes that hold what they say, the classes each class extends, whose objects it holds too, and the variants of
+     * discriminated unions, which a union gives a value of the discriminator their schemas do not tell.
      *
      * @param array<string, ClassName> $parents FQCN → the class it extends
      */
@@ -306,7 +307,7 @@ final class Registry
     {
         $variants = [];
         foreach ($this->planned as [$schema]) {
-            foreach ($schema->discriminator() instanceof Discriminator ? array_merge($schema->oneOf(), $schema->anyOf()) : [] as $member) {
+            foreach (SchemaShape::discriminatorOf($schema) instanceof Discriminator ? array_merge($schema->oneOf(), $schema->anyOf()) : [] as $member) {
                 $target = $lookup->target($member);
                 $class = $target instanceof ResolvedSchema ? $lookup->classBehind($target) : $lookup->classAt($member);
                 if ($class instanceof ClassName) {
