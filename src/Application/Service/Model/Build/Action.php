@@ -132,14 +132,14 @@ final class Action
         }
 
         $parents = [];
-        foreach ($compositions as $index => $composition) {
-            $parent = $composition->parent();
+        foreach ($registry->planned() as $index => [, $name]) {
+            $parent = $compositions[$index]->parent();
             if ($parent instanceof ClassName) {
-                $parents[$registry->planned()[$index][1]->fqcn()] = $parent;
+                $parents[$name->fqcn()] = $parent;
             }
         }
 
-        $declarations = $registry->declarationsWithWider($input->graph(), $parents);
+        $declarations = $registry->declarationsWithHierarchy($input->graph(), $parents);
         $types = new TypeMapper($input->graph(), $declarations, $input->target(), $input->formats());
         $superseded = new Superseded();
         $builder = new ClassBuilder(

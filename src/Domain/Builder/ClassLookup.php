@@ -79,38 +79,6 @@ final class ClassLookup
     }
 
     /**
-     * The generated classes whose schemas a schema's `allOf` has, through its members' members too: every value of the
-     * schema is one of theirs.
-     *
-     * @return list<ClassName>
-     */
-    public function allOfClasses(Schema $schema): array
-    {
-        $classes = [];
-        $seen = [];
-        for ($pending = $schema->allOf(); $pending !== [];) {
-            $member = array_shift($pending);
-            $target = $this->target($member);
-            $named = $target instanceof ResolvedSchema ? $this->behind($target) : null;
-            $walked = $named instanceof NamedClass ? $named->schema()->schema() : ($target instanceof ResolvedSchema ? $target->schema() : $member);
-            $key = $walked->location()->toString();
-            if (isset($seen[$key])) {
-                continue;
-            }
-
-            $seen[$key] = $key;
-            if ($named instanceof NamedClass) {
-                $classes[$named->name()->fqcn()] = $named->name();
-            }
-
-            // An allOf beside a $ref applies as well (OpenAPI 3.1).
-            $pending = array_merge($pending, $walked->allOf(), $walked === $member ? [] : $member->allOf());
-        }
-
-        return array_values($classes);
-    }
-
-    /**
      * The schema whose `$ref` leads on: an alias itself, or the one `$ref` member of an `allOf` that is no class of its
      * own. Requirements written beside that `$ref` name properties of the class behind it.
      */

@@ -48,32 +48,18 @@ final class ObjectShape
         return true;
     }
 
-    /**
-     * Whether a class schema restricts its objects only by its properties, which it requires and its `allOf`: a class
-     * that merges its properties then admits no other objects.
-     */
-    public static function restrictsOnlyByProperties(Schema $schema): bool
+    private static function saysOnlyProperties(Schema $schema): bool
     {
-        return $schema->ref() === null && $schema->oneOf() === [] && $schema->anyOf() === [] && self::isObject($schema)
-            && !$schema->discriminator() instanceof Discriminator
+        return self::isPlainObject($schema) && !$schema->discriminator() instanceof Discriminator
             && in_array($schema->additionalProperties(), [null, true], true) && $schema->extensions()->all() === []
             && array_diff($schema->keywordNames(), self::ANNOTATIONS) === []
             && $schema->enum() === null && !$schema->default() instanceof DefaultValue;
     }
 
-    private static function saysOnlyProperties(Schema $schema): bool
-    {
-        return $schema->allOf() === [] && self::restrictsOnlyByProperties($schema);
-    }
-
     private static function isPlainObject(Schema $schema): bool
     {
-        return $schema->ref() === null && !self::branches($schema) && self::isObject($schema);
-    }
-
-    private static function isObject(Schema $schema): bool
-    {
-        return array_filter($schema->nonNullTypes(), static fn (SchemaType $type): bool => $type->value() !== SchemaType::OBJECT) === [];
+        return $schema->ref() === null && !self::branches($schema)
+            && array_filter($schema->nonNullTypes(), static fn (SchemaType $type): bool => $type->value() !== SchemaType::OBJECT) === [];
     }
 
     private static function branches(Schema $schema): bool

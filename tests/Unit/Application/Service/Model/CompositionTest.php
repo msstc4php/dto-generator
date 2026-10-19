@@ -448,31 +448,35 @@ final class CompositionTest extends TestCase
             'B' => ['type' => 'object', 'required' => ['kind'], 'properties' => ['kind' => ['type' => 'string', 'enum' => ['B']]]],
         ];
 
-        foreach ([AllOfStrategy::EXTENDS, AllOfStrategy::MERGE] as $strategy) {
-            yield "a member, {$strategy}" => [['Narrow' => $narrow], $strategy, 'Narrow'];
-            yield "a member of a member, {$strategy}" => [['Narrow' => ['allOf' => [['$ref' => '#/components/schemas/Mid'], $more]], 'Mid' => ['allOf' => [['$ref' => '#/components/schemas/Wide'], ['type' => 'object', 'properties' => ['c' => ['type' => 'integer']]]]]], $strategy, 'Narrow'];
-            yield "an inline member's member, {$strategy}" => [['Narrow' => ['allOf' => [['allOf' => [['$ref' => '#/components/schemas/Wide']]], $more]]], $strategy, 'Narrow'];
-            yield "through an alias, {$strategy}" => [['Narrow' => ['allOf' => [['$ref' => '#/components/schemas/Alias'], $more]], 'Alias' => ['$ref' => '#/components/schemas/Wide']], $strategy, 'Narrow'];
-            yield "an allOf beside a \$ref, {$strategy}" => [['Narrow' => ['allOf' => [['$ref' => '#/components/schemas/Mid', 'allOf' => [['$ref' => '#/components/schemas/Wide']]], $more]], 'Mid' => ['type' => 'object', 'properties' => ['c' => ['type' => 'integer']]]], $strategy, 'Narrow'];
-            yield "a member of a skipped member, {$strategy}" => [['Narrow' => ['allOf' => [['$ref' => '#/components/schemas/Mid'], $more]], 'Mid' => ['x-php-skip' => true, 'allOf' => [['$ref' => '#/components/schemas/Wide']]]], $strategy, 'Narrow'];
-            yield "a class twice, {$strategy}" => [[
-                'Narrow' => ['allOf' => [['$ref' => '#/components/schemas/Base'], ['$ref' => '#/components/schemas/Mid'], $more]],
-                'Mid' => ['allOf' => [['$ref' => '#/components/schemas/Base'], ['$ref' => '#/components/schemas/Wide']]],
-                'Base' => ['type' => 'object', 'properties' => ['z' => ['type' => 'string']]],
-            ], $strategy, 'Narrow'];
-            yield "a member with a cycle, {$strategy}" => [['Narrow' => ['allOf' => [['$ref' => '#/components/schemas/Wide'], ['type' => 'object', 'properties' => ['self' => ['$ref' => '#/components/schemas/Narrow']]]]]], $strategy, 'Narrow'];
-        }
-
-        // Only a subclass keeps what a member says beside its properties.
-        yield 'a closed member, extends' => [['Wide' => $closed, 'Narrow' => $narrow], AllOfStrategy::EXTENDS, 'Narrow'];
-        yield 'a closed member, merge' => [['Wide' => $closed, 'Narrow' => $narrow], AllOfStrategy::MERGE, 'error'];
-        yield 'a closed member of a member, extends' => [['Wide' => $closed, 'Narrow' => ['allOf' => [['$ref' => '#/components/schemas/Mid'], $more]], 'Mid' => ['allOf' => [['$ref' => '#/components/schemas/Wide'], ['type' => 'object', 'properties' => ['c' => ['type' => 'integer']]]]]], AllOfStrategy::EXTENDS, 'Narrow'];
-        yield "a closed inline member's member, extends" => [['Wide' => $closed, 'Narrow' => ['allOf' => [['allOf' => [['$ref' => '#/components/schemas/Wide']]], $more]]], AllOfStrategy::EXTENDS, 'error'];
-        yield 'a discriminated member, merge' => [['Wide' => $discriminated, 'Narrow' => $narrow] + $variants, AllOfStrategy::MERGE, 'error'];
-        yield 'a member with another keyword, merge' => [['Wide' => ['minProperties' => 1, 'type' => 'object', 'properties' => ['a' => ['type' => 'string']]], 'Narrow' => $narrow], AllOfStrategy::MERGE, 'error'];
-        yield 'a member with an x- key, merge' => [['Wide' => ['x-dto-mutable' => true, 'type' => 'object', 'properties' => ['a' => ['type' => 'string']]], 'Narrow' => $narrow], AllOfStrategy::MERGE, 'error'];
+        yield 'a parent' => [['Narrow' => $narrow], AllOfStrategy::EXTENDS, 'Narrow'];
+        yield 'a parent of a parent' => [['Narrow' => ['allOf' => [['$ref' => '#/components/schemas/Mid'], $more]], 'Mid' => ['allOf' => [['$ref' => '#/components/schemas/Wide'], ['type' => 'object', 'properties' => ['c' => ['type' => 'integer']]]]]], AllOfStrategy::EXTENDS, 'Narrow'];
+        yield 'a parent through an alias' => [['Narrow' => ['allOf' => [['$ref' => '#/components/schemas/Alias'], $more]], 'Alias' => ['$ref' => '#/components/schemas/Wide']], AllOfStrategy::EXTENDS, 'Narrow'];
+        yield 'a parent through a skipped wrapper' => [['Narrow' => ['allOf' => [['$ref' => '#/components/schemas/Mid'], $more]], 'Mid' => ['x-php-skip' => true, 'allOf' => [['$ref' => '#/components/schemas/Wide']]]], AllOfStrategy::EXTENDS, 'Narrow'];
+        yield 'a parent with a cycle' => [['Narrow' => ['allOf' => [['$ref' => '#/components/schemas/Wide'], ['type' => 'object', 'properties' => ['self' => ['$ref' => '#/components/schemas/Narrow']]]]]], AllOfStrategy::EXTENDS, 'Narrow'];
+        yield 'a closed parent' => [['Wide' => $closed, 'Narrow' => $narrow], AllOfStrategy::EXTENDS, 'Narrow'];
+        // A merged class keeps only the properties of a member, not its discriminator or other constraints.
+        yield 'a merged member' => [['Narrow' => $narrow], AllOfStrategy::MERGE, 'error'];
+        yield 'one of several members' => [['Narrow' => ['allOf' => [['$ref' => '#/components/schemas/Base'], ['$ref' => '#/components/schemas/Wide'], $more]], 'Base' => ['type' => 'object', 'properties' => ['z' => ['type' => 'string']]]], AllOfStrategy::EXTENDS, 'error'];
+        yield "an inline member's member" => [['Narrow' => ['allOf' => [['allOf' => [['$ref' => '#/components/schemas/Wide']]], $more]]], AllOfStrategy::EXTENDS, 'error'];
         yield 'an unrelated class' => [['Narrow' => ['type' => 'object', 'properties' => ['w' => ['$ref' => '#/components/schemas/Wide']]]], AllOfStrategy::EXTENDS, 'error'];
         yield 'a union of it' => [['Narrow' => $discriminated, 'A' => ['allOf' => [['$ref' => '#/components/schemas/Wide'], $variants['A']]], 'B' => $variants['B']], AllOfStrategy::EXTENDS, 'error'];
+        // A variant checks the values that select it, which its schema does not tell.
+        yield 'a variant with fewer properties' => [[
+            'Wide' => ['type' => 'object', 'required' => ['kind'], 'properties' => ['kind' => ['type' => 'string']]],
+            'Narrow' => ['type' => 'object', 'required' => ['kind'], 'properties' => ['kind' => ['type' => 'string'], 'b' => ['type' => 'integer']]],
+            'Union' => ['oneOf' => [['$ref' => '#/components/schemas/Wide'], ['$ref' => '#/components/schemas/Other']], 'discriminator' => ['propertyName' => 'kind', 'mapping' => ['w' => '#/components/schemas/Wide', 'o' => '#/components/schemas/Other']]],
+            'Other' => ['type' => 'object', 'required' => ['kind'], 'properties' => ['kind' => ['type' => 'string']]],
+        ], AllOfStrategy::EXTENDS, 'error'];
+        yield 'an anyOf variant with fewer properties' => [[
+            'Wide' => ['type' => 'object', 'required' => ['kind'], 'properties' => ['kind' => ['type' => 'string']]],
+            'Narrow' => ['type' => 'object', 'required' => ['kind'], 'properties' => ['kind' => ['type' => 'string'], 'b' => ['type' => 'integer']]],
+            'Union' => ['anyOf' => [['$ref' => '#/components/schemas/Other'], ['$ref' => '#/components/schemas/Wide']], 'discriminator' => ['propertyName' => 'kind', 'mapping' => ['w' => '#/components/schemas/Wide', 'o' => '#/components/schemas/Other']]],
+            'Other' => ['type' => 'object', 'required' => ['kind'], 'properties' => ['kind' => ['type' => 'string']]],
+        ], AllOfStrategy::EXTENDS, 'error'];
+        yield 'a class with fewer properties' => [[
+            'Wide' => ['type' => 'object', 'required' => ['kind'], 'properties' => ['kind' => ['type' => 'string']]],
+            'Narrow' => ['type' => 'object', 'required' => ['kind'], 'properties' => ['kind' => ['type' => 'string'], 'b' => ['type' => 'integer']]],
+        ], AllOfStrategy::EXTENDS, 'Narrow'];
     }
 
     public function testMeetsNoClassWithOneOfAView(): void

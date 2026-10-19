@@ -8,7 +8,6 @@ use MSSTC4PHP\DtoGenerator\Domain\Builder\ClassBuilder;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\ClassLookup;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\Composition;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\Declarations;
-use MSSTC4PHP\DtoGenerator\Domain\Builder\ObjectShape;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\PropertyView;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\SchemaShape;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
@@ -16,6 +15,8 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\Identifier;
+use MSSTC4PHP\DtoGenerator\Domain\Schema\Discriminator;
+use MSSTC4PHP\DtoGenerator\Domain\Schema\ResolvedSchema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaGraph;
 
@@ -261,34 +262,60 @@ final class Registry
     }
 
     /**
-     * The declarations with the classes that admit every object of each class, once every class is composed: those it
-     * extends, and those its `allOf` has that restrict their objects only by properties, which a merge keeps.
+     * The declarations once every class is composed: the classes each class extends, whose objects it holds too, and the
+     * variants of discriminated unions, which a union gives a value of the discriminator their schemas do not tell.
      *
      * @param array<string, ClassName> $parents FQCN → the class it extends
      */
-    public function declarationsWithWider(SchemaGraph $graph, array $parents): Declarations
+    public function declarationsWithHierarchy(SchemaGraph $graph, array $parents): Declarations
     {
+        $declarations = $this->declarations();
         $schemas = $this->schemas();
-        $declarations = new Declarations($this->classes, $this->enums, $this->skipped, $this->abandoned, $schemas);
-        $lookup = new ClassLookup($graph, $declarations);
-        $wider = [];
-        foreach ($schemas as $fqcn => $schema) {
-            $found = [];
-            for ($parent = $parents[$fqcn] ?? null; $parent instanceof ClassName && !isset($found[$parent->fqcn()]); $parent = $parents[$parent->fqcn()] ?? null) {
-                $found[$parent->fqcn()] = $parent->fqcn();
-            }
-
-            foreach ($lookup->allOfClasses($schema) as $class) {
-                if (isset($schemas[$class->fqcn()]) && ObjectShape::restrictsOnlyByProperties($schemas[$class->fqcn()])) {
-                    $found[$class->fqcn()] = $class->fqcn();
-                }
-            }
-
+        $ancestors = [];
+        foreach (array_keys($schemas) as $fqcn) {
             // A class the schema leaves out holds what its schema does not tell.
-            $wider[$fqcn] = array_intersect_key($found, $schemas);
+            $ancestors[$fqcn] = array_intersect_key($this->ancestors($fqcn, $parents), $schemas);
         }
 
-        return $declarations->withWider($wider);
+        return $declarations->withHierarchy($ancestors, $this->variants(new ClassLookup($graph, $declarations)));
+    }
+
+    /**
+     * @param array<string, ClassName> $parents
+     *
+     * @return array<string, string> FQCNs by themselves
+     */
+    private function ancestors(string $fqcn, array $parents): array
+    {
+        $ancestors = [];
+        $parent = $parents[$fqcn] ?? null;
+        while ($parent instanceof ClassName && !isset($ancestors[$parent->fqcn()])) {
+            $ancestors[$parent->fqcn()] = $parent->fqcn();
+            $parent = $parents[$parent->fqcn()] ?? null;
+        }
+
+        return $ancestors;
+    }
+
+    /**
+     * The classes a discriminated schema lists, which its mapping may only name.
+     *
+     * @return array<string, string> FQCNs by themselves
+     */
+    private function variants(ClassLookup $lookup): array
+    {
+        $variants = [];
+        foreach ($this->planned as [$schema]) {
+            foreach ($schema->discriminator() instanceof Discriminator ? array_merge($schema->oneOf(), $schema->anyOf()) : [] as $member) {
+                $target = $lookup->target($member);
+                $class = $target instanceof ResolvedSchema ? $lookup->classBehind($target) : null;
+                if ($class instanceof ClassName) {
+                    $variants[$class->fqcn()] = $class->fqcn();
+                }
+            }
+        }
+
+        return $variants;
     }
 
     /**

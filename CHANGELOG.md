@@ -8,11 +8,14 @@ All notable changes to this package are documented here. The format follows
 
 ### Changed
 
-- A property two `allOf` members give two classes is of the class that extends the other, or whose `allOf` has it
-  (`allOf: [$ref: Wide, …]`, also through its members' members, an `allOf` beside a `$ref` and aliases) when the other
-  says nothing but its properties, which it requires, annotations and its own `allOf`, instead of an error. A merged
-  class keeps nothing else of a member: its discriminator, `oneOf`, closed `additionalProperties` or keywords. With a
-  read or write model view the classes do not meet.
+- A property two `allOf` members give two classes is of the class that extends the other (`allOf: [$ref: Wide, …]`
+  with the `extends` strategy, also through other classes), instead of an error. A class merged from `Wide` does not
+  count: it keeps nothing of `Wide` but its properties. With a read or write model view the classes do not meet.
+
+### Fixed
+
+- A class that has all the properties of a variant of a discriminated union no longer meets it in an `allOf`: the
+  variant accepts only the discriminator values that select it, which its schema does not tell.
 
 ### Added
 

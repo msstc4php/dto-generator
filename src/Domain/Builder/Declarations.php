@@ -32,8 +32,11 @@ final class Declarations
     /** @var array<string, Schema> by FQCN */
     private array $schemas;
 
-    /** @var array<string, array<string, string>> FQCN → FQCNs, by themselves */
-    private array $wider = [];
+    /** @var array<string, array<string, string>> FQCN → the FQCNs of its ancestors, by themselves */
+    private array $ancestors = [];
+
+    /** @var array<string, string> FQCNs by themselves */
+    private array $variants = [];
 
     /**
      * @param array<string, ClassName> $classes location key → class
@@ -72,24 +75,32 @@ final class Declarations
     }
 
     /**
-     * @param array<string, array<string, string>> $wider FQCN → the FQCNs of the classes that admit every object of the
-     *                                                    class, keyed by themselves
+     * @param array<string, array<string, string>> $ancestors FQCN → the FQCNs of the classes it extends, by themselves
+     * @param array<string, string> $variants the FQCNs of the classes discriminated unions list or map, by themselves
      */
-    public function withWider(array $wider): self
+    public function withHierarchy(array $ancestors, array $variants): self
     {
         $declarations = clone $this;
-        $declarations->wider = $wider;
+        $declarations->ancestors = $ancestors;
+        $declarations->variants = $variants;
 
         return $declarations;
     }
 
     /**
-     * Whether every object of a generated class is one of the other: it extends the other, or its `allOf` has the other,
-     * which restricts its objects only by the properties the class merges.
+     * Whether a generated class extends the other, so its objects are the other's too.
      */
-    public function isWider(ClassName $wide, ClassName $narrow): bool
+    public function extends(ClassName $class, ClassName $ancestor): bool
     {
-        return isset($this->wider[$narrow->fqcn()][$wide->fqcn()]);
+        return isset($this->ancestors[$class->fqcn()][$ancestor->fqcn()]);
+    }
+
+    /**
+     * Whether a discriminated union lists or maps the class, which then accepts only the values that select it.
+     */
+    public function isVariant(ClassName $class): bool
+    {
+        return isset($this->variants[$class->fqcn()]);
     }
 
     public function classAt(string $key): ?ClassName

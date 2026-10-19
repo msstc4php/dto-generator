@@ -75,39 +75,6 @@ final class ObjectShapeTest extends TestCase
     }
 
     /**
-     * @dataProvider restrictions
-     *
-     * @param array<string, mixed> $raw
-     */
-    public function testTellsWhetherAClassSchemaRestrictsItsObjectsOnlyByProperties(array $raw, bool $only): void
-    {
-        self::assertSame($only, ObjectShape::restrictsOnlyByProperties($this->schema($raw + ['properties' => ['a' => ['type' => 'string']]], 'a.yaml')));
-    }
-
-    /**
-     * @return iterable<string, array{array<string, mixed>, bool}>
-     */
-    public static function restrictions(): iterable
-    {
-        yield 'properties' => [['type' => 'object'], true];
-        yield 'no type' => [[], true];
-        yield 'null' => [['type' => ['object', 'null']], true];
-        yield 'an allOf and annotations' => [['type' => 'object', 'title' => 'T', 'allOf' => [['$ref' => '#/components/schemas/X']], 'required' => ['a']], true];
-        yield 'other properties allowed' => [['type' => 'object', 'additionalProperties' => true], true];
-        yield 'a $ref' => [['$ref' => '#/components/schemas/X'], false];
-        yield 'a oneOf' => [['type' => 'object', 'oneOf' => [['type' => 'object']]], false];
-        yield 'an anyOf' => [['type' => 'object', 'anyOf' => [['type' => 'object']]], false];
-        yield 'another type' => [['type' => ['object', 'array']], false];
-        yield 'a discriminator' => [['type' => 'object', 'discriminator' => ['propertyName' => 'a']], false];
-        yield 'no other properties' => [['type' => 'object', 'additionalProperties' => false], false];
-        yield 'other properties of a type' => [['type' => 'object', 'additionalProperties' => ['type' => 'string']], false];
-        yield 'an x- key' => [['type' => 'object', 'x-dto-mutable' => true], false];
-        yield 'a keyword' => [['type' => 'object', 'minProperties' => 1], false];
-        yield 'an enum' => [['type' => 'object', 'enum' => [['a' => 'x']]], false];
-        yield 'a default' => [['type' => 'object', 'default' => ['a' => 'x']], false];
-    }
-
-    /**
      * @param array<string, mixed> $raw
      */
     private function schema(array $raw, string $file): Schema
