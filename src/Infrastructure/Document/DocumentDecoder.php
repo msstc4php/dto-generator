@@ -69,51 +69,8 @@ final class DocumentDecoder
                 throw $exception;
             }
 
-            return Yaml::parse($this->withImplicitKeys($content));
+            return Yaml::parse(ExplicitYamlKeys::rewrite($content));
         }
-    }
-
-    /**
-     * The YAML with every scalar key written after "?" written before its ":" instead; block scalars stay as they are.
-     */
-    private function withImplicitKeys(string $content): string
-    {
-        $lines = explode("\n", $content);
-        $written = [];
-        $block = null;
-        $counter = count($lines);
-        for ($index = 0; $index < $counter; $index++) {
-            $line = $lines[$index];
-            $indent = strlen($line) - strlen(ltrim($line, ' '));
-            if ($block !== null && (trim($line) === '' || $indent > $block)) {
-                $written[] = $line;
-
-                continue;
-            }
-
-            $block = null;
-            $next = $lines[$index + 1] ?? null;
-            if ($next !== null && preg_match('/^( *)\? ([^\[{].*)$/D', $line, $key) === 1
-                && preg_match('/^' . $key[1] . ':(?: (.*))?$/D', $next, $value) === 1) {
-                $name = trim($key[2]);
-                $written[] = $key[1] . (in_array($name[0], ['"', "'"], true) ? $name : (string) json_encode($name, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)) . ':';
-                if (($value[1] ?? '') !== '') {
-                    $written[] = $key[1] . '  ' . $value[1];
-                }
-
-                $index++;
-
-                continue;
-            }
-
-            if (preg_match('/[:-] *[|>][-+0-9]* *(?:#.*)?$/D', $line) === 1) {
-                $block = $indent;
-            }
-
-            $written[] = $line;
-        }
-
-        return implode("\n", $written);
     }
 
     /**
