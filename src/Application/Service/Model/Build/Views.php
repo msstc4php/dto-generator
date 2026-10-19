@@ -13,6 +13,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Builder\ReadWriteMode;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\ViewDependence;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostic;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
+use MSSTC4PHP\DtoGenerator\Domain\Model\ClassKind;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\DiscriminatorModel;
@@ -82,6 +83,7 @@ final class Views
         }
 
         $renamed = [];
+        $opened = [];
         foreach ($write->classes() as $class) {
             $model = $class->model();
             $fqcn = $model->name()->fqcn();
@@ -91,12 +93,12 @@ final class Views
                 $classes[] = $class;
                 $renamed[$fqcn] = $readAt[$model->source()->toString()] ?? $fqcn;
             } elseif ($earlier->source()->equals($model->source()) && $this->shape($earlier) !== $this->shape($model)) {
-                $diagnostics->error(
-                    sprintf('%s comes out differently in the read and the write build, which is a defect of the generator; please report it.', $fqcn),
-                    $model->source(),
-                );
+                $this->reconcile($earlier, $class, $opened, $diagnostics);
             }
         }
+
+        // A class that a class of one view extends is open in that view only; the class both share stays open.
+        $classes = array_map(static fn (BuiltClass $class): BuiltClass => $opened[$class->model()->name()->fqcn()] ?? $class, $classes);
 
         $known = [];
         foreach ($read->diagnostics()->all() as $diagnostic) {
@@ -222,6 +224,32 @@ final class Views
         $diagnostics->merge($more);
 
         return new Output($output->classes(), $diagnostics, $output->enums());
+    }
+
+    /**
+     * A shared class the two builds disagree on: open in the build that extends it and final in the other, it is the open
+     * one; anything else is a defect.
+     *
+     * @param array<string, BuiltClass> $opened the write build's classes to keep instead of the read build's, by FQCN
+     */
+    private function reconcile(ClassModel $read, BuiltClass $write, array &$opened, Diagnostics $diagnostics): void
+    {
+        $readShape = $this->shape($read);
+        $writeShape = $this->shape($write->model());
+        $kinds = [$readShape[0], $writeShape[0]];
+        $readShape[0] = $writeShape[0];
+        if ($readShape === $writeShape && in_array($kinds, [[ClassKind::FINAL, ClassKind::OPEN], [ClassKind::OPEN, ClassKind::FINAL]], true)) {
+            if ($kinds[1] === ClassKind::OPEN) {
+                $opened[$read->name()->fqcn()] = $write;
+            }
+
+            return;
+        }
+
+        $diagnostics->error(
+            sprintf('%s comes out differently in the read and the write build, which is a defect of the generator; please report it.', $read->name()->fqcn()),
+            $read->source(),
+        );
     }
 
     /**

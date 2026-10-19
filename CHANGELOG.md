@@ -29,6 +29,8 @@ All notable changes to this package are documented here. The format follows
 
 ### Fixed
 
+- A class that a class of only the read or only the write model extends (an `allOf` of it and more properties in a
+  `readOnly` or `writeOnly` property) is generated open, instead of an error that the two builds disagree on it.
 - A class that has all the properties of a variant of a discriminated union no longer meets it in an `allOf`: the
   variant accepts only the discriminator values that select it, which its schema does not tell.
 

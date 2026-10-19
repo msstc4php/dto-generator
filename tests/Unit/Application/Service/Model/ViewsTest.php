@@ -43,7 +43,7 @@ final class ViewsTest extends TestCase
 
         return [
             'type' => [['Tag' => $tag], ['Tag' => ['type' => 'object', 'properties' => ['a' => ['type' => 'integer']]]]],
-            'kind' => [['Tag' => $tag], ['Tag' => $tag, 'Sub' => ['allOf' => [['$ref' => '#/components/schemas/Tag'], ['type' => 'object', 'properties' => ['b' => ['type' => 'string']]]]]]],
+            'kind and type' => [['Tag' => $tag], ['Tag' => ['type' => 'object', 'properties' => ['a' => ['type' => 'integer']]], 'Sub' => ['allOf' => [['$ref' => '#/components/schemas/Tag'], ['type' => 'object', 'properties' => ['b' => ['type' => 'string']]]]]]],
             'parent' => [['Tag' => $tag, 'Top' => ['type' => 'object']], ['Tag' => ['allOf' => [['$ref' => '#/components/schemas/Top'], $tag]], 'Top' => ['type' => 'object', 'properties' => ['t' => ['type' => 'string']]]]],
             'variants' => [
                 ['Tag' => $base + ['discriminator' => ['propertyName' => 'kind']], 'A' => $variant, 'B' => $variant],
@@ -66,6 +66,33 @@ final class ViewsTest extends TestCase
             'error /project/api/openapi.yaml#/components/schemas/Tag: App\Dto\Tag comes out differently in the read and the write build, which is a defect of the generator; please report it.',
             ModelFixture::messages($merged),
         );
+    }
+
+    /**
+     * @dataProvider extendedInOneBuild
+     *
+     * @param array<string, array<array-key, mixed>> $read
+     * @param array<string, array<array-key, mixed>> $write
+     */
+    public function testKeepsTheOpenClassThatOnlyOneBuildExtends(array $read, array $write): void
+    {
+        $merged = $this->views()->merge(ModelFixture::build($read), ModelFixture::build($write));
+
+        self::assertSame([], ModelFixture::messages($merged));
+        self::assertSame('open', ModelFixture::hierarchy($merged)['App\\Dto\\Tag']);
+        self::assertSame('final extends App\\Dto\\Tag', ModelFixture::hierarchy($merged)['App\\Dto\\Sub']);
+    }
+
+    /**
+     * @return iterable<string, array{array<string, array<array-key, mixed>>, array<string, array<array-key, mixed>>}>
+     */
+    public static function extendedInOneBuild(): iterable
+    {
+        $tag = ['type' => 'object', 'properties' => ['a' => ['type' => 'string']]];
+        $sub = ['allOf' => [['$ref' => '#/components/schemas/Tag'], ['type' => 'object', 'properties' => ['b' => ['type' => 'string']]]]];
+
+        yield 'by the write build' => [['Tag' => $tag], ['Tag' => $tag, 'Sub' => $sub]];
+        yield 'by the read build' => [['Tag' => $tag, 'Sub' => $sub], ['Tag' => $tag]];
     }
 
     public function testBuildsOnceWithoutDependentClasses(): void

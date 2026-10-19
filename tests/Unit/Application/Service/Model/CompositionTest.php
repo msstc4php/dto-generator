@@ -783,12 +783,15 @@ final class CompositionTest extends TestCase
             'H' => $object([
                 'id' => ['type' => 'string'],
                 'alone' => ['allOf' => [['$ref' => '#/components/schemas/E']], 'readOnly' => true],
+                'more' => ['allOf' => [['$ref' => '#/components/schemas/E'], $object(['x' => ['type' => 'string']])], 'writeOnly' => true],
             ]),
         ]);
 
         self::assertSame([], ModelFixture::messages($output));
         self::assertSame(['id: string|null', 'alone: App\\Dto\\A|App\\Dto\\B|null'], ModelFixture::classes($output)['App\\Dto\\HRead']);
-        self::assertSame(['id: string|null'], ModelFixture::classes($output)['App\\Dto\\HWrite']);
+        self::assertSame(['id: string|null', 'more: App\\Dto\\HMoreA|App\\Dto\\HMoreB|null'], ModelFixture::classes($output)['App\\Dto\\HWrite']);
+        self::assertSame('final extends App\\Dto\\A', ModelFixture::hierarchy($output)['App\\Dto\\HMoreA']);
+        self::assertSame('open', ModelFixture::hierarchy($output)['App\\Dto\\A']);
     }
 
     /**
