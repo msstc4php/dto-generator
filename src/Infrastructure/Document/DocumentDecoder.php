@@ -57,6 +57,7 @@ final class DocumentDecoder
      * @return mixed
      *
      * @throws ParseException
+     * @throws UndecodableDocument
      */
     private function yaml(string $content)
     {
@@ -69,7 +70,11 @@ final class DocumentDecoder
                 throw $exception;
             }
 
-            return Yaml::parse(ExplicitYamlKeys::rewrite($content));
+            try {
+                return Yaml::parse(ExplicitYamlKeys::rewrite($content));
+            } catch (ParseException $rewritten) {
+                throw UndecodableDocument::malformed($rewritten->getMessage() . ' Keys written after "?" were rewritten first.');
+            }
         }
     }
 

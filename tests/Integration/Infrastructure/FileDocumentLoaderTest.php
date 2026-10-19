@@ -161,7 +161,7 @@ final class FileDocumentLoaderTest extends TestCase
     public function testReadsKeysWrittenAfterAQuestionMark(): void
     {
         $yaml = "components:\n  schemas:\n    ? a.very.long.name\n    : type: object\n      properties:\n        sid: {type: string}\n"
-            . "    ? 'quoted: name'\n    :\n      type: string\n    ? 'it''s'\n    : plain\n    ? with \"quotes\" and: colon\n    : [1]\n    after: 1\n"
+            . "    ? 'quoted: name'\n    :\n      type: string\n    ? 'it''s'\n    : plain\n    ? with \"quotes\" and colon:x\n    : [1]\n    after: 1\n"
             . "  text: |\n    ? not a key\n    : not a value\n";
 
         $root = (new FileDocumentLoader())->load($this->file('explicit.yaml', $yaml))->root();
@@ -173,7 +173,7 @@ final class FileDocumentLoaderTest extends TestCase
                         'a.very.long.name' => ['type' => 'object', 'properties' => ['sid' => ['type' => 'string']]],
                         'quoted: name' => ['type' => 'string'],
                         "it's" => 'plain',
-                        'with "quotes" and: colon' => [1],
+                        'with "quotes" and colon:x' => [1],
                         'after' => 1,
                     ],
                     'text' => "? not a key\n: not a value\n",
@@ -181,6 +181,14 @@ final class FileDocumentLoaderTest extends TestCase
             ],
             $root,
         );
+    }
+
+    public function testTellsAnErrorAfterRewritingKeys(): void
+    {
+        $this->expectException(DocumentLoadFailed::class);
+        $this->expectExceptionMessage('Keys written after "?" were rewritten first.');
+
+        (new FileDocumentLoader())->load($this->file('rewritten.yaml', "? k\n: v\nbad: [\n"));
     }
 
     public function testStillRejectsAComplexKey(): void

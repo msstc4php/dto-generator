@@ -10,6 +10,12 @@ namespace MSSTC4PHP\DtoGenerator\Infrastructure\Document;
  */
 final class ExplicitYamlKeys
 {
+    /** Node properties, then a block scalar indicator with its chomping and indentation, then a comment. */
+    private const BLOCK_HEADER = '(?:[!&]\S* +)*[|>][-+0-9]* *(?:#.*)?';
+
+    /** Node properties alone, which belong to the value on the next lines. */
+    private const PROPERTIES = '(?:[!&]\S*)(?: +[!&]\S*)* *(?:#.*)?';
+
     private function __construct()
     {
     }
@@ -40,7 +46,7 @@ final class ExplicitYamlKeys
 
             $prefix = $question[1] . $key . ':';
             $next = $lines[$index + 1] ?? '';
-            if (preg_match('/^' . $question[1] . ':(?: +(.*))?$/D', $next, $colon) !== 1) {
+            if (preg_match('/^' . $question[1] . ':(?:[ \t]+(.*))?$/D', $next, $colon) !== 1) {
                 // A key without a value line holds null.
                 $written[] = $prefix;
 
@@ -48,19 +54,19 @@ final class ExplicitYamlKeys
             }
 
             $value = $colon[1] ?? '';
-            // An empty line before the key keeps the numbers of the lines after it.
-            if ($value === '' || preg_match('/^[|>][-+0-9]* *(?:#.*)?$/D', $value) === 1) {
+            if ($value === '' || preg_match('/^(?:' . self::BLOCK_HEADER . '|' . self::PROPERTIES . ')$/D', $value) === 1) {
+                // A comment, unlike an empty line, joins no block scalar before it and keeps the numbers of the lines.
                 $index++;
-                $written[] = '';
+                $written[] = $question[1] . '#';
                 $written[] = $value === '' ? $prefix : $prefix . ' ' . $value;
-                $blockIndent = $value === '' ? null : strlen($question[1]);
+                $blockIndent = preg_match('/^' . self::BLOCK_HEADER . '$/D', $value) === 1 ? strlen($question[1]) : null;
 
                 continue;
             }
 
-            // The value goes below the key, where the next round reads it as any line, a key after "?" too.
+            // The value stays in its column in place of the ":", where the next round reads it as any line.
             $written[] = $prefix;
-            $lines[$index + 1] = $question[1] . '  ' . $value;
+            $lines[$index + 1] = substr_replace($next, ' ', strlen($question[1]), 1);
         }
 
         return implode("\n", $written);
@@ -71,13 +77,13 @@ final class ExplicitYamlKeys
      */
     private static function key(string $written): ?string
     {
-        if (preg_match('/^(\'(?:[^\']|\'\')*\'|"(?:[^"\\\\]|\\\\.)*")(?: +#.*)? *$/D', $written, $quoted) === 1) {
+        if (preg_match('/^(\'(?:[^\']|\'\')*\'|"(?:[^"\\\\]|\\\\.)*")(?:[ \t]+#.*)?[ \t]*$/D', $written, $quoted) === 1) {
             return $quoted[1];
         }
 
-        $plain = trim((string) preg_replace('/(?:^| +)#.*$/D', '', $written));
-        // Anchors, aliases, tags, flow collections and block or reserved indicators mean more than a plain string.
-        if ($plain === '' || strpbrk($plain[0], '[]{}&*!|>@`\'"%') !== false) {
+        $plain = trim((string) preg_replace('/(?:^|[ \t]+)#.*$/D', '', $written));
+        // Anchors, aliases, tags, flow and block collections, and block or reserved indicators mean more than a string.
+        if ($plain === '' || strpbrk($plain[0], '[]{}&*!|>@`\'"%') !== false || preg_match('/^[-?:](?:[ \t]|$)|:[ \t]|:$/D', $plain) === 1) {
             return null;
         }
 
@@ -88,6 +94,6 @@ final class ExplicitYamlKeys
 
     private static function opensBlock(string $line): bool
     {
-        return preg_match('/(?:^ *-|:) +[|>][-+0-9]* *(?:#.*)?$/D', $line) === 1;
+        return preg_match('/(?:^ *(?:- +)*-|:) +' . self::BLOCK_HEADER . '$/D', $line) === 1;
     }
 }
