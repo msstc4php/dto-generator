@@ -685,6 +685,61 @@ final class CompositionTest extends TestCase
         self::assertSame(['d: string|null', 'q: App\\Dto\\InnerXQ|null', 'i: string|null'], $classes['App\\Dto\\InnerXD']);
     }
 
+    /**
+     * @dataProvider variantOrders
+     *
+     * @param list<array<array-key, mixed>> $variants
+     * @param list<string> $classes the variant classes, the classes of what they share last
+     */
+    public function testNamesWhatVariantsShareAlikeInAnyOrder(array $variants, array $classes, bool $inline = false): void
+    {
+        $object = static fn (array $properties): array => ['type' => 'object', 'properties' => $properties];
+        $distributed = ['allOf' => [['anyOf' => $variants], $object(['e' => $object(['ee' => ['type' => 'string']])])]];
+        $shared = $classes[count($classes) - 1];
+        foreach ([$variants, array_reverse($variants)] as $order) {
+            $schema = ['allOf' => [['anyOf' => $order], $distributed['allOf'][1]]];
+            $output = ModelFixture::build([
+                'List' => $object(['l' => ['type' => 'string']]),
+                'B' => $object(['b' => ['type' => 'string']]),
+                'A' => $object(['a' => ['type' => 'string']]) + ['x-php-class-name' => 'Aye'],
+            ] + ($inline ? ['H' => $object(['p' => $schema])] : ['S' => $schema]));
+            $generated = ModelFixture::classes($output);
+
+            self::assertSame([], ModelFixture::messages($output));
+            foreach (array_slice($classes, 0, -1) as $class) {
+                self::assertContains("e: App\\Dto\\{$shared}|null", $generated['App\\Dto\\' . $class]);
+            }
+        }
+    }
+
+    /**
+     * @return iterable<string, array{0: list<array<array-key, mixed>>, 1: list<string>, 2?: bool}>
+     */
+    public static function variantOrders(): iterable
+    {
+        $titled = static fn (string $title, string $property): array => ['type' => 'object', 'title' => $title, 'properties' => [$property => ['type' => 'string']]];
+        $ref = static fn (string $name): array => ['$ref' => '#/components/schemas/' . $name];
+
+        yield 'a reserved word' => [[$ref('List'), $ref('B')], ['SList', 'SB', 'SE']];
+        yield 'a class name of the variant' => [[$ref('A'), $ref('B')], ['SAye', 'SB', 'SE']];
+        yield 'a leading digit' => [[$titled('2fa', 'x'), $ref('B')], ['HP2fa', 'HPB', 'HPE'], true];
+        yield 'names without letters' => [[$titled('+', 'x'), $titled('-', 'y')], ['SOption1', 'SOption2', 'SE']];
+        yield 'names alike as class names' => [[$titled('foo bar', 'x'), $titled('foo-bar', 'y')], ['SOption1', 'SOption2', 'SE']];
+    }
+
+    public function testStartsTheNamesOfVariantsWithTheClassNameOfTheirSchema(): void
+    {
+        $object = static fn (array $properties): array => ['type' => 'object', 'properties' => $properties];
+        $output = ModelFixture::build([
+            'A' => $object(['a' => ['type' => 'string']]),
+            'B' => $object(['b' => ['type' => 'string']]),
+            'S' => ['x-php-class-name' => 'My_Dto', 'allOf' => [['anyOf' => [['$ref' => '#/components/schemas/A'], ['$ref' => '#/components/schemas/B']]], $object(['e' => $object(['ee' => ['type' => 'string']])])]],
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(['App\\Dto\\A', 'App\\Dto\\B', 'App\\Dto\\My_DtoA', 'App\\Dto\\My_DtoB', 'App\\Dto\\MyDtoE'], array_keys(ModelFixture::classes($output)));
+    }
+
     public function testNamesVariantsWithTheSameTitleByPosition(): void
     {
         $object = static fn (array $properties): array => ['type' => 'object', 'properties' => $properties];

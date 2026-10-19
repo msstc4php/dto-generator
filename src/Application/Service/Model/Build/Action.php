@@ -384,7 +384,7 @@ final class Action
         $root = $origin instanceof VariantOrigin ? $this->rootOf($origin, $registry->baseOf($ownerName)) : null;
         $baseOf = function (Schema $part) use ($origin, $root, $registry, $ownerName): string {
             $variants = $origin instanceof VariantOrigin && $root !== null ? $origin->variantsOf($part->location()) : null;
-            $shared = $variants === null ? null : $this->names->className(implode(' ', array_merge([$root], $variants)));
+            $shared = $variants === null ? null : $root . implode('', array_map(fn (string $variant): string => (string) $this->names->pascalCase($variant), $variants));
 
             return $shared ?? $registry->baseOf($ownerName);
         };
@@ -425,11 +425,11 @@ final class Action
 
     /**
      * The name of the classes of the schema a variant was distributed from: the variant class's without the names of the
-     * variants it took, which its name ends with; null when a clash changed it.
+     * variants it took, which its name ends with; null when it does not (an x-php-class-name of the variant's own).
      */
     private function rootOf(VariantOrigin $origin, string $ownBase): ?string
     {
-        $taken = implode('', array_map(fn (string $variant): string => (string) $this->names->className($variant), $origin->variants()));
+        $taken = implode('', array_map(fn (string $variant): string => (string) $this->names->pascalCase($variant), $origin->variants()));
 
         return substr($ownBase, -strlen($taken)) === $taken ? (string) substr($ownBase, 0, -strlen($taken)) : null;
     }
@@ -611,7 +611,8 @@ final class Action
             }
 
             $origin = $graph->originOf($member->location());
-            $variant = $origin instanceof VariantOrigin ? $this->names->className((string) $origin->variant()) : null;
+            $name = $origin instanceof VariantOrigin ? $origin->variant() : null;
+            $variant = $name === null ? null : $this->names->pascalCase($name);
             foreach ($this->inlines($member, $suffix . ($variant ?? 'Option' . ($index + 1)), $diagnostics, $registry, $graph) as [$candidate, $candidateSuffix, $title]) {
                 $found[] = [$candidate, $candidateSuffix, $candidate === $member ? $this->title($member) : $title];
             }

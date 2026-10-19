@@ -14,6 +14,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaGraph;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaType;
+use MSSTC4PHP\DtoGenerator\Domain\Schema\VariantLevel;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\VariantOrigin;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
 
@@ -35,6 +36,8 @@ final class UnionDistribution
 
     private Diagnostics $diagnostics;
 
+    private NameResolver $names;
+
     /** @var list<ResolvedSchema> the variants of named schemas, named themselves */
     private array $added = [];
 
@@ -48,6 +51,7 @@ final class UnionDistribution
     {
         $this->graph = $graph;
         $this->diagnostics = $diagnostics;
+        $this->names = new NameResolver();
     }
 
     public static function of(SchemaGraph $graph, Diagnostics $diagnostics): SchemaGraph
@@ -129,7 +133,7 @@ final class UnionDistribution
         [$kind, $variants] = $union;
         $extensions = $schema->extensions()->all();
         unset($extensions['x-php-class-name']);
-        $owner = $named instanceof ResolvedSchema ? $this->ownerName($named) : '';
+        $override = $named instanceof ResolvedSchema ? $this->checkedClassName($named) : null;
         $names = $this->variantNames($variants, $named, $schema->allOf()[$index]);
         $origin = $this->graph->originOf($schema->location()) ?? new VariantOrigin($schema->location());
         $members = [];
@@ -138,9 +142,11 @@ final class UnionDistribution
             $keywords = $schema->keywords();
             unset($keywords['title']);
             $location = $schema->location()->child(VariantOrigin::SEGMENT, (string) $index, (string) $position);
-            $member = $this->schema($schema, $location, $schema->nonNullTypes(), $this->properties($schema), $schema->required(), $schema->items(), $schema->additionalProperties(), $allOf, [], [], $keywords, new Extensions($extensions));
-            $this->origins[$location->toString()] = $origin->withVariant($schema->allOf()[$index]->location(), $variant->location(), $names[$position]);
-            $members[] = $named instanceof ResolvedSchema ? $this->named($member, $named, $owner . ' ' . $names[$position], [$kind, $position]) : $member;
+            // An x-php-class-name of the schema starts the names of its variants as written.
+            $memberExtensions = $override === null ? $extensions : ['x-php-class-name' => $override . $this->names->pascalCase($names[$position])] + $extensions;
+            $member = $this->schema($schema, $location, $schema->nonNullTypes(), $this->properties($schema), $schema->required(), $schema->items(), $schema->additionalProperties(), $allOf, [], [], $keywords, new Extensions($memberExtensions));
+            $this->origins[$location->toString()] = $origin->withLevel(new VariantLevel($schema->allOf()[$index]->location(), $variant->location(), $names[$position]));
+            $members[] = $named instanceof ResolvedSchema ? $this->named($member, $named, $named->name() . ' ' . $names[$position], [$kind, $position]) : $member;
         }
 
         // What applies to the value as a whole (readOnly, a description) stays on the union.
@@ -226,33 +232,39 @@ final class UnionDistribution
             $names[] = $name !== null && $repeated !== null && strpos($name, $repeated) === 0 ? (string) substr($name, strlen($repeated)) : $name;
         }
 
-        $counts = array_count_values(array_map([Identifier::class, 'asciiLower'], array_filter($names, 'is_string')));
+        // Names alike once they are part of a class name are none, as names without letters or digits are.
+        $keys = array_map(fn (?string $name): ?string => $name === null ? null : $this->names->pascalCase($name), $names);
+        $counts = array_count_values(array_map([Identifier::class, 'asciiLower'], array_filter($keys, 'is_string')));
         $unique = [];
         foreach ($names as $position => $name) {
-            $unique[] = $name !== null && $counts[Identifier::asciiLower($name)] === 1 ? $name : 'Option' . ($position + 1);
+            $key = $keys[$position];
+            $unique[] = $name !== null && $key !== null && $counts[Identifier::asciiLower($key)] === 1 ? $name : 'Option' . ($position + 1);
         }
 
         return $unique;
     }
 
     /**
-     * The named schema's x-php-class-name, when it is a PHP identifier, else its name.
+     * The named schema's x-php-class-name, reported when it is no PHP identifier.
      */
-    private function ownerName(ResolvedSchema $named): string
+    private function checkedClassName(ResolvedSchema $named): ?string
     {
-        $extensions = $named->schema()->extensions();
-        if (!$extensions->has('x-php-class-name')) {
-            return $named->name();
+        $override = $this->classNameOf($named);
+        if ($override === null && $named->schema()->extensions()->has('x-php-class-name')) {
+            $this->diagnostics->error('"x-php-class-name" must be a PHP identifier that is not a reserved word.', $named->location()->child('x-php-class-name'));
         }
 
-        $override = $extensions->get('x-php-class-name');
-        if (is_string($override) && Identifier::isValid($override) && !Identifier::isReserved($override)) {
-            return $override;
-        }
+        return $override;
+    }
 
-        $this->diagnostics->error('"x-php-class-name" must be a PHP identifier that is not a reserved word.', $named->location()->child('x-php-class-name'));
+    /**
+     * A named schema's x-php-class-name, when it is a PHP identifier.
+     */
+    private function classNameOf(ResolvedSchema $named): ?string
+    {
+        $override = $named->schema()->extensions()->has('x-php-class-name') ? $named->schema()->extensions()->get('x-php-class-name') : null;
 
-        return $named->name();
+        return is_string($override) && Identifier::isValid($override) && !Identifier::isReserved($override) ? $override : null;
     }
 
     /**
@@ -283,7 +295,7 @@ final class UnionDistribution
         if ($ref !== null) {
             $target = $this->graph->resolve(new ReferenceUse($ref, $variant->location()));
 
-            return $target instanceof ResolvedSchema ? $target->name() : null;
+            return $target instanceof ResolvedSchema ? $this->classNameOf($target) ?? $target->name() : null;
         }
 
         $title = $variant->hasKeyword('title') ? $variant->keyword('title') : null;

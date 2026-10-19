@@ -17,11 +17,11 @@ final class VariantOrigin
 
     private SchemaLocation $root;
 
-    /** @var list<array{SchemaLocation, SchemaLocation, string}> union member, variant taken, its name */
+    /** @var list<VariantLevel> */
     private array $levels;
 
     /**
-     * @param list<array{SchemaLocation, SchemaLocation, string}> $levels union member, variant taken, its name
+     * @param list<VariantLevel> $levels the unions distributed on the way, first first
      */
     public function __construct(SchemaLocation $root, array $levels = [])
     {
@@ -39,14 +39,10 @@ final class VariantOrigin
 
     /**
      * The origin of a variant of one more union.
-     *
-     * @param SchemaLocation $union the member of the allOf that was the union
-     * @param SchemaLocation $variant the variant taken, as the union lists it
-     * @param string $name the variant's own name: its schema name or title, `Option<N>` without one
      */
-    public function withVariant(SchemaLocation $union, SchemaLocation $variant, string $name): self
+    public function withLevel(VariantLevel $level): self
     {
-        return new self($this->root, array_merge($this->levels, [[$union, $variant, $name]]));
+        return new self($this->root, array_merge($this->levels, [$level]));
     }
 
     /**
@@ -66,7 +62,7 @@ final class VariantOrigin
      */
     public function variants(): array
     {
-        return array_map(static fn (array $level): string => $level[2], $this->levels);
+        return array_map(static fn (VariantLevel $level): string => $level->name(), $this->levels);
     }
 
     /**
@@ -82,12 +78,12 @@ final class VariantOrigin
         }
 
         $names = [];
-        foreach ($this->levels as [$union, $variant, $name]) {
-            if (!$this->isWithin($part, $union) || !$this->isWithin($part, $variant)) {
+        foreach ($this->levels as $level) {
+            if (!self::isWithin($part, $level->union()) || !self::isWithin($part, $level->variant())) {
                 break;
             }
 
-            $names[] = $name;
+            $names[] = $level->name();
         }
 
         return $names;

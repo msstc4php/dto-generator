@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MSSTC4PHP\DtoGenerator\Tests\Unit\Domain\Schema;
 
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
+use MSSTC4PHP\DtoGenerator\Domain\Schema\VariantLevel;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\VariantOrigin;
 use PHPUnit\Framework\TestCase;
 
@@ -20,8 +21,8 @@ final class VariantOriginTest extends TestCase
     public function testTellsTheVariantsAPartComesWith(string $part, ?array $variants, string $file = '/api.yaml'): void
     {
         $origin = (new VariantOrigin(new SchemaLocation('/api.yaml', self::S)))
-            ->withVariant(new SchemaLocation('/api.yaml', self::S . '/allOf/1'), new SchemaLocation('/api.yaml', self::S . '/allOf/1/anyOf/0'), 'A')
-            ->withVariant(new SchemaLocation('/api.yaml', self::S . '/allOf/1/anyOf/0'), new SchemaLocation('/api.yaml', self::S . '/allOf/1/anyOf/0/x-dto-variant/0/1'), 'C')
+            ->withLevel(new VariantLevel(new SchemaLocation('/api.yaml', self::S . '/allOf/1'), new SchemaLocation('/api.yaml', self::S . '/allOf/1/anyOf/0'), 'A'))
+            ->withLevel(new VariantLevel(new SchemaLocation('/api.yaml', self::S . '/allOf/1/anyOf/0'), new SchemaLocation('/api.yaml', self::S . '/allOf/1/anyOf/0/x-dto-variant/0/1'), 'C'))
         ;
 
         self::assertSame(['A', 'C'], $origin->variants());
@@ -58,11 +59,20 @@ final class VariantOriginTest extends TestCase
     public function testStopsAtTheFirstVariantAPartDoesNotComeWith(): void
     {
         $origin = (new VariantOrigin(new SchemaLocation('/api.yaml', self::S)))
-            ->withVariant(new SchemaLocation('/api.yaml', self::S . '/allOf/1'), new SchemaLocation('/api.yaml', self::S . '/allOf/1/anyOf/0'), 'A')
-            ->withVariant(new SchemaLocation('/api.yaml', self::S . '/allOf/2'), new SchemaLocation('/api.yaml', self::S . '/allOf/2/anyOf/1'), 'C')
+            ->withLevel(new VariantLevel(new SchemaLocation('/api.yaml', self::S . '/allOf/1'), new SchemaLocation('/api.yaml', self::S . '/allOf/1/anyOf/0'), 'A'))
+            ->withLevel(new VariantLevel(new SchemaLocation('/api.yaml', self::S . '/allOf/2'), new SchemaLocation('/api.yaml', self::S . '/allOf/2/anyOf/1'), 'C'))
         ;
 
         self::assertSame([], $origin->variantsOf(new SchemaLocation('/api.yaml', self::S . '/allOf/2/anyOf/1/properties/p')));
+    }
+
+    public function testKeepsWhatALevelHolds(): void
+    {
+        $level = new VariantLevel(new SchemaLocation('/api.yaml', self::S . '/allOf/1'), new SchemaLocation('/api.yaml', self::S . '/allOf/1/anyOf/0'), 'A');
+
+        self::assertSame(self::S . '/allOf/1', $level->union()->pointer());
+        self::assertSame(self::S . '/allOf/1/anyOf/0', $level->variant()->pointer());
+        self::assertSame('A', $level->name());
     }
 
     public function testTellsAVariantByItsLocation(): void
