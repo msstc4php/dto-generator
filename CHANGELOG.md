@@ -14,7 +14,7 @@ All notable changes to this package are documented here. The format follows
 
 - A variant of a discriminated `oneOf`/`anyOf` that the `mapping` leaves out is selected by the one value its
   discriminator property allows (`const` or a one-value `enum`, also beside a `$ref`, in a one-member `allOf` around
-  it or in the branches of a nullable `oneOf`/`anyOf`), when nothing else claims the value (the mapping, another
+  it or in every branch of a `oneOf`/`anyOf` around it but `null`), when nothing else claims the value (the mapping, another
   variant's value or schema name, an inline variant's value), instead of by its schema name, which such a property
   never holds; a subclass that inherits the value of another variant keeps its schema name. Such unions without a
   mapping (the OpenAI specification has hundreds of variants like that) select their variants instead of none.

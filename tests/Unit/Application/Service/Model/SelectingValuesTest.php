@@ -284,6 +284,19 @@ final class SelectingValuesTest extends TestCase
         yield 'a value in oneOf branches' => [['A' => $role(['type' => 'string', 'oneOf' => [['const' => 'a'], ['type' => 'null']]])], 'a: App\\Dto\\A', []];
         yield 'one value in two branches' => [['A' => $role(['type' => 'string', 'anyOf' => [['const' => 'a'], ['enum' => ['a']]]])], 'a: App\\Dto\\A', ['warning @A: The constructor of App\\Dto\\A does not check discriminator "role": only a string, integer or enum property can be checked.']];
         yield 'a value beside another variant' => [['A' => ['allOf' => [['$ref' => '#/components/schemas/B'], $role(['type' => 'string', 'const' => 'a'])]], 'B' => $free], 'a: App\\Dto\\A, B: App\\Dto\\B', ['warning @A/allOf/1/properties/role: Property "role" of App\\Dto\\A narrows the one App\\Dto\\B declares, whose type string the class keeps.']];
+        yield 'a cascade' => [['A' => $role(['const' => 'x']), 'B' => $role(['const' => 'x']), 'C' => $role(['const' => 'A'])], 'A: App\\Dto\\A, B: App\\Dto\\B, C: App\\Dto\\C', [
+            'warning @A: Discriminator value "A" is not a value of property "role", so it does not select App\\Dto\\A.',
+            'warning @B: Discriminator value "B" is not a value of property "role", so it does not select App\\Dto\\B.',
+            'warning @C: Discriminator value "C" is not a value of property "role", so it does not select App\\Dto\\C.',
+        ]];
+        yield 'a cascade the other way round' => [['C' => $role(['const' => 'A']), 'B' => $role(['const' => 'x']), 'A' => $role(['const' => 'x'])], 'C: App\\Dto\\C, B: App\\Dto\\B, A: App\\Dto\\A', [
+            'warning @C: Discriminator value "C" is not a value of property "role", so it does not select App\\Dto\\C.',
+            'warning @B: Discriminator value "B" is not a value of property "role", so it does not select App\\Dto\\B.',
+            'warning @A: Discriminator value "A" is not a value of property "role", so it does not select App\\Dto\\A.',
+        ]];
+        yield 'an empty value and any string in branches' => [['A' => $role(['type' => 'string', 'anyOf' => [['const' => ''], ['type' => 'string']]])], 'A: App\\Dto\\A', []];
+        yield 'any string and an empty value in branches' => [['A' => $role(['type' => 'string', 'anyOf' => [['type' => 'string'], ['const' => '']]])], 'A: App\\Dto\\A', []];
+        yield 'null before the value in branches' => [['A' => $role(['type' => 'string', 'oneOf' => [['type' => 'null'], ['const' => 'a']]])], 'a: App\\Dto\\A', []];
         yield 'its own name' => [['A' => $role(['enum' => ['A']])], 'A: App\\Dto\\A', []];
         yield 'an integer' => [['A' => $role(['type' => 'integer', 'enum' => [1]]), 'B' => $role(['type' => 'integer', 'enum' => [2]])], '1: App\\Dto\\A, 2: App\\Dto\\B', []];
         yield 'null beside the value' => [['A' => $role(['type' => ['string', 'null'], 'enum' => ['a', null]])], 'a: App\\Dto\\A', []];

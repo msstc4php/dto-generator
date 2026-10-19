@@ -167,12 +167,19 @@ final class VariantResolver
 
         $values = [];
         foreach (array_merge($declaration->oneOf(), $declaration->anyOf()) as $branch) {
-            if ($branch->types() === [] || $branch->nonNullTypes() !== []) {
-                $values[] = $this->valueIn($branch, $seen);
+            if ($branch->types() !== [] && $branch->nonNullTypes() === []) {
+                continue;
             }
+
+            $value = $this->valueIn($branch, $seen);
+            if ($value === null) {
+                return null;
+            }
+
+            $values[$value] = $value;
         }
 
-        return count(array_unique($values)) === 1 ? $values[0] : null;
+        return count($values) === 1 ? reset($values) : null;
     }
 
     /**
@@ -186,7 +193,7 @@ final class VariantResolver
         $names = [];
         $at = [];
         $schemas = [];
-        foreach ($candidates as [$name, $class, $location, $named]) {
+        foreach ($candidates as [$name, $class, $location, $variantSchema]) {
             if (isset($names[$class->fqcn()])) {
                 $diagnostics->warning(sprintf('Variant %s is listed twice.', $class->fqcn()), $location);
 
@@ -196,8 +203,8 @@ final class VariantResolver
             $classes[] = $class;
             $names[$class->fqcn()] = $name;
             $at[$class->fqcn()] = $location;
-            if ($named instanceof Schema) {
-                $schemas[$class->fqcn()] = $named;
+            if ($variantSchema instanceof Schema) {
+                $schemas[$class->fqcn()] = $variantSchema;
             }
         }
 
@@ -209,16 +216,45 @@ final class VariantResolver
         }
 
         // The value an inline variant gives is all that selects it, so it goes before any schema name.
-        $unmapped = [];
-        foreach ([false, true] as $named) {
-            foreach ($classes as $class) {
-                if (!isset($mapped[$class->fqcn()]) && isset($schemas[$class->fqcn()]) === $named) {
-                    $unmapped[] = $class;
+        $inline = [];
+        $named = [];
+        foreach ($classes as $class) {
+            if (!isset($mapped[$class->fqcn()])) {
+                if (isset($schemas[$class->fqcn()])) {
+                    $named[] = $class;
+                } else {
+                    $inline[] = $class;
                 }
             }
         }
 
+        $unmapped = array_merge($inline, $named);
         $values = $this->implicitValues($unmapped, $names, $schemas, $explicit, $discriminator->propertyName());
+        $winners = $this->winners($unmapped, $values, $schemas, $explicit, $at, $schema, $diagnostics);
+
+        // Implicit values follow the variants' order, after the explicit mapping: it becomes the Serializer's map.
+        foreach ($classes as $class) {
+            if (isset($winners[$class->fqcn()])) {
+                $mapping[$winners[$class->fqcn()]] = $class;
+            }
+        }
+
+        return new Variants($classes, $mapping === [] ? null : new DiscriminatorModel($discriminator->propertyName(), $mapping), $listed);
+    }
+
+    /**
+     * The value each variant the mapping leaves out keeps, first come first served, reporting the others.
+     *
+     * @param list<ClassName> $unmapped inline variants first
+     * @param array<string, string> $values by FQCN
+     * @param array<string, Schema> $schemas by FQCN, of the variants not inline
+     * @param array<int|string, ClassName> $explicit the mapping
+     * @param array<string, SchemaLocation> $at by FQCN
+     *
+     * @return array<string, string> by FQCN
+     */
+    private function winners(array $unmapped, array $values, array $schemas, array $explicit, array $at, Schema $schema, Diagnostics $diagnostics): array
+    {
         $taken = $explicit;
         $winners = [];
         foreach ($unmapped as $class) {
@@ -246,14 +282,7 @@ final class VariantResolver
             $winners[$class->fqcn()] = $value;
         }
 
-        // The mapping keeps the order of the variants.
-        foreach ($classes as $class) {
-            if (isset($winners[$class->fqcn()])) {
-                $mapping[$winners[$class->fqcn()]] = $class;
-            }
-        }
-
-        return new Variants($classes, $mapping === [] ? null : new DiscriminatorModel($discriminator->propertyName(), $mapping), $listed);
+        return $winners;
     }
 
     /**
