@@ -27,19 +27,24 @@ final class ExtensionSettings
 
     private ?bool $verifyClasses;
 
+    /** @var list<ExcludedExtension> */
+    private array $excluded;
+
     /**
      * @param list<ClassName> $classes extensions listed explicitly, in order
      * @param array<int|string, JsonValue> $config extensionConfig sections by extension name
      * @param array<string, AttributeDeclaration> $aliases attributeAliases: key → attribute template
      * @param bool|null $verifyClasses null for "auto"
+     * @param list<ExcludedExtension> $excluded what discovery leaves out
      */
-    public function __construct(array $classes, bool $discover, array $config, array $aliases, ?bool $verifyClasses)
+    public function __construct(array $classes, bool $discover, array $config, array $aliases, ?bool $verifyClasses, array $excluded = [])
     {
         $this->classes = $classes;
         $this->discover = $discover;
         $this->config = $config;
         $this->aliases = $aliases;
         $this->verifyClasses = $verifyClasses;
+        $this->excluded = $excluded;
     }
 
     /**
@@ -74,5 +79,13 @@ final class ExtensionSettings
     public function verifyClasses(): ?bool
     {
         return $this->verifyClasses;
+    }
+
+    /**
+     * @return list<ExcludedExtension>
+     */
+    public function excluded(): array
+    {
+        return $this->excluded;
     }
 }

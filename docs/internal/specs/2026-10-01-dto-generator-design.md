@@ -110,7 +110,7 @@ formats:
 attributeAliases:
   x-audit: { class: App\Attr\Audited, args: { level: '{value}' } }
 verifyClasses: auto            # auto | true | false
-discoverExtensions: true       # автообнаружение через composer extra (§8)
+discoverExtensions: true       # автообнаружение через composer extra (§8); или { exclude: [vendor/pkg, Класс] }
 extensions:
   - MSSTC4PHP\DtoGeneratorBridgeSymfony\SymfonyExtension
 extensionConfig:
@@ -381,7 +381,9 @@ interface ClassEnricher
    установленных пакетов (читается из `vendor/composer/installed.json` той
    установки, из которой запущен генератор: vendor проекта при обычной
    установке, vendor образа в Docker; глобально установленный генератор
-   расширений проекта не видит). Отключается через `discoverExtensions: false`.
+   расширений проекта не видит). Отключается через `discoverExtensions: false`;
+   `discoverExtensions: {exclude: [...]}` (1.8) не грузит расширения перечисленных
+   пакетов или классов, неиспользованная запись — warning.
 
 Порядок применения: сначала встроенное `CustomAttributes`, затем явные
 расширения в порядке конфига, затем обнаруженные — по имени пакета.

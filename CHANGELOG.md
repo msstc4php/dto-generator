@@ -6,6 +6,11 @@ All notable changes to this package are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `discoverExtensions: {exclude: [...]}` turns discovery on but leaves out the extensions of the packages it lists, or
+  single extension classes, without loading them; an entry that leaves out nothing gives a warning.
+
 ## [1.7.0] - 2026-10-16
 
 ### Changed

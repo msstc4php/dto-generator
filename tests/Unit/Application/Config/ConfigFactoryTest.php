@@ -6,6 +6,7 @@ namespace MSSTC4PHP\DtoGenerator\Tests\Unit\Application\Config;
 
 use InvalidArgumentException;
 use MSSTC4PHP\DtoGenerator\Application\Config\ConfigFactory;
+use MSSTC4PHP\DtoGenerator\Application\Config\ExcludedExtension;
 use MSSTC4PHP\DtoGenerator\Application\Config\GeneratorConfig;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostic;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
@@ -158,6 +159,19 @@ final class ConfigFactoryTest extends TestCase
             'reserved alias prefix' => [['version' => 1, 'attributeAliases' => ['x-php-audit' => []], 'sources' => [$source]], 'outside the reserved', '/attributeAliases/x-php-audit'],
             'alias not object' => [['version' => 1, 'attributeAliases' => ['x-audit' => 'App\A'], 'sources' => [$source]], 'An alias must be an object', '/attributeAliases/x-audit'],
             'bad verifyClasses' => [['version' => 1, 'verifyClasses' => 'yes', 'sources' => [$source]], 'must be "auto", true or false', '/verifyClasses'],
+            'discoverExtensions not bool' => [['version' => 1, 'discoverExtensions' => 'yes', 'sources' => [$source]], '"discoverExtensions" must be true, false or an object', '/discoverExtensions'],
+            'discoverExtensions null' => [['version' => 1, 'discoverExtensions' => null, 'sources' => [$source]], '"discoverExtensions" must be true, false or an object', '/discoverExtensions'],
+            'exclude after a bad entry' => [['version' => 1, 'discoverExtensions' => ['exclude' => [1, 'Not A Class']], 'sources' => [$source]], 'class: "Not A Class" is not a valid class name', '/discoverExtensions/exclude/1'],
+            'exclude reserved class' => [['version' => 1, 'discoverExtensions' => ['exclude' => ['App\\List']], 'sources' => [$source]], '"List" is a reserved word', '/discoverExtensions/exclude/0'],
+            'remoteRefs prefix after a bad entry' => [['version' => 1, 'remoteRefs' => ['allow' => [1, 'schemas.example.com/']], 'sources' => [$source]], 'A remote $ref prefix must be an absolute http or https URL', '/remoteRefs/allow/1'],
+            'extension after a bad entry' => [['version' => 1, 'extensions' => [1, 'Not A Class'], 'sources' => [$source]], 'is not a valid class name', '/extensions/1'],
+            'discoverExtensions list' => [['version' => 1, 'discoverExtensions' => ['a/b'], 'sources' => [$source]], '"discoverExtensions" must be true, false or an object', '/discoverExtensions'],
+            'discoverExtensions key' => [['version' => 1, 'discoverExtensions' => ['skip' => []], 'sources' => [$source]], 'Unknown key "skip"', '/discoverExtensions/skip'],
+            'exclude not a list' => [['version' => 1, 'discoverExtensions' => ['exclude' => 'a/b'], 'sources' => [$source]], '"exclude" must be a list of strings', '/discoverExtensions/exclude'],
+            'exclude not a string' => [['version' => 1, 'discoverExtensions' => ['exclude' => ['a/b', 1]], 'sources' => [$source]], 'Expected a non-empty string', '/discoverExtensions/exclude/1'],
+            'exclude upper-case package' => [['version' => 1, 'discoverExtensions' => ['exclude' => ['Acme/Pkg']], 'sources' => [$source]], 'Expected a package name in lower case (vendor/name) or an extension class', '/discoverExtensions/exclude/0'],
+            'exclude package of three parts' => [['version' => 1, 'discoverExtensions' => ['exclude' => ['a/b/c']], 'sources' => [$source]], 'Expected a package name in lower case (vendor/name) or an extension class', '/discoverExtensions/exclude/0'],
+            'exclude bad class' => [['version' => 1, 'discoverExtensions' => ['exclude' => ['a/b', 'Not A Class']], 'sources' => [$source]], 'Expected a package name in lower case (vendor/name) or an extension class', '/discoverExtensions/exclude/1'],
             'bad extension class' => [['version' => 1, 'extensions' => ['Not A Class'], 'sources' => [$source]], 'is not a valid class name', '/extensions/0'],
             'missing sources' => [['version' => 1], '"sources" is required', ''],
             'empty sources' => [['version' => 1, 'sources' => []], '"sources" must be a non-empty list', '/sources'],
@@ -453,6 +467,43 @@ final class ConfigFactoryTest extends TestCase
         self::assertSame(['x-phpstorm', 'x-dtox', 'x-empty'], array_keys($config->extensions()->aliases()));
         self::assertCount(2, $config->sources());
         self::assertSame(['A*', 'B*'], $config->sources()[0]->include());
+    }
+
+    /**
+     * @dataProvider discoverySettings
+     *
+     * @param bool|array<string, list<string>> $discover
+     * @param list<string> $excluded
+     */
+    public function testReadsWhichDiscoveredExtensionsAreLeftOut($discover, bool $on, array $excluded): void
+    {
+        $settings = $this->valid(['discoverExtensions' => $discover] + self::MINIMAL)->extensions();
+
+        self::assertSame($on, $settings->discover());
+        self::assertSame($excluded, array_map(static fn (ExcludedExtension $entry): string => $entry->index() . ' ' . $entry->describe(), $settings->excluded()));
+    }
+
+    /**
+     * @return iterable<string, array{bool|array<string, list<string>>, bool, list<string>}>
+     */
+    public static function discoverySettings(): iterable
+    {
+        yield 'on' => [true, true, []];
+        yield 'off' => [false, false, []];
+        yield 'an empty object' => [[], true, []];
+        yield 'packages and classes' => [['exclude' => ['acme/money-ext', '\Vendor\Ext\Audit', 'a.b-c/d_e--f']], true, ['0 acme/money-ext', '1 Vendor\Ext\Audit', '2 a.b-c/d_e--f']];
+    }
+
+    public function testKeepsTheValidPatternsOfASourceAsAList(): void
+    {
+        $diagnostics = new Diagnostics();
+        $config = (new ConfigFactory())->create(['version' => 1, 'sources' => [['spec' => 'a.yaml', 'namespace' => 'App\Dto', 'outputDir' => 'src', 'include' => [1, 'User*'], 'exclude' => [2, 'UserInternal']]]], self::PATH, $diagnostics);
+
+        self::assertNull($config);
+        self::assertSame(
+            ['/sources/0/include/0', '/sources/0/exclude/0'],
+            array_map(static fn (Diagnostic $error): string => substr($error->location()->toString(), strlen(self::PATH . '#')), $diagnostics->errors()),
+        );
     }
 
     public function testRequiresAnAbsoluteConfigPath(): void

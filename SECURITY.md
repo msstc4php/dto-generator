@@ -20,7 +20,7 @@ minor on each supported major.
   `verifyClasses: false` when the project is not trusted.
 - **Extensions are code.** Explicit `extensions` and those discovered from installed
   packages run inside the generator; `discoverExtensions: false` limits them to the
-  listed ones.
+  listed ones, `discoverExtensions: {exclude: [...]}` leaves out single packages or extension classes.
 - **Writes stay in `outputDir`.** Apart from a lock file per output directory in the
   system temporary directory, nothing outside the output directories is written;
   manifest entries that would leave them are refused, and a file without the
