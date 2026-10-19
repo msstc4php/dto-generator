@@ -6,32 +6,31 @@ All notable changes to this package are documented here. The format follows
 
 ## [Unreleased]
 
-### Changed
-
-- A property two `allOf` members give two classes is of the class that extends the other (`allOf: [$ref: Wide, …]`
-  with the `extends` strategy, also through other classes), instead of an error. A class merged from `Wide` does not
-  count: it keeps nothing of `Wide` but its properties. With a read or write model view the classes do not meet.
-
-- A variant of a discriminated `oneOf`/`anyOf` that the `mapping` leaves out is selected by the one value its
-  discriminator property allows (`const` or a one-value `enum`, also beside a `$ref`, in a one-member `allOf` around
-  it or in every branch of a `oneOf`/`anyOf` around it but `null`), when nothing else claims the value (the mapping, another
-  variant's value or schema name, an inline variant's value), instead of by its schema name, which such a property
-  never holds; a subclass that inherits the value of another variant keeps its schema name. Such unions without a
-  mapping (the OpenAI specification has hundreds of variants like that) select their variants instead of none.
-
-### Fixed
-
-- A class that has all the properties of a variant of a discriminated union no longer meets it in an `allOf`: the
-  variant accepts only the discriminator values that select it, which its schema does not tell.
-
 ### Added
 
 - An `allOf` with one member that is a `oneOf`/`anyOf` of objects without a discriminator, written there or behind a
   `$ref`, is the union of a class per variant with the rest of the `allOf` (`<Schema><Variant>`, extending the variant
   with the `extends` strategy), instead of an error. The OpenAI specification now generates whole, without `exclude`.
-
 - `discoverExtensions: {exclude: [...]}` turns discovery on but leaves out the extensions of the packages it lists, or
   single extension classes, without loading them; an entry that leaves out nothing gives a warning.
+
+### Changed
+
+- A property two `allOf` members give two classes is of the class that extends the other (`allOf: [$ref: Wide, …]`
+  with the `extends` strategy, also through other classes), instead of an error. A class merged from `Wide` does not
+  count: it keeps nothing of `Wide` but its properties. With a read or write model view the classes do not meet.
+- A variant of a discriminated `oneOf`/`anyOf` that the `mapping` leaves out is selected by the one value its
+  discriminator property allows (`const` or a one-value `enum`, also beside a `$ref`, in a one-member `allOf` around
+  it or in every branch of a `oneOf`/`anyOf` around it but `null`), when nothing else claims the value (the mapping,
+  another variant's value or schema name, an inline variant's value), instead of by its schema name, which such a
+  property never holds; a subclass that inherits the value of another variant keeps its schema name. Such unions
+  without a mapping (the OpenAI specification has hundreds of variants like that) select their variants instead of
+  none.
+
+### Fixed
+
+- A class that has all the properties of a variant of a discriminated union no longer meets it in an `allOf`: the
+  variant accepts only the discriminator values that select it, which its schema does not tell.
 
 ## [1.7.0] - 2026-10-16
 
