@@ -40,6 +40,8 @@ final class ViewsTest extends TestCase
         $tag = ['type' => 'object', 'properties' => ['a' => ['type' => 'string']]];
         $base = ['type' => 'object', 'required' => ['kind'], 'properties' => ['kind' => ['type' => 'string']]];
         $variant = ['allOf' => [['$ref' => '#/components/schemas/Tag'], ['type' => 'object', 'properties' => ['v' => ['type' => 'string']]]]];
+        $root = ['allOf' => [['$ref' => '#/components/schemas/Root'], $tag]];
+        $sub = ['allOf' => [['$ref' => '#/components/schemas/Tag'], ['type' => 'object', 'properties' => ['b' => ['type' => 'string']]]]];
 
         return [
             'type' => [['Tag' => $tag], ['Tag' => ['type' => 'object', 'properties' => ['a' => ['type' => 'integer']]]]],
@@ -48,6 +50,10 @@ final class ViewsTest extends TestCase
             'variants' => [
                 ['Tag' => $base + ['discriminator' => ['propertyName' => 'kind']], 'A' => $variant, 'B' => $variant],
                 ['Tag' => $base + ['discriminator' => ['propertyName' => 'kind', 'mapping' => ['x' => '#/components/schemas/A', 'y' => '#/components/schemas/B']]], 'A' => $variant, 'B' => $variant],
+            ],
+            'kind and the values it is selected by' => [
+                ['Root' => $base + ['discriminator' => ['propertyName' => 'kind', 'mapping' => ['t' => '#/components/schemas/Tag']]], 'Tag' => $root],
+                ['Root' => $base + ['discriminator' => ['propertyName' => 'kind', 'mapping' => ['t' => '#/components/schemas/Tag', 's' => '#/components/schemas/Sub']]], 'Tag' => $root, 'Sub' => $sub],
             ],
         ];
     }

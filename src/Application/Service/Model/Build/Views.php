@@ -92,8 +92,11 @@ final class Views
             if (!$earlier instanceof ClassModel) {
                 $classes[] = $class;
                 $renamed[$fqcn] = $readAt[$model->source()->toString()] ?? $fqcn;
-            } elseif ($earlier->source()->equals($model->source()) && $this->shape($earlier) !== $this->shape($model)) {
-                $this->reconcile($earlier, $class, $opened, $diagnostics);
+            } elseif ($earlier->source()->equals($model->source())) {
+                $open = $this->reconcile($earlier, $class, $diagnostics);
+                if ($open instanceof BuiltClass) {
+                    $opened[$fqcn] = $open;
+                }
             }
         }
 
@@ -227,29 +230,32 @@ final class Views
     }
 
     /**
-     * A shared class the two builds disagree on: open in the build that extends it and final in the other, it is the open
-     * one; anything else is a defect.
-     *
-     * @param array<string, BuiltClass> $opened the write build's classes to keep instead of the read build's, by FQCN
+     * A shared class the two builds agree on but that one extends: open in that build and final in the other, the class
+     * both share is the open one, which the write build gives when it is that build. Anything else is a defect.
      */
-    private function reconcile(ClassModel $read, BuiltClass $write, array &$opened, Diagnostics $diagnostics): void
+    private function reconcile(ClassModel $read, BuiltClass $write, Diagnostics $diagnostics): ?BuiltClass
     {
         $readShape = $this->shape($read);
         $writeShape = $this->shape($write->model());
-        $kinds = [$readShape[0], $writeShape[0]];
-        $readShape[0] = $writeShape[0];
-        if ($readShape === $writeShape && in_array($kinds, [[ClassKind::FINAL, ClassKind::OPEN], [ClassKind::OPEN, ClassKind::FINAL]], true)) {
-            if ($kinds[1] === ClassKind::OPEN) {
-                $opened[$read->name()->fqcn()] = $write;
-            }
+        if ($readShape === $writeShape) {
+            return null;
+        }
 
-            return;
+        $kinds = [$readShape[0], $writeShape[0]];
+        if (array_slice($readShape, 1) === array_slice($writeShape, 1)
+            && [$read->discriminatedProperties(), $read->restoredMutators()] === [$write->model()->discriminatedProperties(), $write->model()->restoredMutators()]
+            // Value objects: equal when their properties are.
+            && serialize([$read->discriminatorValues(), $read->attributes()]) === serialize([$write->model()->discriminatorValues(), $write->model()->attributes()])
+            && in_array($kinds, [[ClassKind::FINAL, ClassKind::OPEN], [ClassKind::OPEN, ClassKind::FINAL]], true)) {
+            return $kinds[1] === ClassKind::OPEN ? $write : null;
         }
 
         $diagnostics->error(
             sprintf('%s comes out differently in the read and the write build, which is a defect of the generator; please report it.', $read->name()->fqcn()),
             $read->source(),
         );
+
+        return null;
     }
 
     /**

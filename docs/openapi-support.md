@@ -133,7 +133,8 @@ Classes are `final`, except the bases of `allOf` and of discriminated unions. At
   the PHP type ignores them. `readOnly`/`writeOnly` are ignored without a warning by default: they describe requests
   and responses, which one DTO does not tell apart. `dto.readWriteModels: split`, or `x-php-read-write: split` on one
   schema, gives such classes a read and a write model ([configuration](configuration.md#dto)); the keywords count on
-  properties only, not on the `items` of an array.
+  properties only, not on the `items` of an array. A class both models share is one class: when only one of them
+  extends it (an `allOf` over it in a `readOnly` property), it is open in both.
 - **OpenAPI 3.0 `nullable: true` has no effect** and gives a warning; use `type: [T, 'null']`.
 - **`const`** keeps a date or a `formats` class when `format` names one, and keeps the declared `type` (with a
   warning) when the constant does not fit it. A bare `const` member of `allOf` (`allOf: [{$ref: Code}, {const: x}]`)
