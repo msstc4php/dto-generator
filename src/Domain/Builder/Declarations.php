@@ -32,6 +32,9 @@ final class Declarations
     /** @var array<string, Schema> by FQCN */
     private array $schemas;
 
+    /** @var array<string, array<string, ClassName>> FQCN → by FQCN */
+    private array $allOfClasses = [];
+
     /**
      * @param array<string, ClassName> $classes location key → class
      * @param array<string, EnumType> $enums location key → enum
@@ -66,6 +69,26 @@ final class Declarations
     public function schemaOf(ClassName $class): ?Schema
     {
         return $this->schemas[$class->fqcn()] ?? null;
+    }
+
+    /**
+     * @param array<string, array<string, ClassName>> $allOfClasses FQCN → the classes whose schemas the class's `allOf`
+     *                                                              has, by FQCN
+     */
+    public function withAllOfClasses(array $allOfClasses): self
+    {
+        $declarations = clone $this;
+        $declarations->allOfClasses = $allOfClasses;
+
+        return $declarations;
+    }
+
+    /**
+     * Whether the schema of a generated class has the other's among its `allOf`, so its values are the other's too.
+     */
+    public function hasInAllOf(ClassName $class, ClassName $member): bool
+    {
+        return isset($this->allOfClasses[$class->fqcn()][$member->fqcn()]);
     }
 
     public function classAt(string $key): ?ClassName

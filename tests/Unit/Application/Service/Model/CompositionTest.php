@@ -397,6 +397,76 @@ final class CompositionTest extends TestCase
         self::assertSame(["opts: App\\Dto\\{$expected}|null"], ModelFixture::classes($output)['App\\Dto\\Rev']);
     }
 
+    /**
+     * @dataProvider subclasses
+     *
+     * @param array<string, array<array-key, mixed>> $schemas
+     */
+    public function testMeetsAClassWithOneWhoseAllOfHasIt(array $schemas, string $strategy, string $expected): void
+    {
+        $wide = ['type' => 'object', 'additionalProperties' => false, 'properties' => ['a' => ['type' => 'string']]];
+        $output = ModelFixture::build($schemas + [
+            'Wide' => $wide,
+            'Req' => ['allOf' => [
+                ['type' => 'object', 'properties' => ['opts' => ['$ref' => '#/components/schemas/Wide']]],
+                ['type' => 'object', 'properties' => ['opts' => ['$ref' => '#/components/schemas/Narrow']]],
+            ]],
+            'Rev' => ['allOf' => [
+                ['type' => 'object', 'properties' => ['opts' => ['$ref' => '#/components/schemas/Narrow']]],
+                ['type' => 'object', 'properties' => ['opts' => ['$ref' => '#/components/schemas/Wide']]],
+            ]],
+        ], [], ['*'], $strategy);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(["opts: App\\Dto\\{$expected}|null"], ModelFixture::classes($output)['App\\Dto\\Req']);
+        self::assertSame(["opts: App\\Dto\\{$expected}|null"], ModelFixture::classes($output)['App\\Dto\\Rev']);
+    }
+
+    /**
+     * @return iterable<string, array{array<string, array<array-key, mixed>>, string, string}>
+     */
+    public static function subclasses(): iterable
+    {
+        $more = ['type' => 'object', 'properties' => ['b' => ['type' => 'integer']]];
+        $narrow = ['allOf' => [['$ref' => '#/components/schemas/Wide'], $more]];
+
+        foreach ([AllOfStrategy::EXTENDS, AllOfStrategy::MERGE] as $strategy) {
+            yield "a member, {$strategy}" => [['Narrow' => $narrow], $strategy, 'Narrow'];
+            yield "a member of a member, {$strategy}" => [['Narrow' => ['allOf' => [['$ref' => '#/components/schemas/Mid'], $more]], 'Mid' => ['allOf' => [['$ref' => '#/components/schemas/Wide'], ['type' => 'object', 'properties' => ['c' => ['type' => 'integer']]]]]], $strategy, 'Narrow'];
+            yield "an inline member's member, {$strategy}" => [['Narrow' => ['allOf' => [['allOf' => [['$ref' => '#/components/schemas/Wide']]], $more]]], $strategy, 'Narrow'];
+            yield "through an alias, {$strategy}" => [['Narrow' => ['allOf' => [['$ref' => '#/components/schemas/Alias'], $more]], 'Alias' => ['$ref' => '#/components/schemas/Wide']], $strategy, 'Narrow'];
+            yield "a class twice, {$strategy}" => [[
+                'Narrow' => ['allOf' => [['$ref' => '#/components/schemas/Base'], ['$ref' => '#/components/schemas/Mid'], $more]],
+                'Mid' => ['allOf' => [['$ref' => '#/components/schemas/Base'], ['$ref' => '#/components/schemas/Wide']]],
+                'Base' => ['type' => 'object', 'properties' => ['z' => ['type' => 'string']]],
+            ], $strategy, 'Narrow'];
+            yield "a member with a cycle, {$strategy}" => [['Narrow' => ['allOf' => [['$ref' => '#/components/schemas/Wide'], ['type' => 'object', 'properties' => ['self' => ['$ref' => '#/components/schemas/Narrow']]]]]], $strategy, 'Narrow'];
+        }
+    }
+
+    public function testMeetsNoClassWithOneThatOnlyHoldsIt(): void
+    {
+        $at = self::AT;
+        $wide = ['type' => 'object', 'additionalProperties' => false, 'properties' => ['a' => ['type' => 'string']]];
+        $req = ['allOf' => [
+            ['type' => 'object', 'properties' => ['opts' => ['$ref' => '#/components/schemas/Wide']]],
+            ['type' => 'object', 'properties' => ['opts' => ['$ref' => '#/components/schemas/Narrow']]],
+        ]];
+        $error = "error {$at}Req/allOf/1/properties/opts: Property \"opts\" of App\\Dto\\Req is App\\Dto\\Narrow|null here, but App\\Dto\\Wide|null in an earlier allOf member.";
+
+        $property = ModelFixture::build(['Wide' => $wide, 'Req' => $req, 'Narrow' => ['type' => 'object', 'properties' => ['w' => ['$ref' => '#/components/schemas/Wide']]]]);
+        $variant = ModelFixture::build(['Wide' => $wide, 'Req' => $req, 'Narrow' => ['oneOf' => [['$ref' => '#/components/schemas/Wide'], ['type' => 'object', 'properties' => ['b' => ['type' => 'string']]]]]]);
+        $viewed = ModelFixture::views([
+            'Wide' => $wide,
+            'Req' => $req,
+            'Narrow' => ['allOf' => [['$ref' => '#/components/schemas/Wide'], ['type' => 'object', 'properties' => ['b' => ['type' => 'string', 'readOnly' => true]]]]],
+        ]);
+
+        self::assertContains($error, ModelFixture::messages($property));
+        self::assertNotContains('opts: App\\Dto\\Narrow|null', ModelFixture::classes($variant)['App\\Dto\\Req'] ?? []);
+        self::assertSame(["error {$at}Req/allOf/1/properties/opts: Property \"opts\" of App\\Dto\\ReqRead is App\\Dto\\NarrowRead|null here, but App\\Dto\\Wide|null in an earlier allOf member."], ModelFixture::messages($viewed));
+    }
+
     public function testMeetsNoClassWhoseSchemaLeavesOutWhatItHolds(): void
     {
         $at = self::AT;

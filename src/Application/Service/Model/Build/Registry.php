@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MSSTC4PHP\DtoGenerator\Application\Service\Model\Build;
 
 use MSSTC4PHP\DtoGenerator\Domain\Builder\ClassBuilder;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\ClassLookup;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\Composition;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\Declarations;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\PropertyView;
@@ -15,6 +16,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\EnumModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\Identifier;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
+use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaGraph;
 
 /**
  * The names claimed during one build, the classes still to build and the enums already built.
@@ -254,7 +256,29 @@ final class Registry
 
     public function declarations(): Declarations
     {
-        // A view leaves out properties, a companion adds them: the schema no longer tells which objects the class holds.
+        return new Declarations($this->classes, $this->enums, $this->skipped, $this->abandoned, $this->schemas());
+    }
+
+    /**
+     * The declarations with the classes each class's `allOf` has, once every class is declared.
+     */
+    public function declarationsWithAllOf(SchemaGraph $graph): Declarations
+    {
+        $declarations = $this->declarations();
+        $lookup = new ClassLookup($graph, $declarations);
+        $allOfClasses = array_map(static fn (Schema $schema): array => $lookup->allOfClasses($schema), $this->schemas());
+
+        return $declarations->withAllOfClasses($allOfClasses);
+    }
+
+    /**
+     * The schema of each class that holds what it says, by FQCN: a view leaves out properties, a companion adds them,
+     * and the schema no longer tells which objects the class holds.
+     *
+     * @return array<string, Schema>
+     */
+    private function schemas(): array
+    {
         $schemas = [];
         foreach (!$this->view instanceof View && !$this->properties instanceof PropertyView ? $this->planned : [] as [$schema, $name]) {
             if ($this->companions($schema) === []) {
@@ -262,6 +286,6 @@ final class Registry
             }
         }
 
-        return new Declarations($this->classes, $this->enums, $this->skipped, $this->abandoned, $schemas);
+        return $schemas;
     }
 }

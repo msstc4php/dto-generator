@@ -131,7 +131,7 @@ final class Action
             $this->hoist($planned[0], $compositions[$index], $planned[1], $planned[2], $registry, $enums, $diagnostics, $input->graph());
         }
 
-        $declarations = $registry->declarations();
+        $declarations = $registry->declarationsWithAllOf($input->graph());
         $types = new TypeMapper($input->graph(), $declarations, $input->target(), $input->formats());
         $superseded = new Superseded();
         $builder = new ClassBuilder(
