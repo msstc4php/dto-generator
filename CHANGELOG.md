@@ -29,6 +29,8 @@ All notable changes to this package are documented here. The format follows
 
 ### Fixed
 
+- A YAML document with keys written after `?` (Twilio writes its long schema names so) is read: a key that is a plain
+  or quoted scalar is taken as such; symfony/yaml rejected the whole document.
 - A class that has all the properties of a variant of a discriminated union no longer meets it in an `allOf`: the
   variant accepts only the discriminator values that select it, which its schema does not tell.
 

@@ -158,6 +158,61 @@ final class FileDocumentLoaderTest extends TestCase
         }
     }
 
+    public function testReadsKeysWrittenAfterAQuestionMark(): void
+    {
+        $yaml = "components:\n  schemas:\n    ? a.very.long.name\n    : type: object\n      properties:\n        sid: {type: string}\n"
+            . "    ? 'quoted: name'\n    :\n      type: string\n    ? 'it''s'\n    : plain\n    ? with \"quotes\" and colon:x\n    : [1]\n    after: 1\n"
+            . "  text: |\n    ? not a key\n    : not a value\n";
+
+        $root = (new FileDocumentLoader())->load($this->file('explicit.yaml', $yaml))->root();
+
+        self::assertSame(
+            [
+                'components' => [
+                    'schemas' => [
+                        'a.very.long.name' => ['type' => 'object', 'properties' => ['sid' => ['type' => 'string']]],
+                        'quoted: name' => ['type' => 'string'],
+                        "it's" => 'plain',
+                        'with "quotes" and colon:x' => [1],
+                        'after' => 1,
+                    ],
+                    'text' => "? not a key\n: not a value\n",
+                ],
+            ],
+            $root,
+        );
+    }
+
+    public function testTellsAnErrorAfterRewritingKeys(): void
+    {
+        $this->expectException(DocumentLoadFailed::class);
+        $this->expectExceptionMessage('Keys written after "?" were rewritten first, so the text quoted is the rewritten one.');
+
+        (new FileDocumentLoader())->load($this->file('rewritten.yaml', "? k\n: v\nbad: [\n"));
+    }
+
+    public function testStillRejectsAComplexKey(): void
+    {
+        $this->expectException(DocumentLoadFailed::class);
+        $this->expectExceptionMessage('Complex mappings are not supported');
+
+        (new FileDocumentLoader())->load($this->file('complex.yaml', "? [a, b]\n: value\n? {a: b}\n: value\n"));
+    }
+
+    public function testRejectsAliasesThatExpandBeyondTheLimitBeforeTakingTheMarksOff(): void
+    {
+        $this->expectException(DocumentLoadFailed::class);
+        $this->expectExceptionMessage('aliases expand to more than');
+
+        // A key after "?" sends the document through the rewrite, whose result is walked to take the marks off.
+        $yaml = "openapi: 3.1.0\n? k\n: v\nl0: &l0 [1, 2, 3, 4, 5, 6]\n";
+        for ($level = 1; $level <= 8; $level++) {
+            $yaml .= sprintf("l%d: &l%1\$d [%s]\n", $level, implode(', ', array_fill(0, 6, '*l' . ($level - 1))));
+        }
+
+        (new FileDocumentLoader())->load($this->file('marked-bomb.yaml', $yaml));
+    }
+
     public function testRejectsYamlAliasesThatExpandBeyondTheLimit(): void
     {
         // Each level aliases the previous one six times: 6^8 values from under a kilobyte.
