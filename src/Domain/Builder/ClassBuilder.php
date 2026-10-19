@@ -143,7 +143,7 @@ final class ClassBuilder
             $key = Identifier::asciiLower($property->name());
             if (isset($taken[$key])) {
                 $diagnostics->error(
-                    sprintf('Property "%s" becomes $%s, which "%s" already uses; set "x-php-name" on one of them.', $wireName, $property->name(), $taken[$key]),
+                    sprintf('Property "%s" becomes $%s, which "%s" already uses; set "x-php-name" on one of them, in the document or "propertyNames" of the source.', $wireName, $property->name(), $taken[$key]),
                     $propertySchema->location(),
                 );
 
@@ -183,7 +183,7 @@ final class ClassBuilder
 
         if ($nameTaken) {
             $diagnostics->error(
-                'The class already has a property $additionalProperties; rename it with "x-php-name".',
+                'The class already has a property $additionalProperties; rename it with "x-php-name", in the document or "propertyNames" of the source.',
                 $schema->location()->child('additionalProperties'),
             );
 
@@ -333,7 +333,7 @@ final class ClassBuilder
 
         $name = $this->names->propertyName($wireName);
         if ($name === null) {
-            $diagnostics->error(sprintf('Property name "%s" has no usable characters; set "x-php-name".', $wireName), $schema->location());
+            $diagnostics->error(sprintf('Property name "%s" has no usable characters; set "x-php-name", in the document or "propertyNames" of the source.', $wireName), $schema->location());
         }
 
         return $name;

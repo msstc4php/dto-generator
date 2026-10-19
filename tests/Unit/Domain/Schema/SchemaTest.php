@@ -315,4 +315,31 @@ final class SchemaTest extends TestCase
 
         self::assertSame($id, $this->builder()->property('id', $id)->build()->requireProperty('id'));
     }
+
+    /**
+     * @return iterable<string, array{list<string>, bool}>
+     */
+    public static function subschemaPaths(): iterable
+    {
+        yield 'the schema itself' => [[], true];
+        yield 'a property' => [['properties', 'a'], true];
+        yield 'a nested member' => [['allOf', '0', 'properties', 'a', 'items', 'not'], true];
+        yield 'an item of a list of items' => [['items', '1', 'additionalProperties'], true];
+        yield 'the items' => [['items'], true];
+        yield 'within the items' => [['items', 'properties', 'a'], true];
+        yield 'the map of properties' => [['properties'], false];
+        yield 'the list of members' => [['allOf'], false];
+        yield 'a default' => [['properties', 'a', 'default'], false];
+        yield 'within a constant' => [['const', 'properties', 'a'], false];
+    }
+
+    /**
+     * @dataProvider subschemaPaths
+     *
+     * @param list<string> $segments
+     */
+    public function testTellsAPathToASubschema(array $segments, bool $expected): void
+    {
+        self::assertSame($expected, Schema::leadsToASubschema($segments));
+    }
 }

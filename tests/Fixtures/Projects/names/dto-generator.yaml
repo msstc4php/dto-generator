@@ -1,0 +1,12 @@
+version: 1
+target:
+  php: 8.2
+sources:
+  - spec: openapi.yaml
+    namespace: App\Dto
+    outputDir: src/Dto
+    # Keys starting with "#" are quoted: YAML reads the rest of the line as a comment.
+    classNames:
+      '#/components/schemas/fields': FieldList
+    propertyNames:
+      '#/components/schemas/Fields/properties/issueType': issueTypeObject

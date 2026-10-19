@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Tests\Unit\Application\Service\Schemas;
 
+use MSSTC4PHP\DtoGenerator\Application\Config\NameOverride;
 use MSSTC4PHP\DtoGenerator\Application\Config\SourceConfig;
 use MSSTC4PHP\DtoGenerator\Application\Port\DocumentLoadFailed;
 use MSSTC4PHP\DtoGenerator\Application\Service\Schemas\Load\Action;
@@ -13,8 +14,11 @@ use MSSTC4PHP\DtoGenerator\Domain\Builder\SchemaParser;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\ClaimedKeyword;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostic;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\KeywordChecks;
+use MSSTC4PHP\DtoGenerator\Domain\Schema\Reference;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\ReferenceUse;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\ResolvedSchema;
+use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
+use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
 use MSSTC4PHP\DtoGenerator\Tests\Support\ConfigMother;
 use MSSTC4PHP\DtoGenerator\Tests\Support\InMemoryDocumentLoader;
 use PHPUnit\Framework\TestCase;
@@ -324,6 +328,163 @@ final class LoadTest extends TestCase
             static fn (ResolvedSchema $schema): array => [$schema->name(), $schema->source(), $schema->isSelected()],
             $output->graph()->all(),
         );
+    }
+
+    public function testWritesTheConfiguredNamesIntoTheSchemasAsTheyAreRead(): void
+    {
+        $fields = ['properties' => ['issuetype' => ['type' => 'string'], 'issueType' => ['$ref' => '../shared/common.json#/Type']]];
+        $output = $this->load(
+            [
+                self::SPEC => $this->spec(['field' => ['type' => 'object'], 'fields' => ['type' => 'object', 'x-php-class-name' => 'Mine'], 'Fields' => $fields, 'Both' => ['allOf' => [['$ref' => '#/components/schemas/Fields'], ['properties' => ['a' => ['type' => 'object']]]]]]),
+                self::SHARED => ['Type' => ['type' => 'object']],
+            ],
+            $this->named(
+                ['*'],
+                [NameOverride::CLASS_NAME, '#/components/schemas/fields', 'FieldList'],
+                [NameOverride::CLASS_NAME, '#/components/schemas/Both/allOf/1/properties/a', 'BothA'],
+                [NameOverride::CLASS_NAME, '../shared/common.json#/Type', 'IssueType'],
+                [NameOverride::PROPERTY_NAME, '#/components/schemas/Fields/properties/issueType', 'issueTypeObject'],
+            ),
+        );
+
+        $schemas = [];
+        foreach ($output->graph()->all() as $schema) {
+            $schemas[$schema->name()] = $schema->schema();
+        }
+
+        self::assertSame([], $this->messages($output));
+        self::assertSame('FieldList', $schemas['fields']->extensions()->get('x-php-class-name'));
+        self::assertFalse($schemas['field']->extensions()->has('x-php-class-name'));
+        self::assertSame('issueTypeObject', $this->property($schemas['Fields'], 'issueType')->extensions()->get('x-php-name'));
+        self::assertFalse($this->property($schemas['Fields'], 'issuetype')->extensions()->has('x-php-name'));
+        self::assertSame('BothA', $this->property($schemas['Both']->allOf()[1], 'a')->extensions()->get('x-php-class-name'));
+        self::assertSame('IssueType', $schemas['Type']->extensions()->get('x-php-class-name'));
+    }
+
+    public function testWarnsOfANameGivenToNoSchemaItReads(): void
+    {
+        $tag = [
+            'type' => 'object', 'default' => ['k' => 1], 'const' => ['k' => 1], 'allOf' => [['type' => 'object']], 'properties' => ['p' => ['type' => 'object'], 'q' => []],
+            'items' => [['type' => 'object']], 'not' => ['type' => 'object'], 'additionalProperties' => false,
+        ];
+        $output = $this->load(
+            [self::SPEC => $this->spec(['Tag' => $tag, 'Skipped' => ['type' => 'object']])],
+            $this->named(
+                ['Tag'],
+                [NameOverride::CLASS_NAME, '#/components/schemas/Pet', 'A'],
+                [NameOverride::CLASS_NAME, '#/components/schemas/Tag/type/x', 'B'],
+                [NameOverride::CLASS_NAME, '#/components/schemas/Tag/allOf', 'C'],
+                [NameOverride::CLASS_NAME, '#/components/schemas/Skipped', 'D'],
+                [NameOverride::CLASS_NAME, '../shared/common.json', 'E'],
+                [NameOverride::CLASS_NAME, '#/components/schemas/Tag/default', 'F'],
+                [NameOverride::CLASS_NAME, '#/components/schemas/Tag/const', 'G'],
+                [NameOverride::CLASS_NAME, '#/components/schemas/Tag/properties', 'H'],
+                [NameOverride::CLASS_NAME, '#/components/schemas/Tag/allOf/0', 'I'],
+                [NameOverride::CLASS_NAME, '#/components/schemas/Tag/items/0', 'J'],
+                [NameOverride::CLASS_NAME, '#/components/schemas/Tag/not', 'K'],
+                [NameOverride::CLASS_NAME, '#/components/schemas/Tag/items', 'L'],
+                [NameOverride::CLASS_NAME, '#/components/schemas/Tag/additionalProperties', 'M'],
+                [NameOverride::CLASS_NAME, '#/components/schemas/Tag/properties/q', 'N'],
+            ),
+        );
+
+        $at = 'warning /project/dto-generator.yaml#/n/';
+        self::assertSame(
+            [
+                $at . '0: No schema read is at /project/api/openapi.yaml#/components/schemas/Pet; the name is not used.',
+                $at . '1: No schema read is at /project/api/openapi.yaml#/components/schemas/Tag/type/x; the name is not used.',
+                $at . '2: No schema read is at /project/api/openapi.yaml#/components/schemas/Tag/allOf; the name is not used.',
+                $at . '3: No schema read is at /project/api/openapi.yaml#/components/schemas/Skipped; the name is not used.',
+                $at . '4: No schema read is at /project/shared/common.json#; the name is not used. To name a schema inside the file, add its JSON pointer ("common.json#/Type").',
+                $at . '5: No schema read is at /project/api/openapi.yaml#/components/schemas/Tag/default; the name is not used.',
+                $at . '6: No schema read is at /project/api/openapi.yaml#/components/schemas/Tag/const; the name is not used.',
+                $at . '7: No schema read is at /project/api/openapi.yaml#/components/schemas/Tag/properties; the name is not used.',
+                $at . '11: No schema read is at /project/api/openapi.yaml#/components/schemas/Tag/items; the name is not used.',
+                $at . '12: No schema read is at /project/api/openapi.yaml#/components/schemas/Tag/additionalProperties; the name is not used.',
+            ],
+            array_values(array_filter($this->messages($output), static fn (string $message): bool => strpos($message, $at) === 0)),
+        );
+        $schema = $output->graph()->all()[0]->schema();
+        $default = $schema->default();
+        self::assertNotNull($default);
+        self::assertSame(['k' => 1], $default->value());
+        self::assertSame(['p', 'q'], $schema->propertyNames());
+        $q = $schema->property('q');
+        self::assertNotNull($q);
+        self::assertSame('N', $q->extensions()->get('x-php-class-name'));
+    }
+
+    public function testNamesASchemaThatIsAWholeFile(): void
+    {
+        $output = $this->load(
+            [self::SPEC => $this->spec(['User' => ['properties' => ['salary' => ['$ref' => '../shared/common.json']]]]), self::SHARED => ['type' => 'object']],
+            $this->named(['*'], [NameOverride::CLASS_NAME, '../shared/common.json', 'Salary']),
+        );
+
+        self::assertSame([], $this->messages($output));
+        self::assertSame('Salary', $output->graph()->all()[1]->schema()->extensions()->get('x-php-class-name'));
+    }
+
+    public function testTakesTheNamesOfEverySourceAndRejectsTwoForOneSchema(): void
+    {
+        $output = $this->load(
+            [
+                self::SPEC => $this->spec(['User' => ['type' => 'object'], 'Money' => ['type' => 'object']]),
+                self::OTHER => $this->spec(['Pet' => ['properties' => ['price' => ['$ref' => '../api/openapi.yaml#/components/schemas/Money']]]]),
+            ],
+            $this->namedAt(self::SPEC, '/a/', ['*'], [NameOverride::CLASS_NAME, '#/components/schemas/User', 'Person'], [NameOverride::CLASS_NAME, '#/components/schemas/Money', 'Cash'], [NameOverride::PROPERTY_NAME, '#/components/schemas/Money', 'cash']),
+            $this->namedAt(self::OTHER, '/b/', ['*'], [NameOverride::CLASS_NAME, '#/components/schemas/Pet', 'Animal'], [NameOverride::CLASS_NAME, '../api/openapi.yaml#/components/schemas/Money', 'Cash'], [NameOverride::CLASS_NAME, '../api/openapi.yaml#/components/schemas/Money', 'Money']),
+        );
+
+        self::assertSame(
+            ['error /project/dto-generator.yaml#/b/2: /project/api/openapi.yaml#/components/schemas/Money is named "Cash" already, at /project/dto-generator.yaml#/a/1.'],
+            array_values(array_filter($this->messages($output), static fn (string $message): bool => strpos($message, 'error') === 0)),
+        );
+        $names = [];
+        foreach ($output->graph()->all() as $schema) {
+            $names[$schema->name()] = $schema->schema()->extensions()->get('x-php-class-name');
+        }
+
+        self::assertSame(['User' => 'Person', 'Money' => 'Cash', 'Pet' => 'Animal'], $names);
+    }
+
+    public function testLeavesTheNamesOfASourceItCannotReadUnreported(): void
+    {
+        $output = $this->load([], $this->named(['*'], [NameOverride::CLASS_NAME, '#/components/schemas/Pet', 'A']));
+
+        self::assertCount(1, $this->messages($output));
+        self::assertStringStartsWith('error /project/dto-generator.yaml', $this->messages($output)[0]);
+    }
+
+    /**
+     * @param list<string> $include
+     * @param array{NameOverride::CLASS_NAME|NameOverride::PROPERTY_NAME, string, string} ...$names keyword, reference and name
+     */
+    private function named(array $include, array ...$names): SourceConfig
+    {
+        return $this->namedAt(self::SPEC, '/n/', $include, ...$names);
+    }
+
+    /**
+     * @param list<string> $include
+     * @param array{NameOverride::CLASS_NAME|NameOverride::PROPERTY_NAME, string, string} ...$names keyword, reference and name
+     */
+    private function namedAt(string $spec, string $at, array $include, array ...$names): SourceConfig
+    {
+        $overrides = [];
+        foreach ($names as $index => [$keyword, $ref, $name]) {
+            $overrides[] = new NameOverride($keyword, Reference::target($ref, new SchemaLocation($spec)), $name, new SchemaLocation('/project/dto-generator.yaml', $at . $index));
+        }
+
+        return new SourceConfig($spec, 'App\\Dto' . strlen($at), '/project/src/Dto' . count($names), $include, [], $overrides);
+    }
+
+    private function property(Schema $schema, string $name): Schema
+    {
+        $property = $schema->property($name);
+        self::assertInstanceOf(Schema::class, $property);
+
+        return $property;
     }
 
     public function testKeepsLoadingAfterABrokenOrDuplicateSource(): void

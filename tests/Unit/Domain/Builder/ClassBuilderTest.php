@@ -116,12 +116,12 @@ final class ClassBuilderTest extends TestCase
             'names colliding after camelCase' => [
                 ['type' => 'object', 'properties' => ['user_name' => ['type' => 'string'], 'userName' => ['type' => 'string'], 'id' => ['type' => 'string']]],
                 ['userName' => 'user_name: string|null = NULL', 'id' => 'id: string|null = NULL'],
-                ["error {$at}/properties/userName: Property \"userName\" becomes \$userName, which \"user_name\" already uses; set \"x-php-name\" on one of them."],
+                ["error {$at}/properties/userName: Property \"userName\" becomes \$userName, which \"user_name\" already uses; set \"x-php-name\" on one of them, in the document or \"propertyNames\" of the source."],
             ],
             'names colliding by case' => [
                 ['type' => 'object', 'properties' => ['URL' => ['type' => 'string'], 'url' => ['type' => 'string']]],
                 ['url' => 'URL: string|null = NULL'],
-                ["error {$at}/properties/url: Property \"url\" becomes \$url, which \"URL\" already uses; set \"x-php-name\" on one of them."],
+                ["error {$at}/properties/url: Property \"url\" becomes \$url, which \"URL\" already uses; set \"x-php-name\" on one of them, in the document or \"propertyNames\" of the source."],
             ],
             'x-php-name' => [
                 ['type' => 'object', 'properties' => ['user_name' => ['type' => 'string', 'x-php-name' => 'login']]],
@@ -141,7 +141,7 @@ final class ClassBuilderTest extends TestCase
             'no usable name' => [
                 ['type' => 'object', 'properties' => ['§§§' => ['type' => 'string'], 'id' => ['type' => 'string']]],
                 ['id' => 'id: string|null = NULL'],
-                ["error {$at}/properties/§§§: Property name \"§§§\" has no usable characters; set \"x-php-name\"."],
+                ["error {$at}/properties/§§§: Property name \"§§§\" has no usable characters; set \"x-php-name\", in the document or \"propertyNames\" of the source."],
             ],
             'names only their signs tell apart' => [
                 ['type' => 'object', 'properties' => ['+1' => ['type' => 'integer'], '-1' => ['type' => 'integer'], '*' => ['type' => 'string'], '2' => ['type' => 'string']]],
@@ -156,7 +156,7 @@ final class ClassBuilderTest extends TestCase
             'a sign alone keeps its name' => [
                 ['type' => 'object', 'properties' => ['+1' => ['type' => 'integer'], 'x' => ['type' => 'integer', 'x-php-name' => '_1']]],
                 ['_1' => '+1: int|null = NULL'],
-                ["error {$at}/properties/x: Property \"x\" becomes \$_1, which \"+1\" already uses; set \"x-php-name\" on one of them."],
+                ["error {$at}/properties/x: Property \"x\" becomes \$_1, which \"+1\" already uses; set \"x-php-name\" on one of them, in the document or \"propertyNames\" of the source."],
             ],
             'skipped property' => [
                 ['type' => 'object', 'properties' => ['secret' => ['type' => 'string', 'x-php-skip' => true], 'id' => ['type' => 'string']]],
@@ -194,7 +194,7 @@ final class ClassBuilderTest extends TestCase
             'additional properties clash with a property' => [
                 ['type' => 'object', 'properties' => ['additionalProperties' => ['type' => 'string']], 'additionalProperties' => ['type' => 'integer']],
                 ['additionalProperties' => 'additionalProperties: string|null = NULL'],
-                ["error {$at}/additionalProperties: The class already has a property \$additionalProperties; rename it with \"x-php-name\"."],
+                ["error {$at}/additionalProperties: The class already has a property \$additionalProperties; rename it with \"x-php-name\", in the document or \"propertyNames\" of the source."],
             ],
             'default for an untyped property' => [
                 ['type' => 'object', 'properties' => ['any' => ['default' => 5]]],

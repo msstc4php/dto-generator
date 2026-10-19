@@ -1,0 +1,14 @@
+openapi: 3.1.0
+info: { title: Names, version: '1' }
+paths: {}
+components:
+  schemas:
+    fields:
+      type: object
+      properties:
+        all: { type: array, items: { $ref: '#/components/schemas/Fields' } }
+    Fields:
+      type: object
+      properties:
+        issuetype: { type: string }
+        issueType: { type: object, x-php-class-name: IssueType, properties: { id: { type: string } } }

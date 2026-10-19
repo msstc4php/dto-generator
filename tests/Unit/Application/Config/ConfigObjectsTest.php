@@ -8,8 +8,10 @@ use InvalidArgumentException;
 use MSSTC4PHP\DtoGenerator\Application\Config\DtoSettings;
 use MSSTC4PHP\DtoGenerator\Application\Config\ExtensionSettings;
 use MSSTC4PHP\DtoGenerator\Application\Config\GeneratorConfig;
+use MSSTC4PHP\DtoGenerator\Application\Config\NameOverride;
 use MSSTC4PHP\DtoGenerator\Application\Config\SourceConfig;
 use MSSTC4PHP\DtoGenerator\Application\Config\TargetSettings;
+use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
 use MSSTC4PHP\DtoGenerator\Domain\Target\AccessorStyle;
 use MSSTC4PHP\DtoGenerator\Domain\Target\AllOfStrategy;
 use MSSTC4PHP\DtoGenerator\Domain\Target\DateTimeClass;
@@ -89,5 +91,33 @@ final class ConfigObjectsTest extends TestCase
         self::assertTrue($source->selects('Tag'));
         self::assertFalse($source->selects('UserInternal'));
         self::assertFalse($source->selects('Order'));
+    }
+
+    public function testASourceKeepsItsNamesInAnotherOutputDirectory(): void
+    {
+        $name = new NameOverride(NameOverride::CLASS_NAME, new SchemaLocation('/api.yaml', '/components/schemas/a'), 'A', new SchemaLocation('/c.yaml'));
+
+        self::assertSame([$name], (new SourceConfig('/api.yaml', 'App', '/out', ['*'], [], [$name]))->withOutputDir('/other')->nameOverrides());
+        self::assertSame([], (new SourceConfig('/api.yaml', 'App', '/out', ['*'], []))->nameOverrides());
+    }
+
+    /**
+     * @return iterable<string, array{string, string, string}>
+     */
+    public static function malformedNameOverrides(): iterable
+    {
+        yield 'another keyword' => ['x-php-type', 'A', 'sets x-php-class-name or x-php-name, not "x-php-type"'];
+        yield 'no name' => [NameOverride::PROPERTY_NAME, '', 'needs a name'];
+    }
+
+    /**
+     * @dataProvider malformedNameOverrides
+     */
+    public function testANameOverrideSetsANameKeyword(string $keyword, string $name, string $message): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage($message);
+
+        new NameOverride($keyword, new SchemaLocation('/api.yaml'), $name, new SchemaLocation('/c.yaml'));
     }
 }

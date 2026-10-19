@@ -12,6 +12,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Exception\UnsupportedPhpVersion;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\Identifier;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Extensions;
+use MSSTC4PHP\DtoGenerator\Domain\Schema\Reference;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\AbstractEnum;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
@@ -384,7 +385,7 @@ final class ConfigFactory
     {
         $sources = [];
         foreach ($root->sectionList('sources') as $section) {
-            $section->rejectUnknownKeys(['spec', 'namespace', 'outputDir', 'include', 'exclude']);
+            $section->rejectUnknownKeys(['spec', 'namespace', 'outputDir', 'include', 'exclude', 'classNames', 'propertyNames']);
             $spec = $section->requiredString('spec');
             $namespace = $section->requiredString('namespace');
             $outputDir = $section->requiredString('outputDir');
@@ -404,14 +405,58 @@ final class ConfigFactory
                 $section->error('include', 'must not be empty');
             }
 
-            if ($spec === null || $namespace === null || $outputDir === null || $include === []) {
+            // Checked before the rest of the source, so every error of it shows at once.
+            $specPath = $spec === null ? null : Path::resolve($baseDir, $spec);
+            $names = array_merge(
+                $this->nameOverrides($section, 'classNames', NameOverride::CLASS_NAME, $specPath),
+                $this->nameOverrides($section, 'propertyNames', NameOverride::PROPERTY_NAME, $specPath),
+            );
+            if ($specPath === null || $namespace === null || $outputDir === null || $include === []) {
                 continue;
             }
 
-            $sources[] = new SourceConfig(Path::resolve($baseDir, $spec), $namespace, Path::resolve($baseDir, $outputDir), $include, $exclude);
+            $sources[] = new SourceConfig($specPath, $namespace, Path::resolve($baseDir, $outputDir), $include, $exclude, $names);
         }
 
         return $sources;
+    }
+
+    /**
+     * @param NameOverride::CLASS_NAME|NameOverride::PROPERTY_NAME $keyword
+     *
+     * @return list<NameOverride>
+     */
+    private function nameOverrides(RawSection $source, string $key, string $keyword, ?string $spec): array
+    {
+        if (!$source->has($key)) {
+            return [];
+        }
+
+        $section = $source->section($key);
+        $overrides = [];
+        foreach ($section->keys() as $ref) {
+            $name = $section->raw($ref);
+            if (!is_string($name) || $name === '') {
+                $section->report('Expected a non-empty string.', $ref);
+
+                continue;
+            }
+
+            try {
+                // Without a specification the key is still checked, against any path.
+                $target = Reference::target($ref, new SchemaLocation($spec ?? '/'));
+            } catch (InvalidModel $exception) {
+                $section->report(sprintf('Expected a reference to a schema of the specification, like "#/components/schemas/Pet": %s', $exception->getMessage()), $ref);
+
+                continue;
+            }
+
+            if ($spec !== null) {
+                $overrides[] = new NameOverride($keyword, $target, $name, $section->location($ref));
+            }
+        }
+
+        return $overrides;
     }
 
     /**

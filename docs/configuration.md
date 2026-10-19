@@ -46,6 +46,8 @@ sources:                         # required, at least one
     outputDir: src/Dto/Api
     include: ['*']
     exclude: []
+    classNames: {}               # '#/components/schemas/fields': FieldList
+    propertyNames: {}            # '#/components/schemas/Fields/properties/issueType': issueTypeObject
 ```
 
 ## `version`
@@ -177,6 +179,8 @@ extensions by package name. Attributes are written in that order.
 | `outputDir` | yes | Where the classes and the manifest go |
 | `include` | no, `['*']` | Glob patterns over the names in `components/schemas` |
 | `exclude` | no, `[]` | Glob patterns to leave out |
+| `classNames` | no, `{}` | Class or enum names by schema: `'<$ref>': Name`, as `x-php-class-name` |
+| `propertyNames` | no, `{}` | PHP property names by property schema: `'<$ref>': name`, as `x-php-name` |
 
 - A schema outside `include` is still generated when an included schema refers to it, since the property type needs
   it.
@@ -185,6 +189,25 @@ extensions by package name. Attributes are written in that order.
   reached from two sources without belonging to either is an error: its namespace would be ambiguous.
 - `outputDir` must not be shared with files you write by hand: the generator deletes the classes whose schemas are
   gone.
+- `classNames` and `propertyNames` name what a document you do not change names twice, such as two schemas whose
+  names differ in case only. A key is a `$ref` from the specification (`'#/components/schemas/fields'`, or into
+  another file, `'common.json#/Type'`), which is where an error about the name points; it must be quoted, as YAML
+  reads the rest of a line after `#` as a comment. The name is set as if the document had `x-php-class-name` or
+  `x-php-name` there, over one it has, and is checked like one: an error about it points where the keyword would be in
+  the document (`…/fields/x-php-class-name`). A key that names no schema the generator reads (a typo, a schema left
+  out, or a place that holds no schema, such as a `default`) gives a warning, and two names for one schema an error.
+  A schema only a keyword such as `not` or `if` holds gets no class, so a name for it is not used either.
+
+  ```yaml
+  sources:
+    - spec: jira.json
+      namespace: App\Jira
+      outputDir: src/Jira
+      classNames:
+        '#/components/schemas/fields': FieldList           # Fields is another schema
+      propertyNames:
+        '#/components/schemas/Fields/properties/issueType': issueTypeObject   # beside "issuetype"
+  ```
 
 ## `remoteRefs`
 

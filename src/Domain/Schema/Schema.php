@@ -376,6 +376,33 @@ final class Schema
     }
 
     /**
+     * Whether a JSON pointer's segments, taken from a schema, lead to one of its subschemas (or to itself, when empty)
+     * through the keywords whose values are schemas, not into the data of another keyword (`default`, `const`).
+     *
+     * @param list<string> $segments
+     */
+    public static function leadsToASubschema(array $segments): bool
+    {
+        $count = count($segments);
+        $index = 0;
+        while ($index < $count) {
+            $segment = $segments[$index];
+            if (in_array($segment, self::SCHEMAS_KEYWORDS, true)) {
+                $index++;
+            } elseif ($segment === 'items') {
+                // A list of item schemas in draft 07; no keyword is a number.
+                $index += isset($segments[$index + 1]) && preg_match('/\A\d+\z/', $segments[$index + 1]) === 1 ? 1 : 0;
+            } elseif (!in_array($segment, self::SCHEMA_KEYWORDS, true)) {
+                return false;
+            }
+
+            $index++;
+        }
+
+        return $index === $count;
+    }
+
+    /**
      * The `$ref`s in raw schemas, found through the keywords whose values are schemas; the values of other keywords
      * (`const`, `examples`) are data, whatever keys they hold.
      *

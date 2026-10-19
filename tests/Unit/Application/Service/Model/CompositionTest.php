@@ -621,7 +621,7 @@ final class CompositionTest extends TestCase
         ]);
         $classes = ModelFixture::classes($output);
 
-        self::assertSame(["error {$at}Taken/x-dto-variant/0/0: Class App\\Dto\\SA is already generated from {$at}SA; set \"x-php-class-name\" on one of them (on the schema this one is distributed from or on a referenced variant, or a \"title\" on an inline one)."], ModelFixture::messages($output));
+        self::assertSame(["error {$at}Taken/x-dto-variant/0/0: Class App\\Dto\\SA is already generated from {$at}SA; set \"x-php-class-name\" on one of them (on the schema this one is distributed from or on a referenced variant, or a \"title\" on an inline one), in the document or \"classNames\" of the source."], ModelFixture::messages($output));
         foreach (['SATC', 'SATD', 'SBTC', 'SBTD'] as $variant) {
             self::assertContains('meta: App\\Dto\\SMeta|null', $classes['App\\Dto\\' . $variant]);
         }
@@ -999,7 +999,7 @@ final class CompositionTest extends TestCase
             ],
             'property named like an inherited one' => [
                 ['Pet' => $pet, 'Cat' => ['allOf' => [self::PET, ['properties' => ['NAME' => ['type' => 'string', 'x-php-name' => 'Name']]]]]],
-                ["error {$at}Cat/allOf/1/properties/NAME: Property \"NAME\" of App\\Dto\\Cat becomes \$Name, which App\\Dto\\Pet already declares; set \"x-php-name\"."],
+                ["error {$at}Cat/allOf/1/properties/NAME: Property \"NAME\" of App\\Dto\\Cat becomes \$Name, which App\\Dto\\Pet already declares; set \"x-php-name\", in the document or \"propertyNames\" of the source."],
             ],
             'property of a grandparent' => [
                 [

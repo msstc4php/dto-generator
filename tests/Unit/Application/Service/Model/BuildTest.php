@@ -125,12 +125,12 @@ final class BuildTest extends TestCase
             'case-only collision' => [
                 ['User' => $object, 'user' => $object, 'Tag' => $object],
                 ['App\Dto\User', 'App\Dto\Tag'],
-                ["error {$at}user: Class App\\Dto\\User is already generated from {$at}User; set \"x-php-class-name\" on one of them."],
+                ["error {$at}user: Class App\\Dto\\User is already generated from {$at}User; set \"x-php-class-name\" on one of them, in the document or \"classNames\" of the source."],
             ],
             'separator collision' => [
                 ['user_profile' => $object, 'UserProfile' => $object],
                 ['App\Dto\UserProfile'],
-                ["error {$at}UserProfile: Class App\\Dto\\UserProfile is already generated from {$at}user_profile; set \"x-php-class-name\" on one of them."],
+                ["error {$at}UserProfile: Class App\\Dto\\UserProfile is already generated from {$at}user_profile; set \"x-php-class-name\" on one of them, in the document or \"classNames\" of the source."],
             ],
             'invalid override' => [
                 ['User' => $object + ['x-php-class-name' => 'List']],
@@ -145,7 +145,7 @@ final class BuildTest extends TestCase
             'no usable name' => [
                 ['***' => $object, 'Tag' => $object],
                 ['App\Dto\Tag'],
-                ["error {$at}***: Schema name \"***\" has no usable characters; set \"x-php-class-name\"."],
+                ["error {$at}***: Schema name \"***\" has no usable characters; set \"x-php-class-name\", in the document or \"classNames\" of the source."],
             ],
         ];
     }
@@ -376,8 +376,8 @@ final class BuildTest extends TestCase
 
         self::assertSame(
             [
-                "warning {$at}User/properties/address: Class App\\Dto\\UserAddress is already generated from {$at}UserAddress, so this one becomes App\\Dto\\UserAddress3; set \"x-php-class-name\" to name it.",
-                "error {$at}User/properties/home: Class App\\Dto\\UserAddress is already generated from {$at}UserAddress; set \"x-php-class-name\" on one of them.",
+                "warning {$at}User/properties/address: Class App\\Dto\\UserAddress is already generated from {$at}UserAddress, so this one becomes App\\Dto\\UserAddress3; set \"x-php-class-name\" to name it, in the document or \"classNames\" of the source.",
+                "error {$at}User/properties/home: Class App\\Dto\\UserAddress is already generated from {$at}UserAddress; set \"x-php-class-name\" on one of them, in the document or \"classNames\" of the source.",
             ],
             ModelFixture::messages($output),
         );
@@ -428,8 +428,8 @@ final class BuildTest extends TestCase
 
         self::assertSame(
             [
-                "error {$at}User/properties/§§§: Property name \"§§§\" gives no class name for its inline schema; set \"x-php-class-name\".",
-                "error {$at}User/properties/§§§: Property name \"§§§\" has no usable characters; set \"x-php-name\".",
+                "error {$at}User/properties/§§§: Property name \"§§§\" gives no class name for its inline schema; set \"x-php-class-name\", in the document or \"classNames\" of the source.",
+                "error {$at}User/properties/§§§: Property name \"§§§\" has no usable characters; set \"x-php-name\", in the document or \"propertyNames\" of the source.",
             ],
             ModelFixture::messages($output),
         );
@@ -467,7 +467,7 @@ final class BuildTest extends TestCase
         ]]]);
 
         self::assertSame(
-            ["error {$at}User/properties/***: Property name \"***\" gives no class name for its inline schema; set \"x-php-class-name\"."],
+            ["error {$at}User/properties/***: Property name \"***\" gives no class name for its inline schema; set \"x-php-class-name\", in the document or \"classNames\" of the source."],
             ModelFixture::messages($output),
         );
         self::assertSame(["\u{20AC}: App\\Dto\\Euro|null", '***: mixed'], ModelFixture::classes($output)['App\\Dto\\User']);

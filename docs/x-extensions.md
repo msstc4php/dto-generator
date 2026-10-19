@@ -37,6 +37,9 @@ Order:
 Only the first word of a name is lower-cased (`URL_PATH` → `urlPATH`, `HTTPStatus` → `httpStatus`); use `x-php-name`
 for another form. Extensions see the original wire name, so the Symfony bridge writes `SerializedName('@type')`.
 
+For a document you do not change, `classNames` and `propertyNames` of the source set both names from the
+configuration ([configuration](configuration.md#sources)).
+
 ## `x-php-type`
 
 Maps a schema or a property to a class of yours. On a schema, no class is generated and every `$ref` to it gets your
