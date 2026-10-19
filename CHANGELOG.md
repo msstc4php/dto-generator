@@ -13,8 +13,9 @@ All notable changes to this package are documented here. The format follows
   count: it keeps nothing of `Wide` but its properties. With a read or write model view the classes do not meet.
 
 - A variant of a discriminated `oneOf`/`anyOf` that the `mapping` leaves out is selected by the one value its
-  discriminator property allows (`const` or a one-value `enum`), unless another variant has that value, instead of by
-  its schema name, which such a property never holds. Such unions without a mapping (the OpenAI specification has
+  discriminator property allows (`const` or a one-value `enum`), when nothing else claims the value (the mapping,
+  another variant's value or schema name), instead of by its schema name, which such a property never holds; a subclass
+  that inherits the value of another variant keeps its schema name. Such unions without a mapping (the OpenAI specification has
   hundreds of variants like that) select their variants instead of none.
 
 ### Fixed

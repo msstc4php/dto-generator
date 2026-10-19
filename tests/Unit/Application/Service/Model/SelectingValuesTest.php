@@ -241,6 +241,56 @@ final class SelectingValuesTest extends TestCase
         );
     }
 
+    /**
+     * @dataProvider claims
+     *
+     * @param array<string, array<array-key, mixed>> $variants
+     * @param list<string> $messages
+     * @param array<string, array<array-key, mixed>> $others schemas that are no variants
+     */
+    public function testGivesTheOneValueOnlyWhenNoOtherVariantClaimsIt(array $variants, string $mapping, array $messages, array $others = []): void
+    {
+        $at = self::AT;
+        $members = array_map(static fn ($name, array $schema): array => is_int($name) ? $schema : ['$ref' => '#/components/schemas/' . $name], array_keys($variants), $variants);
+        $output = ModelFixture::build(['U' => ['oneOf' => $members, 'discriminator' => ['propertyName' => 'role']]] + array_filter($variants, 'is_string', ARRAY_FILTER_USE_KEY) + $others);
+
+        self::assertSame(array_map(static fn (string $message): string => str_replace('@', $at, $message), $messages), ModelFixture::messages($output));
+        self::assertSame("abstract by role {{$mapping}}", ModelFixture::hierarchy($output)['App\\Dto\\U']);
+    }
+
+    /**
+     * @return iterable<string, array{0: array<array-key, array<array-key, mixed>>, 1: string, 2: list<string>, 3?: array<string, array<array-key, mixed>>}>
+     */
+    public static function claims(): iterable
+    {
+        $role = static fn (array $schema): array => ['type' => 'object', 'required' => ['role'], 'properties' => ['role' => $schema]];
+        $free = $role(['type' => 'string']);
+
+        yield 'the name of a later variant' => [['A' => $role(['enum' => ['B']]), 'B' => $free], 'A: App\\Dto\\A, B: App\\Dto\\B', ['warning @A: Discriminator value "A" is not a value of property "role", so it does not select App\\Dto\\A.']];
+        yield 'the name of an earlier variant' => [['B' => $free, 'A' => $role(['enum' => ['B']])], 'B: App\\Dto\\B, A: App\\Dto\\A', ['warning @A: Discriminator value "A" is not a value of property "role", so it does not select App\\Dto\\A.']];
+        yield 'the value of a later inline variant' => [['A' => $role(['enum' => ['x']]), 0 => $role(['const' => 'x'])], 'A: App\\Dto\\A, x: App\\Dto\\UOption2', ['warning @A: Discriminator value "A" is not a value of property "role", so it does not select App\\Dto\\A.']];
+        yield 'the value of an earlier inline variant' => [[0 => $role(['const' => 'x']), 'A' => $role(['enum' => ['x']])], 'x: App\\Dto\\UOption1, A: App\\Dto\\A', ['warning @A: Discriminator value "A" is not a value of property "role", so it does not select App\\Dto\\A.']];
+        yield 'the value of another variant' => [['A' => $role(['enum' => ['x']]), 'B' => $role(['const' => 'x'])], 'A: App\\Dto\\A, B: App\\Dto\\B', [
+            'warning @A: Discriminator value "A" is not a value of property "role", so it does not select App\\Dto\\A.',
+            'warning @B: Discriminator value "B" is not a value of property "role", so it does not select App\\Dto\\B.',
+        ]];
+        yield 'its own name' => [['A' => $role(['enum' => ['A']])], 'A: App\\Dto\\A', []];
+        yield 'an integer' => [['A' => $role(['type' => 'integer', 'enum' => [1]]), 'B' => $role(['type' => 'integer', 'enum' => [2]])], '1: App\\Dto\\A, 2: App\\Dto\\B', []];
+        yield 'null beside the value' => [['A' => $role(['type' => ['string', 'null'], 'enum' => ['a', null]])], 'a: App\\Dto\\A', []];
+        yield 'a described $ref' => [['A' => $role(['allOf' => [['$ref' => '#/components/schemas/Role']], 'description' => 'The role.'])], 'a: App\\Dto\\A', [], ['Role' => ['type' => 'string', 'enum' => ['a']]]];
+    }
+
+    public function testLeavesAParentItsValueAndASubclassWithoutOneItsName(): void
+    {
+        $output = ModelFixture::build([
+            'Animal' => ['type' => 'object', 'required' => ['kind'], 'properties' => ['kind' => ['type' => 'string']], 'discriminator' => ['propertyName' => 'kind']],
+            'Dog' => ['allOf' => [['$ref' => '#/components/schemas/Animal'], ['type' => 'object', 'required' => ['kind'], 'properties' => ['kind' => ['type' => 'string', 'enum' => ['dog']]]]]],
+            'Puppy' => ['allOf' => [['$ref' => '#/components/schemas/Dog'], ['type' => 'object', 'properties' => ['age' => ['type' => 'integer']]]]],
+        ]);
+
+        self::assertSame('abstract by kind {dog: App\\Dto\\Dog, Puppy: App\\Dto\\Puppy}', ModelFixture::hierarchy($output)['App\\Dto\\Animal']);
+    }
+
     public function testDoesNotCheckADiscriminatorOfAnotherType(): void
     {
         $at = self::AT;
