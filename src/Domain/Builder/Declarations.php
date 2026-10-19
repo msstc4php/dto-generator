@@ -32,8 +32,8 @@ final class Declarations
     /** @var array<string, Schema> by FQCN */
     private array $schemas;
 
-    /** @var array<string, array<string, ClassName>> FQCN → by FQCN */
-    private array $allOfClasses = [];
+    /** @var array<string, array<string, string>> FQCN → FQCNs, by themselves */
+    private array $wider = [];
 
     /**
      * @param array<string, ClassName> $classes location key → class
@@ -72,23 +72,24 @@ final class Declarations
     }
 
     /**
-     * @param array<string, array<string, ClassName>> $allOfClasses FQCN → the classes whose schemas the class's `allOf`
-     *                                                              has, by FQCN
+     * @param array<string, array<string, string>> $wider FQCN → the FQCNs of the classes that admit every object of the
+     *                                                    class, keyed by themselves
      */
-    public function withAllOfClasses(array $allOfClasses): self
+    public function withWider(array $wider): self
     {
         $declarations = clone $this;
-        $declarations->allOfClasses = $allOfClasses;
+        $declarations->wider = $wider;
 
         return $declarations;
     }
 
     /**
-     * Whether the schema of a generated class has the other's among its `allOf`, so its values are the other's too.
+     * Whether every object of a generated class is one of the other: it extends the other, or its `allOf` has the other,
+     * which restricts its objects only by the properties the class merges.
      */
-    public function hasInAllOf(ClassName $class, ClassName $member): bool
+    public function isWider(ClassName $wide, ClassName $narrow): bool
     {
-        return isset($this->allOfClasses[$class->fqcn()][$member->fqcn()]);
+        return isset($this->wider[$narrow->fqcn()][$wide->fqcn()]);
     }
 
     public function classAt(string $key): ?ClassName

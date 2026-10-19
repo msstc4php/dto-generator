@@ -8,6 +8,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Builder\ClassBuilder;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\ClassLookup;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\Composition;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\Declarations;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\ObjectShape;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\PropertyView;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\SchemaShape;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
@@ -260,15 +261,34 @@ final class Registry
     }
 
     /**
-     * The declarations with the classes each class's `allOf` has, once every class is declared.
+     * The declarations with the classes that admit every object of each class, once every class is composed: those it
+     * extends, and those its `allOf` has that restrict their objects only by properties, which a merge keeps.
+     *
+     * @param array<string, ClassName> $parents FQCN → the class it extends
      */
-    public function declarationsWithAllOf(SchemaGraph $graph): Declarations
+    public function declarationsWithWider(SchemaGraph $graph, array $parents): Declarations
     {
-        $declarations = $this->declarations();
+        $schemas = $this->schemas();
+        $declarations = new Declarations($this->classes, $this->enums, $this->skipped, $this->abandoned, $schemas);
         $lookup = new ClassLookup($graph, $declarations);
-        $allOfClasses = array_map(static fn (Schema $schema): array => $lookup->allOfClasses($schema), $this->schemas());
+        $wider = [];
+        foreach ($schemas as $fqcn => $schema) {
+            $found = [];
+            for ($parent = $parents[$fqcn] ?? null; $parent instanceof ClassName && !isset($found[$parent->fqcn()]); $parent = $parents[$parent->fqcn()] ?? null) {
+                $found[$parent->fqcn()] = $parent->fqcn();
+            }
 
-        return $declarations->withAllOfClasses($allOfClasses);
+            foreach ($lookup->allOfClasses($schema) as $class) {
+                if (isset($schemas[$class->fqcn()]) && ObjectShape::restrictsOnlyByProperties($schemas[$class->fqcn()])) {
+                    $found[$class->fqcn()] = $class->fqcn();
+                }
+            }
+
+            // A class the schema leaves out holds what its schema does not tell.
+            $wider[$fqcn] = array_intersect_key($found, $schemas);
+        }
+
+        return $declarations->withWider($wider);
     }
 
     /**

@@ -131,7 +131,15 @@ final class Action
             $this->hoist($planned[0], $compositions[$index], $planned[1], $planned[2], $registry, $enums, $diagnostics, $input->graph());
         }
 
-        $declarations = $registry->declarationsWithAllOf($input->graph());
+        $parents = [];
+        foreach ($compositions as $index => $composition) {
+            $parent = $composition->parent();
+            if ($parent instanceof ClassName) {
+                $parents[$registry->planned()[$index][1]->fqcn()] = $parent;
+            }
+        }
+
+        $declarations = $registry->declarationsWithWider($input->graph(), $parents);
         $types = new TypeMapper($input->graph(), $declarations, $input->target(), $input->formats());
         $superseded = new Superseded();
         $builder = new ClassBuilder(

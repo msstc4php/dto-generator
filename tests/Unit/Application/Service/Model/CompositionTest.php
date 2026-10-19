@@ -404,9 +404,9 @@ final class CompositionTest extends TestCase
      */
     public function testMeetsAClassWithOneWhoseAllOfHasIt(array $schemas, string $strategy, string $expected): void
     {
-        $wide = ['type' => 'object', 'additionalProperties' => false, 'properties' => ['a' => ['type' => 'string']]];
+        $at = self::AT;
         $output = ModelFixture::build($schemas + [
-            'Wide' => $wide,
+            'Wide' => ['type' => 'object', 'properties' => ['a' => ['type' => 'string']]],
             'Req' => ['allOf' => [
                 ['type' => 'object', 'properties' => ['opts' => ['$ref' => '#/components/schemas/Wide']]],
                 ['type' => 'object', 'properties' => ['opts' => ['$ref' => '#/components/schemas/Narrow']]],
@@ -416,6 +416,12 @@ final class CompositionTest extends TestCase
                 ['type' => 'object', 'properties' => ['opts' => ['$ref' => '#/components/schemas/Wide']]],
             ]],
         ], [], ['*'], $strategy);
+
+        if ($expected === 'error') {
+            self::assertContains("error {$at}Req/allOf/1/properties/opts: Property \"opts\" of App\\Dto\\Req is App\\Dto\\Narrow|null here, but App\\Dto\\Wide|null in an earlier allOf member.", ModelFixture::messages($output));
+
+            return;
+        }
 
         self::assertSame([], ModelFixture::messages($output));
         self::assertSame(["opts: App\\Dto\\{$expected}|null"], ModelFixture::classes($output)['App\\Dto\\Req']);
@@ -429,12 +435,26 @@ final class CompositionTest extends TestCase
     {
         $more = ['type' => 'object', 'properties' => ['b' => ['type' => 'integer']]];
         $narrow = ['allOf' => [['$ref' => '#/components/schemas/Wide'], $more]];
+        $closed = ['type' => 'object', 'additionalProperties' => false, 'properties' => ['a' => ['type' => 'string']]];
+        $discriminated = [
+            'type' => 'object',
+            'required' => ['kind'],
+            'properties' => ['kind' => ['type' => 'string']],
+            'oneOf' => [['$ref' => '#/components/schemas/A'], ['$ref' => '#/components/schemas/B']],
+            'discriminator' => ['propertyName' => 'kind'],
+        ];
+        $variants = [
+            'A' => ['type' => 'object', 'required' => ['kind'], 'properties' => ['kind' => ['type' => 'string', 'enum' => ['A']]]],
+            'B' => ['type' => 'object', 'required' => ['kind'], 'properties' => ['kind' => ['type' => 'string', 'enum' => ['B']]]],
+        ];
 
         foreach ([AllOfStrategy::EXTENDS, AllOfStrategy::MERGE] as $strategy) {
             yield "a member, {$strategy}" => [['Narrow' => $narrow], $strategy, 'Narrow'];
             yield "a member of a member, {$strategy}" => [['Narrow' => ['allOf' => [['$ref' => '#/components/schemas/Mid'], $more]], 'Mid' => ['allOf' => [['$ref' => '#/components/schemas/Wide'], ['type' => 'object', 'properties' => ['c' => ['type' => 'integer']]]]]], $strategy, 'Narrow'];
             yield "an inline member's member, {$strategy}" => [['Narrow' => ['allOf' => [['allOf' => [['$ref' => '#/components/schemas/Wide']]], $more]]], $strategy, 'Narrow'];
             yield "through an alias, {$strategy}" => [['Narrow' => ['allOf' => [['$ref' => '#/components/schemas/Alias'], $more]], 'Alias' => ['$ref' => '#/components/schemas/Wide']], $strategy, 'Narrow'];
+            yield "an allOf beside a \$ref, {$strategy}" => [['Narrow' => ['allOf' => [['$ref' => '#/components/schemas/Mid', 'allOf' => [['$ref' => '#/components/schemas/Wide']]], $more]], 'Mid' => ['type' => 'object', 'properties' => ['c' => ['type' => 'integer']]]], $strategy, 'Narrow'];
+            yield "a member of a skipped member, {$strategy}" => [['Narrow' => ['allOf' => [['$ref' => '#/components/schemas/Mid'], $more]], 'Mid' => ['x-php-skip' => true, 'allOf' => [['$ref' => '#/components/schemas/Wide']]]], $strategy, 'Narrow'];
             yield "a class twice, {$strategy}" => [[
                 'Narrow' => ['allOf' => [['$ref' => '#/components/schemas/Base'], ['$ref' => '#/components/schemas/Mid'], $more]],
                 'Mid' => ['allOf' => [['$ref' => '#/components/schemas/Base'], ['$ref' => '#/components/schemas/Wide']]],
@@ -442,28 +462,31 @@ final class CompositionTest extends TestCase
             ], $strategy, 'Narrow'];
             yield "a member with a cycle, {$strategy}" => [['Narrow' => ['allOf' => [['$ref' => '#/components/schemas/Wide'], ['type' => 'object', 'properties' => ['self' => ['$ref' => '#/components/schemas/Narrow']]]]]], $strategy, 'Narrow'];
         }
+
+        // Only a subclass keeps what a member says beside its properties.
+        yield 'a closed member, extends' => [['Wide' => $closed, 'Narrow' => $narrow], AllOfStrategy::EXTENDS, 'Narrow'];
+        yield 'a closed member, merge' => [['Wide' => $closed, 'Narrow' => $narrow], AllOfStrategy::MERGE, 'error'];
+        yield 'a closed member of a member, extends' => [['Wide' => $closed, 'Narrow' => ['allOf' => [['$ref' => '#/components/schemas/Mid'], $more]], 'Mid' => ['allOf' => [['$ref' => '#/components/schemas/Wide'], ['type' => 'object', 'properties' => ['c' => ['type' => 'integer']]]]]], AllOfStrategy::EXTENDS, 'Narrow'];
+        yield "a closed inline member's member, extends" => [['Wide' => $closed, 'Narrow' => ['allOf' => [['allOf' => [['$ref' => '#/components/schemas/Wide']]], $more]]], AllOfStrategy::EXTENDS, 'error'];
+        yield 'a discriminated member, merge' => [['Wide' => $discriminated, 'Narrow' => $narrow] + $variants, AllOfStrategy::MERGE, 'error'];
+        yield 'a member with another keyword, merge' => [['Wide' => ['minProperties' => 1, 'type' => 'object', 'properties' => ['a' => ['type' => 'string']]], 'Narrow' => $narrow], AllOfStrategy::MERGE, 'error'];
+        yield 'a member with an x- key, merge' => [['Wide' => ['x-dto-mutable' => true, 'type' => 'object', 'properties' => ['a' => ['type' => 'string']]], 'Narrow' => $narrow], AllOfStrategy::MERGE, 'error'];
+        yield 'an unrelated class' => [['Narrow' => ['type' => 'object', 'properties' => ['w' => ['$ref' => '#/components/schemas/Wide']]]], AllOfStrategy::EXTENDS, 'error'];
+        yield 'a union of it' => [['Narrow' => $discriminated, 'A' => ['allOf' => [['$ref' => '#/components/schemas/Wide'], $variants['A']]], 'B' => $variants['B']], AllOfStrategy::EXTENDS, 'error'];
     }
 
-    public function testMeetsNoClassWithOneThatOnlyHoldsIt(): void
+    public function testMeetsNoClassWithOneOfAView(): void
     {
         $at = self::AT;
-        $wide = ['type' => 'object', 'additionalProperties' => false, 'properties' => ['a' => ['type' => 'string']]];
-        $req = ['allOf' => [
-            ['type' => 'object', 'properties' => ['opts' => ['$ref' => '#/components/schemas/Wide']]],
-            ['type' => 'object', 'properties' => ['opts' => ['$ref' => '#/components/schemas/Narrow']]],
-        ]];
-        $error = "error {$at}Req/allOf/1/properties/opts: Property \"opts\" of App\\Dto\\Req is App\\Dto\\Narrow|null here, but App\\Dto\\Wide|null in an earlier allOf member.";
-
-        $property = ModelFixture::build(['Wide' => $wide, 'Req' => $req, 'Narrow' => ['type' => 'object', 'properties' => ['w' => ['$ref' => '#/components/schemas/Wide']]]]);
-        $variant = ModelFixture::build(['Wide' => $wide, 'Req' => $req, 'Narrow' => ['oneOf' => [['$ref' => '#/components/schemas/Wide'], ['type' => 'object', 'properties' => ['b' => ['type' => 'string']]]]]]);
         $viewed = ModelFixture::views([
-            'Wide' => $wide,
-            'Req' => $req,
+            'Wide' => ['type' => 'object', 'properties' => ['a' => ['type' => 'string']]],
+            'Req' => ['allOf' => [
+                ['type' => 'object', 'properties' => ['opts' => ['$ref' => '#/components/schemas/Wide']]],
+                ['type' => 'object', 'properties' => ['opts' => ['$ref' => '#/components/schemas/Narrow']]],
+            ]],
             'Narrow' => ['allOf' => [['$ref' => '#/components/schemas/Wide'], ['type' => 'object', 'properties' => ['b' => ['type' => 'string', 'readOnly' => true]]]]],
         ]);
 
-        self::assertContains($error, ModelFixture::messages($property));
-        self::assertNotContains('opts: App\\Dto\\Narrow|null', ModelFixture::classes($variant)['App\\Dto\\Req'] ?? []);
         self::assertSame(["error {$at}Req/allOf/1/properties/opts: Property \"opts\" of App\\Dto\\ReqRead is App\\Dto\\NarrowRead|null here, but App\\Dto\\Wide|null in an earlier allOf member."], ModelFixture::messages($viewed));
     }
 

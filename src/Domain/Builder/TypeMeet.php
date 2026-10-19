@@ -182,7 +182,7 @@ final class TypeMeet
         $wideSchema = $this->declarations->schemaOf($wide);
         $narrowSchema = $this->declarations->schemaOf($narrow);
 
-        return $this->declarations->hasInAllOf($narrow, $wide)
+        return $this->declarations->isWider($wide, $narrow)
             || ($wideSchema instanceof Schema && $narrowSchema instanceof Schema && ObjectShape::admits($wideSchema, $narrowSchema));
     }
 

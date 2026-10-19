@@ -8,9 +8,11 @@ All notable changes to this package are documented here. The format follows
 
 ### Changed
 
-- A property two `allOf` members give two classes is of the class whose `allOf` has the other (`allOf: [$ref: Wide,
-  …]`, also through its members' members and aliases), with either `allOfStrategy`, instead of an error; with a read
-  or write model view the classes do not meet.
+- A property two `allOf` members give two classes is of the class that extends the other, or whose `allOf` has it
+  (`allOf: [$ref: Wide, …]`, also through its members' members, an `allOf` beside a `$ref` and aliases) when the other
+  says nothing but its properties, which it requires, annotations and its own `allOf`, instead of an error. A merged
+  class keeps nothing else of a member: its discriminator, `oneOf`, closed `additionalProperties` or keywords. With a
+  read or write model view the classes do not meet.
 
 ### Added
 

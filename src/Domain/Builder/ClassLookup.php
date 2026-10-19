@@ -82,7 +82,7 @@ final class ClassLookup
      * The generated classes whose schemas a schema's `allOf` has, through its members' members too: every value of the
      * schema is one of theirs.
      *
-     * @return array<string, ClassName> by FQCN
+     * @return list<ClassName>
      */
     public function allOfClasses(Schema $schema): array
     {
@@ -92,7 +92,8 @@ final class ClassLookup
             $member = array_shift($pending);
             $target = $this->target($member);
             $named = $target instanceof ResolvedSchema ? $this->behind($target) : null;
-            $key = $named instanceof NamedClass ? $named->schema()->location()->toString() : $member->location()->toString();
+            $walked = $named instanceof NamedClass ? $named->schema()->schema() : ($target instanceof ResolvedSchema ? $target->schema() : $member);
+            $key = $walked->location()->toString();
             if (isset($seen[$key])) {
                 continue;
             }
@@ -100,13 +101,13 @@ final class ClassLookup
             $seen[$key] = $key;
             if ($named instanceof NamedClass) {
                 $classes[$named->name()->fqcn()] = $named->name();
-                $member = $named->schema()->schema();
             }
 
-            $pending = array_merge($pending, $member->allOf());
+            // An allOf beside a $ref applies as well (OpenAPI 3.1).
+            $pending = array_merge($pending, $walked->allOf(), $walked === $member ? [] : $member->allOf());
         }
 
-        return $classes;
+        return array_values($classes);
     }
 
     /**
