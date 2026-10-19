@@ -97,8 +97,8 @@ final class ConfigObjectsTest extends TestCase
     {
         $name = new NameOverride(NameOverride::CLASS_NAME, new SchemaLocation('/api.yaml', '/components/schemas/a'), 'A', new SchemaLocation('/c.yaml'));
 
-        self::assertSame([$name], (new SourceConfig('/api.yaml', 'App', '/out', ['*'], [], [$name]))->withOutputDir('/other')->names());
-        self::assertSame([], (new SourceConfig('/api.yaml', 'App', '/out', ['*'], []))->names());
+        self::assertSame([$name], (new SourceConfig('/api.yaml', 'App', '/out', ['*'], [], [$name]))->withOutputDir('/other')->nameOverrides());
+        self::assertSame([], (new SourceConfig('/api.yaml', 'App', '/out', ['*'], []))->nameOverrides());
     }
 
     /**

@@ -405,15 +405,16 @@ final class ConfigFactory
                 $section->error('include', 'must not be empty');
             }
 
-            if ($spec === null || $namespace === null || $outputDir === null || $include === []) {
-                continue;
-            }
-
-            $specPath = Path::resolve($baseDir, $spec);
+            // Checked before the rest of the source, so every error of it shows at once.
+            $specPath = $spec === null ? null : Path::resolve($baseDir, $spec);
             $names = array_merge(
                 $this->nameOverrides($section, 'classNames', NameOverride::CLASS_NAME, $specPath),
                 $this->nameOverrides($section, 'propertyNames', NameOverride::PROPERTY_NAME, $specPath),
             );
+            if ($specPath === null || $namespace === null || $outputDir === null || $include === []) {
+                continue;
+            }
+
             $sources[] = new SourceConfig($specPath, $namespace, Path::resolve($baseDir, $outputDir), $include, $exclude, $names);
         }
 
@@ -425,7 +426,7 @@ final class ConfigFactory
      *
      * @return list<NameOverride>
      */
-    private function nameOverrides(RawSection $source, string $key, string $keyword, string $spec): array
+    private function nameOverrides(RawSection $source, string $key, string $keyword, ?string $spec): array
     {
         if (!$source->has($key)) {
             return [];
@@ -438,6 +439,10 @@ final class ConfigFactory
             if (!is_string($name) || $name === '') {
                 $section->report('Expected a non-empty string.', $ref);
 
+                continue;
+            }
+
+            if ($spec === null) {
                 continue;
             }
 

@@ -183,7 +183,7 @@ final class ClassBuilder
 
         if ($nameTaken) {
             $diagnostics->error(
-                'The class already has a property $additionalProperties; rename it with "x-php-name".',
+                'The class already has a property $additionalProperties; rename it with "x-php-name", in the document or "propertyNames" of the source.',
                 $schema->location()->child('additionalProperties'),
             );
 

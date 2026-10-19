@@ -193,8 +193,9 @@ extensions by package name. Attributes are written in that order.
   names differ in case only. A key is a `$ref` from the specification (`'#/components/schemas/fields'`, or into
   another file, `'common.json#/Type'`), which is where an error about the name points; it must be quoted, as YAML
   reads the rest of a line after `#` as a comment. The name is set as if the document had `x-php-class-name` or
-  `x-php-name` there, over one it has, and is checked like one. A key that names no schema the generator reads (a
-  typo, or a schema left out) gives a warning.
+  `x-php-name` there, over one it has, and is checked like one: an error about it points where the keyword would be in
+  the document (`…/fields/x-php-class-name`). A key that names no schema the generator reads (a typo, a schema left
+  out, or a place that holds no schema, such as a `default`) gives a warning, and two names for one schema an error.
 
   ```yaml
   sources:

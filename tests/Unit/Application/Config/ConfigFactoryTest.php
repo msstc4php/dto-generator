@@ -526,7 +526,7 @@ final class ConfigFactoryTest extends TestCase
             ],
             array_map(
                 static fn (NameOverride $name): array => [$name->keyword(), $name->target()->toString(), $name->name(), $name->declaredAt()->toString()],
-                $config->sources()[0]->names(),
+                $config->sources()[0]->nameOverrides(),
             ),
         );
     }
@@ -549,6 +549,17 @@ final class ConfigFactoryTest extends TestCase
                 'error ' . self::PATH . '#/sources/0/propertyNames: "propertyNames" must be an object.',
             ],
             array_map(static fn (Diagnostic $error): string => $error->toString(), $diagnostics->all()),
+        );
+    }
+
+    public function testChecksTheNamesOfASourceWithOtherErrors(): void
+    {
+        $diagnostics = new Diagnostics();
+        (new ConfigFactory())->create(['version' => 1, 'sources' => [['spec' => 'a.yaml', 'outputDir' => 'src', 'classNames' => ['#/a' => '']]]], self::PATH, $diagnostics);
+
+        self::assertSame(
+            ['/sources/0', '/sources/0/classNames/#~1a'],
+            array_map(static fn (Diagnostic $error): string => substr($error->location()->toString(), strlen(self::PATH . '#')), $diagnostics->errors()),
         );
     }
 

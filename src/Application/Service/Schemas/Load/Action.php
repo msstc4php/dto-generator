@@ -52,7 +52,7 @@ final class Action
         $queue = [];
         $reads = new Reads();
         $parser = $this->parser->claiming($input->keywordChecks());
-        $names = new NameOverrides($config->sources());
+        $names = new NameOverrides($config->sources(), $diagnostics);
 
         foreach ($config->sources() as $index => $source) {
             $specAt = $config->location()->child('sources', (string) $index, 'spec');
@@ -108,7 +108,7 @@ final class Action
         }
 
         $this->followKeywordReferences($graph, $input, $diagnostics, $reads, $names);
-        $names->reportUnused($diagnostics);
+        $names->reportUnused(array_values($owners), $diagnostics);
 
         // Every later stage sees an allOf of a union of objects as the union of the objects it makes.
         return new Output(UnionDistribution::of($graph->build($diagnostics), $diagnostics), $diagnostics, $reads->documents(), $reads->readsRemote() ? $config->remoteRefs()->cacheDir() : null);

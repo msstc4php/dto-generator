@@ -8,6 +8,7 @@ use MSSTC4PHP\DtoGenerator\Application\Config\NameOverride;
 use MSSTC4PHP\DtoGenerator\Application\Config\SourceConfig;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\JsonPointer;
+use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
 
@@ -19,19 +20,39 @@ use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
  */
 final class NameOverrides
 {
-    /** @var list<NameOverride> */
+    /** @var list<array{int, NameOverride}> each with the index of its source */
     private array $overrides = [];
 
-    /** @var array<int, true> by index into the overrides */
+    /** @var array<int, bool> by index into the overrides */
     private array $applied = [];
 
     /**
+     * Two different names for one schema are an error at the later one, which is left out.
+     *
      * @param list<SourceConfig> $sources
      */
-    public function __construct(array $sources)
+    public function __construct(array $sources, Diagnostics $diagnostics)
     {
-        foreach ($sources as $source) {
-            $this->overrides = array_merge($this->overrides, $source->names());
+        /** @var array<string, array<string, NameOverride>> $first by keyword, then target */
+        $first = [];
+        foreach ($sources as $index => $source) {
+            foreach ($source->nameOverrides() as $override) {
+                $target = $override->target()->toString();
+                $earlier = $first[$override->keyword()][$target] ?? null;
+                if ($earlier instanceof NameOverride) {
+                    if ($earlier->name() !== $override->name()) {
+                        $diagnostics->error(
+                            sprintf('%s is named "%s" already, at %s.', $override->target()->toString(), $earlier->name(), $earlier->declaredAt()->toString()),
+                            $override->declaredAt(),
+                        );
+                    }
+
+                    continue;
+                }
+
+                $first[$override->keyword()][$target] = $override;
+                $this->overrides[] = [$index, $override];
+            }
         }
     }
 
@@ -42,17 +63,22 @@ final class NameOverrides
      */
     public function apply($node, SchemaLocation $at)
     {
-        foreach ($this->overrides as $index => $override) {
+        $prefix = $at->pointer() . '/';
+        foreach ($this->overrides as $index => [, $override]) {
             $target = $override->target();
-            $prefix = $at->pointer() . '/';
             if ($target->file() !== $at->file() || ($target->pointer() !== $at->pointer() && strpos($target->pointer(), $prefix) !== 0)) {
                 continue;
             }
 
-            $segments = JsonPointer::segments((string) substr($target->pointer(), strlen($at->pointer())));
-            $found = false;
-            $node = $this->set($node, $segments, $override, $found);
-            if ($found) {
+            $segments = array_slice(JsonPointer::segments($target->pointer()), count(JsonPointer::segments($at->pointer())));
+            $relative = JsonPointer::fromSegments(...$segments);
+            if (!is_array($node) || !Schema::leadsToASubschema($segments) || !JsonPointer::has($node, $relative)) {
+                continue;
+            }
+
+            $schema = JsonPointer::get($node, $relative);
+            if (is_array($schema) && ($schema === [] || !Json::isList($schema))) {
+                $node = $this->with($node, $segments, $override);
                 $this->applied[$index] = true;
             }
         }
@@ -61,39 +87,46 @@ final class NameOverrides
     }
 
     /**
-     * Warns of a name given to no schema that was read, which a typo in the reference or an excluded schema leaves.
+     * Warns of a name given to no schema that was read, which a typo in the reference or an excluded schema leaves; a
+     * source whose specification was not read has its own error.
+     *
+     * @param list<int> $read the indexes of the sources whose specification was read
      */
-    public function reportUnused(Diagnostics $diagnostics): void
+    public function reportUnused(array $read, Diagnostics $diagnostics): void
     {
-        foreach ($this->overrides as $index => $override) {
-            if (!($this->applied[$index] ?? false)) {
-                $diagnostics->warning(sprintf('No schema read is at %s; the name is not used.', $override->target()->toString()), $override->declaredAt());
+        foreach ($this->overrides as $index => [$source, $override]) {
+            if (!($this->applied[$index] ?? false) && in_array($source, $read, true)) {
+                $target = $override->target();
+                $diagnostics->warning(
+                    sprintf(
+                        'No schema read is at %s; the name is not used.%s',
+                        $target->toString(),
+                        $target->pointer() === '' ? ' A key names a schema by a $ref such as "#/components/schemas/Pet".' : '',
+                    ),
+                    $override->declaredAt(),
+                );
             }
         }
     }
 
     /**
-     * @param JsonValue $node
+     * @param array<array-key, mixed> $node as JsonValue holds it
      * @param list<string> $segments
      *
-     * @return JsonValue
+     * @return array<array-key, mixed>
      */
-    private function set($node, array $segments, NameOverride $override, bool &$found)
+    private function with(array $node, array $segments, NameOverride $override): array
     {
-        if (!is_array($node)) {
+        $segment = array_shift($segments);
+        if ($segment === null) {
+            $node[$override->keyword()] = $override->name();
+
             return $node;
         }
 
-        if ($segments === []) {
-            if ($node === [] || !Json::isList($node)) {
-                $node[$override->keyword()] = $override->name();
-                $found = true;
-            }
-        } else {
-            $segment = array_shift($segments);
-            if (array_key_exists($segment, $node)) {
-                $node[$segment] = $this->set(Json::value($node[$segment]), $segments, $override, $found);
-            }
+        $child = $node[$segment];
+        if (is_array($child)) {
+            $node[$segment] = $this->with($child, $segments, $override);
         }
 
         return $node;

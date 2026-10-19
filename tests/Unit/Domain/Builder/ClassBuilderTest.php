@@ -194,7 +194,7 @@ final class ClassBuilderTest extends TestCase
             'additional properties clash with a property' => [
                 ['type' => 'object', 'properties' => ['additionalProperties' => ['type' => 'string']], 'additionalProperties' => ['type' => 'integer']],
                 ['additionalProperties' => 'additionalProperties: string|null = NULL'],
-                ["error {$at}/additionalProperties: The class already has a property \$additionalProperties; rename it with \"x-php-name\"."],
+                ["error {$at}/additionalProperties: The class already has a property \$additionalProperties; rename it with \"x-php-name\", in the document or \"propertyNames\" of the source."],
             ],
             'default for an untyped property' => [
                 ['type' => 'object', 'properties' => ['any' => ['default' => 5]]],
