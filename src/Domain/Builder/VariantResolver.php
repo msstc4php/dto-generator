@@ -123,7 +123,12 @@ final class VariantResolver
         foreach ($schema->allOf() as $part) {
             $target = $this->classes->target($part);
             $next = $target instanceof ResolvedSchema ? $target->schema() : $part;
-            $value = in_array($next->location()->toString(), $seen, true) ? null : $this->valueOf($next, $property, array_merge($seen, [$next->location()->toString()]));
+            $at = $next->location()->toString();
+            if (in_array($at, $seen, true)) {
+                continue;
+            }
+
+            $value = $this->valueOf($next, $property, array_merge($seen, [$at]));
             if ($value !== null) {
                 return $value;
             }
@@ -133,12 +138,21 @@ final class VariantResolver
     }
 
     /**
-     * The one value a declaration of the property allows, behind its `$ref` too.
+     * The one value a declaration of the property allows: its own, behind its `$ref`, in a one-member `allOf` around it
+     * (OpenAPI 3.0 describes a `$ref` so) or in every branch of a `oneOf`/`anyOf` but `null`.
      *
      * @param list<string> $seen
      */
     private function valueIn(Schema $declaration, array $seen): ?string
     {
+        $own = $declaration->hasKeyword('const') ? [$declaration->keyword('const')] : $declaration->enum();
+        if ($own !== null) {
+            // A null next to the value only makes the property nullable, as in OpenAPI 3.0.
+            $values = array_values(array_filter($own, static fn ($value): bool => $value !== null));
+
+            return count($values) === 1 && (is_string($values[0]) || is_int($values[0])) ? (string) $values[0] : null;
+        }
+
         $target = $this->classes->target($declaration);
         if ($target instanceof ResolvedSchema) {
             $at = $target->schema()->location()->toString();
@@ -146,16 +160,19 @@ final class VariantResolver
             return in_array($at, $seen, true) ? null : $this->valueIn($target->schema(), array_merge($seen, [$at]));
         }
 
-        // OpenAPI 3.0 wraps a $ref in a one-member allOf to describe it.
         $parts = $declaration->allOf();
-        if (count($parts) === 1 && !$declaration->hasKeyword('const') && $declaration->enum() === null) {
+        if (count($parts) === 1) {
             return $this->valueIn($parts[0], $seen);
         }
 
-        // A null next to the value only makes the property nullable, as in OpenAPI 3.0.
-        $values = array_values(array_filter($declaration->hasKeyword('const') ? [$declaration->keyword('const')] : $declaration->enum() ?? [], static fn ($value): bool => $value !== null));
+        $values = [];
+        foreach (array_merge($declaration->oneOf(), $declaration->anyOf()) as $branch) {
+            if ($branch->types() === [] || $branch->nonNullTypes() !== []) {
+                $values[] = $this->valueIn($branch, $seen);
+            }
+        }
 
-        return count($values) === 1 && (is_string($values[0]) || is_int($values[0])) ? (string) $values[0] : null;
+        return count(array_unique($values)) === 1 ? $values[0] : null;
     }
 
     /**
@@ -184,8 +201,69 @@ final class VariantResolver
             }
         }
 
-        $mapping = [];
+        $mapping = $this->explicitMapping($schema, $discriminator, $names, $diagnostics);
+        $explicit = $mapping;
         $mapped = [];
+        foreach ($mapping as $value => $class) {
+            $mapped[$class->fqcn()] = $value;
+        }
+
+        // The value an inline variant gives is all that selects it, so it goes before any schema name.
+        $unmapped = [];
+        foreach ([false, true] as $named) {
+            foreach ($classes as $class) {
+                if (!isset($mapped[$class->fqcn()]) && isset($schemas[$class->fqcn()]) === $named) {
+                    $unmapped[] = $class;
+                }
+            }
+        }
+
+        $values = $this->implicitValues($unmapped, $names, $schemas, $explicit, $discriminator->propertyName());
+        $taken = $explicit;
+        $winners = [];
+        foreach ($unmapped as $class) {
+            $value = $values[$class->fqcn()];
+            if (isset($taken[$value]) && !isset($schemas[$class->fqcn()])) {
+                $diagnostics->error(sprintf('Another variant already has discriminator value "%s", so %s can never be selected.', $value, $class->fqcn()), $at[$class->fqcn()]);
+
+                continue;
+            }
+
+            if (isset($taken[$value])) {
+                $diagnostics->warning(
+                    sprintf(
+                        isset($explicit[$value]) ? 'Variant %s gets no discriminator value: the mapping gives "%s" to another schema.' : 'Variant %s gets no discriminator value: another variant already has "%s".',
+                        $class->fqcn(),
+                        $value,
+                    ),
+                    $schema->location()->child('discriminator'),
+                );
+
+                continue;
+            }
+
+            $taken[$value] = $class;
+            $winners[$class->fqcn()] = $value;
+        }
+
+        // The mapping keeps the order of the variants.
+        foreach ($classes as $class) {
+            if (isset($winners[$class->fqcn()])) {
+                $mapping[$winners[$class->fqcn()]] = $class;
+            }
+        }
+
+        return new Variants($classes, $mapping === [] ? null : new DiscriminatorModel($discriminator->propertyName(), $mapping), $listed);
+    }
+
+    /**
+     * @param array<string, string> $names the variants by FQCN
+     *
+     * @return array<int|string, ClassName>
+     */
+    private function explicitMapping(Schema $schema, Discriminator $discriminator, array $names, Diagnostics $diagnostics): array
+    {
+        $mapping = [];
         foreach ($discriminator->values() as $value) {
             $entry = $schema->location()->child('discriminator', 'mapping', $value);
             $ref = $discriminator->refFor($value);
@@ -203,44 +281,9 @@ final class VariantResolver
             }
 
             $mapping[$value] = $class;
-            $mapped[$class->fqcn()] = $value;
         }
 
-        $explicit = $mapping;
-        $unmapped = [];
-        foreach ($classes as $class) {
-            if (!isset($mapped[$class->fqcn()])) {
-                $unmapped[] = $class;
-            }
-        }
-
-        $values = $this->implicitValues($unmapped, $names, $schemas, $explicit, $discriminator->propertyName());
-        foreach ($unmapped as $class) {
-            $value = $values[$class->fqcn()];
-            // The value an inline variant gives is all that selects it.
-            if (isset($mapping[$value]) && !isset($schemas[$class->fqcn()])) {
-                $diagnostics->error(sprintf('Another variant already has discriminator value "%s", so %s can never be selected.', $value, $class->fqcn()), $at[$class->fqcn()]);
-
-                continue;
-            }
-
-            if (isset($mapping[$value])) {
-                $diagnostics->warning(
-                    sprintf(
-                        isset($explicit[$value]) ? 'Variant %s gets no discriminator value: the mapping gives "%s" to another schema.' : 'Variant %s gets no discriminator value: another variant already has "%s".',
-                        $class->fqcn(),
-                        $value,
-                    ),
-                    $schema->location()->child('discriminator'),
-                );
-
-                continue;
-            }
-
-            $mapping[$value] = $class;
-        }
-
-        return new Variants($classes, $mapping === [] ? null : new DiscriminatorModel($discriminator->propertyName(), $mapping), $listed);
+        return $mapping;
     }
 
     /**
@@ -257,30 +300,32 @@ final class VariantResolver
      */
     private function implicitValues(array $unmapped, array $names, array $schemas, array $explicit, string $property): array
     {
-        $own = [];
-        $claims = [];
         // A value a subclass inherits from another variant is that variant's: the walk stops at every variant.
         $variants = [];
         foreach ($schemas as $schema) {
             $variants[] = $schema->location()->toString();
         }
 
+        $taking = [];
         foreach ($unmapped as $class) {
             $fqcn = $class->fqcn();
-            $claims[] = $names[$fqcn];
             $value = isset($schemas[$fqcn]) ? $this->valueOf($schemas[$fqcn], $property, $variants) : null;
-            if ($value !== null && $value !== $names[$fqcn]) {
-                $own[$fqcn] = $value;
-                $claims[] = $value;
+            if ($value !== null && $value !== $names[$fqcn] && !isset($explicit[$value])) {
+                $taking[$fqcn] = $value;
             }
         }
 
-        $counts = array_count_values($claims);
-        $values = [];
-        foreach ($unmapped as $class) {
-            $value = $own[$class->fqcn()] ?? null;
-            $values[$class->fqcn()] = $value !== null && $counts[$value] === 1 && !isset($explicit[$value]) ? $value : $names[$class->fqcn()];
-        }
+        // A variant that gives up its value claims its schema name instead, which may take the value of another.
+        do {
+            $values = [];
+            foreach ($unmapped as $class) {
+                $values[$class->fqcn()] = $taking[$class->fqcn()] ?? $names[$class->fqcn()];
+            }
+
+            $counts = array_count_values($values);
+            $before = count($taking);
+            $taking = array_filter($taking, static fn (string $value): bool => $counts[$value] === 1);
+        } while (count($taking) !== $before);
 
         return $values;
     }
