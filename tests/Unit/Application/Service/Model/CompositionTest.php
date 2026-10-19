@@ -578,12 +578,65 @@ final class CompositionTest extends TestCase
         self::assertSame(['own: App\\Dto\\SOption2Own|null', 'meta: App\\Dto\\SMeta|null', 'kind: App\\Dto\\SKind|null'], ModelFixture::classes($output)['App\\Dto\\SOption2']);
     }
 
+    public function testStopsWhereAUnionLeadsBackToItself(): void
+    {
+        $at = self::AT;
+        $object = static fn (array $properties): array => ['type' => 'object', 'properties' => $properties];
+        $ref = static fn (string $name): array => ['$ref' => '#/components/schemas/' . $name];
+        $error = 'An allOf member of a class must be an object schema, not a oneOf or anyOf: no class adds properties to each variant.';
+        $output = ModelFixture::build([
+            'A' => $object(['a' => ['type' => 'string']]),
+            'C' => $object(['c' => ['type' => 'string']]),
+            'Self' => ['anyOf' => [$ref('Self'), $ref('A')]],
+            'OnSelf' => ['allOf' => [$ref('Self'), $object(['x' => ['type' => 'string']])]],
+            'V' => ['anyOf' => [$ref('W'), $ref('A')]],
+            'W' => ['anyOf' => [$ref('V'), $ref('C')]],
+            'OnPair' => ['allOf' => [['anyOf' => [$ref('V'), $object(['y' => ['type' => 'string']])]], $object(['x' => ['type' => 'string']])]],
+        ]);
+
+        self::assertSame(["error {$at}OnSelf/allOf/0: {$error}", "error {$at}OnPair/allOf/0/anyOf/0: {$error}"], ModelFixture::messages($output));
+        self::assertSame(['App\\Dto\\A', 'App\\Dto\\C', 'App\\Dto\\OnSelf', 'App\\Dto\\OnPairV', 'App\\Dto\\OnPairOption2'], array_keys(ModelFixture::classes($output)));
+    }
+
+    public function testNamesWhatVariantsShareAfterTheSchemaTheyComeFromThroughEveryRound(): void
+    {
+        $at = self::AT;
+        $object = static fn (array $properties): array => ['type' => 'object', 'properties' => $properties];
+        $ref = static fn (string $name): array => ['$ref' => '#/components/schemas/' . $name];
+        $output = ModelFixture::build([
+            'A' => $object(['a' => ['type' => 'string']]),
+            'B' => $object(['b' => ['type' => 'integer']]),
+            'C' => $object(['c' => ['type' => 'string']]),
+            'D' => $object(['d' => ['type' => 'string']]),
+            'T' => ['allOf' => [['anyOf' => [$ref('C'), $ref('D')]], $object(['t' => ['type' => 'string']])]],
+            'S' => ['allOf' => [$ref('T'), ['anyOf' => [$ref('A'), $ref('B')]], $object(['meta' => $object(['m' => ['type' => 'string']])])]],
+            'My Thing' => [
+                'type' => 'object',
+                'properties' => ['meta' => $object(['m' => ['type' => 'string']])],
+                'additionalProperties' => $object(['v' => ['type' => 'string']]),
+                'allOf' => [['anyOf' => [$ref('A'), $ref('B')]]],
+            ],
+            'SA' => $object(['z' => ['type' => 'string']]),
+            'Taken' => ['allOf' => [['anyOf' => [$ref('A'), $ref('B')]], $object(['x' => ['type' => 'string']])], 'x-php-class-name' => 'S'],
+        ]);
+        $classes = ModelFixture::classes($output);
+
+        self::assertSame(["error {$at}Taken/x-dto-variant/0/0: Class App\\Dto\\SA is already generated from {$at}SA; set \"x-php-class-name\" on one of them (on the schema this one is distributed from, or a \"title\" on its variant)."], ModelFixture::messages($output));
+        foreach (['SATC', 'SATD', 'SBTC', 'SBTD'] as $variant) {
+            self::assertContains('meta: App\\Dto\\SMeta|null', $classes['App\\Dto\\' . $variant]);
+        }
+
+        foreach (['MyThingA', 'MyThingB'] as $variant) {
+            self::assertSame(['meta: App\\Dto\\MyThingMeta|null', 'additionalProperties: array<array-key, App\\Dto\\MyThingAdditionalProperty>'], $classes['App\\Dto\\' . $variant]);
+        }
+    }
+
     public function testNamesVariantsWithTheSameTitleByPosition(): void
     {
         $object = static fn (array $properties): array => ['type' => 'object', 'properties' => $properties];
         $output = ModelFixture::build([
             'S' => ['x-php-class-name' => 'Renamed', 'allOf' => [
-                ['oneOf' => [$object(['p' => ['type' => 'string']]) + ['title' => 'T'], $object(['q' => ['type' => 'string']]) + ['title' => 'T'], $object(['r' => ['type' => 'string']]) + ['title' => 'U']]],
+                ['oneOf' => [$object(['p' => ['type' => 'string']]) + ['title' => 'T'], $object(['q' => ['type' => 'string']]) + ['title' => 'T'], $object(['r' => ['type' => 'string']]) + ['title' => 'u']]],
                 $object(['x' => ['type' => 'string']]),
             ]],
         ]);

@@ -20,7 +20,6 @@ use MSSTC4PHP\DtoGenerator\Domain\Builder\RequiredCycles;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\SchemaShape;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\Superseded;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\TypeMapper;
-use MSSTC4PHP\DtoGenerator\Domain\Builder\UnionDistribution;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\VariantResolver;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\Variants;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
@@ -33,6 +32,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Schema\Discriminator;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\ResolvedSchema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaGraph;
+use MSSTC4PHP\DtoGenerator\Domain\Schema\VariantOrigin;
 
 /**
  * Turns the schema graph into the IR: one class per object schema and one enum per enum schema, including schemas
@@ -380,10 +380,11 @@ final class Action
 
         $excluded = $registry->excluded($owner, $composition);
         // A part every variant of a distributed allOf shares names its classes after the schema it comes from.
-        $entry = $graph->get($owner->location());
-        $sharedBase = $entry instanceof ResolvedSchema ? $this->names->className(UnionDistribution::owner($entry)) : null;
+        $origin = $graph->originOf($owner->location());
+        $sharedBase = $origin instanceof VariantOrigin ? $this->names->className($origin->base()) : null;
+        $baseOf = static fn (Schema $part): string => $origin instanceof VariantOrigin && $sharedBase !== null && $origin->shares($part->location()) ? $sharedBase : $registry->baseOf($ownerName);
         foreach ($composition->ownParts() as $part) {
-            $parentBase = $sharedBase !== null && UnionDistribution::isShared($owner->location(), $part->location()) ? $sharedBase : $registry->baseOf($ownerName);
+            $parentBase = $baseOf($part);
             foreach ($part->propertyNames() as $wireName) {
                 $property = $part->requireProperty($wireName);
                 if (($kept[$wireName] ?? false) && !isset($excluded[$wireName])) {
@@ -395,7 +396,7 @@ final class Action
 
         $additional = $owner->additionalProperties();
         if ($additional instanceof Schema && $registry->admits($owner, $additional)) {
-            $candidates[] = [$additional, $registry->baseOf($ownerName) . 'AdditionalProperty', 'additionalProperties'];
+            $candidates[] = [$additional, $baseOf($additional) . 'AdditionalProperty', 'additionalProperties'];
         }
 
         $namespace = $ownerName->namespace();

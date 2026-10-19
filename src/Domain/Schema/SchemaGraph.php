@@ -19,6 +19,9 @@ final class SchemaGraph
     /** @var array<string, string> */
     private array $edges;
 
+    /** @var array<string, VariantOrigin> by location key */
+    private array $origins = [];
+
     /**
      * @param list<ResolvedSchema> $schemas
      * @param array<string, string> $edges {@see ReferenceUse::key()} → location key of the schema it resolved to
@@ -48,8 +51,9 @@ final class SchemaGraph
      *
      * @param list<ResolvedSchema> $schemas
      * @param array<string, string> $edges {@see ReferenceUse::key()} → location key of the schema it resolves to
+     * @param array<string, VariantOrigin> $origins location key → where a schema distributed from an allOf comes from
      */
-    public function with(array $schemas, array $edges = []): self
+    public function with(array $schemas, array $edges = [], array $origins = []): self
     {
         $given = [];
         foreach ($schemas as $schema) {
@@ -76,7 +80,15 @@ final class SchemaGraph
             $all[] = $schema;
         }
 
-        return new self($all, $edges + $this->edges);
+        $graph = new self($all, $edges + $this->edges);
+        $graph->origins = $origins + $this->origins;
+
+        return $graph;
+    }
+
+    public function originOf(SchemaLocation $location): ?VariantOrigin
+    {
+        return $this->origins[$location->toString()] ?? null;
     }
 
     public function get(SchemaLocation $location): ?ResolvedSchema

@@ -19,6 +19,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Schema\Discriminator;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\ResolvedSchema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaGraph;
+use MSSTC4PHP\DtoGenerator\Domain\Schema\VariantOrigin;
 
 /**
  * The names claimed during one build, the classes still to build and the enums already built.
@@ -158,9 +159,10 @@ final class Registry
 
             $diagnostics->error(
                 sprintf(
-                    'Class %s is already generated from %s; set "x-php-class-name" on one of them%s.',
+                    'Class %s is already generated from %s; set "x-php-class-name" on one of them%s%s.',
                     $name->fqcn(),
                     $this->taken[$lower],
+                    VariantOrigin::isVariant($schema->location()) ? ' (on the schema this one is distributed from, or a "title" on its variant)' : '',
                     $suffixed || ($this->views[$lower] ?? false) ? ', or change dto.readWriteSuffixes' : '',
                 ),
                 $schema->location(),
