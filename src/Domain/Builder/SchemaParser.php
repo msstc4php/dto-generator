@@ -116,10 +116,10 @@ final class SchemaParser
     }
 
     /**
-     * The node with `nullable: true` written as OpenAPI 3.1 does: null joins the type, or, for a union without one, its
-     * members. Without either, null joins the type of a `$ref` or an `allOf`, and a schema with no type admits it anyway.
+     * The node with `nullable: true` written as OpenAPI 3.1 does: null joins the type. Beside a `$ref` or a composition
+     * without a type, a null type makes that nullable; a schema with no type at all admits null anyway.
      *
-     * @param array<array-key, mixed> $node
+     * @param array<array-key, mixed> $node as JsonValue holds it
      *
      * @return array<array-key, mixed>
      */
@@ -139,32 +139,8 @@ final class SchemaParser
             $node['type'] = [$type, SchemaType::NULL];
         } elseif (is_array($type)) {
             $node['type'] = in_array(SchemaType::NULL, $type, true) ? $type : array_merge($type, [SchemaType::NULL]);
-        } elseif ($type === null) {
-            $node = $this->withNullMember($node);
-        }
-
-        return $node;
-    }
-
-    /**
-     * @param array<array-key, mixed> $node without a type
-     *
-     * @return array<array-key, mixed>
-     */
-    private function withNullMember(array $node): array
-    {
-        // The member goes last, so those written keep their locations.
-        foreach (['oneOf', 'anyOf'] as $keyword) {
-            $members = $node[$keyword] ?? null;
-            if (is_array($members) && $members !== [] && Json::isList($members)) {
-                $members[] = ['type' => SchemaType::NULL];
-                $node[$keyword] = $members;
-
-                return $node;
-            }
-        }
-
-        if (isset($node['$ref']) || isset($node['allOf'])) {
+        } elseif ($type === null && array_intersect(['$ref', 'allOf', 'oneOf', 'anyOf'], array_keys($node)) !== []) {
+            // A member of the union instead would break a discriminated union and the distribution of an allOf over it.
             $node['type'] = [SchemaType::NULL];
         }
 

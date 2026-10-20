@@ -18,7 +18,8 @@ All notable changes to this package are documented here. The format follows
   properties one PHP name (Jira: the schemas `fields` and `Fields`, the properties `issuetype` and `issueType`) can
   still be generated; a key that names no schema read gives a warning. The errors about such names point to them.
 - In an OpenAPI 3.0 document (and the documents it refers to that state no version) `nullable: true` admits `null`:
-  beside a `type`, a `oneOf`/`anyOf`, a `$ref` or an `allOf`, instead of a warning that it has no effect. Stripe,
+  beside a `type`, a `$ref`, an `allOf`, a `oneOf` or an `anyOf`, instead of a warning that it has no effect. A
+  document without a version that 3.0 and 3.1 documents both refer to gives a warning. Stripe,
   Twilio and Jira lose hundreds of such warnings, and their nullable properties are nullable. The warning about the
   version says so.
 

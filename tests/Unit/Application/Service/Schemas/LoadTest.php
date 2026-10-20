@@ -273,7 +273,7 @@ final class LoadTest extends TestCase
     public static function otherVersions(): iterable
     {
         $openApi30 = static fn (string $version): string => sprintf(
-            'OpenAPI %s is read as 3.1, but for "nullable", which admits null; other keywords that differ in 3.0 (such as a boolean "exclusiveMinimum") are not understood.',
+            'OpenAPI %s is read as 3.1, except that "nullable: true" admits null; other keywords that differ in 3.0 (such as a boolean "exclusiveMinimum") are not understood.',
             $version,
         );
 
@@ -319,7 +319,7 @@ final class LoadTest extends TestCase
         );
         self::assertSame(
             [
-                'warning /project/api/openapi.yaml#/openapi: OpenAPI 3.0.3 is read as 3.1, but for "nullable", which admits null; other keywords that differ in 3.0 (such as a boolean "exclusiveMinimum") are not understood.',
+                'warning /project/api/openapi.yaml#/openapi: OpenAPI 3.0.3 is read as 3.1, except that "nullable: true" admits null; other keywords that differ in 3.0 (such as a boolean "exclusiveMinimum") are not understood.',
                 'warning /project/api/openapi.yaml#/components/schemas/User/not: "not" is not supported and has no effect on the generated type.',
                 'warning /project/api/newer.yaml#/Far/nullable: "nullable" is OpenAPI 3.0 and has no effect in 3.1; write type: [T, \'null\'].',
             ],

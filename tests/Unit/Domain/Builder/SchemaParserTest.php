@@ -330,21 +330,13 @@ final class SchemaParserTest extends TestCase
         yield 'a list of types' => [['type' => ['string', 'integer'], 'nullable' => true], ['string', 'integer', 'null'], 0, 0];
         yield 'a list of types with null' => [['type' => ['null', 'string'], 'nullable' => true], ['null', 'string'], 0, 0];
         yield 'not nullable' => [['type' => 'string', 'nullable' => false], ['string'], 0, 0];
-        yield 'a oneOf' => [['oneOf' => [['type' => 'string']], 'nullable' => true], [], 2, 0];
-        yield 'an anyOf' => [['anyOf' => [['type' => 'string']], 'nullable' => true], [], 0, 2];
-        yield 'a oneOf beside an anyOf' => [['oneOf' => [['type' => 'string']], 'anyOf' => [['type' => 'integer']], 'nullable' => true], [], 2, 1];
+        yield 'a oneOf' => [['oneOf' => [['type' => 'string']], 'nullable' => true], ['null'], 1, 0];
+        yield 'an anyOf' => [['anyOf' => [['type' => 'string']], 'nullable' => true], ['null'], 0, 1];
+        yield 'a discriminated oneOf' => [['oneOf' => [['$ref' => '#/components/schemas/Tag']], 'discriminator' => ['propertyName' => 'kind'], 'nullable' => true], ['null'], 1, 0];
         yield 'a $ref' => [['$ref' => '#/components/schemas/Tag', 'nullable' => true], ['null'], 0, 0];
         yield 'an allOf' => [['allOf' => [['$ref' => '#/components/schemas/Tag']], 'nullable' => true], ['null'], 0, 0];
         yield 'a typed oneOf' => [['type' => 'object', 'oneOf' => [['required' => ['a']]], 'nullable' => true], ['object', 'null'], 1, 0];
         yield 'no type' => [['description' => 'Anything.', 'nullable' => true], [], 0, 0];
-    }
-
-    public function testAddsTheNullMemberAfterThoseWritten(): void
-    {
-        $schema = (new SchemaParser())->forOpenApi30()->parse(['anyOf' => [['type' => 'string'], ['type' => 'integer']], 'nullable' => true], $this->root(), new Diagnostics());
-
-        self::assertSame(['string', 'integer', 'null'], array_map(static fn (Schema $member): string => $member->types()[0]->value(), $schema->anyOf()));
-        self::assertSame('a.yaml#/components/schemas/User/anyOf/1', $schema->anyOf()[1]->location()->toString());
     }
 
     public function testReadsOpenApi30NullableInSubschemasAndBesideClaimedKeywords(): void

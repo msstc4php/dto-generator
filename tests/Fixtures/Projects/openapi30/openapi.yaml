@@ -27,3 +27,35 @@ components:
         tags:
           type: array
           items: { type: string, nullable: true }
+    Cat:
+      type: object
+      required: [kind]
+      properties:
+        kind: { type: string, enum: [cat] }
+    Dog:
+      type: object
+      required: [kind]
+      properties:
+        kind: { type: string, enum: [dog] }
+    Pet:
+      oneOf:
+        - $ref: '#/components/schemas/Cat'
+        - $ref: '#/components/schemas/Dog'
+      discriminator: { propertyName: kind }
+      nullable: true
+    PetOrNull:
+      oneOf:
+        - $ref: '#/components/schemas/Cat'
+        - $ref: '#/components/schemas/Dog'
+      nullable: true
+    Owner:
+      type: object
+      properties:
+        pet: { $ref: '#/components/schemas/Pet' }
+        other: { $ref: '#/components/schemas/PetOrNull' }
+    Extended:
+      allOf:
+        - $ref: '#/components/schemas/PetOrNull'
+        - type: object
+          properties:
+            extra: { type: string }
