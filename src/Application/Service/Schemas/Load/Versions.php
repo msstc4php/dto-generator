@@ -41,6 +41,14 @@ final class Versions
         return $version !== null && preg_match('/^3\.0(?:\.\d+)?\z/', $version) === 1;
     }
 
+    /**
+     * Whether the generator reads the version: OpenAPI 3.1, or 3.0, which it rewrites as 3.1.
+     */
+    public static function isUnderstood(string $version): bool
+    {
+        return self::isOpenApi30($version) || preg_match('/^3\.1(?:\.\d+)?\z/', $version) === 1;
+    }
+
     public function ofSource(Document $document): bool
     {
         return $this->openApi30[$document->path()] = self::isOpenApi30($this->stated($document));

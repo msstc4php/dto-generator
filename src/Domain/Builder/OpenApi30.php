@@ -17,29 +17,45 @@ final class OpenApi30
     /** Each 3.0 boolean bound with the bound it makes exclusive. */
     private const EXCLUSIVE = ['exclusiveMinimum' => 'minimum', 'exclusiveMaximum' => 'maximum'];
 
-    private function __construct()
+    private Diagnostics $diagnostics;
+
+    /** Whether x-php-type or x-php-skip replaces the schema, so a keyword without effect is no news. */
+    private bool $quiet;
+
+    private function __construct(Diagnostics $diagnostics, bool $quiet)
     {
+        $this->diagnostics = $diagnostics;
+        $this->quiet = $quiet;
     }
 
     /**
-     * Rewrites the node itself and the inline schema of its `not`, which stays raw JSON; the parser reaches the other
-     * subschemas on its own.
+     * Rewrites the node itself and the inline schema of its `not`, the one subschema 3.0 has that stays raw JSON; the
+     * parser reaches the other subschemas of 3.0 on its own. Keywords 3.0 does not have are left as they are.
      *
      * @param array<array-key, mixed> $node as JsonValue holds it
-     * @param bool $quiet whether x-php-type or x-php-skip replaces the schema, so a keyword without effect is no news
      *
      * @return array<array-key, mixed>
      */
     public static function asOpenApi31(array $node, SchemaLocation $location, Diagnostics $diagnostics, bool $quiet): array
     {
-        $node = self::withNullAdmitted($node, $location, $diagnostics);
+        return (new self($diagnostics, $quiet))->rewrite($node, $location);
+    }
+
+    /**
+     * @param array<array-key, mixed> $node
+     *
+     * @return array<array-key, mixed>
+     */
+    private function rewrite(array $node, SchemaLocation $location): array
+    {
+        $node = $this->withNullAdmitted($node, $location);
         foreach (self::EXCLUSIVE as $exclusive => $bound) {
-            $node = self::withExclusiveBound($node, $exclusive, $bound, $location, $diagnostics, $quiet);
+            $node = $this->withExclusiveBound($node, $exclusive, $bound, $location);
         }
 
         $not = $node['not'] ?? null;
         if (is_array($not)) {
-            $node['not'] = self::asOpenApi31($not, $location->child('not'), $diagnostics, $quiet);
+            $node['not'] = $this->rewrite($not, $location->child('not'));
         }
 
         return $node;
@@ -53,7 +69,7 @@ final class OpenApi30
      *
      * @return array<array-key, mixed>
      */
-    private static function withNullAdmitted(array $node, SchemaLocation $location, Diagnostics $diagnostics): array
+    private function withNullAdmitted(array $node, SchemaLocation $location): array
     {
         if (!array_key_exists('nullable', $node)) {
             return $node;
@@ -62,7 +78,7 @@ final class OpenApi30
         $nullable = $node['nullable'];
         unset($node['nullable']);
         if (!is_bool($nullable)) {
-            $diagnostics->error('"nullable" must be a boolean.', $location->child('nullable'));
+            $this->diagnostics->error('"nullable" must be a boolean.', $location->child('nullable'));
         }
 
         if ($nullable !== true) {
@@ -90,7 +106,7 @@ final class OpenApi30
      *
      * @return array<array-key, mixed>
      */
-    private static function withExclusiveBound(array $node, string $exclusive, string $bound, SchemaLocation $location, Diagnostics $diagnostics, bool $quiet): array
+    private function withExclusiveBound(array $node, string $exclusive, string $bound, SchemaLocation $location): array
     {
         if (!array_key_exists($exclusive, $node)) {
             return $node;
@@ -98,16 +114,15 @@ final class OpenApi30
 
         $flag = $node[$exclusive];
         if (is_int($flag) || is_float($flag)) {
-            if (!$quiet) {
-                $diagnostics->warning(sprintf('"%s" is a boolean in OpenAPI 3.0; the number is read as in 3.1.', $exclusive), $location->child($exclusive));
-            }
+            $this->notice(sprintf('"%s" is a boolean in OpenAPI 3.0; the number is read as in 3.1.', $exclusive), $location->child($exclusive));
 
             return $node;
         }
 
         $value = $node[$bound] ?? null;
         if ($flag === true && (is_int($value) || is_float($value))) {
-            // In place, as the parser reads keywords in the order the document writes them.
+            // In place: the parser keeps keywords in the document's order, which diagnostics and the constraints
+            // extensions generate from them follow.
             $node[$exclusive] = $value;
             unset($node[$bound]);
 
@@ -116,11 +131,18 @@ final class OpenApi30
 
         unset($node[$exclusive]);
         if (!is_bool($flag)) {
-            $diagnostics->error(sprintf('"%s" must be a boolean.', $exclusive), $location->child($exclusive));
-        } elseif ($flag && !$quiet) {
-            $diagnostics->warning(sprintf('"%s: true" has no effect without a numeric "%s".', $exclusive, $bound), $location->child($exclusive));
+            $this->diagnostics->error(sprintf('"%s" must be a boolean.', $exclusive), $location->child($exclusive));
+        } elseif ($flag) {
+            $this->notice(sprintf('"%s: true" has no effect without a numeric "%s".', $exclusive, $bound), $location->child($exclusive));
         }
 
         return $node;
+    }
+
+    private function notice(string $message, SchemaLocation $at): void
+    {
+        if (!$this->quiet) {
+            $this->diagnostics->warning($message, $at);
+        }
     }
 }

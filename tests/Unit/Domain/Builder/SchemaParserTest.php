@@ -389,6 +389,27 @@ final class SchemaParserTest extends TestCase
         );
     }
 
+    public function testGivesOnlyTheErrorsOfOpenApi30BoundsInASchemaThatIsReplaced(): void
+    {
+        $diagnostics = new Diagnostics();
+        $schema = (new SchemaParser())->forOpenApi30()->parse(
+            ['properties' => [
+                'a' => ['x-php-type' => 'App\\A', 'exclusiveMinimum' => true, 'exclusiveMaximum' => 'yes'],
+                'b' => ['type' => 'integer', 'minimum' => 1, 'exclusiveMinimum' => true],
+            ]],
+            $this->root(),
+            $diagnostics,
+        );
+
+        $b = $schema->property('b');
+        self::assertNotNull($b);
+        self::assertSame(['exclusiveMinimum' => 1], $b->keywords());
+        self::assertSame(
+            ['error a.yaml#/components/schemas/User/properties/a/exclusiveMaximum: "exclusiveMaximum" must be a boolean.'],
+            array_map(static fn (Diagnostic $d): string => $d->toString(), $diagnostics->all()),
+        );
+    }
+
     private function root(): SchemaLocation
     {
         return new SchemaLocation('a.yaml', '/components/schemas/User');

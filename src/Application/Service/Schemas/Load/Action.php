@@ -216,7 +216,7 @@ final class Action
             return;
         }
 
-        if (!Versions::isOpenApi30($version) && preg_match('/^3\.1(?:\.\d+)?\z/', $version) !== 1) {
+        if (!Versions::isUnderstood($version)) {
             $diagnostics->warning(sprintf('Expected OpenAPI 3.0 or 3.1, found "%s"; keywords specific to that version are not understood.', $version), $at);
         }
     }

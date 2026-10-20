@@ -36,7 +36,7 @@ final class OpenApi30Test extends TestCase
         $model = (new BuildModel(new NameResolver()))(new BuildInput($config, $target, $schemas->graph(), []));
 
         self::assertSame(
-            [],
+            ['warning ' . dirname($file) . '/openapi.yaml#/components/schemas/Quota/properties/loose/exclusiveMinimum: "exclusiveMinimum: true" has no effect without a numeric "minimum".'],
             array_map(static fn (Diagnostic $d): string => $d->toString(), array_merge($loaded->diagnostics()->all(), $schemas->diagnostics()->all(), $model->diagnostics()->all())),
         );
         $properties = [];
@@ -58,6 +58,6 @@ final class OpenApi30Test extends TestCase
             ],
             $properties['App\Dto\Customer'],
         );
-        self::assertSame(['open' => 'int<1, 9>|null', 'closed' => 'int<0, 10>|null', 'ratio' => 'float|null'], $properties['App\Dto\Quota']);
+        self::assertSame(['open' => 'int<1, 9>|null', 'closed' => 'int<0, 10>|null', 'loose' => 'int|null', 'replaced' => 'App\Money\Money|null'], $properties['App\Dto\Quota']);
     }
 }

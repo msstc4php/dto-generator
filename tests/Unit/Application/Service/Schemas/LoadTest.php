@@ -258,23 +258,40 @@ final class LoadTest extends TestCase
     /**
      * @param JsonValue $version
      *
-     * @dataProvider otherVersions
+     * @dataProvider understoodVersions
      */
-    public function testWarnsAboutOtherOpenApiVersions($version, ?string $message): void
+    public function testReadsOpenApi30And31WithoutAWarning($version): void
     {
         $output = $this->load([self::SPEC => ['openapi' => $version, 'components' => ['schemas' => []]]]);
 
-        self::assertSame($message === null ? [] : ['warning /project/api/openapi.yaml#/openapi: ' . $message], $this->messages($output));
+        self::assertSame([], $this->messages($output));
     }
 
     /**
-     * @return iterable<string, array{JsonValue, ?string}>
+     * @return iterable<string, array{JsonValue}>
+     */
+    public static function understoodVersions(): iterable
+    {
+        yield '3.0.3' => ['3.0.3'];
+        yield '3.0 from unquoted YAML' => [3.0];
+        yield '3.1.1' => ['3.1.1'];
+    }
+
+    /**
+     * @dataProvider otherVersions
+     */
+    public function testWarnsAboutOtherOpenApiVersions(string $version, string $message): void
+    {
+        $output = $this->load([self::SPEC => ['openapi' => $version, 'components' => ['schemas' => []]]]);
+
+        self::assertSame(['warning /project/api/openapi.yaml#/openapi: ' . $message], $this->messages($output));
+    }
+
+    /**
+     * @return iterable<string, array{string, string}>
      */
     public static function otherVersions(): iterable
     {
-        yield '3.0.3' => ['3.0.3', null];
-        yield '3.0 from unquoted YAML' => [3.0, null];
-        yield '3.1.1' => ['3.1.1', null];
         yield '3.2.0' => ['3.2.0', 'Expected OpenAPI 3.0 or 3.1, found "3.2.0"; keywords specific to that version are not understood.'];
         yield '3.0.3 with a suffix' => ['3.0.3-rc', 'Expected OpenAPI 3.0 or 3.1, found "3.0.3-rc"; keywords specific to that version are not understood.'];
     }

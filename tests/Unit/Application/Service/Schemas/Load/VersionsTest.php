@@ -22,26 +22,31 @@ final class VersionsTest extends TestCase
      *
      * @dataProvider versions
      */
-    public function testTellsOpenApi30FromItsVersion($version, ?string $normalized, bool $openApi30): void
+    public function testTellsOpenApi30FromItsVersion($version, ?string $normalized, bool $openApi30, bool $understood): void
     {
         self::assertSame($normalized, Versions::normalize($version));
+        self::assertSame($understood, $normalized !== null && Versions::isUnderstood($normalized));
         self::assertSame($openApi30, (new Versions())->ofSource(new Document('/p/a.yaml', ['openapi' => $version])));
     }
 
     /**
-     * @return iterable<string, array{JsonValue, ?string, bool}>
+     * @return iterable<string, array{JsonValue, ?string, bool, bool}>
      */
     public static function versions(): iterable
     {
-        yield '3.0.3' => ['3.0.3', '3.0.3', true];
-        yield '3.0' => ['3.0', '3.0', true];
-        yield 'a float' => [3.0, '3.0', true];
-        yield '3.1.0' => ['3.1.0', '3.1.0', false];
-        yield '3.0.3 with a suffix' => ['3.0.3-rc', '3.0.3-rc', false];
-        yield 'a prefix before 3.0' => ['v3.0', 'v3.0', false];
-        yield '3.00' => ['3.00', '3.00', false];
-        yield 'an integer' => [3, null, false];
-        yield 'none' => [null, null, false];
+        yield '3.0.3' => ['3.0.3', '3.0.3', true, true];
+        yield '3.0' => ['3.0', '3.0', true, true];
+        yield 'a float' => [3.0, '3.0', true, true];
+        yield '3.1.0' => ['3.1.0', '3.1.0', false, true];
+        yield '3.0.3 with a suffix' => ['3.0.3-rc', '3.0.3-rc', false, false];
+        yield 'a prefix before 3.0' => ['v3.0', 'v3.0', false, false];
+        yield '3.00' => ['3.00', '3.00', false, false];
+        yield '3.1' => ['3.1', '3.1', false, true];
+        yield '3.1.0 with a suffix' => ['3.1.0-rc', '3.1.0-rc', false, false];
+        yield 'a prefix before 3.1' => ['v3.1', 'v3.1', false, false];
+        yield '3.2.0' => ['3.2.0', '3.2.0', false, false];
+        yield 'an integer' => [3, null, false, false];
+        yield 'none' => [null, null, false, false];
     }
 
     public function testReadsADocumentWithoutAVersionInThatOfTheDocumentReferringToItFirst(): void
