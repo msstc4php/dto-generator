@@ -21,6 +21,9 @@ final class Reads
     /** @var array<string, Anchors> by document path */
     private array $anchors = [];
 
+    /** @var list<array{string, string}> document path and anchor of each anchor no single schema declares */
+    private array $failedAnchors = [];
+
     public function document(string $path): void
     {
         $this->documents[$path] = true;
@@ -34,6 +37,16 @@ final class Reads
     public function anchors(Document $document): Anchors
     {
         return $this->anchors[$document->path()] ??= new Anchors($document->root());
+    }
+
+    public function failAnchor(string $path, string $anchor): void
+    {
+        $this->failedAnchors[] = [$path, $anchor];
+    }
+
+    public function anchorFailed(string $path, string $anchor): bool
+    {
+        return in_array([$path, $anchor], $this->failedAnchors, true);
     }
 
     public function remoteDocument(string $url): ?Document

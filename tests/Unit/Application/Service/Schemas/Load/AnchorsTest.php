@@ -27,6 +27,31 @@ final class AnchorsTest extends TestCase
         self::assertSame([], $anchors->pointersOf('5'));
     }
 
+    public function testReadsNamesThatAreKeywordsElsewhereAsNames(): void
+    {
+        $anchors = new Anchors([
+            'components' => ['schemas' => [
+                'default' => ['$anchor' => 'Default', '$dynamicAnchor' => 'Default', 'properties' => [
+                    'example' => ['$anchor' => 'Example'],
+                    'x-id' => ['$anchor' => 'Xid'],
+                    'properties' => ['properties' => ['enum' => ['$dynamicAnchor' => 'Enum']]],
+                ]],
+            ]],
+            '$defs' => ['examples' => ['$anchor' => 'Examples'], '$anchor' => ['$anchor' => 'Self']],
+            'definitions' => ['const' => ['$anchor' => 'Const']],
+            'x-defs' => ['default' => ['$anchor' => 'Hidden']],
+        ]);
+
+        self::assertSame(['/components/schemas/default'], $anchors->pointersOf('Default'));
+        self::assertSame(['/components/schemas/default/properties/example'], $anchors->pointersOf('Example'));
+        self::assertSame(['/components/schemas/default/properties/x-id'], $anchors->pointersOf('Xid'));
+        self::assertSame(['/components/schemas/default/properties/properties/properties/enum'], $anchors->pointersOf('Enum'));
+        self::assertSame(['/$defs/examples'], $anchors->pointersOf('Examples'));
+        self::assertSame(['/$defs/$anchor'], $anchors->pointersOf('Self'));
+        self::assertSame(['/definitions/const'], $anchors->pointersOf('Const'));
+        self::assertSame([], $anchors->pointersOf('Hidden'));
+    }
+
     /**
      * @dataProvider names
      */

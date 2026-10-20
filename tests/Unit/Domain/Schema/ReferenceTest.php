@@ -103,6 +103,14 @@ final class ReferenceTest extends TestCase
         ];
     }
 
+    public function testNeedsAReferenceToTellItsDocument(): void
+    {
+        $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('Empty $ref.');
+
+        Reference::document('', new SchemaLocation('/p/a.yaml'));
+    }
+
     /**
      * @dataProvider anchors
      */

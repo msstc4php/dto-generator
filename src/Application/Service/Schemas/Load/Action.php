@@ -266,7 +266,11 @@ final class Action
         $ref = $use->ref();
         $anchor = Reference::anchor($ref);
         try {
-            $target = $anchor === null ? Reference::target($ref, $use->location()) : new SchemaLocation(Reference::document($ref, $use->location()));
+            if ($anchor === null) {
+                $target = Reference::target($ref, $use->location());
+            } else {
+                $target = new SchemaLocation(Reference::document($ref, $use->location()));
+            }
         } catch (InvalidModel $exception) {
             $diagnostics->error($exception->getMessage(), $use->location());
 
@@ -306,14 +310,19 @@ final class Action
         }
 
         $pointers = $reads->anchors($document)->pointersOf($anchor);
-        if (count($pointers) !== 1) {
+        // Reported at the first $ref only, as a missing JSON pointer is.
+        if (count($pointers) !== 1 && !$reads->anchorFailed($document->path(), $anchor)) {
+            $reads->failAnchor($document->path(), $anchor);
+            $places = array_map(static fn (string $pointer): string => (new SchemaLocation($document->path(), $pointer))->toString(), $pointers);
             $diagnostics->error(
                 $pointers === []
                     ? sprintf('$ref "%s" does not resolve: %s has no schema with "$anchor": "%s".', $use->ref(), $document->path(), $anchor)
-                    : sprintf('$ref "%s" is ambiguous: %s has "$anchor": "%s" at %s.', $use->ref(), $document->path(), $anchor, implode(', ', $pointers)),
+                    : sprintf('$ref "%s" is ambiguous: "%s" is the anchor of %s.', $use->ref(), $anchor, implode(', ', $places)),
                 $use->location(),
             );
+        }
 
+        if (count($pointers) !== 1) {
             return null;
         }
 

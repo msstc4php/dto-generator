@@ -22,8 +22,7 @@ final class Reference
      */
     public static function anchor(string $ref): ?string
     {
-        $hash = strpos($ref, '#');
-        $fragment = $hash === false ? '' : rawurldecode((string) substr($ref, $hash + 1));
+        $fragment = self::split($ref)[1];
 
         return $fragment === '' || strncmp($fragment, '/', 1) === 0 ? null : $fragment;
     }
@@ -35,9 +34,11 @@ final class Reference
      */
     public static function document(string $ref, SchemaLocation $from): string
     {
-        $hash = strpos($ref, '#');
+        if ($ref === '') {
+            throw new InvalidModel('Empty $ref.');
+        }
 
-        return self::target($hash === false ? $ref : substr($ref, 0, $hash) . '#', $from)->file();
+        return self::resolve(self::split($ref)[0], '', $from)->file();
     }
 
     /**
@@ -52,14 +53,28 @@ final class Reference
             throw new InvalidModel('Empty $ref.');
         }
 
-        $hash = strpos($ref, '#');
-        $file = $hash === false ? $ref : (string) substr($ref, 0, $hash);
-        $fragment = $hash === false ? '' : rawurldecode((string) substr($ref, $hash + 1));
-        if ($fragment !== '' && strncmp($fragment, '/', 1) !== 0) {
+        [$file, $fragment] = self::split($ref);
+        if (self::anchor($ref) !== null) {
             throw new InvalidModel(sprintf('$ref "%s" names an anchor; a JSON pointer ("#/components/schemas/Pet") is expected here.', $ref));
         }
 
         JsonPointer::segments($fragment);
+
+        return self::resolve($file, $fragment, $from);
+    }
+
+    /**
+     * @return array{string, string} the document as written and the decoded fragment
+     */
+    private static function split(string $ref): array
+    {
+        $hash = strpos($ref, '#');
+
+        return $hash === false ? [$ref, ''] : [(string) substr($ref, 0, $hash), rawurldecode((string) substr($ref, $hash + 1))];
+    }
+
+    private static function resolve(string $file, string $fragment, SchemaLocation $from): SchemaLocation
+    {
         if ($file === '') {
             return new SchemaLocation($from->file(), $fragment);
         }

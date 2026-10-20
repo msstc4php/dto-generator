@@ -236,7 +236,7 @@ final class LoadTest extends TestCase
             ],
             'ambiguous anchor' => [
                 ['properties' => ['x' => ['$ref' => '#Twice'], 'y' => ['$anchor' => 'Twice'], 'z' => ['items' => ['$anchor' => 'Twice']]]],
-                $at . '$ref "#Twice" is ambiguous: /project/api/openapi.yaml has "$anchor": "Twice" at /components/schemas/User/properties/y, /components/schemas/User/properties/z/items.',
+                $at . '$ref "#Twice" is ambiguous: "Twice" is the anchor of /project/api/openapi.yaml#/components/schemas/User/properties/y, /project/api/openapi.yaml#/components/schemas/User/properties/z/items.',
             ],
             'no anchor name' => [
                 ['properties' => ['x' => ['$ref' => '#1st']]],
@@ -280,6 +280,40 @@ final class LoadTest extends TestCase
         $tag = $output->graph()->resolve($user->schema()->requireProperty('tag')->references()[0]);
         self::assertNotNull($tag);
         self::assertSame('/project/shared/common.yaml#/$defs/Tag', $tag->location()->toString());
+    }
+
+    public function testReportsAnAnchorNoSingleSchemaDeclaresOnce(): void
+    {
+        $output = $this->load([self::SPEC => ['$anchor' => 'Twice'] + $this->spec([
+            'User' => ['properties' => ['a' => ['$ref' => '#Gone'], 'b' => ['$ref' => '#Gone'], 'c' => ['$ref' => '#Twice'], 'd' => ['$ref' => '#Twice']]],
+            'Other' => ['$anchor' => 'Twice'],
+        ])]);
+
+        self::assertSame(
+            [
+                'error /project/api/openapi.yaml#/components/schemas/User/properties/a: $ref "#Gone" does not resolve: /project/api/openapi.yaml has no schema with "$anchor": "Gone".',
+                'error /project/api/openapi.yaml#/components/schemas/User/properties/c: $ref "#Twice" is ambiguous: "Twice" is the anchor of /project/api/openapi.yaml#, /project/api/openapi.yaml#/components/schemas/Other.',
+            ],
+            $this->messages($output),
+        );
+    }
+
+    public function testFollowsAnAnchorOfAKeywordOrADiscriminatorMapping(): void
+    {
+        $output = $this->load([self::SPEC => $this->spec([
+            'Pet' => ['oneOf' => [['$ref' => '#Cat']], 'discriminator' => ['propertyName' => 'kind', 'mapping' => ['cat' => '#Cat']]],
+            'Cat' => ['$dynamicAnchor' => 'Cat', 'type' => 'object'],
+            'User' => ['type' => 'object', 'not' => ['$ref' => '#Missing']],
+        ])]);
+
+        self::assertSame(
+            [
+                'warning /project/api/openapi.yaml#/components/schemas/User/not: "not" is not supported and has no effect on the generated type.',
+                'warning /project/api/openapi.yaml#/components/schemas/User/not: $ref "#Missing" does not resolve: /project/api/openapi.yaml has no schema with "$anchor": "Missing".',
+            ],
+            $this->messages($output),
+        );
+        self::assertSame([['Pet', 0, true], ['Cat', 0, true], ['User', 0, true]], $this->summary($output));
     }
 
     public function testReportsAMissingSpecificationAtTheConfig(): void

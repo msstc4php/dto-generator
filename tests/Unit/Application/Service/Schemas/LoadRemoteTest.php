@@ -47,6 +47,23 @@ final class LoadRemoteTest extends TestCase
         self::assertSame([[self::MONEY, true], ['https://schemas.example.com/common/v1/currency.yaml', true]], $remote->loads());
     }
 
+    public function testFollowsAnAnchorInAnAllowedRemoteDocument(): void
+    {
+        $remote = new InMemoryRemoteDocuments([
+            self::MONEY => ['$defs' => ['Money' => ['$anchor' => 'Money', 'type' => 'object', 'properties' => ['currency' => ['$ref' => '#Currency']]], 'Currency' => ['$anchor' => 'Currency', 'type' => 'string']]],
+        ]);
+
+        $output = $this->load($remote, ['https://schemas.example.com/'], true, ['price' => ['$ref' => self::MONEY . '#Money']]);
+
+        self::assertSame([], $this->messages($output));
+        self::assertSame([
+            '/project/api/openapi.yaml#/components/schemas/Order',
+            'https://schemas.example.com/common/v1/money.yaml#/$defs/Money',
+            'https://schemas.example.com/common/v1/money.yaml#/$defs/Currency',
+        ], array_map(static fn (ResolvedSchema $schema): string => $schema->location()->toString(), $output->graph()->all()));
+        self::assertSame([[self::MONEY, true]], $remote->loads());
+    }
+
     public function testNamesTheCacheOfTheRemoteDocumentsItRead(): void
     {
         $remote = new InMemoryRemoteDocuments([self::MONEY => ['Money' => ['type' => 'string']]]);

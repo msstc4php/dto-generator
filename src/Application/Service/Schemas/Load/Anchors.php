@@ -16,6 +16,12 @@ final class Anchors
     /** Keywords whose values are data, which an object with "$anchor" in them does not make a schema. */
     private const DATA = ['const', 'default', 'enum', 'example', 'examples'];
 
+    /** Keys whose values map names to schemas: a name there is no keyword, whatever it is. */
+    private const NAMES = ['properties', 'patternProperties', 'dependentSchemas', '$defs', 'definitions', 'schemas'];
+
+    /** Both name a plain anchor; a `$dynamicAnchor` names a dynamic one besides. */
+    private const KEYWORDS = ['$anchor', '$dynamicAnchor'];
+
     /** @var array<string, list<string>> by anchor, the pointers of the schemas that declare it */
     private array $pointers = [];
 
@@ -24,11 +30,11 @@ final class Anchors
      */
     public function __construct(array $root)
     {
-        $this->collect($root, []);
+        $this->collect($root, [], false);
     }
 
     /**
-     * @return list<string> the pointers of the schemas declaring the anchor, in document order
+     * @return list<string> the pointers of the schemas declaring the anchor, each once, in document order
      */
     public function pointersOf(string $anchor): array
     {
@@ -46,18 +52,23 @@ final class Anchors
     /**
      * @param array<array-key, mixed> $node
      * @param list<string> $segments
+     * @param bool $names whether the keys of the node are names, not keywords
      */
-    private function collect(array $node, array $segments): void
+    private function collect(array $node, array $segments, bool $names): void
     {
-        $anchor = $node['$anchor'] ?? null;
-        if (is_string($anchor)) {
-            $this->pointers[$anchor][] = JsonPointer::fromSegments(...$segments);
+        $pointer = JsonPointer::fromSegments(...$segments);
+        foreach ($names ? [] : self::KEYWORDS as $keyword) {
+            $anchor = $node[$keyword] ?? null;
+            if (is_string($anchor) && !in_array($pointer, $this->pointers[$anchor] ?? [], true)) {
+                $this->pointers[$anchor][] = $pointer;
+            }
         }
 
         foreach ($node as $key => $value) {
             $key = (string) $key;
-            if (is_array($value) && !in_array($key, self::DATA, true) && !Extensions::isExtensionKey($key)) {
-                $this->collect($value, array_merge($segments, [$key]));
+            $data = !$names && (in_array($key, self::DATA, true) || Extensions::isExtensionKey($key));
+            if (is_array($value) && !$data) {
+                $this->collect($value, array_merge($segments, [$key]), !$names && in_array($key, self::NAMES, true));
             }
         }
     }
