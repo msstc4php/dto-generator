@@ -144,10 +144,10 @@ final class TypeMapper
             return $this->mixedEnum($schema, $diagnostics);
         }
 
-        if (SchemaShape::isBooleanEnum($schema)) {
-            $values = array_values(array_unique(array_filter($schema->enum() ?? [], 'is_bool'), SORT_REGULAR));
-
-            return ScalarType::bool(count($values) === 1 ? LiteralType::of($values[0]) : null);
+        $booleans = SchemaShape::booleanEnumValues($schema);
+        // A `const` beside it narrows the type further, below.
+        if ($booleans !== null && !$schema->hasKeyword('const')) {
+            return ScalarType::bool(count($booleans) === 1 ? LiteralType::of($booleans[0]) : null);
         }
 
         if (SchemaShape::isEnum($schema)) {
@@ -157,7 +157,7 @@ final class TypeMapper
             );
         }
 
-        if ($schema->enum() !== null && !SchemaShape::isEnum($schema)) {
+        if ($schema->enum() !== null && !SchemaShape::isEnum($schema) && $booleans === null) {
             $diagnostics->warning(
                 'This enum has no string or integer value, so it is not generated and the property keeps its plain type.',
                 $schema->location(),

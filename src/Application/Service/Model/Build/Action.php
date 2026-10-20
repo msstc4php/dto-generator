@@ -188,8 +188,9 @@ final class Action
             $classSchemas[] = new ClassSchema($schema, $compositions[$index]);
         }
 
-        foreach ($registry->rejected() as [$schema, $taker]) {
-            // Reported where its name was refused; a split still needs to know whether it depends on the direction.
+        // A schema refused its name is reported there, and one sharing a class needs it in a view as its holder does; a
+        // split still needs to know whether either depends on the direction.
+        foreach (array_merge($registry->rejected(), $registry->reused()) as [$schema, $taker]) {
             $classSchemas[] = new ClassSchema($schema, $allOf->compose($schema, new Diagnostics()), $taker);
         }
 
@@ -404,20 +405,37 @@ final class Action
         }
 
         $namespace = $ownerName->namespace();
-        $objects = [];
+        $inlines = [];
+        $places = [];
         foreach ($candidates as [$schema, $baseName, $wireName]) {
             foreach ($this->inlines($schema, '', $diagnostics, $registry, $graph) as [$candidate, $suffix, $title]) {
-                // The inline objects at one place of a property in several members of an allOf all apply: one class.
-                $declared = $objects[$wireName][$suffix] ?? null;
-                $object = SchemaShape::isClass($candidate);
-                if ($declared instanceof Schema && $object && $this->joinable($declared, $candidate, $suffix, $graph)) {
-                    $registry->join($declared, $candidate);
-                } else {
-                    // An object the class cannot join is reported where the types of the property meet, not renamed.
-                    $this->declareInline($candidate, $title, $baseName === null ? null : $baseName . $suffix, $wireName, $namespace, $source, $registry, $enums, $diagnostics, !$declared instanceof Schema);
-                    if ($object && !$declared instanceof Schema) {
-                        $objects[$wireName][$suffix] = $candidate;
-                    }
+                $inlines[] = [$candidate, $suffix, $title, $baseName, $wireName];
+                if (SchemaShape::isClass($candidate)) {
+                    $places[$wireName][$suffix][] = $candidate;
+                }
+            }
+        }
+
+        foreach ($places as $suffixes) {
+            foreach ($suffixes as $objects) {
+                foreach (count($objects) > 1 ? $objects : [] as $object) {
+                    $registry->unshare($object);
+                }
+            }
+        }
+
+        $objects = [];
+        foreach ($inlines as [$candidate, $suffix, $title, $baseName, $wireName]) {
+            // The inline objects at one place of a property in several members of an allOf all apply: one class.
+            $declared = $objects[$wireName][$suffix] ?? null;
+            $object = SchemaShape::isClass($candidate);
+            if ($declared instanceof Schema && $object && $this->joinable($declared, $candidate, $suffix, $graph)) {
+                $registry->join($declared, $candidate);
+            } else {
+                // An object the class cannot join is reported where the types of the property meet, not renamed.
+                $this->declareInline($candidate, $title, $baseName === null ? null : $baseName . $suffix, $wireName, $namespace, $source, $registry, $enums, $diagnostics, !$declared instanceof Schema);
+                if ($object && !$declared instanceof Schema) {
+                    $objects[$wireName][$suffix] = $candidate;
                 }
             }
         }
@@ -502,11 +520,12 @@ final class Action
 
         $short = $this->inlineName($candidate, $title ?? $derived, $wireName, $diagnostics);
         $name = $short === null ? null : $registry->className($namespace, $short, $candidate);
-        if ($name instanceof ClassName && $registry->isTaken($name) && $registry->reuse($name, $candidate)) {
+        $taken = $name instanceof ClassName && $registry->isTaken($name);
+        if ($taken && $registry->reuse($name, $candidate)) {
             return;
         }
 
-        if ($name instanceof ClassName && $registry->isTaken($name) && !$candidate->extensions()->has('x-php-class-name')) {
+        if ($taken && !$candidate->extensions()->has('x-php-class-name')) {
             $name = $this->freeName($candidate, $name, $title === null ? null : $derived, $namespace, $registry, $warn ? $diagnostics : new Diagnostics());
         }
 

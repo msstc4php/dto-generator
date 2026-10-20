@@ -426,6 +426,59 @@ final class BuildTest extends TestCase
         self::assertSame(['App\\Dto\\Level'], ModelFixture::enums($output));
     }
 
+    public function testSharesTheViewsOfARepeatedInlineSchema(): void
+    {
+        $meta = ['type' => 'object', 'properties' => ['id' => ['type' => 'string', 'readOnly' => true], 'name' => ['type' => 'string']]];
+        $point = ['oneOf' => [['title' => 'Point'] + $meta, ['type' => 'string']]];
+        $output = ModelFixture::views(['A' => ['type' => 'object', 'properties' => ['p' => $point]], 'B' => ['type' => 'object', 'properties' => ['q' => $point]]]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(
+            [
+                'App\\Dto\\ARead' => ['p: App\\Dto\\PointRead|string|null'],
+                'App\\Dto\\BRead' => ['q: App\\Dto\\PointRead|string|null'],
+                'App\\Dto\\PointRead' => ['id: string|null', 'name: string|null'],
+                'App\\Dto\\AWrite' => ['p: App\\Dto\\PointWrite|string|null'],
+                'App\\Dto\\BWrite' => ['q: App\\Dto\\PointWrite|string|null'],
+                'App\\Dto\\PointWrite' => ['name: string|null'],
+            ],
+            ModelFixture::classes($output),
+        );
+    }
+
+    /**
+     * @dataProvider joinedPlaces
+     *
+     * @param array<string, array<array-key, mixed>> $schemas
+     * @param array<string, list<string>> $expected
+     */
+    public function testSharesNoClassThatTakesThePropertiesOfAnAllOf(array $schemas, array $expected): void
+    {
+        $output = ModelFixture::build($schemas);
+
+        self::assertCount(1, ModelFixture::messages($output));
+        self::assertSame($expected, array_intersect_key(ModelFixture::classes($output), $expected));
+    }
+
+    /**
+     * @return iterable<string, array{array<string, array<array-key, mixed>>, array<string, list<string>>}>
+     */
+    public static function joinedPlaces(): iterable
+    {
+        $x = ['type' => 'object', 'properties' => ['x' => []]];
+        $alone = ['type' => 'object', 'properties' => ['b_meta' => $x]];
+        $joined = ['allOf' => [['type' => 'object', 'properties' => ['meta' => $x]], ['type' => 'object', 'properties' => ['meta' => ['type' => 'object', 'properties' => ['y' => []]]]]]];
+
+        yield 'the joined place after' => [
+            ['A' => $alone, 'AB' => $joined],
+            ['App\\Dto\\A' => ['b_meta: App\\Dto\\ABMeta|null'], 'App\\Dto\\AB' => ['meta: App\\Dto\\ABMeta2|null'], 'App\\Dto\\ABMeta' => ['x: mixed'], 'App\\Dto\\ABMeta2' => ['x: mixed', 'y: mixed']],
+        ];
+        yield 'the joined place first' => [
+            ['AB' => $joined, 'A' => $alone],
+            ['App\\Dto\\AB' => ['meta: App\\Dto\\ABMeta|null'], 'App\\Dto\\A' => ['b_meta: App\\Dto\\ABMeta2|null'], 'App\\Dto\\ABMeta' => ['x: mixed', 'y: mixed'], 'App\\Dto\\ABMeta2' => ['x: mixed']],
+        ];
+    }
+
     public function testReportsAnEnumItCannotBuildOnce(): void
     {
         $at = self::AT;

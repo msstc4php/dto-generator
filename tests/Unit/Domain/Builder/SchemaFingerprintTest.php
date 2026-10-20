@@ -20,7 +20,9 @@ final class SchemaFingerprintTest extends TestCase
         'required' => ['x'],
         'additionalProperties' => ['type' => 'string'],
         'minProperties' => 1,
+        'maxProperties' => 5,
         'x-php-final' => true,
+        'x-php-name' => 'point',
         'allOf' => [['minProperties' => 1]],
         'oneOf' => [['required' => ['x']]],
         'anyOf' => [['required' => ['x']]],
@@ -33,6 +35,15 @@ final class SchemaFingerprintTest extends TestCase
             SchemaFingerprint::of($this->schema(self::SCHEMA, 'a.yaml', '/A')),
             SchemaFingerprint::of($this->schema(self::SCHEMA, 'b.yaml', '/B/properties/c')),
         );
+    }
+
+    public function testLeavesOutTheOrderOfKeywordsButNotOfProperties(): void
+    {
+        $node = ['minProperties' => 1, 'maxProperties' => 2, 'x-a' => 1, 'x-b' => 2, 'properties' => ['a' => [], 'b' => []]];
+        $fingerprint = SchemaFingerprint::of($this->schema($node));
+
+        self::assertSame($fingerprint, SchemaFingerprint::of($this->schema(['maxProperties' => 2, 'x-b' => 2, 'x-a' => 1, 'minProperties' => 1] + $node)));
+        self::assertNotSame($fingerprint, SchemaFingerprint::of($this->schema(['properties' => ['b' => [], 'a' => []]] + $node)));
     }
 
     /**
@@ -71,7 +82,9 @@ final class SchemaFingerprintTest extends TestCase
         yield 'discriminator value' => [['discriminator' => ['propertyName' => 'x', 'mapping' => ['2' => '#/components/schemas/P']]]];
         yield 'discriminator target' => [['discriminator' => ['propertyName' => 'x', 'mapping' => ['1' => '#/components/schemas/Q']]]];
         yield 'keyword' => [['minProperties' => 2]];
+        yield 'another keyword' => [['maxProperties' => 6]];
         yield 'extension' => [['x-php-final' => false]];
+        yield 'another extension' => [['x-php-name' => 'spot']];
     }
 
     public function testTellsTheMembersOfCompositionsApart(): void

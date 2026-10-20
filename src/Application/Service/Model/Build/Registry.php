@@ -39,11 +39,14 @@ final class Registry
     /** @var array<string, true> */
     private array $abandoned = [];
 
-    /** @var array<string, string> lower-cased FQCN → location that claimed it */
-    private array $taken = [];
-
     /** @var array<string, Schema> lower-cased FQCN → the schema that claimed it */
     private array $holders = [];
+
+    /** @var list<string> locations whose class takes the properties of other schemas, so no other may share it */
+    private array $unshared = [];
+
+    /** @var list<array{Schema, string}> inline classes that share the class of the schema at the location */
+    private array $reused = [];
 
     /** @var array<string, bool> lower-cased FQCN of the views' names claimed */
     private array $views = [];
@@ -137,7 +140,9 @@ final class Registry
      */
     public function holder(ClassName $name): ?string
     {
-        return $this->taken[Identifier::asciiLower($name->fqcn())] ?? null;
+        $holder = $this->holders[Identifier::asciiLower($name->fqcn())] ?? null;
+
+        return $holder instanceof Schema ? $holder->location()->toString() : null;
     }
 
     /**
@@ -145,7 +150,7 @@ final class Registry
      */
     public function isTaken(ClassName $name): bool
     {
-        return isset($this->taken[Identifier::asciiLower($name->fqcn())]);
+        return isset($this->holders[Identifier::asciiLower($name->fqcn())]);
     }
 
     /**
@@ -156,16 +161,18 @@ final class Registry
         $lower = Identifier::asciiLower($name->fqcn());
         $base = $this->unclaimed[$name->fqcn()] ?? $name->shortName();
         $suffixed = $base !== $name->shortName();
-        if (isset($this->taken[$lower])) {
+        $holder = $this->holders[$lower] ?? null;
+        if ($holder instanceof Schema) {
+            $taker = $holder->location()->toString();
             if (SchemaShape::isClass($schema)) {
-                $this->rejected[] = [$schema, $this->taken[$lower]];
+                $this->rejected[] = [$schema, $taker];
             }
 
             $diagnostics->error(
                 sprintf(
                     'Class %s is already generated from %s; set "x-php-class-name" on one of them%s, in the document or "classNames" of the source%s.',
                     $name->fqcn(),
-                    $this->taken[$lower],
+                    $taker,
                     VariantOrigin::isVariant($schema->location()) ? ' (on the schema this one is distributed from or on a referenced variant, or a "title" on an inline one)' : '',
                     $suffixed || ($this->views[$lower] ?? false) ? ', or change dto.readWriteSuffixes' : '',
                 ),
@@ -175,7 +182,6 @@ final class Registry
             return false;
         }
 
-        $this->taken[$lower] = $schema->location()->toString();
         $this->holders[$lower] = $schema;
         $this->bases[$name->fqcn()] = $base;
         if ($suffixed) {
@@ -187,7 +193,8 @@ final class Registry
 
     /**
      * An inline schema that says all the schema holding the name says, in its file, gets its class or enum instead of
-     * another name: specifications repeat such schemas (OpenAI's Beta copies, GitHub's webhooks).
+     * another name: specifications repeat such schemas (OpenAI's Beta copies, GitHub's webhooks). A class that takes the
+     * properties of other schemas of an allOf ({@see join()}) says more than its schema, so it is shared with none.
      */
     public function reuse(ClassName $name, Schema $candidate): bool
     {
@@ -197,20 +204,40 @@ final class Registry
         }
 
         $key = $holder->location()->toString();
+        $at = $candidate->location()->toString();
         $class = $this->classes[$key] ?? null;
         $enum = $this->enums[$key] ?? null;
-        if ((!$class instanceof ClassName && !$enum instanceof EnumType) || SchemaFingerprint::of($holder) !== SchemaFingerprint::of($candidate)) {
+        if ((!$class instanceof ClassName && !$enum instanceof EnumType) || array_intersect([$key, $at], $this->unshared) !== []
+            || SchemaFingerprint::of($holder) !== SchemaFingerprint::of($candidate)) {
             return false;
         }
 
-        $at = $candidate->location()->toString();
         if ($class instanceof ClassName) {
             $this->classes[$at] = $class;
+            $this->reused[] = [$candidate, $key];
         } else {
             $this->enums[$at] = $enum;
         }
 
         return true;
+    }
+
+    /**
+     * Keeps the class of an inline object to itself: other objects of its place in an allOf will join it.
+     */
+    public function unshare(Schema $schema): void
+    {
+        $this->unshared[] = $schema->location()->toString();
+    }
+
+    /**
+     * The inline classes that share the class of another schema, with the location of that schema.
+     *
+     * @return list<array{Schema, string}>
+     */
+    public function reused(): array
+    {
+        return $this->reused;
     }
 
     public function isDeclared(Schema $schema): bool

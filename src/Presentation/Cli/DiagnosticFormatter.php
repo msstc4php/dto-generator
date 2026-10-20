@@ -33,31 +33,33 @@ final class DiagnosticFormatter
     public function lines(array $diagnostics, bool $everyPlace): array
     {
         $shown = [];
-        /** @var array<string, int> $first the position of each warning shown */
+        /** @var array<string, int> $first by message, the position of each warning shown */
         $first = [];
         /** @var array<int, int> $more by position, how many more places a warning recurs at */
         $more = [];
         foreach ($diagnostics as $diagnostic) {
-            $key = $diagnostic->message();
+            $message = $diagnostic->message();
             $grouped = !$everyPlace && $diagnostic->severity()->value() === Severity::WARNING;
-            if ($grouped && isset($first[$key])) {
-                $more[$first[$key]] = ($more[$first[$key]] ?? 0) + 1;
+            if ($grouped && isset($first[$message])) {
+                $more[$first[$message]] = ($more[$first[$message]] ?? 0) + 1;
 
                 continue;
             }
 
             if ($grouped) {
-                $first[$key] = count($shown);
+                $first[$message] = count($shown);
             }
 
             $shown[] = $diagnostic;
         }
 
-        return array_map(function (Diagnostic $diagnostic, int $position) use ($more): string {
+        $lines = [];
+        foreach ($shown as $position => $diagnostic) {
             $count = $more[$position] ?? 0;
+            $lines[] = $this->line($diagnostic) . ($count === 0 ? '' : sprintf(' (Also at %d more place%s; -v lists them.)', $count, $count === 1 ? '' : 's'));
+        }
 
-            return $this->line($diagnostic) . ($count === 0 ? '' : sprintf(' (Also at %d more place%s; -v lists them.)', $count, $count === 1 ? '' : 's'));
-        }, $shown, array_keys($shown));
+        return $lines;
     }
 
     public function line(Diagnostic $diagnostic): string

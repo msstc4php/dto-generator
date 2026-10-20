@@ -38,9 +38,12 @@ docker-build: ## Build the Docker image as dto-generator:local, with the sibling
 docker-smoke: docker-build ## Generate the golden project with the image and compare
 	sh tests/Docker/smoke.sh dto-generator:local
 
+# Mutation testing on every core makes a laptop unusable; THREADS=$(nproc) for a full-speed run.
+THREADS ?= 4
+
 infection: ## Mutation testing
 	# The reporters hold every mutant in memory; 512M runs out at the end of a full run.
-	XDEBUG_MODE=coverage php -d memory_limit=2G $(TOOLS)/infection --threads=$(shell nproc) --no-interaction
+	XDEBUG_MODE=coverage php -d memory_limit=2G $(TOOLS)/infection --threads=$(THREADS) --no-interaction
 
 fix: ## Apply code style and Rector
 	$(TOOLS)/rector process

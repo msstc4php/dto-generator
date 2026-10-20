@@ -8,10 +8,13 @@ use MSSTC4PHP\DtoGenerator\Domain\Schema\Discriminator;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaType;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\DefaultValue;
+use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
 
 /**
  * Everything a schema says, its subschemas included, apart from where it is: two schemas with one fingerprint in one
  * file give the same class. Each `$ref` counts as written, so only within one file does it name the same target.
+ *
+ * @phpstan-import-type JsonValue from Json
  */
 final class SchemaFingerprint
 {
@@ -49,9 +52,23 @@ final class SchemaFingerprint
             $discriminator instanceof Discriminator
                 ? [$discriminator->propertyName(), array_map(static fn (string $value): array => [$value, $discriminator->refFor($value)], $discriminator->values())]
                 : null,
-            $schema->keywords(),
-            $schema->extensions()->all(),
+            self::sorted($schema->keywords()),
+            self::sorted($schema->extensions()->all()),
         ]);
+    }
+
+    /**
+     * Keywords in any order say the same; the order of properties is that of the constructor's parameters, so it counts.
+     *
+     * @param array<array-key, JsonValue> $keywords
+     *
+     * @return array<array-key, JsonValue>
+     */
+    private static function sorted(array $keywords): array
+    {
+        ksort($keywords, SORT_STRING);
+
+        return $keywords;
     }
 
     /**

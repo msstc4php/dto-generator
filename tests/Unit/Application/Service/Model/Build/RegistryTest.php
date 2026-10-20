@@ -51,6 +51,23 @@ final class RegistryTest extends TestCase
         self::assertNull($registry->declarations()->classAt('a.yaml#/B'));
     }
 
+    public function testSharesNoClassThatOtherSchemasJoin(): void
+    {
+        $registry = new Registry();
+        $name = ClassName::fromFqcn('App\Point');
+        $holder = $this->schema(self::POINT, 'a.yaml', '/A');
+        self::assertTrue($registry->claim($name, $holder, new Diagnostics()));
+        $registry->planClass($holder, $name, 0);
+        $registry->unshare($this->schema(self::POINT, 'a.yaml', '/Joined'));
+
+        self::assertTrue($registry->reuse($name, $this->schema(self::POINT, 'a.yaml', '/B')));
+        self::assertFalse($registry->reuse($name, $this->schema(self::POINT, 'a.yaml', '/Joined')));
+        self::assertSame([['a.yaml#/B', 'a.yaml#/A']], array_map(static fn (array $reused): array => [$reused[0]->location()->toString(), $reused[1]], $registry->reused()));
+
+        $registry->unshare($holder);
+        self::assertFalse($registry->reuse($name, $this->schema(self::POINT, 'a.yaml', '/C')));
+    }
+
     public function testLeavesASchemaAloneWhenTheOneHoldingTheNameIsNotDeclared(): void
     {
         $registry = new Registry();

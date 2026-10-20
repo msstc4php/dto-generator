@@ -25,8 +25,9 @@ All notable changes to this package are documented here. The format follows
   gives a warning. Stripe, Twilio and Jira lose hundreds of warnings, and their nullable properties are nullable.
 
 - An inline schema whose name another schema already holds gets that schema's class or enum when the two say the
-  same in one file, subschemas included, instead of a numbered copy (`…2`, `…Option1`) and a warning. OpenAI's
-  `Beta` copies and GitHub's repeated webhook schemas lose such duplicates.
+  same in one file, subschemas included, instead of a numbered copy (`…2`, `…Option1`) and a warning, or an error
+  when both set the same `x-php-class-name`. OpenAI's `Beta` copies and GitHub's repeated webhook schemas lose such
+  duplicates. A class an `allOf` gives the properties of other schemas is shared with none.
 
 ### Changed
 
