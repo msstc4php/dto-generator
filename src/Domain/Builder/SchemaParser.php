@@ -28,10 +28,24 @@ final class SchemaParser
     /** The keywords extensions check, whose occurrences wait for them rather than giving a warning here. */
     private ?KeywordChecks $checks = null;
 
+    /** OpenAPI 3.0 reads `nullable: true` as admitting null, which 3.1 writes as a type. */
+    private bool $openApi30 = false;
+
     public function claiming(KeywordChecks $checks): self
     {
         $parser = clone $this;
         $parser->checks = $checks;
+
+        return $parser;
+    }
+
+    /**
+     * The parser of a document in OpenAPI 3.0, where `nullable: true` admits null.
+     */
+    public function forOpenApi30(): self
+    {
+        $parser = clone $this;
+        $parser->openApi30 = true;
 
         return $parser;
     }
@@ -58,7 +72,7 @@ final class SchemaParser
         $this->quiet = $outer || is_string($node['x-php-type'] ?? null) || ($node['x-php-skip'] ?? null) === true;
 
         try {
-            return $this->parseObject($node, $builder, $location, $diagnostics);
+            return $this->parseObject($this->openApi30 ? $this->withNullAdmitted($node, $location, $diagnostics) : $node, $builder, $location, $diagnostics);
         } finally {
             $this->quiet = $outer;
         }
@@ -85,7 +99,7 @@ final class SchemaParser
                 continue;
             }
 
-            $unsupported = $this->quiet ? null : UnsupportedKeywords::warning($keyword, $value);
+            $unsupported = $this->quiet || ($this->openApi30 && $keyword === 'nullable') ? null : UnsupportedKeywords::warning($keyword, $value);
             if ($unsupported !== null && $this->checks instanceof KeywordChecks && $this->checks->isClaimed($keyword)) {
                 $this->checks->expect($location, $keyword);
                 $unsupported = null;
@@ -99,6 +113,62 @@ final class SchemaParser
         }
 
         return $builder->extensions(new Extensions($extensions))->build();
+    }
+
+    /**
+     * The node with `nullable: true` written as OpenAPI 3.1 does: null joins the type, or, for a union without one, its
+     * members. Without either, null joins the type of a `$ref` or an `allOf`, and a schema with no type admits it anyway.
+     *
+     * @param array<array-key, mixed> $node
+     *
+     * @return array<array-key, mixed>
+     */
+    private function withNullAdmitted(array $node, SchemaLocation $location, Diagnostics $diagnostics): array
+    {
+        $nullable = array_key_exists('nullable', $node) ? $node['nullable'] : false;
+        if (!is_bool($nullable)) {
+            $diagnostics->error('"nullable" must be a boolean.', $location->child('nullable'));
+        }
+
+        if ($nullable !== true) {
+            return $node;
+        }
+
+        $type = $node['type'] ?? null;
+        if (is_string($type) && SchemaType::tryFrom($type) instanceof SchemaType) {
+            $node['type'] = [$type, SchemaType::NULL];
+        } elseif (is_array($type)) {
+            $node['type'] = in_array(SchemaType::NULL, $type, true) ? $type : array_merge($type, [SchemaType::NULL]);
+        } elseif ($type === null) {
+            $node = $this->withNullMember($node);
+        }
+
+        return $node;
+    }
+
+    /**
+     * @param array<array-key, mixed> $node without a type
+     *
+     * @return array<array-key, mixed>
+     */
+    private function withNullMember(array $node): array
+    {
+        // The member goes last, so those written keep their locations.
+        foreach (['oneOf', 'anyOf'] as $keyword) {
+            $members = $node[$keyword] ?? null;
+            if (is_array($members) && $members !== [] && Json::isList($members)) {
+                $members[] = ['type' => SchemaType::NULL];
+                $node[$keyword] = $members;
+
+                return $node;
+            }
+        }
+
+        if (isset($node['$ref']) || isset($node['allOf'])) {
+            $node['type'] = [SchemaType::NULL];
+        }
+
+        return $node;
     }
 
     /**

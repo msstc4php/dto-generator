@@ -1,0 +1,29 @@
+openapi: 3.0.3
+info: { title: Nullable in 3.0, version: '1' }
+paths: {}
+components:
+  schemas:
+    Address:
+      type: object
+      properties:
+        city: { type: string }
+    Customer:
+      type: object
+      required: [name, address, status]
+      properties:
+        name: { type: string, nullable: true }
+        address:
+          anyOf:
+            - $ref: '#/components/schemas/Address'
+          nullable: true
+        billing:
+          allOf:
+            - $ref: '#/components/schemas/Address'
+          nullable: true
+        status:
+          type: string
+          enum: [active, closed]
+          nullable: true
+        tags:
+          type: array
+          items: { type: string, nullable: true }

@@ -19,10 +19,14 @@ use MSSTC4PHP\DtoGenerator\Domain\Schema\ReferenceUse;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\ResolvedSchema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
+use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
 use MSSTC4PHP\DtoGenerator\Tests\Support\ConfigMother;
 use MSSTC4PHP\DtoGenerator\Tests\Support\InMemoryDocumentLoader;
 use PHPUnit\Framework\TestCase;
 
+/**
+ * @phpstan-import-type JsonValue from Json
+ */
 final class LoadTest extends TestCase
 {
     private const SPEC = '/project/api/openapi.yaml';
@@ -251,12 +255,74 @@ final class LoadTest extends TestCase
         self::assertSame(['error /project/dto-generator.yaml#/sources/1/spec: The specification is already used by source #0.'], $this->messages($output));
     }
 
-    public function testWarnsAboutOtherOpenApiVersions(): void
+    /**
+     * @param JsonValue $version
+     *
+     * @dataProvider otherVersions
+     */
+    public function testWarnsAboutOtherOpenApiVersions($version, string $message): void
     {
-        $output = $this->load([self::SPEC => ['openapi' => '3.0.3', 'components' => ['schemas' => []]]]);
+        $output = $this->load([self::SPEC => ['openapi' => $version, 'components' => ['schemas' => []]]]);
+
+        self::assertSame(['warning /project/api/openapi.yaml#/openapi: ' . $message], $this->messages($output));
+    }
+
+    /**
+     * @return iterable<string, array{JsonValue, string}>
+     */
+    public static function otherVersions(): iterable
+    {
+        $openApi30 = static fn (string $version): string => sprintf(
+            'OpenAPI %s is read as 3.1, but for "nullable", which admits null; other keywords that differ in 3.0 (such as a boolean "exclusiveMinimum") are not understood.',
+            $version,
+        );
+
+        yield '3.0.3' => ['3.0.3', $openApi30('3.0.3')];
+        yield '3.0 from unquoted YAML' => [3.0, $openApi30('3.0')];
+        yield '3.2.0' => ['3.2.0', 'Expected OpenAPI 3.1, found "3.2.0"; keywords specific to that version are not understood.'];
+        yield '3.0.3 with a suffix' => ['3.0.3-rc', 'Expected OpenAPI 3.1, found "3.0.3-rc"; keywords specific to that version are not understood.'];
+    }
+
+    public function testReadsNullableInOpenApi30AndInTheDocumentsItRefersTo(): void
+    {
+        $output = $this->load([
+            self::SPEC => ['openapi' => '3.0.3', 'components' => ['schemas' => [
+                'User' => ['properties' => [
+                    'name' => ['type' => 'string', 'nullable' => true],
+                    'near' => ['$ref' => 'shared.yaml#/Near'],
+                    'far' => ['$ref' => 'newer.yaml#/Far'],
+                ], 'not' => ['$ref' => 'shared.yaml#/Hidden']],
+            ]]],
+            '/project/api/shared.yaml' => ['Near' => ['type' => 'string', 'nullable' => true], 'Hidden' => ['type' => 'integer', 'nullable' => true]],
+            '/project/api/newer.yaml' => ['openapi' => '3.1.0', 'Far' => ['type' => 'string', 'nullable' => true]],
+        ]);
+
+        $nullable = [];
+        foreach ($output->graph()->all() as $schema) {
+            $nullable[$schema->location()->toString()] = $schema->schema()->isNullable();
+            foreach ($schema->schema()->propertyNames() as $name) {
+                $nullable[$schema->location()->toString() . '/properties/' . $name] = $schema->schema()->requireProperty($name)->isNullable();
+            }
+        }
 
         self::assertSame(
-            ['warning /project/api/openapi.yaml#/openapi: Expected OpenAPI 3.1, found "3.0.3"; keywords specific to that version (such as "nullable") are not understood.'],
+            [
+                '/project/api/openapi.yaml#/components/schemas/User' => false,
+                '/project/api/openapi.yaml#/components/schemas/User/properties/name' => true,
+                '/project/api/openapi.yaml#/components/schemas/User/properties/near' => false,
+                '/project/api/openapi.yaml#/components/schemas/User/properties/far' => false,
+                '/project/api/shared.yaml#/Near' => true,
+                '/project/api/newer.yaml#/Far' => false,
+                '/project/api/shared.yaml#/Hidden' => true,
+            ],
+            $nullable,
+        );
+        self::assertSame(
+            [
+                'warning /project/api/openapi.yaml#/openapi: OpenAPI 3.0.3 is read as 3.1, but for "nullable", which admits null; other keywords that differ in 3.0 (such as a boolean "exclusiveMinimum") are not understood.',
+                'warning /project/api/openapi.yaml#/components/schemas/User/not: "not" is not supported and has no effect on the generated type.',
+                'warning /project/api/newer.yaml#/Far/nullable: "nullable" is OpenAPI 3.0 and has no effect in 3.1; write type: [T, \'null\'].',
+            ],
             $this->messages($output),
         );
     }

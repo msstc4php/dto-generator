@@ -305,6 +305,98 @@ final class SchemaParserTest extends TestCase
         );
     }
 
+    /**
+     * @param array<array-key, mixed> $node
+     * @param list<string> $types
+     *
+     * @dataProvider openApi30Nullables
+     */
+    public function testReadsOpenApi30NullableAsAdmittingNull(array $node, array $types, int $oneOf, int $anyOf): void
+    {
+        $diagnostics = new Diagnostics();
+        $schema = (new SchemaParser())->forOpenApi30()->parse($node, $this->root(), $diagnostics);
+
+        self::assertSame($types, array_map(static fn (SchemaType $type): string => $type->value(), $schema->types()));
+        self::assertSame([$oneOf, $anyOf], [count($schema->oneOf()), count($schema->anyOf())]);
+        self::assertSame([], $diagnostics->all());
+    }
+
+    /**
+     * @return iterable<string, array{array<array-key, mixed>, list<string>, int, int}>
+     */
+    public static function openApi30Nullables(): iterable
+    {
+        yield 'a type' => [['type' => 'string', 'nullable' => true], ['string', 'null'], 0, 0];
+        yield 'a list of types' => [['type' => ['string', 'integer'], 'nullable' => true], ['string', 'integer', 'null'], 0, 0];
+        yield 'a list of types with null' => [['type' => ['null', 'string'], 'nullable' => true], ['null', 'string'], 0, 0];
+        yield 'not nullable' => [['type' => 'string', 'nullable' => false], ['string'], 0, 0];
+        yield 'a oneOf' => [['oneOf' => [['type' => 'string']], 'nullable' => true], [], 2, 0];
+        yield 'an anyOf' => [['anyOf' => [['type' => 'string']], 'nullable' => true], [], 0, 2];
+        yield 'a oneOf beside an anyOf' => [['oneOf' => [['type' => 'string']], 'anyOf' => [['type' => 'integer']], 'nullable' => true], [], 2, 1];
+        yield 'a $ref' => [['$ref' => '#/components/schemas/Tag', 'nullable' => true], ['null'], 0, 0];
+        yield 'an allOf' => [['allOf' => [['$ref' => '#/components/schemas/Tag']], 'nullable' => true], ['null'], 0, 0];
+        yield 'a typed oneOf' => [['type' => 'object', 'oneOf' => [['required' => ['a']]], 'nullable' => true], ['object', 'null'], 1, 0];
+        yield 'no type' => [['description' => 'Anything.', 'nullable' => true], [], 0, 0];
+    }
+
+    public function testAddsTheNullMemberAfterThoseWritten(): void
+    {
+        $schema = (new SchemaParser())->forOpenApi30()->parse(['anyOf' => [['type' => 'string'], ['type' => 'integer']], 'nullable' => true], $this->root(), new Diagnostics());
+
+        self::assertSame(['string', 'integer', 'null'], array_map(static fn (Schema $member): string => $member->types()[0]->value(), $schema->anyOf()));
+        self::assertSame('a.yaml#/components/schemas/User/anyOf/1', $schema->anyOf()[1]->location()->toString());
+    }
+
+    public function testReadsOpenApi30NullableInSubschemasAndBesideClaimedKeywords(): void
+    {
+        $diagnostics = new Diagnostics();
+        $schema = (new SchemaParser())->forOpenApi30()->claiming(new KeywordChecks(['not']))->parse(
+            ['properties' => ['a' => ['type' => 'integer', 'nullable' => true, 'not' => ['const' => 1]]]],
+            $this->root(),
+            $diagnostics,
+        );
+
+        $property = $schema->property('a');
+        self::assertNotNull($property);
+        self::assertTrue($property->isNullable());
+        self::assertSame([], $diagnostics->all());
+    }
+
+    /**
+     * @dataProvider malformedNullables
+     */
+    public function testRejectsAnOpenApi30NullableThatIsNoBoolean(?string $nullable): void
+    {
+        $diagnostics = new Diagnostics();
+        $schema = (new SchemaParser())->forOpenApi30()->parse(['type' => 'string', 'nullable' => $nullable], $this->root(), $diagnostics);
+
+        self::assertFalse($schema->isNullable());
+        self::assertSame(
+            ['error a.yaml#/components/schemas/User/nullable: "nullable" must be a boolean.'],
+            array_map(static fn (Diagnostic $d): string => $d->toString(), $diagnostics->all()),
+        );
+    }
+
+    /**
+     * @return iterable<string, array{string|null}>
+     */
+    public static function malformedNullables(): iterable
+    {
+        yield 'a string' => ['true'];
+        yield 'null' => [null];
+    }
+
+    public function testLeavesAnUnknownTypeToItsOwnError(): void
+    {
+        $diagnostics = new Diagnostics();
+        (new SchemaParser())->forOpenApi30()->parse(['type' => 'text', 'nullable' => true], $this->root(), $diagnostics);
+
+        self::assertSame(
+            ['error a.yaml#/components/schemas/User/type: Unknown type "text".'],
+            array_map(static fn (Diagnostic $d): string => $d->toString(), $diagnostics->all()),
+        );
+    }
+
     private function root(): SchemaLocation
     {
         return new SchemaLocation('a.yaml', '/components/schemas/User');

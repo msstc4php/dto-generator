@@ -297,6 +297,7 @@ final class SelectingValuesTest extends TestCase
         yield 'an empty value and any string in branches' => [['A' => $role(['type' => 'string', 'anyOf' => [['const' => ''], ['type' => 'string']]])], 'A: App\\Dto\\A', []];
         yield 'any string and an empty value in branches' => [['A' => $role(['type' => 'string', 'anyOf' => [['type' => 'string'], ['const' => '']]])], 'A: App\\Dto\\A', []];
         yield 'null before the value in branches' => [['A' => $role(['type' => 'string', 'oneOf' => [['type' => 'null'], ['const' => 'a']]])], 'a: App\\Dto\\A', []];
+        yield 'a nullable $ref without a value in branches' => [['A' => $role(['anyOf' => [['const' => 'a'], ['$ref' => '#/components/schemas/Role', 'type' => ['null']]]])], 'A: App\\Dto\\A', [], ['Role' => ['type' => 'string']]];
         yield 'its own name' => [['A' => $role(['enum' => ['A']])], 'A: App\\Dto\\A', []];
         yield 'an integer' => [['A' => $role(['type' => 'integer', 'enum' => [1]]), 'B' => $role(['type' => 'integer', 'enum' => [2]])], '1: App\\Dto\\A, 2: App\\Dto\\B', []];
         yield 'null beside the value' => [['A' => $role(['type' => ['string', 'null'], 'enum' => ['a', null]])], 'a: App\\Dto\\A', []];

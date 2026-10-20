@@ -167,7 +167,7 @@ final class VariantResolver
 
         $values = [];
         foreach (array_merge($declaration->oneOf(), $declaration->anyOf()) as $branch) {
-            if ($branch->types() !== [] && $branch->nonNullTypes() === []) {
+            if (SchemaShape::isNull($branch)) {
                 continue;
             }
 

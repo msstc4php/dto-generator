@@ -198,7 +198,7 @@ final class TypeMapper
         $nullable = false;
         $mixed = false;
         foreach (array_merge($schema->oneOf(), $schema->anyOf()) as $member) {
-            if ($member->ref() === null && $member->isNullable() && $member->nonNullTypes() === [] && !SchemaShape::isComposed($member)) {
+            if (SchemaShape::isNull($member)) {
                 $nullable = true;
 
                 continue;
