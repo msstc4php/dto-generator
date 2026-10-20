@@ -160,8 +160,10 @@ Classes are `final`, except the bases of `allOf` and of discriminated unions. At
 - **Hoisted names give way to named schemas.** An inline member whose title or derived name equals a schema in
   `components/schemas` takes another name (see [Composition](#composition)); the named schema keeps its class. An
   inline member that says the same as that schema gets its class.
-- **Remote `$ref`** (`https://…`) works only for the URLs [`remoteRefs.allow`](configuration.md#remoterefs) names;
-  anchors (`$anchor`, `#Name`) are not supported.
+- **Remote `$ref`** (`https://…`) works only for the URLs [`remoteRefs.allow`](configuration.md#remoterefs) names.
+- **Anchors.** `$ref: '#Pet'` or `'common.yaml#Pet'` names the one schema of that document with `$anchor: Pet` (or
+  `$dynamicAnchor: Pet`, read as a plain anchor); none or several is an error, at the first `$ref` to it. The whole document is one scope: a `$id` inside it starts none, and a `$ref` by `$id` is not
+  resolved. `classNames` and `propertyNames` keys take JSON pointers only.
 - **A bare name in `discriminator.mapping`** is resolved against the file holding the discriminator, not the root
   document.
 - **A mutable DTO with `accessors: public-properties`** still lets code assign the discriminator directly.

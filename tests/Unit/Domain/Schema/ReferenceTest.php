@@ -98,8 +98,39 @@ final class ReferenceTest extends TestCase
     {
         return [
             'empty' => ['', 'Empty $ref'],
-            'anchor' => ['#User', 'only JSON pointer fragments are supported'],
+            'anchor' => ['#User', 'names an anchor; a JSON pointer'],
             'bad escape' => ['#/a~2', 'is not a valid JSON pointer'],
         ];
+    }
+
+    public function testNeedsAReferenceToTellItsDocument(): void
+    {
+        $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('Empty $ref.');
+
+        Reference::document('', new SchemaLocation('/p/a.yaml'));
+    }
+
+    /**
+     * @dataProvider anchors
+     */
+    public function testTellsTheAnchorAndTheDocumentOfAReference(string $ref, ?string $anchor, string $document): void
+    {
+        self::assertSame($anchor, Reference::anchor($ref));
+        self::assertSame($document, Reference::document($ref, new SchemaLocation('/p/a.yaml', '/x')));
+    }
+
+    /**
+     * @return iterable<string, array{string, ?string, string}>
+     */
+    public static function anchors(): iterable
+    {
+        yield 'an anchor here' => ['#Pet', 'Pet', '/p/a.yaml'];
+        yield 'an anchor elsewhere' => ['b.yaml#Pet', 'Pet', '/p/b.yaml'];
+        yield 'an encoded anchor' => ['b.yaml#P%65t', 'Pet', '/p/b.yaml'];
+        yield 'a pointer' => ['b.yaml#/Pet', null, '/p/b.yaml'];
+        yield 'an encoded pointer' => ['b.yaml#%2FPet', null, '/p/b.yaml'];
+        yield 'a whole document' => ['b.yaml', null, '/p/b.yaml'];
+        yield 'an empty fragment' => ['b.yaml#', null, '/p/b.yaml'];
     }
 }
