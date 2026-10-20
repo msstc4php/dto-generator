@@ -22,7 +22,7 @@ use PHPUnit\Framework\TestCase;
 
 final class OpenApi30Test extends TestCase
 {
-    public function testAdmitsNullWhereOpenApi30SaysNullable(): void
+    public function testReadsTheKeywordsOpenApi30WritesOtherwise(): void
     {
         $loader = new FileDocumentLoader();
         $file = Path::normalize(__DIR__ . '/../Fixtures/Projects/openapi30/dto-generator.yaml');
@@ -36,7 +36,7 @@ final class OpenApi30Test extends TestCase
         $model = (new BuildModel(new NameResolver()))(new BuildInput($config, $target, $schemas->graph(), []));
 
         self::assertSame(
-            ['warning ' . dirname($file) . '/openapi.yaml#/openapi: OpenAPI 3.0.3 is read as 3.1, except that "nullable: true" admits null; other keywords that differ in 3.0 (such as a boolean "exclusiveMinimum") are not understood.'],
+            [],
             array_map(static fn (Diagnostic $d): string => $d->toString(), array_merge($loaded->diagnostics()->all(), $schemas->diagnostics()->all(), $model->diagnostics()->all())),
         );
         $properties = [];
@@ -58,5 +58,6 @@ final class OpenApi30Test extends TestCase
             ],
             $properties['App\Dto\Customer'],
         );
+        self::assertSame(['open' => 'int<1, 9>|null', 'closed' => 'int<0, 10>|null', 'ratio' => 'float|null'], $properties['App\Dto\Quota']);
     }
 }

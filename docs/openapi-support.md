@@ -1,8 +1,9 @@
 # OpenAPI support
 
-The generator reads OpenAPI 3.1 documents in YAML or JSON and generates a class for each schema in
+The generator reads OpenAPI 3.1 and 3.0 documents in YAML or JSON and generates a class for each schema in
 `components/schemas` that `sources[].include` selects, plus the schemas those refer to. Schemas follow JSON Schema
-2020-12, as OpenAPI 3.1 does. Paths and operations are not read.
+2020-12, as OpenAPI 3.1 does; [3.0 keywords](#openapi-30) are read as 3.1 writes them. Paths and operations are not
+read.
 
 ## Types
 
@@ -135,13 +136,18 @@ Classes are `final`, except the bases of `allOf` and of discriminated unions. At
   schema, gives such classes a read and a write model ([configuration](configuration.md#dto)); the keywords count on
   properties only, not on the `items` of an array. A class both models share is one class: when only one of them
   extends it (an `allOf` over it in a `readOnly` or `writeOnly` property), it is open in both.
-- **OpenAPI 3.0 `nullable: true`** admits `null` in a document whose `openapi` is `3.0.x`: `null` joins the `type`
-  (`type: string` becomes `[string, 'null']`); beside a `$ref`, an `allOf`, a `oneOf` or an `anyOf` without a `type`
-  it makes that nullable, as most 3.0 documents mean it (the specification ignores siblings of a `$ref`). A document
-  that states no `openapi` version is read in the version of the document that refers to it first; one that 3.0 and
-  3.1 documents both refer to gives a warning. A 3.0 document gets one warning: it is read as 3.1 otherwise, so other
-  keywords that changed (a boolean `exclusiveMinimum`) are not understood. In a 3.1 document `nullable` has no effect
-  and gives a warning; use `type: [T, 'null']`.
+- **OpenAPI 3.0** <a id="openapi-30"></a> documents (`openapi: 3.0.x`) are read as 3.1, with the keywords 3.0
+  writes otherwise rewritten as 3.1 writes them, also in an inline `not`:
+  - `nullable: true` admits `null`: it joins the `type` (`type: string` becomes `[string, 'null']`); beside a `$ref`,
+    an `allOf`, a `oneOf` or an `anyOf` without a `type` it makes that nullable, as most 3.0 documents mean it (the
+    specification ignores siblings of a `$ref`);
+  - `exclusiveMinimum: true` beside `minimum: 5` is `exclusiveMinimum: 5` (`int<6, max>`), and so for
+    `exclusiveMaximum`; without a numeric bound beside it it gives a warning, and a number in its place is read as
+    in 3.1, with a warning.
+
+  A document that states no `openapi` version is read in the version of the document that refers to it first; one
+  that 3.0 and 3.1 documents both refer to gives a warning. In a 3.1 document `nullable` has no effect and gives a
+  warning; use `type: [T, 'null']`.
 - **`const`** keeps a date or a `formats` class when `format` names one, and keeps the declared `type` (with a
   warning) when the constant does not fit it. A bare `const` member of `allOf` (`allOf: [{$ref: Code}, {const: x}]`)
   narrows the type to its literal; a constant outside that type (`{type: integer, maximum: 10, allOf: [{const: 50}]}`)

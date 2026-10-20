@@ -59,3 +59,9 @@ components:
         - type: object
           properties:
             extra: { type: string }
+    Quota:
+      type: object
+      properties:
+        open: { type: integer, minimum: 0, exclusiveMinimum: true, maximum: 10, exclusiveMaximum: true }
+        closed: { type: integer, minimum: 0, exclusiveMinimum: false, maximum: 10 }
+        ratio: { type: number, maximum: 1, exclusiveMaximum: true }

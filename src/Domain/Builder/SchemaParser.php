@@ -28,7 +28,7 @@ final class SchemaParser
     /** The keywords extensions check, whose occurrences wait for them rather than giving a warning here. */
     private ?KeywordChecks $checks = null;
 
-    /** OpenAPI 3.0 reads `nullable: true` as admitting null, which 3.1 writes as a type. */
+    /** Whether nodes are read as OpenAPI 3.0 writes them, which {@see OpenApi30} rewrites. */
     private bool $openApi30 = false;
 
     public function claiming(KeywordChecks $checks): self
@@ -40,7 +40,7 @@ final class SchemaParser
     }
 
     /**
-     * The parser of a document in OpenAPI 3.0, where `nullable: true` admits null.
+     * The parser of a document in OpenAPI 3.0.
      */
     public function forOpenApi30(): self
     {
@@ -72,7 +72,7 @@ final class SchemaParser
         $this->quiet = $outer || is_string($node['x-php-type'] ?? null) || ($node['x-php-skip'] ?? null) === true;
 
         try {
-            return $this->parseObject($this->openApi30 ? $this->withNullAdmitted($node, $location, $diagnostics) : $node, $builder, $location, $diagnostics);
+            return $this->parseObject($this->openApi30 ? OpenApi30::asOpenApi31($node, $location, $diagnostics, $this->quiet) : $node, $builder, $location, $diagnostics);
         } finally {
             $this->quiet = $outer;
         }
@@ -99,7 +99,7 @@ final class SchemaParser
                 continue;
             }
 
-            $unsupported = $this->quiet || ($this->openApi30 && $keyword === 'nullable') ? null : UnsupportedKeywords::warning($keyword, $value);
+            $unsupported = $this->quiet ? null : UnsupportedKeywords::warning($keyword, $value);
             if ($unsupported !== null && $this->checks instanceof KeywordChecks && $this->checks->isClaimed($keyword)) {
                 $this->checks->expect($location, $keyword);
                 $unsupported = null;
@@ -113,38 +113,6 @@ final class SchemaParser
         }
 
         return $builder->extensions(new Extensions($extensions))->build();
-    }
-
-    /**
-     * The node with `nullable: true` written as OpenAPI 3.1 does: null joins the type. Beside a `$ref` or a composition
-     * without a type, a null type makes that nullable; a schema with no type at all admits null anyway.
-     *
-     * @param array<array-key, mixed> $node as JsonValue holds it
-     *
-     * @return array<array-key, mixed>
-     */
-    private function withNullAdmitted(array $node, SchemaLocation $location, Diagnostics $diagnostics): array
-    {
-        $nullable = array_key_exists('nullable', $node) ? $node['nullable'] : false;
-        if (!is_bool($nullable)) {
-            $diagnostics->error('"nullable" must be a boolean.', $location->child('nullable'));
-        }
-
-        if ($nullable !== true) {
-            return $node;
-        }
-
-        $type = $node['type'] ?? null;
-        if (is_string($type) && SchemaType::tryFrom($type) instanceof SchemaType) {
-            $node['type'] = [$type, SchemaType::NULL];
-        } elseif (is_array($type)) {
-            $node['type'] = in_array(SchemaType::NULL, $type, true) ? $type : array_merge($type, [SchemaType::NULL]);
-        } elseif ($type === null && array_intersect(['$ref', 'allOf', 'oneOf', 'anyOf'], array_keys($node)) !== []) {
-            // A member of the union instead would break a discriminated union and the distribution of an allOf over it.
-            $node['type'] = [SchemaType::NULL];
-        }
-
-        return $node;
     }
 
     /**
