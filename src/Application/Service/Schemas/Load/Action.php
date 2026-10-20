@@ -216,17 +216,8 @@ final class Action
             return;
         }
 
-        if (Versions::isOpenApi30($version)) {
-            $diagnostics->warning(
-                sprintf('OpenAPI %s is read as 3.1, except that "nullable: true" admits null; other keywords that differ in 3.0 (such as a boolean "exclusiveMinimum") are not understood.', $version),
-                $at,
-            );
-
-            return;
-        }
-
-        if (preg_match('/^3\.1(?:\.\d+)?\z/', $version) !== 1) {
-            $diagnostics->warning(sprintf('Expected OpenAPI 3.1, found "%s"; keywords specific to that version are not understood.', $version), $at);
+        if (!Versions::isUnderstood($version)) {
+            $diagnostics->warning(sprintf('Expected OpenAPI 3.0 or 3.1, found "%s"; keywords specific to that version are not understood.', $version), $at);
         }
     }
 

@@ -17,11 +17,12 @@ All notable changes to this package are documented here. The format follows
   reference (`'#/components/schemas/fields': FieldList`), so a document you cannot change that gives two schemas or
   properties one PHP name (Jira: the schemas `fields` and `Fields`, the properties `issuetype` and `issueType`) can
   still be generated; a key that names no schema read gives a warning. The errors about such names point to them.
-- In an OpenAPI 3.0 document (and the documents it refers to that state no version) `nullable: true` admits `null`:
-  beside a `type`, a `$ref`, an `allOf`, a `oneOf` or an `anyOf`, instead of a warning that it has no effect. A
-  document without a version that 3.0 and 3.1 documents both refer to gives a warning. Stripe,
-  Twilio and Jira lose hundreds of such warnings, and their nullable properties are nullable. The warning about the
-  version says so.
+- OpenAPI 3.0 documents (and the documents they refer to that state no version) are read with the keywords 3.0 writes
+  otherwise: `nullable: true` admits `null` beside a `type`, a `$ref`, an `allOf`, a `oneOf` or an `anyOf`, instead
+  of a warning that it has no effect, and a boolean `exclusiveMinimum`/`exclusiveMaximum` makes the `minimum`/`maximum`
+  beside it exclusive (`minimum: 0` and `maximum: 10`, both exclusive, give `int<1, 9>`), instead of being ignored. Such a document
+  gives no warning about its version any more. A document without a version that 3.0 and 3.1 documents both refer to
+  gives a warning. Stripe, Twilio and Jira lose hundreds of warnings, and their nullable properties are nullable.
 
 ### Changed
 

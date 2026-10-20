@@ -44,6 +44,29 @@ final class VersionsTest extends TestCase
         yield 'none' => [null, null, false];
     }
 
+    /**
+     * @dataProvider understood
+     */
+    public function testTellsWhetherAVersionIsUnderstood(string $version, bool $understood): void
+    {
+        self::assertSame($understood, Versions::isUnderstood($version));
+    }
+
+    /**
+     * @return iterable<string, array{string, bool}>
+     */
+    public static function understood(): iterable
+    {
+        yield '3.0.3' => ['3.0.3', true];
+        yield '3.0' => ['3.0', true];
+        yield '3.1.0' => ['3.1.0', true];
+        yield '3.1' => ['3.1', true];
+        yield '3.1.0 with a suffix' => ['3.1.0-rc', false];
+        yield 'a prefix before 3.1' => ['v3.1', false];
+        yield '3.10' => ['3.10', false];
+        yield '3.2.0' => ['3.2.0', false];
+    }
+
     public function testReadsADocumentWithoutAVersionInThatOfTheDocumentReferringToItFirst(): void
     {
         $versions = new Versions();

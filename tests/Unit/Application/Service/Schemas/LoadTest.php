@@ -258,9 +258,29 @@ final class LoadTest extends TestCase
     /**
      * @param JsonValue $version
      *
+     * @dataProvider understoodVersions
+     */
+    public function testReadsOpenApi30And31WithoutAWarning($version): void
+    {
+        $output = $this->load([self::SPEC => ['openapi' => $version, 'components' => ['schemas' => []]]]);
+
+        self::assertSame([], $this->messages($output));
+    }
+
+    /**
+     * @return iterable<string, array{JsonValue}>
+     */
+    public static function understoodVersions(): iterable
+    {
+        yield '3.0.3' => ['3.0.3'];
+        yield '3.0 from unquoted YAML' => [3.0];
+        yield '3.1.1' => ['3.1.1'];
+    }
+
+    /**
      * @dataProvider otherVersions
      */
-    public function testWarnsAboutOtherOpenApiVersions($version, string $message): void
+    public function testWarnsAboutOtherOpenApiVersions(string $version, string $message): void
     {
         $output = $this->load([self::SPEC => ['openapi' => $version, 'components' => ['schemas' => []]]]);
 
@@ -268,19 +288,12 @@ final class LoadTest extends TestCase
     }
 
     /**
-     * @return iterable<string, array{JsonValue, string}>
+     * @return iterable<string, array{string, string}>
      */
     public static function otherVersions(): iterable
     {
-        $openApi30 = static fn (string $version): string => sprintf(
-            'OpenAPI %s is read as 3.1, except that "nullable: true" admits null; other keywords that differ in 3.0 (such as a boolean "exclusiveMinimum") are not understood.',
-            $version,
-        );
-
-        yield '3.0.3' => ['3.0.3', $openApi30('3.0.3')];
-        yield '3.0 from unquoted YAML' => [3.0, $openApi30('3.0')];
-        yield '3.2.0' => ['3.2.0', 'Expected OpenAPI 3.1, found "3.2.0"; keywords specific to that version are not understood.'];
-        yield '3.0.3 with a suffix' => ['3.0.3-rc', 'Expected OpenAPI 3.1, found "3.0.3-rc"; keywords specific to that version are not understood.'];
+        yield '3.2.0' => ['3.2.0', 'Expected OpenAPI 3.0 or 3.1, found "3.2.0"; keywords specific to that version are not understood.'];
+        yield '3.0.3 with a suffix' => ['3.0.3-rc', 'Expected OpenAPI 3.0 or 3.1, found "3.0.3-rc"; keywords specific to that version are not understood.'];
     }
 
     public function testReadsNullableInOpenApi30AndInTheDocumentsItRefersTo(): void
@@ -319,7 +332,6 @@ final class LoadTest extends TestCase
         );
         self::assertSame(
             [
-                'warning /project/api/openapi.yaml#/openapi: OpenAPI 3.0.3 is read as 3.1, except that "nullable: true" admits null; other keywords that differ in 3.0 (such as a boolean "exclusiveMinimum") are not understood.',
                 'warning /project/api/openapi.yaml#/components/schemas/User/not: "not" is not supported and has no effect on the generated type.',
                 'warning /project/api/newer.yaml#/Far/nullable: "nullable" is OpenAPI 3.0 and has no effect in 3.1; write type: [T, \'null\'].',
             ],
@@ -647,7 +659,8 @@ final class LoadTest extends TestCase
     {
         return [
             '3.1' => [3.1, 0],
-            '3.0' => [3.0, 1],
+            '3.0' => [3.0, 0],
+            '3.2' => [3.2, 1],
         ];
     }
 
