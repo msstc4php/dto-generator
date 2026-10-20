@@ -168,6 +168,9 @@ error openapi/api.yaml#/components/schemas/Customer/properties/status/enum: The 
 Generation failed: 1 error(s).
 ```
 
+A warning that recurs word for word (an unknown `format` on hundreds of properties) is shown once, at its first place,
+with how many more there are; `-v` lists every place. The JSON report always lists every one.
+
 When the config or a schema has errors, or a file conflicts, nothing is written. If a write fails halfway (permissions, a full disk), the
 files already written stay; the next run brings the output to the expected state.
 

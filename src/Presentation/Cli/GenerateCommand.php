@@ -145,8 +145,8 @@ final class GenerateCommand extends Command
     private function text(Output $result, Mode $mode, OutputInterface $output): void
     {
         $errors = ErrorOutput::of($output);
-        foreach ($result->diagnostics()->all() as $diagnostic) {
-            $errors->writeln($this->formatter->line($diagnostic));
+        foreach ($this->formatter->lines($result->diagnostics()->all(), $output->isVerbose()) as $line) {
+            $errors->writeln($line);
         }
 
         $errorCount = count($result->diagnostics()->errors());

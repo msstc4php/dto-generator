@@ -24,6 +24,11 @@ All notable changes to this package are documented here. The format follows
   gives no warning about its version any more. A document without a version that 3.0 and 3.1 documents both refer to
   gives a warning. Stripe, Twilio and Jira lose hundreds of warnings, and their nullable properties are nullable.
 
+- An inline schema whose name another schema already holds gets that schema's class or enum when the two say the
+  same in one file, subschemas included, instead of a numbered copy (`…2`, `…Option1`) and a warning, or an error
+  when both set the same `x-php-class-name`. OpenAI's `Beta` copies and GitHub's repeated webhook schemas lose such
+  duplicates. A class an `allOf` gives the properties of other schemas is shared with none.
+
 ### Changed
 
 - A property two `allOf` members give two classes is of the class that extends the other (`allOf: [$ref: Wide, …]`
@@ -36,6 +41,10 @@ All notable changes to this package are documented here. The format follows
   property never holds; a subclass that inherits the value of another variant keeps its schema name. Such unions
   without a mapping (the OpenAI specification has hundreds of variants like that) select their variants instead of
   none.
+- The CLI shows a warning that recurs word for word once, at its first place, with how many more there are (`-v`
+  lists them): an unknown `format` gave hundreds of lines for Stripe, Twilio and OpenAI. The JSON report is unchanged.
+- An `enum` of booleans (`deleted: {type: boolean, enum: [true]}`, as in Stripe) is a `bool`, `true` or `false` with
+  one value, instead of a warning that the enum has no string or integer value.
 
 ### Fixed
 

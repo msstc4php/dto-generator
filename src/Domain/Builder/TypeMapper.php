@@ -144,6 +144,12 @@ final class TypeMapper
             return $this->mixedEnum($schema, $diagnostics);
         }
 
+        $booleans = SchemaShape::booleanEnumValues($schema);
+        // A `const` beside it narrows the type further, below.
+        if ($booleans !== null && !$schema->hasKeyword('const')) {
+            return ScalarType::bool(count($booleans) === 1 ? LiteralType::of($booleans[0]) : null);
+        }
+
         if (SchemaShape::isEnum($schema)) {
             $diagnostics->warning(
                 'This inline enum is not generated (only properties of generated classes get one), so the property keeps its plain type.',
@@ -151,7 +157,7 @@ final class TypeMapper
             );
         }
 
-        if ($schema->enum() !== null && !SchemaShape::isEnum($schema)) {
+        if ($schema->enum() !== null && !SchemaShape::isEnum($schema) && $booleans === null) {
             $diagnostics->warning(
                 'This enum has no string or integer value, so it is not generated and the property keeps its plain type.',
                 $schema->location(),

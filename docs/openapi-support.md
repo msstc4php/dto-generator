@@ -12,7 +12,7 @@ read.
 | `type: string` | `string` | `non-empty-string` with `minLength` ≥ 1 |
 | `type: integer` | `int` | `int<min, max>`, `positive-int`, `non-negative-int` from `minimum`/`maximum`/`exclusive*` |
 | `type: number` | `float` | |
-| `type: boolean` | `bool` | |
+| `type: boolean` | `bool` | `true`/`false` from a one-value `enum` (`enum: [true]`), as from `const` |
 | `format: date-time`, `date` | `\DateTimeImmutable` (or `\DateTime`, see `dto.dateTimeClass`) | |
 | `format: int32`, `int64` / `float`, `double` | `int` / `float` | |
 | `format: email`, `uri`, `uuid`, `hostname`, `ipv4`, `ipv6`, `time`, `byte`, `binary` | `string` | |
@@ -64,8 +64,8 @@ PHPDoc extractor of Symfony 5.4, mistake `non-empty-string` for a class name; th
 | an inline object or enum in a property, its `items` or `additionalProperties` | a named class `<Parent><Property>` (`Order.items[]` → `OrderItemsItem`) |
 | an inline object or enum as a member of a `oneOf`/`anyOf` | a named class: the member's `title` in PascalCase (the title of an inline property schema is not used), else `<Parent><Property>Option<N>` (N counts from 1 over `oneOf`, then `anyOf`) |
 | an inline object or enum in a named alias (`Pets: {type: array, items: {…}}`) | `<Alias>Item`, `<Alias>Value`, `<Alias>Option<N>` |
-| an inline schema whose name another schema already holds | it gives way, with a warning: the name derived from its place when a title gave the first, else that name numbered from 2 (`UserAddress2`) |
-| two classes with the same name otherwise (`x-php-class-name`) | an error suggesting `x-php-class-name`, which `classNames` of the source sets without changing the document |
+| an inline schema whose name another schema already holds | the class or enum of that schema when the two say the same in one file (every keyword, `description` included, in any order, subschemas too: OpenAI's `Beta` copies), unless an `allOf` gives either class the properties of another schema; otherwise it gives way, with a warning: the name derived from its place when a title gave the first, else that name numbered from 2 (`UserAddress2`) |
+| two classes with the same name otherwise (`x-php-class-name`) | an error suggesting `x-php-class-name`, which `classNames` of the source sets without changing the document; an inline schema that says the same as the one holding the name gets its class instead |
 | names that only a leading sign tells apart (`+1`, `-1`), or a sign alone (`*`) | the signs spelled out: `$plus1`, `$minus1`, case `ASTERISK`; a lone `+1` stays `$_1`, and so does one whose spelled name another name holds (`+1` beside `plus1` stays `$_1`, `-1` becomes `$minus1`) |
 | a `oneOf`/`anyOf` with a `discriminator` and no properties of its own, that no class extends through `allOf` and that is no variant of a union that stays a class, a variant of which extends another class (through its `allOf`, or as the variant of another union) | an empty `interface` carrying the discriminator; every variant `implements` it, after the class it extends, and its constructor checks the interface's values as for an abstract base (each base's values, when several map it). Inner unions are decided before the unions that list them. A variant listed by several such unions implements each; a union that stays a class takes it as its subclass, else the first union by class name; an interface variant extends the interface |
 | an inline `oneOf`/`anyOf` with a `discriminator` and an inline object variant | a class named like any inline object (`<Parent><Property>`), with the variants extending it as below |
@@ -158,7 +158,8 @@ Classes are `final`, except the bases of `allOf` and of discriminated unions. At
 - **Strings in literal types are plain.** A `const` or enum string with quotes, backslashes, `|`, `*`, `{`, `}`, `@`
   or non-ASCII characters keeps the type `string` without the literal.
 - **Hoisted names give way to named schemas.** An inline member whose title or derived name equals a schema in
-  `components/schemas` takes another name (see [Composition](#composition)); the named schema keeps its class.
+  `components/schemas` takes another name (see [Composition](#composition)); the named schema keeps its class. An
+  inline member that says the same as that schema gets its class.
 - **Remote `$ref`** (`https://…`) works only for the URLs [`remoteRefs.allow`](configuration.md#remoterefs) names;
   anchors (`$anchor`, `#Name`) are not supported.
 - **A bare name in `discriminator.mapping`** is resolved against the file holding the discriminator, not the root

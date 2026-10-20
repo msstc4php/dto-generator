@@ -384,6 +384,109 @@ final class BuildTest extends TestCase
         self::assertSame(['address: App\Dto\UserAddress3|null', 'home: mixed'], ModelFixture::classes($output)['App\Dto\User']);
     }
 
+    public function testGivesARepeatedInlineSchemaTheClassOfTheSchemaHoldingItsName(): void
+    {
+        $point = ['type' => 'object', 'title' => 'Point', 'properties' => ['x' => [], 'near' => ['type' => 'object', 'properties' => ['d' => []]]]];
+        $level = ['type' => 'string', 'title' => 'Level', 'enum' => ['low', 'high']];
+        $output = ModelFixture::build([
+            'Location' => ['type' => 'object', 'title' => 'Location', 'properties' => ['city' => []]],
+            'User' => ['type' => 'object', 'properties' => [
+                'a' => ['oneOf' => [$point, ['type' => 'string']]],
+                'b' => ['oneOf' => [$point, ['type' => 'integer']]],
+                'c' => ['oneOf' => [['type' => 'object', 'title' => 'Location', 'properties' => ['city' => []]], ['type' => 'boolean']]],
+                'd' => ['oneOf' => [$level, ['type' => 'integer']]],
+                'e' => ['oneOf' => [$level, ['type' => 'boolean']]],
+            ]],
+            'Shop' => ['type' => 'object', 'properties' => ['f' => ['oneOf' => [$point + ['description' => 'Another.'], ['type' => 'string']]]]],
+        ]);
+        $at = self::AT;
+
+        self::assertSame(
+            ["warning {$at}Shop/properties/f/oneOf/0: Class App\\Dto\\Point is already generated from {$at}User/properties/a/oneOf/0, so this one becomes App\\Dto\\ShopFOption1; set \"x-php-class-name\" to name it, in the document or \"classNames\" of the source."],
+            ModelFixture::messages($output),
+        );
+        self::assertSame(
+            [
+                'App\\Dto\\Location' => ['city: mixed'],
+                'App\\Dto\\User' => [
+                    'a: App\\Dto\\Point|string|null',
+                    'b: App\\Dto\\Point|int|null',
+                    'c: App\\Dto\\Location|bool|null',
+                    'd: App\\Dto\\Level|int|null',
+                    'e: App\\Dto\\Level|bool|null',
+                ],
+                'App\\Dto\\Shop' => ['f: App\\Dto\\ShopFOption1|string|null'],
+                'App\\Dto\\Point' => ['x: mixed', 'near: App\\Dto\\PointNear|null'],
+                'App\\Dto\\ShopFOption1' => ['x: mixed', 'near: App\\Dto\\ShopFOption1Near|null'],
+                'App\\Dto\\PointNear' => ['d: mixed'],
+                'App\\Dto\\ShopFOption1Near' => ['d: mixed'],
+            ],
+            ModelFixture::classes($output),
+        );
+        self::assertSame(['App\\Dto\\Level'], ModelFixture::enums($output));
+    }
+
+    public function testSharesTheViewsOfARepeatedInlineSchema(): void
+    {
+        $meta = ['type' => 'object', 'properties' => ['id' => ['type' => 'string', 'readOnly' => true], 'name' => ['type' => 'string']]];
+        $point = ['oneOf' => [['title' => 'Point'] + $meta, ['type' => 'string']]];
+        $output = ModelFixture::views(['A' => ['type' => 'object', 'properties' => ['p' => $point]], 'B' => ['type' => 'object', 'properties' => ['q' => $point]]]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(
+            [
+                'App\\Dto\\ARead' => ['p: App\\Dto\\PointRead|string|null'],
+                'App\\Dto\\BRead' => ['q: App\\Dto\\PointRead|string|null'],
+                'App\\Dto\\PointRead' => ['id: string|null', 'name: string|null'],
+                'App\\Dto\\AWrite' => ['p: App\\Dto\\PointWrite|string|null'],
+                'App\\Dto\\BWrite' => ['q: App\\Dto\\PointWrite|string|null'],
+                'App\\Dto\\PointWrite' => ['name: string|null'],
+            ],
+            ModelFixture::classes($output),
+        );
+    }
+
+    /**
+     * @dataProvider joinedPlaces
+     *
+     * @param array<string, array<array-key, mixed>> $schemas
+     * @param array<string, list<string>> $expected
+     */
+    public function testSharesNoClassThatTakesThePropertiesOfAnAllOf(array $schemas, array $expected, int $renamed): void
+    {
+        $output = ModelFixture::build($schemas);
+
+        self::assertCount($renamed, ModelFixture::messages($output));
+        self::assertSame($expected, array_intersect_key(ModelFixture::classes($output), $expected));
+    }
+
+    /**
+     * @return iterable<string, array{array<string, array<array-key, mixed>>, array<string, list<string>>, int}>
+     */
+    public static function joinedPlaces(): iterable
+    {
+        $x = ['type' => 'object', 'properties' => ['x' => []]];
+        $alone = ['type' => 'object', 'properties' => ['b_meta' => $x]];
+        $joined = ['allOf' => [['type' => 'object', 'properties' => ['level' => ['type' => 'string', 'enum' => ['a']], 'meta' => $x]], ['type' => 'object', 'properties' => ['meta' => ['type' => 'object', 'properties' => ['y' => []]]]]]];
+
+        yield 'the joined place after' => [
+            ['A' => $alone, 'AB' => $joined],
+            ['App\\Dto\\A' => ['b_meta: App\\Dto\\ABMeta|null'], 'App\\Dto\\AB' => ['level: App\\Dto\\ABLevel|null', 'meta: App\\Dto\\ABMeta2|null'], 'App\\Dto\\ABMeta' => ['x: mixed'], 'App\\Dto\\ABMeta2' => ['x: mixed', 'y: mixed']],
+            1,
+        ];
+        $option = ['oneOf' => [['type' => 'object', 'properties' => ['x' => []]], ['type' => 'string']]];
+        yield 'a place of union members, which never join' => [
+            ['AB' => ['allOf' => [['type' => 'object', 'properties' => ['p' => $option]], ['type' => 'object', 'properties' => ['p' => $option]]]], 'ABP' => ['type' => 'object', 'properties' => ['option1' => $x]]],
+            ['App\\Dto\\ABP' => ['option1: App\\Dto\\ABPOption1|null'], 'App\\Dto\\ABPOption1' => ['x: mixed']],
+            0,
+        ];
+        yield 'the joined place first' => [
+            ['AB' => $joined, 'A' => $alone],
+            ['App\\Dto\\AB' => ['level: App\\Dto\\ABLevel|null', 'meta: App\\Dto\\ABMeta|null'], 'App\\Dto\\A' => ['b_meta: App\\Dto\\ABMeta2|null'], 'App\\Dto\\ABMeta' => ['x: mixed', 'y: mixed'], 'App\\Dto\\ABMeta2' => ['x: mixed']],
+            1,
+        ];
+    }
+
     public function testReportsAnEnumItCannotBuildOnce(): void
     {
         $at = self::AT;

@@ -1,4 +1,7 @@
 parameters:
+    # Every core makes a laptop unusable.
+    parallel:
+        maximumNumberOfProcesses: 4
     level: max
     phpVersion: 70400
     treatPhpDocTypesAsCertain: false
