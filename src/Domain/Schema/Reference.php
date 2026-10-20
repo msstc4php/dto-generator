@@ -18,6 +18,29 @@ final class Reference
     }
 
     /**
+     * The anchor a `$ref` names after "#" (`#Pet`, `common.yaml#Pet`); null for a JSON pointer or no fragment.
+     */
+    public static function anchor(string $ref): ?string
+    {
+        $hash = strpos($ref, '#');
+        $fragment = $hash === false ? '' : rawurldecode((string) substr($ref, $hash + 1));
+
+        return $fragment === '' || strncmp($fragment, '/', 1) === 0 ? null : $fragment;
+    }
+
+    /**
+     * The document a `$ref` names, resolved as {@see target()} resolves it; for one that names an anchor.
+     *
+     * @throws InvalidModel for a malformed reference
+     */
+    public static function document(string $ref, SchemaLocation $from): string
+    {
+        $hash = strpos($ref, '#');
+
+        return self::target($hash === false ? $ref : substr($ref, 0, $hash) . '#', $from)->file();
+    }
+
+    /**
      * Resolves a `$ref` against the location it appears in: a file path against the directory of a local document, a
      * URL as it stands, and any reference in a remote document against its URL.
      *
@@ -33,7 +56,7 @@ final class Reference
         $file = $hash === false ? $ref : (string) substr($ref, 0, $hash);
         $fragment = $hash === false ? '' : rawurldecode((string) substr($ref, $hash + 1));
         if ($fragment !== '' && strncmp($fragment, '/', 1) !== 0) {
-            throw new InvalidModel(sprintf('$ref "%s": only JSON pointer fragments are supported, not anchors.', $ref));
+            throw new InvalidModel(sprintf('$ref "%s" names an anchor; a JSON pointer ("#/components/schemas/Pet") is expected here.', $ref));
         }
 
         JsonPointer::segments($fragment);

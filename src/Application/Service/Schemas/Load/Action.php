@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Application\Service\Schemas\Load;
 
-use MSSTC4PHP\DtoGenerator\Application\Config\RemoteRefsSettings;
 use MSSTC4PHP\DtoGenerator\Application\Port\Document;
 use MSSTC4PHP\DtoGenerator\Application\Port\DocumentLoader;
 use MSSTC4PHP\DtoGenerator\Application\Port\DocumentLoadFailed;
@@ -85,7 +84,7 @@ final class Action
         while ($queue !== []) {
             $current = array_shift($queue);
             foreach ($current->schema()->references() as $use) {
-                $target = $this->target($use, $config->remoteRefs(), $diagnostics);
+                $target = $this->target($use, $input, $diagnostics, $graph, $reads);
                 if (!$target instanceof SchemaLocation) {
                     continue;
                 }
@@ -132,7 +131,7 @@ final class Action
 
         while ($queue !== []) {
             [$use, $from] = array_shift($queue);
-            $target = $this->target($use, $input->config()->remoteRefs(), $failures);
+            $target = $this->target($use, $input, $failures, $graph, $reads);
             if (!$target instanceof SchemaLocation) {
                 continue;
             }
@@ -262,21 +261,23 @@ final class Action
         return $pairs;
     }
 
-    private function target(ReferenceUse $use, RemoteRefsSettings $remote, Diagnostics $diagnostics): ?SchemaLocation
+    private function target(ReferenceUse $use, Input $input, Diagnostics $diagnostics, GraphBuilder $graph, Reads $reads): ?SchemaLocation
     {
+        $ref = $use->ref();
+        $anchor = Reference::anchor($ref);
         try {
-            $target = Reference::target($use->ref(), $use->location());
+            $target = $anchor === null ? Reference::target($ref, $use->location()) : new SchemaLocation(Reference::document($ref, $use->location()));
         } catch (InvalidModel $exception) {
             $diagnostics->error($exception->getMessage(), $use->location());
 
             return null;
         }
 
-        if (Url::isUrl($target->file()) && !$remote->allows($target->file())) {
+        if (Url::isUrl($target->file()) && !$input->config()->remoteRefs()->allows($target->file())) {
             $diagnostics->error(
                 sprintf(
                     'Remote $ref "%s" names %s, which remoteRefs.allow does not cover; add its prefix there, or save the document next to the specification and refer to it by path.',
-                    $use->ref(),
+                    $ref,
                     $target->file(),
                 ),
                 $use->location(),
@@ -285,7 +286,38 @@ final class Action
             return null;
         }
 
-        return $target;
+        return $anchor === null ? $target : $this->anchored($target->file(), $anchor, $use, $input, $diagnostics, $graph, $reads);
+    }
+
+    /**
+     * The schema that declares the anchor, as a JSON pointer, so a schema reached both ways is one.
+     */
+    private function anchored(string $file, string $anchor, ReferenceUse $use, Input $input, Diagnostics $diagnostics, GraphBuilder $graph, Reads $reads): ?SchemaLocation
+    {
+        if (!Anchors::isName($anchor)) {
+            $diagnostics->error(sprintf('$ref "%s": "%s" is neither a JSON pointer nor an anchor name.', $use->ref(), $anchor), $use->location());
+
+            return null;
+        }
+
+        $document = $this->load($file, $use->location(), $input, $diagnostics, $graph, $reads);
+        if (!$document instanceof Document) {
+            return null;
+        }
+
+        $pointers = $reads->anchors($document)->pointersOf($anchor);
+        if (count($pointers) !== 1) {
+            $diagnostics->error(
+                $pointers === []
+                    ? sprintf('$ref "%s" does not resolve: %s has no schema with "$anchor": "%s".', $use->ref(), $document->path(), $anchor)
+                    : sprintf('$ref "%s" is ambiguous: %s has "$anchor": "%s" at %s.', $use->ref(), $document->path(), $anchor, implode(', ', $pointers)),
+                $use->location(),
+            );
+
+            return null;
+        }
+
+        return new SchemaLocation($document->path(), $pointers[0]);
     }
 
     /**

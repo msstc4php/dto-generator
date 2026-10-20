@@ -230,11 +230,56 @@ final class LoadTest extends TestCase
                 ['properties' => ['x' => ['$ref' => 'missing.yaml#/X']]],
                 $at . 'File "/project/api/missing.yaml" does not exist.',
             ],
-            'anchor' => [
+            'missing anchor' => [
                 ['properties' => ['x' => ['$ref' => '#User']]],
-                $at . '$ref "#User": only JSON pointer fragments are supported, not anchors.',
+                $at . '$ref "#User" does not resolve: /project/api/openapi.yaml has no schema with "$anchor": "User".',
+            ],
+            'ambiguous anchor' => [
+                ['properties' => ['x' => ['$ref' => '#Twice'], 'y' => ['$anchor' => 'Twice'], 'z' => ['items' => ['$anchor' => 'Twice']]]],
+                $at . '$ref "#Twice" is ambiguous: /project/api/openapi.yaml has "$anchor": "Twice" at /components/schemas/User/properties/y, /components/schemas/User/properties/z/items.',
+            ],
+            'no anchor name' => [
+                ['properties' => ['x' => ['$ref' => '#1st']]],
+                $at . '$ref "#1st": "1st" is neither a JSON pointer nor an anchor name.',
+            ],
+            'anchor in a missing file' => [
+                ['properties' => ['x' => ['$ref' => 'missing.yaml#X']]],
+                $at . 'File "/project/api/missing.yaml" does not exist.',
+            ],
+            'remote anchor' => [
+                ['properties' => ['x' => ['$ref' => 'https://example.com/x.json#X']]],
+                $at . 'Remote $ref "https://example.com/x.json#X" names https://example.com/x.json, which remoteRefs.allow does not cover; add its prefix there, or save the document next to the specification and refer to it by path.',
             ],
         ];
+    }
+
+    public function testFollowsAReferenceToAnAnchor(): void
+    {
+        $output = $this->load([
+            self::SPEC => $this->spec([
+                'User' => ['properties' => [
+                    'address' => ['$ref' => '#Address'],
+                    'home' => ['$ref' => '#/components/schemas/Address'],
+                    'tag' => ['$ref' => '../shared/common.yaml#Tag'],
+                    'note' => ['$ref' => '#Note'],
+                ], 'not' => ['$ref' => '#Hidden']],
+                'Address' => ['$anchor' => 'Address', 'type' => 'object'],
+                'Holder' => ['type' => 'object', 'properties' => ['n' => ['$anchor' => 'Note', 'type' => 'string']], 'examples' => [['$anchor' => 'Note']], 'x-data' => ['$anchor' => 'Note']],
+                'Hidden' => ['$anchor' => 'Hidden', 'type' => 'integer'],
+            ]),
+            '/project/shared/common.yaml' => ['$defs' => ['Tag' => ['$anchor' => 'Tag', 'type' => 'object']], 'default' => ['$anchor' => 'Tag']],
+        ]);
+
+        self::assertSame(['warning /project/api/openapi.yaml#/components/schemas/User/not: "not" is not supported and has no effect on the generated type.'], $this->messages($output));
+        self::assertSame(
+            [['User', 0, true], ['Address', 0, true], ['Holder', 0, true], ['Hidden', 0, true], ['Tag', 0, false], ['n', 0, false]],
+            $this->summary($output),
+        );
+        $user = $output->graph()->get(new SchemaLocation(self::SPEC, '/components/schemas/User'));
+        self::assertNotNull($user);
+        $tag = $output->graph()->resolve($user->schema()->requireProperty('tag')->references()[0]);
+        self::assertNotNull($tag);
+        self::assertSame('/project/shared/common.yaml#/$defs/Tag', $tag->location()->toString());
     }
 
     public function testReportsAMissingSpecificationAtTheConfig(): void

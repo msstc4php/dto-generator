@@ -29,6 +29,9 @@ All notable changes to this package are documented here. The format follows
   when both set the same `x-php-class-name`. OpenAI's `Beta` copies and GitHub's repeated webhook schemas lose such
   duplicates. A class an `allOf` gives the properties of other schemas is shared with none.
 
+- `$ref` to an anchor (`#Pet`, `common.yaml#Pet`) resolves to the schema of that document with `$anchor: Pet`, local
+  or remote, instead of an error; an anchor no schema or several declare is an error.
+
 ### Changed
 
 - A property two `allOf` members give two classes is of the class that extends the other (`allOf: [$ref: Wide, …]`
