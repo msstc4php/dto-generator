@@ -310,8 +310,12 @@ final class Action
         }
 
         $pointers = $reads->anchors($document)->pointersOf($anchor);
+        if (count($pointers) === 1) {
+            return new SchemaLocation($document->path(), $pointers[0]);
+        }
+
         // Reported at the first $ref only, as a missing JSON pointer is.
-        if (count($pointers) !== 1 && !$reads->anchorFailed($document->path(), $anchor)) {
+        if (!$reads->anchorFailed($document->path(), $anchor)) {
             $reads->failAnchor($document->path(), $anchor);
             $places = array_map(static fn (string $pointer): string => (new SchemaLocation($document->path(), $pointer))->toString(), $pointers);
             $diagnostics->error(
@@ -322,11 +326,7 @@ final class Action
             );
         }
 
-        if (count($pointers) !== 1) {
-            return null;
-        }
-
-        return new SchemaLocation($document->path(), $pointers[0]);
+        return null;
     }
 
     /**

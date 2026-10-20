@@ -24,7 +24,7 @@ final class Reference
     {
         $fragment = self::split($ref)[1];
 
-        return $fragment === '' || strncmp($fragment, '/', 1) === 0 ? null : $fragment;
+        return self::isAnchor($fragment) ? $fragment : null;
     }
 
     /**
@@ -54,7 +54,7 @@ final class Reference
         }
 
         [$file, $fragment] = self::split($ref);
-        if (self::anchor($ref) !== null) {
+        if (self::isAnchor($fragment)) {
             throw new InvalidModel(sprintf('$ref "%s" names an anchor; a JSON pointer ("#/components/schemas/Pet") is expected here.', $ref));
         }
 
@@ -71,6 +71,11 @@ final class Reference
         $hash = strpos($ref, '#');
 
         return $hash === false ? [$ref, ''] : [(string) substr($ref, 0, $hash), rawurldecode((string) substr($ref, $hash + 1))];
+    }
+
+    private static function isAnchor(string $fragment): bool
+    {
+        return $fragment !== '' && strncmp($fragment, '/', 1) !== 0;
     }
 
     private static function resolve(string $file, string $fragment, SchemaLocation $from): SchemaLocation

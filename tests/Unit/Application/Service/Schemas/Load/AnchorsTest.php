@@ -40,6 +40,9 @@ final class AnchorsTest extends TestCase
             '$defs' => ['examples' => ['$anchor' => 'Examples'], '$anchor' => ['$anchor' => 'Self']],
             'definitions' => ['const' => ['$anchor' => 'Const']],
             'x-defs' => ['default' => ['$anchor' => 'Hidden']],
+            'paths' => ['/p' => ['get' => ['responses' => ['default' => ['content' => ['application/json' => ['schema' => ['$anchor' => 'Err']]]]]]]],
+            'webhooks' => ['enum' => ['post' => ['requestBody' => ['content' => ['text/plain' => ['schema' => ['$anchor' => 'Hook']]]]]]],
+            'dependencies' => ['default' => ['$anchor' => 'Dependency']],
         ]);
 
         self::assertSame(['/components/schemas/default'], $anchors->pointersOf('Default'));
@@ -50,6 +53,9 @@ final class AnchorsTest extends TestCase
         self::assertSame(['/$defs/$anchor'], $anchors->pointersOf('Self'));
         self::assertSame(['/definitions/const'], $anchors->pointersOf('Const'));
         self::assertSame([], $anchors->pointersOf('Hidden'));
+        self::assertSame(['/paths/~1p/get/responses/default/content/application~1json/schema'], $anchors->pointersOf('Err'));
+        self::assertSame(['/webhooks/enum/post/requestBody/content/text~1plain/schema'], $anchors->pointersOf('Hook'));
+        self::assertSame(['/dependencies/default'], $anchors->pointersOf('Dependency'));
     }
 
     /**

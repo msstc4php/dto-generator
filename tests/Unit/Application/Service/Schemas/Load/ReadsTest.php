@@ -19,4 +19,16 @@ final class ReadsTest extends TestCase
         self::assertSame(['/A'], $anchors->pointersOf('A'));
         self::assertNotSame($anchors, $reads->anchors(new Document('/p/b.yaml', ['A' => ['$anchor' => 'A']])));
     }
+
+    public function testRemembersAFailedAnchorPerDocument(): void
+    {
+        $reads = new Reads();
+        self::assertFalse($reads->anchorFailed('/p/a.yaml', 'A'));
+
+        $reads->failAnchor('/p/a.yaml', 'A');
+
+        self::assertTrue($reads->anchorFailed('/p/a.yaml', 'A'));
+        self::assertFalse($reads->anchorFailed('/p/b.yaml', 'A'));
+        self::assertFalse($reads->anchorFailed('/p/a.yaml', 'B'));
+    }
 }

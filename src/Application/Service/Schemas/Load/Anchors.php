@@ -16,8 +16,12 @@ final class Anchors
     /** Keywords whose values are data, which an object with "$anchor" in them does not make a schema. */
     private const DATA = ['const', 'default', 'enum', 'example', 'examples'];
 
-    /** Keys whose values map names to schemas: a name there is no keyword, whatever it is. */
-    private const NAMES = ['properties', 'patternProperties', 'dependentSchemas', '$defs', 'definitions', 'schemas'];
+    /** Keys whose values map names to schemas or to OpenAPI objects: a name there is no keyword, whatever it is. */
+    private const NAMES = [
+        'properties', 'patternProperties', 'dependentSchemas', 'dependencies', '$defs', 'definitions', 'schemas', 'paths',
+        'webhooks', 'responses', 'parameters', 'requestBodies', 'headers', 'content', 'encoding', 'callbacks', 'links',
+        'pathItems', 'securitySchemes',
+    ];
 
     /** Both name a plain anchor; a `$dynamicAnchor` names a dynamic one besides. */
     private const KEYWORDS = ['$anchor', '$dynamicAnchor'];
