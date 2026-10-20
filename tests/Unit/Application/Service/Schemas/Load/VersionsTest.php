@@ -66,7 +66,7 @@ final class VersionsTest extends TestCase
         self::assertTrue($versions->ofReferenced($shared, new SchemaLocation('/p/new.yaml', '/f'), $diagnostics));
         self::assertTrue($versions->ofReferenced($shared, new SchemaLocation('/p/new.yaml', '/g'), $diagnostics));
         self::assertSame(
-            ['warning /p/new.yaml#/f: /p/shared.yaml states no "openapi" version and is read as OpenAPI 3.0, the version of the document that referred to it first, though this one is 3.1.'],
+            ['warning /p/new.yaml#/f: /p/shared.yaml states no "openapi" version and is read as OpenAPI 3.0, the version of the document that referred to it first, though /p/new.yaml, which refers to it here, is 3.1.'],
             $this->messages($diagnostics),
         );
     }
@@ -81,7 +81,7 @@ final class VersionsTest extends TestCase
         self::assertFalse($versions->ofReferenced($shared, new SchemaLocation('/p/new.yaml', '/a'), $diagnostics));
         self::assertFalse($versions->ofReferenced($shared, new SchemaLocation('/p/old.yaml', '/b'), $diagnostics));
         self::assertSame(
-            ['warning /p/old.yaml#/b: /p/shared.yaml states no "openapi" version and is read as OpenAPI 3.1, the version of the document that referred to it first, though this one is 3.0.'],
+            ['warning /p/old.yaml#/b: /p/shared.yaml states no "openapi" version and is read as OpenAPI 3.1, the version of the document that referred to it first, though /p/old.yaml, which refers to it here, is 3.0.'],
             $this->messages($diagnostics),
         );
     }

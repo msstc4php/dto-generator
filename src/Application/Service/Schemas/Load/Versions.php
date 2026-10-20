@@ -59,9 +59,10 @@ final class Versions
             $this->mixed[] = $path;
             $diagnostics->warning(
                 sprintf(
-                    '%s states no "openapi" version and is read as OpenAPI %s, the version of the document that referred to it first, though this one is %s.',
+                    '%s states no "openapi" version and is read as OpenAPI %s, the version of the document that referred to it first, though %s, which refers to it here, is %s.',
                     $path,
                     $this->openApi30[$path] ? '3.0' : '3.1',
+                    $referredAt->file(),
                     $referrer ? '3.0' : '3.1',
                 ),
                 $referredAt,
