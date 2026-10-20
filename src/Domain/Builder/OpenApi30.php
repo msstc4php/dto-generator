@@ -114,7 +114,7 @@ final class OpenApi30
 
         $flag = $node[$exclusive];
         if (is_int($flag) || is_float($flag)) {
-            $this->notice(sprintf('"%s" is a boolean in OpenAPI 3.0; the number is read as in 3.1.', $exclusive), $location->child($exclusive));
+            $this->warnUnlessQuiet(sprintf('"%s" is a boolean in OpenAPI 3.0; the number is read as in 3.1.', $exclusive), $location->child($exclusive));
 
             return $node;
         }
@@ -133,13 +133,13 @@ final class OpenApi30
         if (!is_bool($flag)) {
             $this->diagnostics->error(sprintf('"%s" must be a boolean.', $exclusive), $location->child($exclusive));
         } elseif ($flag) {
-            $this->notice(sprintf('"%s: true" has no effect without a numeric "%s".', $exclusive, $bound), $location->child($exclusive));
+            $this->warnUnlessQuiet(sprintf('"%s: true" has no effect without a numeric "%s".', $exclusive, $bound), $location->child($exclusive));
         }
 
         return $node;
     }
 
-    private function notice(string $message, SchemaLocation $at): void
+    private function warnUnlessQuiet(string $message, SchemaLocation $at): void
     {
         if (!$this->quiet) {
             $this->diagnostics->warning($message, $at);
