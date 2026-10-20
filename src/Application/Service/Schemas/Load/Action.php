@@ -51,8 +51,8 @@ final class Action
         $owners = [];
         $queue = [];
         $reads = new Reads();
-        $parser = $this->parser->claiming($input->keywordChecks());
         $names = new NameOverrides($config->sources(), $diagnostics);
+        $reader = new SchemaReader($this->parser->claiming($input->keywordChecks()), $names, new Versions());
 
         foreach ($config->sources() as $index => $source) {
             $specAt = $config->location()->child('sources', (string) $index, 'spec');
@@ -76,7 +76,7 @@ final class Action
                 }
 
                 $location = (new SchemaLocation($document->path()))->child('components', 'schemas', $name);
-                $schema = new ResolvedSchema($parser->parse($names->apply($node, $location), $location, $diagnostics), $index, $name, true);
+                $schema = new ResolvedSchema($reader->component($document, $node, $location, $diagnostics), $index, $name, true);
                 $graph->add($schema);
                 $queue[] = $schema;
             }
@@ -95,7 +95,7 @@ final class Action
                     continue;
                 }
 
-                $resolved = $this->resolve($target, $use, $owners, $input, $diagnostics, $graph, $reads, $parser, $names);
+                $resolved = $this->resolve($target, $use, $owners, $input, $diagnostics, $graph, $reads, $reader);
                 if (!$resolved instanceof ResolvedSchema) {
                     $graph->markFailed($target);
 
@@ -107,7 +107,7 @@ final class Action
             }
         }
 
-        $this->followKeywordReferences($graph, $input, $diagnostics, $reads, $names);
+        $this->followKeywordReferences($graph, $input, $diagnostics, $reads, $reader->withParser($this->parser));
         $names->reportUnused(array_values($owners), $diagnostics);
 
         // Every later stage sees an allOf of a union of objects as the union of the objects it makes.
@@ -119,7 +119,7 @@ final class Action
      * no class of its own. Only an extension reads them, so a target that cannot be loaded or read is a warning and
      * stays out of the graph, and what the parser says about one that can is left to the extension.
      */
-    private function followKeywordReferences(GraphBuilder $graph, Input $input, Diagnostics $diagnostics, Reads $reads, NameOverrides $names): void
+    private function followKeywordReferences(GraphBuilder $graph, Input $input, Diagnostics $diagnostics, Reads $reads, SchemaReader $reader): void
     {
         $failures = new Diagnostics();
         /** @var list<array{ReferenceUse, ?SchemaLocation}> $queue each with the schema it names a subschema of, if structural */
@@ -143,7 +143,7 @@ final class Action
             }
 
             $own = new Diagnostics();
-            $resolved = $this->resolve($target, $use, [], $input, $own, $graph, $reads, $this->parser, $names);
+            $resolved = $this->resolve($target, $use, [], $input, $own, $graph, $reads, $reader);
             foreach ($own->errors() as $error) {
                 $failures->add($error);
             }
@@ -208,24 +208,25 @@ final class Action
 
     private function checkOpenApiVersion(Document $document, Diagnostics $diagnostics): void
     {
-        $version = $document->root()['openapi'] ?? null;
+        $version = Versions::normalize(Json::value($document->root()['openapi'] ?? null));
         $at = (new SchemaLocation($document->path()))->child('openapi');
-        // Unquoted `openapi: 3.1` arrives from YAML as a float.
-        if (is_float($version)) {
-            $version = Json::floatToString($version);
-        }
-
-        if (!is_string($version)) {
+        if ($version === null) {
             $diagnostics->warning('No "openapi" version; the document is read as OpenAPI 3.1.', $at);
 
             return;
         }
 
-        if (preg_match('/^3\.1(?:\.\d+)?\z/', $version) !== 1) {
+        if (Versions::isOpenApi30($version)) {
             $diagnostics->warning(
-                sprintf('Expected OpenAPI 3.1, found "%s"; keywords specific to that version (such as "nullable") are not understood.', $version),
+                sprintf('OpenAPI %s is read as 3.1, except that "nullable: true" admits null; other keywords that differ in 3.0 (such as a boolean "exclusiveMinimum") are not understood.', $version),
                 $at,
             );
+
+            return;
+        }
+
+        if (preg_match('/^3\.1(?:\.\d+)?\z/', $version) !== 1) {
+            $diagnostics->warning(sprintf('Expected OpenAPI 3.1, found "%s"; keywords specific to that version are not understood.', $version), $at);
         }
     }
 
@@ -299,7 +300,7 @@ final class Action
     /**
      * @param array<string, int> $owners
      */
-    private function resolve(SchemaLocation $target, ReferenceUse $use, array $owners, Input $input, Diagnostics $diagnostics, GraphBuilder $graph, Reads $reads, SchemaParser $parser, NameOverrides $names): ?ResolvedSchema
+    private function resolve(SchemaLocation $target, ReferenceUse $use, array $owners, Input $input, Diagnostics $diagnostics, GraphBuilder $graph, Reads $reads, SchemaReader $reader): ?ResolvedSchema
     {
         $document = $this->load($target->file(), $use->location(), $input, $diagnostics, $graph, $reads);
         if (!$document instanceof Document) {
@@ -315,9 +316,7 @@ final class Action
             return null;
         }
 
-        $node = $names->apply(JsonPointer::get($document->root(), $target->pointer()), $target);
-
-        return new ResolvedSchema($parser->parse($node, $target, $diagnostics), $owners[$document->path()] ?? null, $this->nameOf($target), false);
+        return new ResolvedSchema($reader->referenced($document, $target, $use->location(), $diagnostics), $owners[$document->path()] ?? null, $this->nameOf($target), false);
     }
 
     private function nameOf(SchemaLocation $location): string

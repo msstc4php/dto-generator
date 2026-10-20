@@ -1,0 +1,61 @@
+openapi: 3.0.3
+info: { title: Nullable in 3.0, version: '1' }
+paths: {}
+components:
+  schemas:
+    Address:
+      type: object
+      properties:
+        city: { type: string }
+    Customer:
+      type: object
+      required: [name, address, status]
+      properties:
+        name: { type: string, nullable: true }
+        address:
+          anyOf:
+            - $ref: '#/components/schemas/Address'
+          nullable: true
+        billing:
+          allOf:
+            - $ref: '#/components/schemas/Address'
+          nullable: true
+        status:
+          type: string
+          enum: [active, closed]
+          nullable: true
+        tags:
+          type: array
+          items: { type: string, nullable: true }
+    Cat:
+      type: object
+      required: [kind]
+      properties:
+        kind: { type: string, enum: [cat] }
+    Dog:
+      type: object
+      required: [kind]
+      properties:
+        kind: { type: string, enum: [dog] }
+    Pet:
+      oneOf:
+        - $ref: '#/components/schemas/Cat'
+        - $ref: '#/components/schemas/Dog'
+      discriminator: { propertyName: kind }
+      nullable: true
+    PetOrNull:
+      oneOf:
+        - $ref: '#/components/schemas/Cat'
+        - $ref: '#/components/schemas/Dog'
+      nullable: true
+    Owner:
+      type: object
+      properties:
+        pet: { $ref: '#/components/schemas/Pet' }
+        other: { $ref: '#/components/schemas/PetOrNull' }
+    Extended:
+      allOf:
+        - $ref: '#/components/schemas/PetOrNull'
+        - type: object
+          properties:
+            extra: { type: string }

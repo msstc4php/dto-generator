@@ -75,6 +75,14 @@ final class SchemaShape
         return self::isDiscriminated($schema) ? $schema->discriminator() : null;
     }
 
+    /**
+     * A schema that admits null alone; null beside a `$ref` or a composition makes that nullable instead.
+     */
+    public static function isNull(Schema $schema): bool
+    {
+        return $schema->ref() === null && $schema->types() !== [] && $schema->nonNullTypes() === [] && !self::isComposed($schema);
+    }
+
     public static function isComposed(Schema $schema): bool
     {
         return $schema->allOf() !== [] || self::hasUnion($schema);

@@ -108,6 +108,10 @@ final class TypeMapperTest extends TestCase
             'string anyOf with a typed and a constraining member' => [['type' => 'string', 'anyOf' => [['pattern' => 'a'], ['type' => 'integer']]], 'string|int'],
             'string constrained by anyOf' => [['type' => 'string', 'anyOf' => [['pattern' => 'a'], ['pattern' => 'b']]], 'string'],
             'oneOf with null first' => [['oneOf' => [['type' => 'null'], ['type' => 'string'], ['type' => 'integer']]], 'string|int|null'],
+            'reference beside null' => [['$ref' => '#/components/schemas/Tag', 'type' => ['null']], 'App\Dto\Tag|null'],
+            'allOf wrapping a reference beside null' => [['allOf' => [['$ref' => '#/components/schemas/Tag']], 'type' => ['null']], 'App\Dto\Tag|null'],
+            'oneOf with a reference beside null' => [['oneOf' => [['$ref' => '#/components/schemas/Tag', 'type' => ['null']], ['$ref' => '#/components/schemas/Note']]], 'App\Dto\Tag|App\Dto\Note|null'],
+            'oneOf with an allOf beside null' => [['oneOf' => [['allOf' => [['$ref' => '#/components/schemas/Tag']], 'type' => ['null']], ['$ref' => '#/components/schemas/Note']]], 'App\Dto\Tag|App\Dto\Note|null'],
             'allOf wrapping a union' => [['allOf' => [['oneOf' => [['type' => 'string'], ['type' => 'integer']]]]], 'string|int'],
         ];
     }
