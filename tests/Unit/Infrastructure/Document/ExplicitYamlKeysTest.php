@@ -87,6 +87,8 @@ final class ExplicitYamlKeysTest extends TestCase
         yield 'a comment before the value line' => ["? k\n  # c\n: x: 1"];
         yield 'an empty line before the value line' => ["? k\n\n: a: 1"];
         yield 'a line of a multi-line scalar' => ["a: x\n  ? y\n  : z"];
+        yield 'a later line of a multi-line scalar' => ["a: x\n  y\n  ? z\n  : w\n? k\n: 1"];
+        yield 'a later line of a multi-line scalar after a comment' => ["a: x\n  y\n  # c\n  ? z\n  : w\n? k\n: 1"];
         yield 'a number' => ["? 0x1F\n: v"];
         yield 'a boolean' => ["? true\n: v"];
         yield 'null' => ["? ~\n: v"];

@@ -69,7 +69,8 @@ final class ExplicitYamlKeys
 
                 $blockColumn = self::blockColumn($line);
                 $written[] = $line;
-                $previous = self::isSignificant($line) ? $line : $previous;
+                // A line continuing a multi-line scalar is no node: the lines after it continue the same scalar.
+                $previous = self::isSignificant($line) && self::startsANode(str_repeat(' ', $indent), $previous) ? $line : $previous;
 
                 continue;
             }

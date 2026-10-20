@@ -6,6 +6,12 @@ All notable changes to this package are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- A line starting with "?" after two or more lines of a multi-line plain scalar is no longer taken for a key written
+  after "?": with symfony/yaml 6 and newer such a document was rejected with an error about the rewritten text instead
+  of the original one.
+
 ## [1.8.0] - 2026-10-20
 
 ### Added
