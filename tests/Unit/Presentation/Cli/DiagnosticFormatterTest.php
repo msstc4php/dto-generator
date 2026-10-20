@@ -26,6 +26,35 @@ final class DiagnosticFormatterTest extends TestCase
         );
     }
 
+    public function testShowsAWarningThatRecursAtItsFirstPlace(): void
+    {
+        $formatter = new DiagnosticFormatter('/p/');
+        $warning = static fn (string $message, string $at): Diagnostic => new Diagnostic(Severity::from(Severity::WARNING), $message, new SchemaLocation('/p/a.yaml', $at));
+        $error = static fn (string $message, string $at): Diagnostic => new Diagnostic(Severity::from(Severity::ERROR), $message, new SchemaLocation('/p/a.yaml', $at));
+        $diagnostics = [
+            $warning('Odd format.', '/A'),
+            $error('Odd format.', '/B'),
+            $warning('5', '/C'),
+            $warning('Odd format.', '/D'),
+            $error('Odd format.', '/E'),
+            $warning('Once.', '/F'),
+            $warning('Odd format.', '/G'),
+            $warning('5', '/H'),
+        ];
+
+        self::assertSame(
+            [
+                'warning a.yaml#/A: Odd format. (Also at 2 more places; -v lists them.)',
+                'error a.yaml#/B: Odd format.',
+                'warning a.yaml#/C: 5 (Also at 1 more place; -v lists them.)',
+                'error a.yaml#/E: Odd format.',
+                'warning a.yaml#/F: Once.',
+            ],
+            $formatter->lines($diagnostics, false),
+        );
+        self::assertSame(array_map([$formatter, 'line'], $diagnostics), $formatter->lines($diagnostics, true));
+    }
+
     public function testNormalisesAWindowsWorkingDirectory(): void
     {
         self::assertSame('api/openapi.yaml', (new DiagnosticFormatter('C:\\proj'))->path('C:/proj/api/openapi.yaml'));

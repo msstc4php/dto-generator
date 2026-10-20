@@ -9,6 +9,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Builder\ClassLookup;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\Composition;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\Declarations;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\PropertyView;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\SchemaFingerprint;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\SchemaShape;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
@@ -40,6 +41,9 @@ final class Registry
 
     /** @var array<string, string> lower-cased FQCN → location that claimed it */
     private array $taken = [];
+
+    /** @var array<string, Schema> lower-cased FQCN → the schema that claimed it */
+    private array $holders = [];
 
     /** @var array<string, bool> lower-cased FQCN of the views' names claimed */
     private array $views = [];
@@ -172,9 +176,38 @@ final class Registry
         }
 
         $this->taken[$lower] = $schema->location()->toString();
+        $this->holders[$lower] = $schema;
         $this->bases[$name->fqcn()] = $base;
         if ($suffixed) {
             $this->views[$lower] = true;
+        }
+
+        return true;
+    }
+
+    /**
+     * An inline schema that says all the schema holding the name says, in its file, gets its class or enum instead of
+     * another name: specifications repeat such schemas (OpenAI's Beta copies, GitHub's webhooks).
+     */
+    public function reuse(ClassName $name, Schema $candidate): bool
+    {
+        $holder = $this->holders[Identifier::asciiLower($name->fqcn())] ?? null;
+        if (!$holder instanceof Schema || $holder->location()->file() !== $candidate->location()->file()) {
+            return false;
+        }
+
+        $key = $holder->location()->toString();
+        $class = $this->classes[$key] ?? null;
+        $enum = $this->enums[$key] ?? null;
+        if ((!$class instanceof ClassName && !$enum instanceof EnumType) || SchemaFingerprint::of($holder) !== SchemaFingerprint::of($candidate)) {
+            return false;
+        }
+
+        $at = $candidate->location()->toString();
+        if ($class instanceof ClassName) {
+            $this->classes[$at] = $class;
+        } else {
+            $this->enums[$at] = $enum;
         }
 
         return true;

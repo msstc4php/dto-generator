@@ -502,6 +502,10 @@ final class Action
 
         $short = $this->inlineName($candidate, $title ?? $derived, $wireName, $diagnostics);
         $name = $short === null ? null : $registry->className($namespace, $short, $candidate);
+        if ($name instanceof ClassName && $registry->isTaken($name) && $registry->reuse($name, $candidate)) {
+            return;
+        }
+
         if ($name instanceof ClassName && $registry->isTaken($name) && !$candidate->extensions()->has('x-php-class-name')) {
             $name = $this->freeName($candidate, $name, $title === null ? null : $derived, $namespace, $registry, $warn ? $diagnostics : new Diagnostics());
         }

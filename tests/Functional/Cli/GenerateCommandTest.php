@@ -9,6 +9,7 @@ use MSSTC4PHP\DtoGenerator\Tests\Support\RemoteServer;
 use MSSTC4PHP\DtoGenerator\Tests\Support\SplitOutput;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Input\ArrayInput;
+use Symfony\Component\Console\Output\OutputInterface;
 
 final class GenerateCommandTest extends TestCase
 {
@@ -105,6 +106,15 @@ final class GenerateCommandTest extends TestCase
             $errors,
         );
         self::assertSame($before, file_get_contents($this->dir . '/src/Dto/User.php'));
+    }
+
+    public function testShowsAWarningThatRecursOnceUnlessVerbose(): void
+    {
+        file_put_contents($this->dir . '/api/openapi.yaml', str_replace('label: { type: string }', "label: { type: string, format: odd }\n        note: { type: string, format: odd }", self::SPEC));
+        $warning = 'warning api/openapi.yaml#/components/schemas/Tag/properties/%s/format: Unknown string format "odd"; the property stays a string.';
+
+        self::assertSame(sprintf($warning, 'label') . " (Also at 1 more place; -v lists them.)\n", $this->execute(['--dry-run' => true])[2]);
+        self::assertSame(sprintf($warning, 'label') . "\n" . sprintf($warning, 'note') . "\n", $this->execute(['--dry-run' => true], OutputInterface::VERBOSITY_VERBOSE)[2]);
     }
 
     public function testFailsOnAConfigError(): void
@@ -304,12 +314,15 @@ final class GenerateCommandTest extends TestCase
 
     /**
      * @param array<string, string|bool> $options
+     * @param OutputInterface::VERBOSITY_* $verbosity
      *
      * @return array{int, string, string} exit code, stdout, stderr
      */
-    private function execute(array $options): array
+    private function execute(array $options, int $verbosity = OutputInterface::VERBOSITY_NORMAL): array
     {
         $output = new SplitOutput();
+        $output->setVerbosity($verbosity);
+
         $code = DtoGenerator::console($this->dir)->find('generate')->run(new ArrayInput($options), $output);
 
         return [$code, $output->fetch(), $output->errors->fetch()];

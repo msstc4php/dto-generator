@@ -31,6 +31,17 @@ final class SchemaShape
     }
 
     /**
+     * Booleans alone, besides null, on a schema that admits booleans: a bool, without an enum to generate.
+     */
+    public static function isBooleanEnum(Schema $schema): bool
+    {
+        $values = array_filter($schema->enum() ?? [], static fn ($value): bool => $value !== null);
+        $types = array_map(static fn (SchemaType $type): string => $type->value(), $schema->nonNullTypes());
+
+        return $values !== [] && array_filter($values, 'is_bool') === $values && array_diff($types, [SchemaType::BOOLEAN]) === [];
+    }
+
+    /**
      * Strings and integers together: no PHP enum can back them, so the property takes a union of both.
      */
     public static function isMixedEnum(Schema $schema): bool

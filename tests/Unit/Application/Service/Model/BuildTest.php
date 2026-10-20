@@ -384,6 +384,48 @@ final class BuildTest extends TestCase
         self::assertSame(['address: App\Dto\UserAddress3|null', 'home: mixed'], ModelFixture::classes($output)['App\Dto\User']);
     }
 
+    public function testGivesARepeatedInlineSchemaTheClassOfTheSchemaHoldingItsName(): void
+    {
+        $point = ['type' => 'object', 'title' => 'Point', 'properties' => ['x' => [], 'near' => ['type' => 'object', 'properties' => ['d' => []]]]];
+        $level = ['type' => 'string', 'title' => 'Level', 'enum' => ['low', 'high']];
+        $output = ModelFixture::build([
+            'Location' => ['type' => 'object', 'title' => 'Location', 'properties' => ['city' => []]],
+            'User' => ['type' => 'object', 'properties' => [
+                'a' => ['oneOf' => [$point, ['type' => 'string']]],
+                'b' => ['oneOf' => [$point, ['type' => 'integer']]],
+                'c' => ['oneOf' => [['type' => 'object', 'title' => 'Location', 'properties' => ['city' => []]], ['type' => 'boolean']]],
+                'd' => ['oneOf' => [$level, ['type' => 'integer']]],
+                'e' => ['oneOf' => [$level, ['type' => 'boolean']]],
+            ]],
+            'Shop' => ['type' => 'object', 'properties' => ['f' => ['oneOf' => [$point + ['description' => 'Another.'], ['type' => 'string']]]]],
+        ]);
+        $at = self::AT;
+
+        self::assertSame(
+            ["warning {$at}Shop/properties/f/oneOf/0: Class App\\Dto\\Point is already generated from {$at}User/properties/a/oneOf/0, so this one becomes App\\Dto\\ShopFOption1; set \"x-php-class-name\" to name it, in the document or \"classNames\" of the source."],
+            ModelFixture::messages($output),
+        );
+        self::assertSame(
+            [
+                'App\\Dto\\Location' => ['city: mixed'],
+                'App\\Dto\\User' => [
+                    'a: App\\Dto\\Point|string|null',
+                    'b: App\\Dto\\Point|int|null',
+                    'c: App\\Dto\\Location|bool|null',
+                    'd: App\\Dto\\Level|int|null',
+                    'e: App\\Dto\\Level|bool|null',
+                ],
+                'App\\Dto\\Shop' => ['f: App\\Dto\\ShopFOption1|string|null'],
+                'App\\Dto\\Point' => ['x: mixed', 'near: App\\Dto\\PointNear|null'],
+                'App\\Dto\\ShopFOption1' => ['x: mixed', 'near: App\\Dto\\ShopFOption1Near|null'],
+                'App\\Dto\\PointNear' => ['d: mixed'],
+                'App\\Dto\\ShopFOption1Near' => ['d: mixed'],
+            ],
+            ModelFixture::classes($output),
+        );
+        self::assertSame(['App\\Dto\\Level'], ModelFixture::enums($output));
+    }
+
     public function testReportsAnEnumItCannotBuildOnce(): void
     {
         $at = self::AT;

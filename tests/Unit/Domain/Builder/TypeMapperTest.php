@@ -50,6 +50,11 @@ final class TypeMapperTest extends TestCase
     {
         return [
             'string' => [['type' => 'string'], 'string'],
+            'boolean enum of one value' => [['type' => 'boolean', 'enum' => [true]], 'true'],
+            'boolean enum of one value twice' => [['enum' => [false, false]], 'false'],
+            'boolean enum of both values' => [['type' => 'boolean', 'enum' => [true, false]], 'bool'],
+            'nullable boolean enum' => [['type' => ['boolean', 'null'], 'enum' => [true, null]], 'true|null'],
+            'boolean enum admitting null' => [['enum' => [null, false]], 'false|null'],
             'non-empty string' => [['type' => 'string', 'minLength' => 1], 'non-empty-string'],
             'zero min length' => [['type' => 'string', 'minLength' => 0], 'string'],
             'email stays a string' => [['type' => 'string', 'format' => 'email'], 'string'],
@@ -176,7 +181,7 @@ final class TypeMapperTest extends TestCase
                 'mixed',
                 ["warning {$at}/anyOf/1: This inline enum is not generated (only properties of generated classes get one), so the property keeps its plain type."],
             ],
-            'boolean enum' => [['type' => 'boolean', 'enum' => [true]], 'bool', ["warning {$at}: This enum has no string or integer value, so it is not generated and the property keeps its plain type."]],
+            'string enum of booleans' => [['type' => 'string', 'enum' => [true]], 'string', ["warning {$at}: This enum has no string or integer value, so it is not generated and the property keeps its plain type."]],
             'nullable class by reference' => [['$ref' => '#/components/schemas/MaybeTag'], 'App\Dto\Tag|null', []],
             'map schema' => [['type' => 'object', 'additionalProperties' => ['type' => 'string']], 'array<array-key, string>', []],
             'nullable map schema' => [['type' => ['object', 'null'], 'additionalProperties' => ['type' => 'integer']], 'array<array-key, int>|null', []],

@@ -144,6 +144,12 @@ final class TypeMapper
             return $this->mixedEnum($schema, $diagnostics);
         }
 
+        if (SchemaShape::isBooleanEnum($schema)) {
+            $values = array_values(array_unique(array_filter($schema->enum() ?? [], 'is_bool'), SORT_REGULAR));
+
+            return ScalarType::bool(count($values) === 1 ? LiteralType::of($values[0]) : null);
+        }
+
         if (SchemaShape::isEnum($schema)) {
             $diagnostics->warning(
                 'This inline enum is not generated (only properties of generated classes get one), so the property keeps its plain type.',
