@@ -8,7 +8,8 @@ use MSSTC4PHP\DtoGenerator\Domain\Builder\Composition;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
 
 /**
- * An object schema a build met, with its composition; one whose class name another schema took knows that schema.
+ * An object schema a build met, with its composition; one refused its class name, or sharing the class of an identical
+ * schema, knows the schema holding that name.
  */
 final class ClassSchema
 {
@@ -19,7 +20,7 @@ final class ClassSchema
     private ?string $taker;
 
     /**
-     * @param string|null $taker location of the schema that took the name, for a schema that did not get it
+     * @param string|null $taker location of the schema holding the name, for a schema refused it or sharing its class
      */
     public function __construct(Schema $schema, Composition $composition, ?string $taker = null)
     {

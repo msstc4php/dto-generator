@@ -132,15 +132,15 @@ final class Views
 
     /**
      * Locations of the object schemas whose classes depend on the direction: split ones with a directed property in any
-     * member of their composition, those that hold, extend or list them, and a schema whose name another took when that
-     * one depends on it, so the views refuse the name again.
+     * member of their composition, those that hold, extend or list them, and a schema whose name another holds when that
+     * one depends on it, so the views refuse the name again, or share the class again.
      *
      * @return array<string, bool>
      */
     private function dependent(Run $single, Directions $directions): array
     {
         $dependent = [];
-        $rejected = [];
+        $held = [];
         foreach ($single->classSchemas() as $classSchema) {
             $schema = $classSchema->schema();
             $additional = $schema->additionalProperties();
@@ -151,7 +151,7 @@ final class Views
             );
             $taker = $classSchema->taker();
             if ($taker !== null) {
-                $rejected[$schema->location()->toString()] = $taker;
+                $held[$schema->location()->toString()] = $taker;
             } elseif ($directed) {
                 $dependent[$schema->location()->toString()] = true;
             }
@@ -172,7 +172,7 @@ final class Views
             }
         }
 
-        foreach ($rejected as $location => $taker) {
+        foreach ($held as $location => $taker) {
             if ($dependent[$taker] ?? false) {
                 $dependent[$location] = true;
             }

@@ -37,12 +37,12 @@ final class SchemaFingerprintTest extends TestCase
         );
     }
 
-    public function testLeavesOutTheOrderOfKeywordsButNotOfProperties(): void
+    public function testLeavesOutTheOrderOfKeywordsAndRequiredButNotOfProperties(): void
     {
-        $node = ['minProperties' => 1, 'maxProperties' => 2, 'x-a' => 1, 'x-b' => 2, 'properties' => ['a' => [], 'b' => []]];
+        $node = ['minProperties' => 1, 'maxProperties' => 2, 'x-a' => 1, 'x-b' => 2, 'properties' => ['a' => [], 'b' => []], 'required' => ['a', 'b']];
         $fingerprint = SchemaFingerprint::of($this->schema($node));
 
-        self::assertSame($fingerprint, SchemaFingerprint::of($this->schema(['maxProperties' => 2, 'x-b' => 2, 'x-a' => 1, 'minProperties' => 1] + $node)));
+        self::assertSame($fingerprint, SchemaFingerprint::of($this->schema(['maxProperties' => 2, 'x-b' => 2, 'x-a' => 1, 'minProperties' => 1, 'required' => ['b', 'a']] + $node)));
         self::assertNotSame($fingerprint, SchemaFingerprint::of($this->schema(['properties' => ['b' => [], 'a' => []]] + $node)));
     }
 
@@ -71,7 +71,7 @@ final class SchemaFingerprintTest extends TestCase
         yield 'a property' => [['properties' => ['x' => ['type' => 'number'], 'tags' => ['type' => 'array', 'items' => ['type' => 'string']]]]];
         yield 'the name of a property' => [['properties' => ['y' => ['type' => 'integer'], 'tags' => ['type' => 'array', 'items' => ['type' => 'string']]]]];
         yield 'the items of a property' => [['properties' => ['x' => ['type' => 'integer'], 'tags' => ['type' => 'array', 'items' => ['type' => 'integer']]]]];
-        yield 'required' => [['required' => ['x', 'tags']]];
+        yield 'required' => [['required' => ['x', 'z']]];
         yield 'additional properties' => [['additionalProperties' => ['type' => 'integer']]];
         yield 'additional properties forbidden' => [['additionalProperties' => false]];
         yield 'allOf' => [['allOf' => [['minProperties' => 2]]]];

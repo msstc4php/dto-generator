@@ -43,7 +43,7 @@ final class SchemaFingerprint
             $default instanceof DefaultValue ? $default->toJson() : null,
             $schema->enum(),
             $properties,
-            $schema->required(),
+            self::sortedNames($schema->required()),
             $items instanceof Schema ? self::of($items) : null,
             $additional instanceof Schema ? self::of($additional) : $additional,
             self::all($schema->allOf()),
@@ -69,6 +69,18 @@ final class SchemaFingerprint
         ksort($keywords, SORT_STRING);
 
         return $keywords;
+    }
+
+    /**
+     * @param list<string> $names
+     *
+     * @return list<string>
+     */
+    private static function sortedNames(array $names): array
+    {
+        sort($names, SORT_STRING);
+
+        return $names;
     }
 
     /**

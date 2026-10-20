@@ -452,30 +452,38 @@ final class BuildTest extends TestCase
      * @param array<string, array<array-key, mixed>> $schemas
      * @param array<string, list<string>> $expected
      */
-    public function testSharesNoClassThatTakesThePropertiesOfAnAllOf(array $schemas, array $expected): void
+    public function testSharesNoClassThatTakesThePropertiesOfAnAllOf(array $schemas, array $expected, int $renamed): void
     {
         $output = ModelFixture::build($schemas);
 
-        self::assertCount(1, ModelFixture::messages($output));
+        self::assertCount($renamed, ModelFixture::messages($output));
         self::assertSame($expected, array_intersect_key(ModelFixture::classes($output), $expected));
     }
 
     /**
-     * @return iterable<string, array{array<string, array<array-key, mixed>>, array<string, list<string>>}>
+     * @return iterable<string, array{array<string, array<array-key, mixed>>, array<string, list<string>>, int}>
      */
     public static function joinedPlaces(): iterable
     {
         $x = ['type' => 'object', 'properties' => ['x' => []]];
         $alone = ['type' => 'object', 'properties' => ['b_meta' => $x]];
-        $joined = ['allOf' => [['type' => 'object', 'properties' => ['meta' => $x]], ['type' => 'object', 'properties' => ['meta' => ['type' => 'object', 'properties' => ['y' => []]]]]]];
+        $joined = ['allOf' => [['type' => 'object', 'properties' => ['level' => ['type' => 'string', 'enum' => ['a']], 'meta' => $x]], ['type' => 'object', 'properties' => ['meta' => ['type' => 'object', 'properties' => ['y' => []]]]]]];
 
         yield 'the joined place after' => [
             ['A' => $alone, 'AB' => $joined],
-            ['App\\Dto\\A' => ['b_meta: App\\Dto\\ABMeta|null'], 'App\\Dto\\AB' => ['meta: App\\Dto\\ABMeta2|null'], 'App\\Dto\\ABMeta' => ['x: mixed'], 'App\\Dto\\ABMeta2' => ['x: mixed', 'y: mixed']],
+            ['App\\Dto\\A' => ['b_meta: App\\Dto\\ABMeta|null'], 'App\\Dto\\AB' => ['level: App\\Dto\\ABLevel|null', 'meta: App\\Dto\\ABMeta2|null'], 'App\\Dto\\ABMeta' => ['x: mixed'], 'App\\Dto\\ABMeta2' => ['x: mixed', 'y: mixed']],
+            1,
+        ];
+        $option = ['oneOf' => [['type' => 'object', 'properties' => ['x' => []]], ['type' => 'string']]];
+        yield 'a place of union members, which never join' => [
+            ['AB' => ['allOf' => [['type' => 'object', 'properties' => ['p' => $option]], ['type' => 'object', 'properties' => ['p' => $option]]]], 'ABP' => ['type' => 'object', 'properties' => ['option1' => $x]]],
+            ['App\\Dto\\ABP' => ['option1: App\\Dto\\ABPOption1|null'], 'App\\Dto\\ABPOption1' => ['x: mixed']],
+            0,
         ];
         yield 'the joined place first' => [
             ['AB' => $joined, 'A' => $alone],
-            ['App\\Dto\\AB' => ['meta: App\\Dto\\ABMeta|null'], 'App\\Dto\\A' => ['b_meta: App\\Dto\\ABMeta2|null'], 'App\\Dto\\ABMeta' => ['x: mixed', 'y: mixed'], 'App\\Dto\\ABMeta2' => ['x: mixed']],
+            ['App\\Dto\\AB' => ['level: App\\Dto\\ABLevel|null', 'meta: App\\Dto\\ABMeta|null'], 'App\\Dto\\A' => ['b_meta: App\\Dto\\ABMeta2|null'], 'App\\Dto\\ABMeta' => ['x: mixed', 'y: mixed'], 'App\\Dto\\ABMeta2' => ['x: mixed']],
+            1,
         ];
     }
 

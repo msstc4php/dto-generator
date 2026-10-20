@@ -406,23 +406,13 @@ final class Action
 
         $namespace = $ownerName->namespace();
         $inlines = [];
-        $places = [];
         foreach ($candidates as [$schema, $baseName, $wireName]) {
             foreach ($this->inlines($schema, '', $diagnostics, $registry, $graph) as [$candidate, $suffix, $title]) {
                 $inlines[] = [$candidate, $suffix, $title, $baseName, $wireName];
-                if (SchemaShape::isClass($candidate)) {
-                    $places[$wireName][$suffix][] = $candidate;
-                }
             }
         }
 
-        foreach ($places as $suffixes) {
-            foreach ($suffixes as $objects) {
-                foreach (count($objects) > 1 ? $objects : [] as $object) {
-                    $registry->unshare($object);
-                }
-            }
-        }
+        $this->unshareJoined($inlines, $registry, $graph);
 
         $objects = [];
         foreach ($inlines as [$candidate, $suffix, $title, $baseName, $wireName]) {
@@ -437,6 +427,30 @@ final class Action
                 if ($object && !$declared instanceof Schema) {
                     $objects[$wireName][$suffix] = $candidate;
                 }
+            }
+        }
+    }
+
+    /**
+     * The first inline object of a place of an allOf takes the properties of those that join it, so it says more than its
+     * schema and shares its class with no other.
+     *
+     * @param list<array{Schema, string, ?string, ?string, string}> $inlines schema, suffix, title, base name, wire name
+     */
+    private function unshareJoined(array $inlines, Registry $registry, SchemaGraph $graph): void
+    {
+        $first = [];
+        foreach ($inlines as [$candidate, $suffix, , , $wireName]) {
+            if (!SchemaShape::isClass($candidate)) {
+                continue;
+            }
+
+            $declared = $first[$wireName][$suffix] ?? null;
+            if (!$declared instanceof Schema) {
+                $first[$wireName][$suffix] = $candidate;
+            } elseif ($this->joinable($declared, $candidate, $suffix, $graph)) {
+                // The object that joins takes the class of the first, so it is never declared, nor shared, itself.
+                $registry->unshare($declared);
             }
         }
     }
