@@ -10,7 +10,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Target\AllOfStrategy;
 use MSSTC4PHP\DtoGenerator\Tests\Support\ModelFixture;
 use PHPUnit\Framework\TestCase;
 
-final class ObjectDefaultsTest extends TestCase
+final class ObjectDefaultsBuildTest extends TestCase
 {
     private const AT = 'warning /project/api/openapi.yaml#/components/schemas/';
 
@@ -113,7 +113,7 @@ final class ObjectDefaultsTest extends TestCase
         ], [], ['*'], AllOfStrategy::MERGE);
 
         self::assertSame([self::AT . 'Base/properties/money/default: A default for App\Money cannot be a PHP constant expression; null is used instead.'], ModelFixture::messages($output));
-        self::assertSame(['money' => 'null', 'name' => 'null'], self::defaults($output, 'Child'));
+        self::assertSame(['money' => 'null', 'name' => 'null'], $this->defaults($output, 'Child'));
     }
 
     public function testBreaksDefaultsThatLeadBackToTheirClass(): void
@@ -127,6 +127,36 @@ final class ObjectDefaultsTest extends TestCase
         self::assertSame([self::AT . 'B/properties/a/default: The default {} cannot be `new App\Dto\A()`: the defaults of App\Dto\A lead back to it; null is used instead.'], ModelFixture::messages($output));
         self::assertSame(['b' => '[]'], $this->defaults($output, 'A'));
         self::assertSame(['a' => 'null', 'meta' => '[]'], $this->defaults($output, 'B'));
+    }
+
+    public function testBreaksALongerLoopOnce(): void
+    {
+        $output = ModelFixture::build([
+            'A' => ['type' => 'object', 'properties' => ['b' => ['$ref' => '#/components/schemas/B', 'default' => []]]],
+            'B' => ['type' => 'object', 'properties' => ['c' => ['$ref' => '#/components/schemas/C', 'default' => []]]],
+            'C' => ['type' => 'object', 'properties' => ['a' => ['$ref' => '#/components/schemas/A', 'default' => []]]],
+        ]);
+
+        self::assertSame([self::AT . 'C/properties/a/default: The default {} cannot be `new App\Dto\A()`: the defaults of App\Dto\A lead back to it; null is used instead.'], ModelFixture::messages($output));
+        self::assertSame(['b' => '[]'], $this->defaults($output, 'A'));
+        self::assertSame(['c' => '[]'], $this->defaults($output, 'B'));
+    }
+
+    /**
+     * Child copies "t" of Base, so `new Child()` and `new T()` create each other; the loop is broken at the edge the
+     * walk from the first class meets last, which here is the copied property, refused in Base too.
+     */
+    public function testBreaksALoopThroughACopiedPropertyWhereTheWalkClosesIt(): void
+    {
+        $output = ModelFixture::build([
+            'Base' => ['type' => 'object', 'properties' => ['t' => ['$ref' => '#/components/schemas/T', 'default' => []]]],
+            'Child' => ['allOf' => [['$ref' => '#/components/schemas/Base'], self::META]],
+            'T' => ['type' => 'object', 'properties' => ['c' => ['$ref' => '#/components/schemas/Child', 'default' => []]]],
+        ], [], ['*'], AllOfStrategy::MERGE);
+
+        self::assertSame([self::AT . 'Base/properties/t/default: The default {} cannot be `new App\Dto\T()`: the defaults of App\Dto\T lead back to it; null is used instead.'], ModelFixture::messages($output));
+        self::assertSame(['t' => 'null'], $this->defaults($output, 'Base'));
+        self::assertSame(['c' => '[]'], $this->defaults($output, 'T'));
     }
 
     public function testBreaksADefaultOfItsOwnClass(): void

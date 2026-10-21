@@ -29,6 +29,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\DiscriminatorModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\Identifier;
+use MSSTC4PHP\DtoGenerator\Domain\Model\PropertyModel;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Discriminator;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\ResolvedSchema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
@@ -175,14 +176,14 @@ final class Action
         }
 
         [$built, $enums] = $this->used($built, $registry->enums(), $superseded, $input->graph());
-        $output = new Output($this->withObjectDefaults($built, $diagnostics), $diagnostics, $enums);
-        $models = [];
-        $inherited = [];
-        foreach ($output->classes() as $class) {
-            $models[] = $class->model();
-            $inherited[$class->model()->name()->fqcn()] = $output->inheritedProperties($class->model());
+        [$models, $inherited] = $this->models(new Output($built, $diagnostics, $enums));
+        $resolved = [];
+        foreach (ObjectDefaults::resolve($models, $inherited, $diagnostics) as $index => $model) {
+            $resolved[] = new BuiltClass($model, $built[$index]->source());
         }
 
+        $output = new Output($resolved, $diagnostics, $enums);
+        [$models, $inherited] = $this->models($output);
         RequiredCycles::check($models, $diagnostics, $inherited);
         $classSchemas = [];
         foreach ($registry->planned() as $index => [$schema]) {
@@ -199,26 +200,18 @@ final class Action
     }
 
     /**
-     * @param list<BuiltClass> $classes
-     *
-     * @return list<BuiltClass>
+     * @return array{list<ClassModel>, array<string, list<PropertyModel>>} the models and, by FQCN, what each inherits
      */
-    private function withObjectDefaults(array $classes, Diagnostics $diagnostics): array
+    private function models(Output $output): array
     {
-        $output = new Output($classes, new Diagnostics(), []);
         $models = [];
         $inherited = [];
-        foreach ($classes as $class) {
+        foreach ($output->classes() as $class) {
             $models[] = $class->model();
             $inherited[$class->model()->name()->fqcn()] = $output->inheritedProperties($class->model());
         }
 
-        $resolved = [];
-        foreach (ObjectDefaults::resolve($models, $inherited, $diagnostics) as $index => $model) {
-            $resolved[] = new BuiltClass($model, $classes[$index]->source());
-        }
-
-        return $resolved;
+        return [$models, $inherited];
     }
 
     /**

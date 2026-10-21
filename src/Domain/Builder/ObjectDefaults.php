@@ -7,7 +7,6 @@ namespace MSSTC4PHP\DtoGenerator\Domain\Builder;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassType;
-use MSSTC4PHP\DtoGenerator\Domain\Model\DiscriminatorValues;
 use MSSTC4PHP\DtoGenerator\Domain\Model\NullableType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\PropertyModel;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\DefaultValue;
@@ -58,7 +57,7 @@ final class ObjectDefaults
             }
         }
 
-        return array_map(static fn (ClassModel $class): ClassModel => $defaults->refuse($class, $diagnostics), $classes);
+        return array_map(static fn (ClassModel $class): ClassModel => $defaults->withoutRefusedDefaults($class, $diagnostics), $classes);
     }
 
     /**
@@ -74,7 +73,7 @@ final class ObjectDefaults
                 continue;
             }
 
-            $refusal = $this->refusal($target);
+            $refusal = $this->refusalFor($target);
             if ($refusal !== null) {
                 $this->refused[$at] = $refusal;
             } elseif (!isset($this->visited[$target])) {
@@ -85,7 +84,7 @@ final class ObjectDefaults
         $this->visited[$fqcn] = true;
     }
 
-    private function refusal(string $target): ?string
+    private function refusalFor(string $target): ?string
     {
         $class = $this->classes[$target] ?? null;
         if (!$class instanceof ClassModel) {
@@ -107,7 +106,7 @@ final class ObjectDefaults
         }
 
         foreach ($this->constructorProperties($class->name()->fqcn()) as $property) {
-            if (!$this->hasDefault($class, $property)) {
+            if (!$class->constructorDefaultOf($property) instanceof DefaultValue) {
                 return sprintf('its constructor requires $%s', $property->name());
             }
         }
@@ -118,7 +117,7 @@ final class ObjectDefaults
     /**
      * A property copied into another class reports its refusal once, as Diagnostics drops repeats.
      */
-    private function refuse(ClassModel $class, Diagnostics $diagnostics): ClassModel
+    private function withoutRefusedDefaults(ClassModel $class, Diagnostics $diagnostics): ClassModel
     {
         $changed = false;
         $properties = [];
@@ -157,20 +156,6 @@ final class ObjectDefaults
         $class = $this->classes[$fqcn] ?? null;
 
         return $class instanceof ClassModel ? array_merge($this->inherited[$fqcn] ?? [], $class->properties()) : [];
-    }
-
-    /**
-     * As the constructor sees it: a discriminator selecting the class by one value defaults to it.
-     */
-    private function hasDefault(ClassModel $class, PropertyModel $property): bool
-    {
-        $selection = $class->discriminatorValuesOf($property->name());
-        $default = $property->default();
-        if (!$selection instanceof DiscriminatorValues) {
-            return $default instanceof DefaultValue;
-        }
-
-        return count($selection->values()) === 1 || ($default instanceof DefaultValue && in_array($default->value(), $selection->values(), true));
     }
 
     /**
