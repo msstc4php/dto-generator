@@ -107,7 +107,7 @@ final class ObjectDefaults
 
         foreach ($this->constructorProperties($class->name()->fqcn()) as $property) {
             if (!$class->constructorDefaultOf($property) instanceof DefaultValue) {
-                return sprintf('its constructor requires $%s', $property->name());
+                return sprintf('{} lacks "%s", which its constructor requires', $property->wireName());
             }
         }
 

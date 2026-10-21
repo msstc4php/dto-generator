@@ -38,11 +38,11 @@ final class ObjectDefaultsBuildTest extends TestCase
     public function testRefusesAClassWithARequiredProperty(): void
     {
         $output = ModelFixture::build([
-            'Meta' => ['type' => 'object', 'required' => ['name'], 'properties' => ['name' => ['type' => 'string']]],
+            'Meta' => ['type' => 'object', 'required' => ['full_name'], 'properties' => ['full_name' => ['type' => 'string']]],
             'C' => ['type' => 'object', 'properties' => ['meta' => ['$ref' => '#/components/schemas/Meta', 'default' => []]]],
         ]);
 
-        self::assertSame([self::AT . 'C/properties/meta/default: The default {} cannot be `new App\Dto\Meta()`: its constructor requires $name; null is used instead.'], ModelFixture::messages($output));
+        self::assertSame([self::AT . 'C/properties/meta/default: The default {} cannot be `new App\Dto\Meta()`: {} lacks "full_name", which its constructor requires; null is used instead.'], ModelFixture::messages($output));
         self::assertSame(['meta' => 'null'], $this->defaults($output, 'C'));
     }
 
@@ -54,7 +54,7 @@ final class ObjectDefaultsBuildTest extends TestCase
             'C' => ['type' => 'object', 'properties' => ['meta' => ['$ref' => '#/components/schemas/Meta', 'default' => []]]],
         ]);
 
-        self::assertSame([self::AT . 'C/properties/meta/default: The default {} cannot be `new App\Dto\Meta()`: its constructor requires $id; null is used instead.'], ModelFixture::messages($output));
+        self::assertSame([self::AT . 'C/properties/meta/default: The default {} cannot be `new App\Dto\Meta()`: {} lacks "id", which its constructor requires; null is used instead.'], ModelFixture::messages($output));
     }
 
     public function testRefusesAnAbstractClassButNotASubclassItsDiscriminatorSelects(): void
@@ -96,7 +96,7 @@ final class ObjectDefaultsBuildTest extends TestCase
      */
     public static function selections(): array
     {
-        $refused = [self::AT . 'C/properties/cat/default: The default {} cannot be `new App\Dto\Cat()`: its constructor requires $kind; null is used instead.'];
+        $refused = [self::AT . 'C/properties/cat/default: The default {} cannot be `new App\Dto\Cat()`: {} lacks "kind", which its constructor requires; null is used instead.'];
 
         return [
             'required' => [['required' => ['kind'], 'properties' => ['kind' => ['type' => 'string']]], $refused],

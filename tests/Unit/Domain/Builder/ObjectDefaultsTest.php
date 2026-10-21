@@ -53,7 +53,7 @@ final class ObjectDefaultsTest extends TestCase
             EmitterFixture::model('App\Meta', null, [EmitterFixture::property('label', ScalarType::string(), false, new DefaultValue('x'))]),
         ], ['App\Meta' => [EmitterFixture::property('id', ScalarType::string(), true)]], $diagnostics);
 
-        self::assertSame([self::AT . 'meta/default: The default {} cannot be `new App\Meta()`: its constructor requires $id; null is used instead.'], $this->messages($diagnostics));
+        self::assertSame([self::AT . 'meta/default: The default {} cannot be `new App\Meta()`: {} lacks "id", which its constructor requires; null is used instead.'], $this->messages($diagnostics));
     }
 
     private function type(string $fqcn): ClassType
