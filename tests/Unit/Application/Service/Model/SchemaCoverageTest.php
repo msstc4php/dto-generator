@@ -185,7 +185,7 @@ final class SchemaCoverageTest extends TestCase
         self::assertArrayHasKey('App\Dto\Chosen', ModelFixture::classes($output));
     }
 
-    public function testReportsATitleThatCollides(): void
+    public function testNamesAMemberWhoseTitleCollidesAfterItsPlaceQuietly(): void
     {
         $output = ModelFixture::build([
             'User' => ['type' => 'object', 'properties' => ['n' => ['type' => 'string']]],
@@ -195,8 +195,28 @@ final class SchemaCoverageTest extends TestCase
             ]]]],
         ]);
 
-        $collisions = array_filter(ModelFixture::messages($output), static fn (string $m): bool => strpos($m, 'x-php-class-name') !== false);
-        self::assertCount(1, $collisions);
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertArrayHasKey('App\Dto\HolderEitherOption1', ModelFixture::classes($output));
+    }
+
+    public function testReportsAMemberWhoseTitleAndPlaceAreBothTaken(): void
+    {
+        $output = ModelFixture::build([
+            'User' => ['type' => 'object', 'properties' => ['n' => ['type' => 'string']]],
+            'HolderEitherOption1' => ['type' => 'object', 'properties' => ['m' => ['type' => 'string']]],
+            'Holder' => ['type' => 'object', 'properties' => ['either' => ['oneOf' => [
+                ['type' => 'object', 'title' => 'User', 'properties' => ['id' => ['type' => 'integer']]],
+                ['type' => 'string'],
+            ]]]],
+        ]);
+
+        self::assertSame(
+            [str_replace('error ', 'warning ', self::AT) . 'Holder/properties/either/oneOf/0: Class App\Dto\User is already generated from /project/api/openapi.yaml#/components/schemas/User, so this one becomes App\Dto\User2; set "x-php-class-name" to name it, in the document or "classNames" of the source.'],
+            ModelFixture::messages($output),
+        );
+        $classes = ModelFixture::classes($output);
+        self::assertSame(['id: int|null'], $classes['App\Dto\User2']);
+        self::assertSame(['m: string|null'], $classes['App\Dto\HolderEitherOption1']);
     }
 
     public function testMakesAClassOfAnInlineDiscriminatedUnionWithInlineVariants(): void
@@ -427,9 +447,8 @@ final class SchemaCoverageTest extends TestCase
         self::assertSame(['n: string|null'], $classes['App\Dto\User']);
         self::assertSame(['id: int|null'], $classes['App\Dto\PetsItem']);
         $messages = ModelFixture::messages($output);
-        self::assertCount(2, $messages);
-        self::assertSame(str_replace('error ', 'warning ', self::AT) . 'Shape/oneOf/0: Class App\Dto\User is already generated from /project/api/openapi.yaml#/components/schemas/User, so this one becomes App\Dto\ShapeOption1; set "x-php-class-name" to name it, in the document or "classNames" of the source.', $messages[0]);
-        self::assertSame(str_replace('error ', 'warning ', self::AT) . 'Pets/items: Class App\Dto\PetsItem is already generated from /project/api/openapi.yaml#/components/schemas/PetsItem, so this one becomes App\Dto\PetsItem2; set "x-php-class-name" to name it, in the document or "classNames" of the source.', $messages[1]);
+        self::assertSame([str_replace('error ', 'warning ', self::AT) . 'Pets/items: Class App\Dto\PetsItem is already generated from /project/api/openapi.yaml#/components/schemas/PetsItem, so this one becomes App\Dto\PetsItem2; set "x-php-class-name" to name it, in the document or "classNames" of the source.'], $messages);
+        self::assertArrayHasKey('App\Dto\ShapeOption1', $classes);
     }
 
     public function testTypesAUnionOfConstMembers(): void

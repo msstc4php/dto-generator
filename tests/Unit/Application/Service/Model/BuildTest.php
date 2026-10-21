@@ -399,12 +399,8 @@ final class BuildTest extends TestCase
             ]],
             'Shop' => ['type' => 'object', 'properties' => ['f' => ['oneOf' => [$point + ['description' => 'Another.'], ['type' => 'string']]]]],
         ]);
-        $at = self::AT;
 
-        self::assertSame(
-            ["warning {$at}Shop/properties/f/oneOf/0: Class App\\Dto\\Point is already generated from {$at}User/properties/a/oneOf/0, so this one becomes App\\Dto\\ShopFOption1; set \"x-php-class-name\" to name it, in the document or \"classNames\" of the source."],
-            ModelFixture::messages($output),
-        );
+        self::assertSame([], ModelFixture::messages($output));
         self::assertSame(
             [
                 'App\\Dto\\Location' => ['city: mixed'],
