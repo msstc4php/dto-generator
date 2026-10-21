@@ -606,8 +606,13 @@ final class Action
 
     private function reuses(ClassName $name, Schema $candidate, Registry $registry, EnumBuilder $enums): bool
     {
-        // The candidate's own problems are reported when it is declared.
-        $own = SchemaShape::isEnum($candidate) ? $enums->build($name, $candidate, new Diagnostics()) : null;
+        $own = null;
+        if (SchemaShape::isEnum($candidate)) {
+            // An enum that has anything to report is declared, where it reports it, rather than shared.
+            $problems = new Diagnostics();
+            $own = $enums->build($name, $candidate, $problems);
+            $own = $problems->count() === 0 ? $own : null;
+        }
 
         return $registry->reuse($name, $candidate, $own);
     }

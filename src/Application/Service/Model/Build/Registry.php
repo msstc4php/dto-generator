@@ -197,7 +197,7 @@ final class Registry
     /**
      * An inline schema that says all the schema holding the name says, in its file, gets its class or enum instead of
      * another name: specifications repeat such schemas (OpenAI's Beta copies, GitHub's webhooks). An enum needs only
-     * the same cases, as the members of an allOf restate one with another order, description or null. A class that
+     * the same cases and deprecation, as the members of an allOf restate one with another order, description or null. A class that
      * takes the properties of other schemas of an allOf ({@see join()}) says more than its schema, so it is shared
      * with none.
      *
@@ -219,7 +219,8 @@ final class Registry
         }
 
         $held = $this->enumModels[$key] ?? null;
-        $sameCases = $held instanceof EnumModel && $own instanceof EnumModel && $this->cases($held) === $this->cases($own);
+        $sameCases = $held instanceof EnumModel && $own instanceof EnumModel && $this->cases($held) === $this->cases($own)
+            && $held->doc()->isDeprecated() === $own->doc()->isDeprecated();
         if (!$sameCases && SchemaFingerprint::of($holder) !== SchemaFingerprint::of($candidate)) {
             return false;
         }

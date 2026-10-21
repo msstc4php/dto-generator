@@ -11,8 +11,8 @@ use MSSTC4PHP\DtoGenerator\Domain\Shared\DefaultValue;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
 
 /**
- * Everything a schema says, its subschemas included, apart from where it is and its own title: two schemas with one
- * fingerprint in one file give the same class. Each `$ref` counts as written, so only within one file does it name the same target.
+ * Everything a schema says, its subschemas included, apart from where it is and its own title: two schemas with
+ * one fingerprint in one file give the same class. Each `$ref` counts as written, so only within one file does it name the same target.
  *
  * @phpstan-import-type JsonValue from Json
  */
@@ -24,23 +24,29 @@ final class SchemaFingerprint
 
     /**
      * The schema's own title only names its class, and a schema that lends its class has named it already; the titles
-     * of subschemas name theirs, so they count.
+     * of subschemas are kept, as some of them name classes of their own.
      */
     public static function of(Schema $schema): string
     {
-        return self::fingerprint($schema, false);
+        $keywords = $schema->keywords();
+        unset($keywords['title']);
+
+        return self::fingerprint($schema, $keywords);
     }
 
-    private static function fingerprint(Schema $schema, bool $titled): string
+    private static function whole(Schema $schema): string
     {
-        $keywords = $schema->keywords();
-        if (!$titled) {
-            unset($keywords['title']);
-        }
+        return self::fingerprint($schema, $schema->keywords());
+    }
 
+    /**
+     * @param array<array-key, JsonValue> $keywords
+     */
+    private static function fingerprint(Schema $schema, array $keywords): string
+    {
         $properties = [];
         foreach ($schema->propertyNames() as $name) {
-            $properties[] = [$name, self::fingerprint($schema->requireProperty($name), true)];
+            $properties[] = [$name, self::whole($schema->requireProperty($name))];
         }
 
         $items = $schema->items();
@@ -58,8 +64,8 @@ final class SchemaFingerprint
             $schema->enum(),
             $properties,
             self::sortedNames($schema->required()),
-            $items instanceof Schema ? self::fingerprint($items, true) : null,
-            $additional instanceof Schema ? self::fingerprint($additional, true) : $additional,
+            $items instanceof Schema ? self::whole($items) : null,
+            $additional instanceof Schema ? self::whole($additional) : $additional,
             self::all($schema->allOf()),
             self::all($schema->oneOf()),
             self::all($schema->anyOf()),
@@ -104,6 +110,6 @@ final class SchemaFingerprint
      */
     private static function all(array $schemas): array
     {
-        return array_map(static fn (Schema $schema): string => self::fingerprint($schema, true), $schemas);
+        return array_map(static fn (Schema $schema): string => self::whole($schema), $schemas);
     }
 }

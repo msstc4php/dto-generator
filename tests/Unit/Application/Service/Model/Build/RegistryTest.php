@@ -70,6 +70,18 @@ final class RegistryTest extends TestCase
         self::assertNull($registry->declarations()->enumAt('a.yaml#/C'));
     }
 
+    public function testGivesAnEnumNoClass(): void
+    {
+        $registry = new Registry();
+        $name = ClassName::fromFqcn('App\Level');
+        $holder = $this->schema(self::POINT, 'a.yaml', '/A');
+        self::assertTrue($registry->claim($name, $holder, new Diagnostics()));
+        $registry->planClass($holder, $name, 0);
+
+        $candidate = $this->schema(['enum' => ['low']], 'a.yaml', '/B');
+        self::assertFalse($registry->reuse($name, $candidate, $this->level($candidate, ['LOW' => 'low'])));
+    }
+
     public function testSharesNoClassThatOtherSchemasJoin(): void
     {
         $registry = new Registry();
