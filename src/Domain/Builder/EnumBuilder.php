@@ -269,7 +269,7 @@ final class EnumBuilder
 
     /**
      * Values only their signs tell apart ("+1" and "-1", "Etc/GMT+1" and "Etc/GMT-1"), or that have no other characters
-     * ("*"), get their signs as words ({@see NameResolver::spelledApart()}); the names x-enum-varnames gives stay as
+     * ("*"), get their signs as words ({@see NameResolver::spelledGroups()}); the names x-enum-varnames gives stay as
      * written.
      *
      * @param array<int, int|string> $values
