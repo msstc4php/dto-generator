@@ -105,13 +105,20 @@ final class ObjectDefaults
             return 'the class is abstract';
         }
 
+        $lacking = [];
         foreach ($this->constructorProperties($class->name()->fqcn()) as $property) {
             if (!$class->constructorDefaultOf($property) instanceof DefaultValue) {
-                return sprintf('{} lacks "%s", which its constructor requires', $property->wireName());
+                $lacking[] = sprintf('"%s"', $property->wireName());
             }
         }
 
-        return null;
+        if ($lacking === []) {
+            return null;
+        }
+
+        $last = array_pop($lacking);
+
+        return sprintf('it lacks %s, which the constructor requires', $lacking === [] ? $last : implode(', ', $lacking) . ' and ' . $last);
     }
 
     /**

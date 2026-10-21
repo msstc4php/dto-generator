@@ -10,8 +10,11 @@ use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassKind;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassType;
+use MSSTC4PHP\DtoGenerator\Domain\Model\DocModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\NullableType;
+use MSSTC4PHP\DtoGenerator\Domain\Model\PropertyModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ScalarType;
+use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\DefaultValue;
 use MSSTC4PHP\DtoGenerator\Tests\Support\EmitterFixture;
 use PHPUnit\Framework\TestCase;
@@ -45,6 +48,22 @@ final class ObjectDefaultsTest extends TestCase
         self::assertEquals(new DefaultValue(null), $property->default());
     }
 
+    public function testNamesEveryPropertyTheDefaultLacksAsTheDocumentDoes(): void
+    {
+        $diagnostics = new Diagnostics();
+        $at = new SchemaLocation('/project/api/openapi.yaml', '/components/schemas/Meta/properties/full_name');
+        ObjectDefaults::resolve([
+            EmitterFixture::model('App\Owner', null, [EmitterFixture::property('meta', new NullableType($this->type('App\Meta')), false, new DefaultValue([]))]),
+            EmitterFixture::model('App\Meta', null, [
+                new PropertyModel('fullName', 'full_name', ScalarType::string(), true, null, DocModel::none(), $at),
+                EmitterFixture::property('id', ScalarType::string(), true),
+                EmitterFixture::property('tag', ScalarType::string(), true),
+            ]),
+        ], [], $diagnostics);
+
+        self::assertSame([self::AT . 'meta/default: The default {} cannot be `new App\Meta()`: it lacks "full_name", "id" and "tag", which the constructor requires; null is used instead.'], $this->messages($diagnostics));
+    }
+
     public function testCountsAnInheritedPropertyWithoutADefault(): void
     {
         $diagnostics = new Diagnostics();
@@ -53,7 +72,7 @@ final class ObjectDefaultsTest extends TestCase
             EmitterFixture::model('App\Meta', null, [EmitterFixture::property('label', ScalarType::string(), false, new DefaultValue('x'))]),
         ], ['App\Meta' => [EmitterFixture::property('id', ScalarType::string(), true)]], $diagnostics);
 
-        self::assertSame([self::AT . 'meta/default: The default {} cannot be `new App\Meta()`: {} lacks "id", which its constructor requires; null is used instead.'], $this->messages($diagnostics));
+        self::assertSame([self::AT . 'meta/default: The default {} cannot be `new App\Meta()`: it lacks "id", which the constructor requires; null is used instead.'], $this->messages($diagnostics));
     }
 
     private function type(string $fqcn): ClassType

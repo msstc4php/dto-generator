@@ -42,7 +42,7 @@ final class ObjectDefaultsBuildTest extends TestCase
             'C' => ['type' => 'object', 'properties' => ['meta' => ['$ref' => '#/components/schemas/Meta', 'default' => []]]],
         ]);
 
-        self::assertSame([self::AT . 'C/properties/meta/default: The default {} cannot be `new App\Dto\Meta()`: {} lacks "full_name", which its constructor requires; null is used instead.'], ModelFixture::messages($output));
+        self::assertSame([self::AT . 'C/properties/meta/default: The default {} cannot be `new App\Dto\Meta()`: it lacks "full_name", which the constructor requires; null is used instead.'], ModelFixture::messages($output));
         self::assertSame(['meta' => 'null'], $this->defaults($output, 'C'));
     }
 
@@ -54,7 +54,7 @@ final class ObjectDefaultsBuildTest extends TestCase
             'C' => ['type' => 'object', 'properties' => ['meta' => ['$ref' => '#/components/schemas/Meta', 'default' => []]]],
         ]);
 
-        self::assertSame([self::AT . 'C/properties/meta/default: The default {} cannot be `new App\Dto\Meta()`: {} lacks "id", which its constructor requires; null is used instead.'], ModelFixture::messages($output));
+        self::assertSame([self::AT . 'C/properties/meta/default: The default {} cannot be `new App\Dto\Meta()`: it lacks "id", which the constructor requires; null is used instead.'], ModelFixture::messages($output));
     }
 
     public function testRefusesAnAbstractClassButNotASubclassItsDiscriminatorSelects(): void
@@ -96,7 +96,7 @@ final class ObjectDefaultsBuildTest extends TestCase
      */
     public static function selections(): array
     {
-        $refused = [self::AT . 'C/properties/cat/default: The default {} cannot be `new App\Dto\Cat()`: {} lacks "kind", which its constructor requires; null is used instead.'];
+        $refused = [self::AT . 'C/properties/cat/default: The default {} cannot be `new App\Dto\Cat()`: it lacks "kind", which the constructor requires; null is used instead.'];
 
         return [
             'required' => [['required' => ['kind'], 'properties' => ['kind' => ['type' => 'string']]], $refused],

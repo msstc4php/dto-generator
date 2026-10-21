@@ -13,8 +13,8 @@ All notable changes to this package are documented here. The format follows
   make a second, numbered one. A schema's own `title` no longer keeps it from sharing the class of a schema that says
   the same, and the schema holding the name derived from its place can lend it its class too. Of the GitHub
   specification's 5 name warnings, 1 is left, for two enums with different values.
-- The warning about a `default: {}` that cannot be `new Name()` because the class requires a property names the
-  property as the document does: `{} lacks "currentNumberScheduled", which its constructor requires`. Such a default
+- The warning about a `default: {}` that cannot be `new Name()` because the class requires properties names all of
+  them as the document does: `it lacks "currentNumberScheduled", which the constructor requires`. Such a default
   breaks the schema's own `required` (the 5 left in the Kubernetes specification), so `null` stays.
 
 ## [1.9.0] - 2026-10-21
