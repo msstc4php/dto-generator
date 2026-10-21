@@ -65,7 +65,7 @@ final class UnionDistribution
             foreach ($graph->all() as $resolved) {
                 $schema = $distribution->rewrite($resolved->schema(), $resolved);
                 if ($schema !== $resolved->schema()) {
-                    $changed[] = new ResolvedSchema($schema, $resolved->source(), $resolved->name(), $resolved->isSelected());
+                    $changed[] = new ResolvedSchema($schema, $resolved->source(), $resolved->name(), $resolved->isSelected(), $resolved->isNamedByPlace());
                 }
             }
 
@@ -277,7 +277,7 @@ final class UnionDistribution
     private function named(Schema $variant, ResolvedSchema $owner, string $name, array $at): Schema
     {
         [$kind, $position] = $at;
-        $this->added[] = new ResolvedSchema($variant, $owner->source(), $name, $owner->isSelected());
+        $this->added[] = new ResolvedSchema($variant, $owner->source(), $name, $owner->isSelected(), $owner->isNamedByPlace());
         $ref = $variant->location()->toString();
         $at = $owner->location()->child($kind, (string) $position);
         $this->edges[(new ReferenceUse($ref, $at))->key()] = $ref;

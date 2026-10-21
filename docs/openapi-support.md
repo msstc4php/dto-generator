@@ -2,8 +2,9 @@
 
 The generator reads OpenAPI 3.1 and 3.0 documents in YAML or JSON and generates a class for each schema in
 `components/schemas` that `sources[].include` selects, plus the schemas those refer to. Schemas follow JSON Schema
-2020-12, as OpenAPI 3.1 does; [3.0 keywords](#openapi-30) are read as 3.1 writes them. Paths and operations are not
-read.
+2020-12, as OpenAPI 3.1 does; [3.0 keywords](#openapi-30) are read as 3.1 writes them. With
+[`sources[].operations`](configuration.md#operations), the schemas written in request bodies and responses give
+classes too; parameters, headers, callbacks and `webhooks` are not read.
 
 ## Types
 

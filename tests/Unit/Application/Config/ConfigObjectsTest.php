@@ -9,6 +9,7 @@ use MSSTC4PHP\DtoGenerator\Application\Config\DtoSettings;
 use MSSTC4PHP\DtoGenerator\Application\Config\ExtensionSettings;
 use MSSTC4PHP\DtoGenerator\Application\Config\GeneratorConfig;
 use MSSTC4PHP\DtoGenerator\Application\Config\NameOverride;
+use MSSTC4PHP\DtoGenerator\Application\Config\OperationFilter;
 use MSSTC4PHP\DtoGenerator\Application\Config\SourceConfig;
 use MSSTC4PHP\DtoGenerator\Application\Config\TargetSettings;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
@@ -99,6 +100,30 @@ final class ConfigObjectsTest extends TestCase
 
         self::assertSame([$name], (new SourceConfig('/api.yaml', 'App', '/out', ['*'], [], [$name]))->withOutputDir('/other')->nameOverrides());
         self::assertSame([], (new SourceConfig('/api.yaml', 'App', '/out', ['*'], []))->nameOverrides());
+        $filter = OperationFilter::all();
+        self::assertSame($filter, (new SourceConfig('/api.yaml', 'App', '/out', ['*'], [], [], $filter))->withOutputDir('/other')->operations());
+        self::assertNull((new SourceConfig('/api.yaml', 'App', '/out', ['*'], []))->operations());
+    }
+
+    public function testSelectsOperationsByIncludeAndExcludeGlobs(): void
+    {
+        $filter = new OperationFilter(['pets*', 'get /admin/*'], ['*Delete']);
+
+        self::assertTrue($filter->selects('petsCreate'));
+        self::assertTrue($filter->selects('get /admin/users'));
+        self::assertFalse($filter->selects('petsDelete'));
+        self::assertFalse($filter->selects('ordersCreate'));
+        self::assertSame([['*'], []], [OperationFilter::all()->include(), OperationFilter::all()->exclude()]);
+        $gapped = new OperationFilter([1 => 'a'], [2 => 'b']);
+        self::assertSame([['a'], ['b']], [$gapped->include(), $gapped->exclude()]);
+    }
+
+    public function testAnOperationFilterNeedsAnIncludePattern(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('An operation filter must include at least one pattern.');
+
+        new OperationFilter([], ['a']);
     }
 
     /**

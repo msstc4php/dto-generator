@@ -6,6 +6,15 @@ All notable changes to this package are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `sources[].operations`: the schemas written in request bodies and responses give classes, named as
+  openapi-generator names them (their `title`, else `CreatePetRequest`, `CreatePet201Response`), and so do those of
+  `components/requestBodies` and `components/responses` the operations name. Off by default; `true` reads every
+  operation, and `include`/`exclude` globs over the operationId (or `<method> <path>`) pick them. Their names give
+  way to every name the components give. With it, the GitHub specification gives 7377 classes instead of 5828 (two
+  operations it cannot represent left out), OpenAI 4337 instead of 4319.
+
 ### Changed
 
 - An inline enum whose name another enum of its file holds shares that enum when the two have the same cases, even

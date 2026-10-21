@@ -24,12 +24,15 @@ final class SourceConfig
     /** @var list<NameOverride> */
     private array $nameOverrides;
 
+    private ?OperationFilter $operations;
+
     /**
      * @param list<string> $include glob patterns over component schema names
      * @param list<string> $exclude glob patterns over component schema names
      * @param list<NameOverride> $nameOverrides
+     * @param ?OperationFilter $operations the operations whose request bodies and responses give classes; null for none
      */
-    public function __construct(string $spec, string $namespace, string $outputDir, array $include, array $exclude, array $nameOverrides = [])
+    public function __construct(string $spec, string $namespace, string $outputDir, array $include, array $exclude, array $nameOverrides = [], ?OperationFilter $operations = null)
     {
         if (!Path::isAbsolute($spec) || !Path::isAbsolute($outputDir)) {
             throw new InvalidArgumentException('Source paths must be absolute.');
@@ -45,11 +48,12 @@ final class SourceConfig
         $this->include = $include;
         $this->exclude = $exclude;
         $this->nameOverrides = $nameOverrides;
+        $this->operations = $operations;
     }
 
     public function withOutputDir(string $outputDir): self
     {
-        return new self($this->spec, $this->namespace, $outputDir, $this->include, $this->exclude, $this->nameOverrides);
+        return new self($this->spec, $this->namespace, $outputDir, $this->include, $this->exclude, $this->nameOverrides, $this->operations);
     }
 
     /**
@@ -92,6 +96,11 @@ final class SourceConfig
     public function nameOverrides(): array
     {
         return $this->nameOverrides;
+    }
+
+    public function operations(): ?OperationFilter
+    {
+        return $this->operations;
     }
 
     /**

@@ -67,6 +67,8 @@ final class Action
         $enums = new EnumBuilder($this->names);
         /** @var list<array{Schema, string, int}> $aliases named non-object schemas with their name and source */
         $aliases = [];
+        /** @var list<array{Schema, string, int, bool}> $placed schemas named by their place, with the name, source and whether it is a class or enum */
+        $placed = [];
 
         foreach ($input->graph()->all() as $resolved) {
             $source = $resolved->source();
@@ -99,13 +101,23 @@ final class Action
             }
 
             if (!$isClass && !$isEnum) {
-                $aliases[] = [$schema, $resolved->name(), $source];
+                if ($resolved->isNamedByPlace()) {
+                    $placed[] = [$schema, $resolved->name(), $source, false];
+                } else {
+                    $aliases[] = [$schema, $resolved->name(), $source];
+                }
 
                 continue;
             }
 
             if ($schema->allOf() === [] && SchemaShape::hasUnion($schema) && !SchemaShape::isDiscriminated($schema)) {
                 $diagnostics->warning('"oneOf" and "anyOf" beside "properties" are not represented; the class keeps only its properties.', $schema->location());
+            }
+
+            if ($resolved->isNamedByPlace()) {
+                $placed[] = [$schema, $resolved->name(), $source, true];
+
+                continue;
             }
 
             $short = $this->shortName($schema, $resolved->name(), $diagnostics);
@@ -128,10 +140,23 @@ final class Action
         // Every named class is declared by now, so `allOf` can tell which members it may extend.
         $allOf = new AllOfResolver(new ClassLookup($input->graph(), $registry->declarations()), $config->dto()->allOfStrategy());
         $compositions = [];
-        // Inline classes are planned while walking, so the walk reaches inline objects nested in inline objects.
-        for ($index = 0; ($planned = $registry->plannedAt($index)) !== null; $index++) {
-            $compositions[$index] = $allOf->compose($planned[0], $diagnostics)->withCompanions(...$registry->companions($planned[0]));
-            $this->hoist($planned[0], $compositions[$index], $planned[1], $planned[2], $registry, $enums, $diagnostics, $input->graph());
+        // Inline classes are planned while walking, so the walk reaches inline objects nested in inline objects. The
+        // schemas named by their place come last, so that turning them on renames no class the components give.
+        $index = 0;
+        foreach ([[], $placed] as $round) {
+            foreach ($round as [$schema, $placeName, $source, $isClassOrEnum]) {
+                $namespace = $config->sources()[$source]->namespace();
+                if ($isClassOrEnum) {
+                    $this->declareInline($schema, $this->title($schema), $this->names->className($placeName), $placeName, $namespace, $source, $registry, $enums, $diagnostics);
+                } else {
+                    $this->hoistFromAlias($schema, $placeName, $namespace, $source, $registry, $enums, $diagnostics, $input->graph());
+                }
+            }
+
+            for (; ($planned = $registry->plannedAt($index)) !== null; $index++) {
+                $compositions[$index] = $allOf->compose($planned[0], $diagnostics)->withCompanions(...$registry->companions($planned[0]));
+                $this->hoist($planned[0], $compositions[$index], $planned[1], $planned[2], $registry, $enums, $diagnostics, $input->graph());
+            }
         }
 
         $parents = [];

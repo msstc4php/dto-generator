@@ -9,6 +9,7 @@ use MSSTC4PHP\DtoGenerator\Application\Config\ConfigFactory;
 use MSSTC4PHP\DtoGenerator\Application\Config\ExcludedExtension;
 use MSSTC4PHP\DtoGenerator\Application\Config\GeneratorConfig;
 use MSSTC4PHP\DtoGenerator\Application\Config\NameOverride;
+use MSSTC4PHP\DtoGenerator\Application\Config\OperationFilter;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostic;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
@@ -505,6 +506,64 @@ final class ConfigFactoryTest extends TestCase
             ['/sources/0/include/0', '/sources/0/exclude/0'],
             array_map(static fn (Diagnostic $error): string => substr($error->location()->toString(), strlen(self::PATH . '#')), $diagnostics->errors()),
         );
+    }
+
+    /**
+     * @param mixed $operations
+     * @param array{list<string>, list<string>}|null $expected include and exclude
+     *
+     * @dataProvider operations
+     */
+    public function testReadsWhichOperationsGiveClasses($operations, ?array $expected): void
+    {
+        $diagnostics = new Diagnostics();
+        $source = ['spec' => 'a.yaml', 'namespace' => 'App\Dto', 'outputDir' => 'src'];
+        $config = (new ConfigFactory())->create(['version' => 1, 'sources' => [$operations === 'absent' ? $source : $source + ['operations' => $operations]]], self::PATH, $diagnostics);
+
+        self::assertSame([], $diagnostics->all());
+        self::assertInstanceOf(GeneratorConfig::class, $config);
+        $filter = $config->sources()[0]->operations();
+        self::assertSame($expected, $filter instanceof OperationFilter ? [$filter->include(), $filter->exclude()] : null);
+    }
+
+    /**
+     * @return iterable<string, array{mixed, array{list<string>, list<string>}|null}>
+     */
+    public static function operations(): iterable
+    {
+        yield 'absent' => ['absent', null];
+        yield 'false' => [false, null];
+        yield 'true' => [true, [['*'], []]];
+        yield 'empty' => [[], [['*'], []]];
+        yield 'filtered' => [['include' => ['pets*'], 'exclude' => ['petsDelete']], [['pets*'], ['petsDelete']]];
+        yield 'excluded only' => [['exclude' => ['get /admin/*']], [['*'], ['get /admin/*']]];
+    }
+
+    /**
+     * @param mixed $operations
+     *
+     * @dataProvider malformedOperations
+     */
+    public function testReportsMalformedOperations($operations, string $error): void
+    {
+        $diagnostics = new Diagnostics();
+        $config = (new ConfigFactory())->create(['version' => 1, 'sources' => [['spec' => 'a.yaml', 'namespace' => 'App\Dto', 'outputDir' => 'src', 'operations' => $operations]]], self::PATH, $diagnostics);
+
+        self::assertNull($config);
+        self::assertSame(['error ' . self::PATH . '#/sources/0/operations' . $error], array_map(static fn (Diagnostic $d): string => $d->toString(), $diagnostics->all()));
+    }
+
+    /**
+     * @return iterable<string, array{mixed, string}>
+     */
+    public static function malformedOperations(): iterable
+    {
+        yield 'a string' => ['yes', ': "operations" must be true, false or an object of "include" and "exclude".'];
+        yield 'a list' => [['a'], ': "operations" must be true, false or an object of "include" and "exclude".'];
+        yield 'unknown key' => [['only' => ['a']], '/only: Unknown key "only"; expected one of: include, exclude.'];
+        yield 'empty include' => [['include' => []], '/include: "include" must not be empty.'];
+        yield 'no string' => [['exclude' => [1]], '/exclude/0: Expected a non-empty string.'];
+        yield 'no string to include' => [['include' => [1]], '/include/0: Expected a non-empty string.'];
     }
 
     public function testReadsTheNamesASourceGivesItsSchemas(): void

@@ -48,6 +48,18 @@ final class SchemaGraphTest extends TestCase
         self::assertSame('Money', $owned->name());
         self::assertFalse($owned->isSelected());
         self::assertSame($money->schema(), $owned->schema());
+        self::assertFalse($owned->isNamedByPlace());
+    }
+
+    public function testKeepsAPlaceNameThroughAnotherSource(): void
+    {
+        $money = $this->resolved('/api/common.json', '/Money', 'Money', null);
+        $placed = ResolvedSchema::namedByPlace($money->schema(), 1, 'get /money 200 Response')->withSource(3);
+
+        self::assertTrue($placed->isNamedByPlace());
+        self::assertTrue($placed->isSelected());
+        self::assertSame(3, $placed->source());
+        self::assertSame('get /money 200 Response', $placed->name());
     }
 
     public function testRejectsDuplicates(): void

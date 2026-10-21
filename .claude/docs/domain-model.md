@@ -27,7 +27,7 @@
 - `SchemaParser` всегда возвращает `Schema`; неверный keyword → диагностика и пропуск.
 - `SchemaGraph::resolve(ReferenceUse)` — по рёбрам, записанным при загрузке (не бросает); `Reference::target()` — `$ref` → `SchemaLocation` (лексически, без ФС); `null` для `scheme://`; якоря (`#Name`) не поддерживаются; фрагмент и путь проходят `rawurldecode`.
 - `Discriminator` хранит mapping нормализованным: голое имя → `#/components/schemas/<имя>`.
-- `SchemaGraph` — ключ `file#pointer`; `ResolvedSchema.source` — индекс источника-владельца; файл вне всех источников наследует владельца от ссылающихся, двое и более → ошибка неоднозначного namespace. `selected=false` — схема нужна только как цель ссылки (генерировать её всё равно придётся, иначе ссылка повиснет — решение этапа 2b).
+- `SchemaGraph` — ключ `file#pointer`; `ResolvedSchema.source` — индекс источника-владельца; файл вне всех источников наследует владельца от ссылающихся, двое и более → ошибка неоднозначного namespace. `selected=false` — схема нужна только как цель ссылки (генерировать её всё равно придётся, иначе ссылка повиснет — решение этапа 2b). `namedByPlace=true` (с 2026-10-21 UTC) — имя дано местом (схема тела запроса/ответа операции, `sources[].operations`): сборка объявляет её как inline-схему (`declareInline`), поэтому имя мягко уступает компоненту (reuse или номер + warning), а не даёт ошибку claim. `UnionDistribution` переносит флаг на копии и варианты.
 - `Capability::RESERVED_NAMESPACE_SEGMENTS` (8.0): ниже — `TargetResolver` отклоняет токены PHP 7.4 в namespace источников и типах `formats`.
 
 ## Builder (этап 2b)
