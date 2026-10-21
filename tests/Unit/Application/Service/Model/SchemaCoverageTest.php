@@ -214,6 +214,9 @@ final class SchemaCoverageTest extends TestCase
             [str_replace('error ', 'warning ', self::AT) . 'Holder/properties/either/oneOf/0: Class App\Dto\User is already generated from /project/api/openapi.yaml#/components/schemas/User, so this one becomes App\Dto\User2; set "x-php-class-name" to name it, in the document or "classNames" of the source.'],
             ModelFixture::messages($output),
         );
+        $classes = ModelFixture::classes($output);
+        self::assertSame(['id: int|null'], $classes['App\Dto\User2']);
+        self::assertSame(['m: string|null'], $classes['App\Dto\HolderEitherOption1']);
     }
 
     public function testMakesAClassOfAnInlineDiscriminatedUnionWithInlineVariants(): void

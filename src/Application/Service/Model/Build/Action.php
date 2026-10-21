@@ -582,9 +582,10 @@ final class Action
             return $name;
         }
 
-        for ($number = 2; $registry->isTaken($name); $number++) {
-            $name = $registry->className($namespace, $registry->baseOf($taken) . $number, $candidate);
-        }
+        $number = 2;
+        do {
+            $name = $registry->className($namespace, $registry->baseOf($taken) . $number++, $candidate);
+        } while ($registry->isTaken($name));
 
         $diagnostics->warning(
             sprintf('Class %s is already generated from %s, so this one becomes %s; set "x-php-class-name" to name it, in the document or "classNames" of the source.', $taken->fqcn(), (string) $registry->holder($taken), $name->fqcn()),
