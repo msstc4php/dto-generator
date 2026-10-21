@@ -6,6 +6,8 @@ All notable changes to this package are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-10-21
+
 ### Added
 
 - On PHP 8.1 and newer, a `default: {}` of a property whose type is a generated class is `new Name()` in the
@@ -374,7 +376,8 @@ First release.
 - A manifest per output directory: stale classes are deleted, files without the `@generated` header are never
   overwritten.
 
-[Unreleased]: https://github.com/msstc4php/dto-generator/compare/v1.8.1...HEAD
+[Unreleased]: https://github.com/msstc4php/dto-generator/compare/v1.9.0...HEAD
+[1.9.0]: https://github.com/msstc4php/dto-generator/compare/v1.8.1...v1.9.0
 [1.8.1]: https://github.com/msstc4php/dto-generator/compare/v1.8.0...v1.8.1
 [1.8.0]: https://github.com/msstc4php/dto-generator/compare/v1.7.0...v1.8.0
 [1.7.0]: https://github.com/msstc4php/dto-generator/compare/v1.6.0...v1.7.0
