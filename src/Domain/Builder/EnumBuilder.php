@@ -268,8 +268,9 @@ final class EnumBuilder
     }
 
     /**
-     * Values only their signs tell apart ("+1" and "-1"), or that have no other characters ("*"), get their signs as
-     * words; the names x-enum-varnames gives stay as written.
+     * Values only their signs tell apart ("+1" and "-1", "Etc/GMT+1" and "Etc/GMT-1"), or that have no other characters
+     * ("*"), get their signs as words ({@see NameResolver::spelledApart()}); the names x-enum-varnames gives stay as
+     * written.
      *
      * @param array<int, int|string> $values
      * @param array<int, array{string, int}> $varnames
@@ -281,28 +282,11 @@ final class EnumBuilder
         $groups = [];
         foreach ($values as $index => $value) {
             if (!isset($varnames[$index])) {
-                $groups[$this->names->enumCaseName($value) ?? ''][] = $index;
+                $groups[$this->names->enumCaseName($value) ?? ''][$index] = (string) $value;
             }
         }
 
-        $spelled = [];
-        $kept = [];
-        foreach ($groups as $case => $indexes) {
-            if ($case !== '' && count($indexes) === 1) {
-                $kept[] = $case;
-
-                continue;
-            }
-
-            $group = [];
-            foreach ($indexes as $index) {
-                $group[$index] = (string) $values[$index];
-            }
-
-            $spelled += array_filter($this->names->spelledApart($group, fn (string $value): ?string => $this->names->enumCaseName($value)), 'is_string');
-        }
-
-        return $this->names->undisputed($spelled, $kept);
+        return $this->names->spelledGroups($groups, fn (string $value): ?string => $this->names->enumCaseName($value));
     }
 
     /**

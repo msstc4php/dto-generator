@@ -33,6 +33,7 @@ final class NameResolverTest extends TestCase
         yield 'a sign at either end' => [['x+', 'x', 'x-'], ['X_PLUS', 'X', 'X_MINUS']];
         yield 'a sign between letters joins words' => [['in-progress', 'in_progress'], ['IN_PROGRESS', 'IN_PROGRESS']];
         yield 'no sign to spell' => [['§', '§§'], [null, null]];
+        yield 'a name without characters beside one with' => [['§-', 'x'], ['MINUS', 'X']];
         yield 'a case apart' => [['a.B', 'a.b'], ['A_B', 'A_B']];
         yield 'leading signs told apart keep their spelling' => [['+a.b', 'a.b'], ['PLUS_A_DOT_B', 'A_B']];
         yield 'a shared sign stays' => [['v1.0+1', 'v1.0-1'], ['V1_0_PLUS_1', 'V1_0_MINUS_1']];
@@ -40,13 +41,20 @@ final class NameResolverTest extends TestCase
         yield 'a name without characters' => [['§+', '§-'], ['PLUS', 'MINUS']];
         yield 'a sign after a digit' => [['a1-b', 'a1_b'], ['A1_MINUS_B', 'A1_B']];
         yield 'a sign before a digit' => [['a-1b', 'a_1b'], ['A_MINUS_1B', 'A_1B']];
+        yield 'a sign every name has, elsewhere' => [['x-1', 'x--1'], ['X_MINUS_1', 'X_MINUS_MINUS_1']];
+        yield 'signs every name has, in another order' => [['a+1-', 'a-1+'], ['A_PLUS_1_MINUS', 'A_MINUS_1_PLUS']];
+        yield 'a leading sign spelled with the rest' => [['+a.b', 'a.b+', 'a.b-'], ['PLUS_A_B', 'A_B_PLUS', 'A_B_MINUS']];
+        yield 'one more name spells a sign the others share' => [['a/1+', 'a/1-', 'a_1'], ['A_SLASH_1_PLUS', 'A_SLASH_1_MINUS', 'A_1']];
+        yield 'a letter beyond ASCII is no letter' => [['é-x', 'é_x'], ['é_MINUS_X', 'é_X']];
     }
 
     public function testComparesSpelledNamesWithoutLetterCase(): void
     {
         $resolver = new NameResolver();
 
-        self::assertSame(['a plus 1', 'A plus 1', 'a minus 1'], $resolver->spelledApart(['a+1', 'A+1', 'a-1'], static fn (string $name): string => trim(preg_replace('/ +/', ' ', $name) ?? '')));
+        $identifier = static fn (string $name): string => trim((string) preg_replace('/[^A-Za-z0-9]+/', '_', $name), '_');
+
+        self::assertSame(['a_plus_1', 'A_minus_1'], $resolver->spelledApart(['a+1', 'A-1'], $identifier));
     }
 
     /**

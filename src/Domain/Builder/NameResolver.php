@@ -117,23 +117,54 @@ final class NameResolver
     }
 
     /**
+     * The names of each group of names that give one name, spelled to tell them apart ({@see spelledApart()}); a name
+     * no other gives stays as it is, and a spelled name another name meets is left out, so that the collision is
+     * reported.
+     *
+     * @template TKey of array-key
+     *
+     * @param array<array-key, non-empty-array<TKey, string>> $groups by the name they give, '' for none
+     * @param callable(string): ?string $identifier gives the identifier of a spelled name
+     *
+     * @return array<TKey, string>
+     */
+    public function spelledGroups(array $groups, callable $identifier): array
+    {
+        $spelled = [];
+        $kept = [];
+        foreach ($groups as $plain => $names) {
+            $plain = (string) $plain;
+            if ($plain !== '' && count($names) === 1) {
+                $kept[] = $plain;
+
+                continue;
+            }
+
+            $spelled += array_filter($this->spelledApart($names, $identifier), 'is_string');
+        }
+
+        return $this->undisputed($spelled, $kept);
+    }
+
+    /**
      * Names that one name stands for, spelled to tell them apart: their leading signs as words, as {@see spelled()}
-     * writes them, or, where that leaves two alike, every sign some have and others lack, unless it stands between two
-     * letters ("Etc/GMT+1" and "Etc/GMT-1" become "Etc/GMT plus 1" and "Etc/GMT minus 1"). Names the first way tells
-     * apart keep it, as they always had.
+     * writes them; where that leaves two alike, the signs some have and others lack ("Etc/GMT+1" and "Etc/GMT-1"
+     * become "Etc/GMT plus 1" and "Etc/GMT minus 1"), else every sign. A sign between two letters joins words
+     * ("in-progress"), so it stays. Names the first way tells apart keep it, as they always had; one more name in a
+     * group that needs the others can spell more signs of theirs.
      *
      * @template TKey of array-key
      *
      * @param array<TKey, string> $names
-     * @param callable(string): ?string $name gives the identifier of a spelled name
+     * @param callable(string): ?string $identifier gives the identifier of a spelled name
      *
-     * @return array<TKey, ?string>
+     * @return array<TKey, ?string> the identifiers; those of the first way when no way tells them apart
      */
-    public function spelledApart(array $names, callable $name): array
+    public function spelledApart(array $names, callable $identifier): array
     {
         $spelled = [];
-        foreach ($names as $key => $each) {
-            $spelled[$key] = $name($this->spelled($each));
+        foreach ($names as $key => $original) {
+            $spelled[$key] = $identifier($this->spelled($original));
         }
 
         if (!$this->clash($spelled)) {
@@ -142,18 +173,20 @@ final class NameResolver
 
         $present = [];
         $shared = null;
-        foreach ($names as $each) {
-            $characters = str_split($each);
+        foreach ($names as $original) {
+            $characters = str_split($original);
             $present = array_merge($present, $characters);
             $shared = $shared === null ? $characters : array_intersect($shared, $characters);
         }
 
-        $apart = array_intersect_key(self::SIGNS, array_flip(array_diff($present, (array) $shared)));
-        if ($apart === []) {
-            return $spelled;
+        foreach ([array_intersect_key(self::SIGNS, array_flip(array_diff($present, (array) $shared))), self::SIGNS] as $signs) {
+            $within = array_map(fn (string $original): ?string => $identifier($this->spelledWithin($original, $signs)), $names);
+            if (!$this->clash($within)) {
+                return $within;
+            }
         }
 
-        return array_map(fn (string $each): ?string => $name($this->spelledWithin($each, $apart)), $names);
+        return $spelled;
     }
 
     /**
@@ -175,14 +208,12 @@ final class NameResolver
     }
 
     /**
-     * A sign between letters joins words ("in-progress"), so it is no sign to spell.
-     *
      * @param array<string, string> $signs the signs to spell, with their words
      */
     private function spelledWithin(string $name, array $signs): string
     {
         $characters = str_split($name);
-        $isLetter = static fn (int $at): bool => ctype_alpha($characters[$at] ?? '');
+        $isLetter = static fn (int $at): bool => strspn($characters[$at] ?? '', 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz') === 1;
         foreach ($characters as $at => $character) {
             if (isset($signs[$character]) && (!$isLetter($at - 1) || !$isLetter($at + 1))) {
                 $characters[$at] = ' ' . $signs[$character] . ' ';
@@ -197,9 +228,13 @@ final class NameResolver
      */
     private function clash(array $names): bool
     {
+        if (in_array(null, $names, true)) {
+            return true;
+        }
+
         $lower = array_map(static fn (?string $name): string => Identifier::asciiLower((string) $name), $names);
 
-        return in_array(null, $names, true) || count(array_unique($lower)) < count($lower);
+        return count(array_unique($lower)) < count($lower);
     }
 
     /**

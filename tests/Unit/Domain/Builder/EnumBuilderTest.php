@@ -63,6 +63,14 @@ final class EnumBuilderTest extends TestCase
         self::assertSame(['ETC_GMT_PLUS_1' => 'Etc/GMT+1', 'ETC_GMT_MINUS_1' => 'Etc/GMT-1', 'ETC_GMT' => 'Etc/GMT', 'UTC' => 'UTC'], $this->cases($enum));
     }
 
+    public function testReportsValuesThatASignBetweenLettersAloneTellsApart(): void
+    {
+        [$enum, $messages] = $this->build(['type' => 'string', 'enum' => ['in-progress', 'in_progress']]);
+
+        self::assertNull($enum);
+        self::assertSame(['error /project/api/openapi.yaml#/components/schemas/E/enum/1: Enum values "in-progress" and "in_progress" both become case IN_PROGRESS.'], $messages);
+    }
+
     public function testKeepsTheValueWhoseSpelledCaseMeetsAnother(): void
     {
         [$enum, $messages] = $this->build(['type' => 'string', 'enum' => ['+1', '-1', 'plus_1', '*']]);
