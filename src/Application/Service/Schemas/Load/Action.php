@@ -72,7 +72,12 @@ final class Action
             $this->checkOpenApiVersion($document, $diagnostics);
             $filter = $source->operations();
             $operations = $filter instanceof OperationFilter ? Operations::of($document->path(), $document->root(), $filter, $diagnostics) : [];
-            foreach ($this->componentSchemas($document, $operations !== [], $diagnostics) as [$name, $node]) {
+            $components = $this->componentSchemas($document, $diagnostics);
+            if ($components === null && $operations === []) {
+                $diagnostics->warning('The specification has no components/schemas; nothing to generate.', (new SchemaLocation($document->path()))->child('components', 'schemas'));
+            }
+
+            foreach ($components ?? [] as [$name, $node]) {
                 if (!$source->selects($name)) {
                     continue;
                 }
@@ -84,7 +89,7 @@ final class Action
             }
 
             foreach ($operations as [$name, $node, $location]) {
-                $schema = new ResolvedSchema($reader->component($document, $node, $location, $diagnostics), $index, $name, true, true);
+                $schema = ResolvedSchema::namedByPlace($reader->component($document, $node, $location, $diagnostics), $index, $name);
                 $graph->add($schema);
                 $queue[] = $schema;
             }
@@ -230,9 +235,10 @@ final class Action
     }
 
     /**
-     * @return list<array{string, JsonValue}> name and node, in document order; numeric names stay strings
+     * @return list<array{string, JsonValue}>|null name and node, in document order (numeric names stay strings); null
+     *                                             when the document has no component schemas
      */
-    private function componentSchemas(Document $document, bool $hasOperations, Diagnostics $diagnostics): array
+    private function componentSchemas(Document $document, Diagnostics $diagnostics): ?array
     {
         $at = (new SchemaLocation($document->path()))->child('components', 'schemas');
         $components = $document->root()['components'] ?? null;
@@ -244,11 +250,7 @@ final class Action
 
         $schemas = is_array($components) ? ($components['schemas'] ?? null) : null;
         if ($schemas === null) {
-            if (!$hasOperations) {
-                $diagnostics->warning('The specification has no components/schemas; nothing to generate.', $at);
-            }
-
-            return [];
+            return null;
         }
 
         if (!is_array($schemas) || ($schemas !== [] && Json::isList($schemas))) {

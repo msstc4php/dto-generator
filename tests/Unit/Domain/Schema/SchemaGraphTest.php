@@ -48,6 +48,9 @@ final class SchemaGraphTest extends TestCase
         self::assertSame('Money', $owned->name());
         self::assertFalse($owned->isSelected());
         self::assertSame($money->schema(), $owned->schema());
+        self::assertFalse($owned->isNamedByPlace());
+        $placed = ResolvedSchema::namedByPlace($money->schema(), 1, 'get /money 200 Response');
+        self::assertSame([true, true, 3, 'get /money 200 Response'], [$placed->withSource(3)->isNamedByPlace(), $placed->isSelected(), $placed->withSource(3)->source(), $placed->name()]);
     }
 
     public function testRejectsDuplicates(): void

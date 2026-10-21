@@ -46,14 +46,21 @@ final class LoadOperationsTest extends TestCase
         ], $this->summary($output));
     }
 
-    public function testNamesTheRequestBodiesAndResponsesOfComponents(): void
+    public function testReadsTheRequestBodiesAndResponsesOfComponentsTheOperationsName(): void
     {
-        $output = $this->load(['components' => [
-            'schemas' => ['Pet' => self::OBJECT],
-            'requestBodies' => ['NewPet' => $this->json(self::OBJECT)],
-            'responses' => ['NotFound' => $this->json(self::OBJECT)],
-        ]]);
+        $output = $this->load([
+            'paths' => ['/pets/{id}' => [
+                'post' => ['operationId' => 'a', 'requestBody' => ['$ref' => '#/components/requestBodies/NewPet'], 'responses' => ['404' => ['$ref' => 'openapi.yaml#/components/responses/NotFound']]],
+                'put' => ['operationId' => 'b', 'requestBody' => ['$ref' => '#/components/requestBodies/NewPet'], 'responses' => ['404' => ['$ref' => '#/components/responses/NotFound'], '410' => ['$ref' => '#/components/responses/Gone']]],
+            ]],
+            'components' => [
+                'schemas' => ['Pet' => self::OBJECT],
+                'requestBodies' => ['NewPet' => $this->json(self::OBJECT), 'Unused' => $this->json(self::OBJECT)],
+                'responses' => ['NotFound' => $this->json(self::OBJECT), 'Gone' => ['$ref' => '#/components/responses/Loop'], 'Loop' => ['$ref' => '#/components/responses/Loop']],
+            ],
+        ]);
 
+        self::assertSame([], $this->messages($output));
         self::assertSame([
             ['Pet', self::SPEC . '#/components/schemas/Pet'],
             ['NewPet Request', self::SPEC . '#/components/requestBodies/NewPet/content/application~1json/schema'],
@@ -61,6 +68,7 @@ final class LoadOperationsTest extends TestCase
         ], $this->summary($output));
         self::assertSame([false, true, true], array_map(static fn (ResolvedSchema $schema): bool => $schema->isNamedByPlace(), $output->graph()->all()));
         self::assertSame([true, true, true], array_map(static fn (ResolvedSchema $schema): bool => $schema->isSelected(), $output->graph()->all()));
+        self::assertSame([0, 0, 0], array_map(static fn (ResolvedSchema $schema): ?int => $schema->source(), $output->graph()->all()));
     }
 
     public function testPrefersTheFirstJsonMediaTypeAndElseTakesTheFirstWithASchema(): void
@@ -98,6 +106,13 @@ final class LoadOperationsTest extends TestCase
             'paths' => ['/pets/{id}' => ['get' => ['operationId' => 'a', 'responses' => [
                 '200' => $this->json(['$ref' => '#/components/schemas/Pet']),
                 '201' => $this->json(['$ref' => '#/components/schemas/Pet', 'description' => 'Created.']),
+                '202' => $this->json(['allOf' => [['$ref' => '#/components/schemas/Pet']], 'description' => 'Accepted.', 'title' => 'A']),
+                '203' => $this->json(['allOf' => [['$ref' => '#/components/schemas/Pet']], 'required' => ['a']]),
+                '204' => $this->json(['allOf' => [['$ref' => '#/components/schemas/Pet'], ['$ref' => '#/components/schemas/Pet']]]),
+                '205' => $this->json(['allOf' => [['$ref' => '#/components/schemas/Pet', 'description' => 'Pet.']]]),
+                '206' => $this->json(['allOf' => ['a' => ['$ref' => '#/components/schemas/Pet']]]),
+                '207' => $this->json(['allOf' => [true]]),
+                '208' => $this->json(['allOf' => true]),
             ]]]],
             'components' => ['schemas' => ['Pet' => self::OBJECT]],
         ]);
@@ -105,6 +120,12 @@ final class LoadOperationsTest extends TestCase
         self::assertSame([
             ['Pet', self::SPEC . '#/components/schemas/Pet'],
             ['a 201 Response', self::AT . 'get/responses/201/content/application~1json/schema'],
+            ['a 203 Response', self::AT . 'get/responses/203/content/application~1json/schema'],
+            ['a 204 Response', self::AT . 'get/responses/204/content/application~1json/schema'],
+            ['a 205 Response', self::AT . 'get/responses/205/content/application~1json/schema'],
+            ['a 206 Response', self::AT . 'get/responses/206/content/application~1json/schema'],
+            ['a 207 Response', self::AT . 'get/responses/207/content/application~1json/schema'],
+            ['a 208 Response', self::AT . 'get/responses/208/content/application~1json/schema'],
         ], $this->summary($output));
     }
 
@@ -115,7 +136,14 @@ final class LoadOperationsTest extends TestCase
                 '/pets/{id}' => ['post' => [
                     'operationId' => 'a',
                     'requestBody' => ['$ref' => '#/components/requestBodies/NewPet'] + $this->json(self::OBJECT),
-                    'responses' => ['200' => ['$ref' => '#/components/responses/Pet'], '404' => ['$ref' => 'common.yaml#/NotFound'], '410' => ['$ref' => '#/components/responsesOld/Gone']],
+                    'responses' => [
+                        '200' => ['$ref' => '#/components/responses/Pet'],
+                        '404' => ['$ref' => 'common.yaml#/NotFound'],
+                        '410' => ['$ref' => '#/components/responsesOld/Gone'],
+                        '411' => ['$ref' => '#/components/responses/Pet/content'],
+                        '412' => ['$ref' => '#Anchor'],
+                        '413' => ['$ref' => '#/components/responses/Missing'],
+                    ],
                 ]],
                 '/cats' => ['$ref' => 'cats.yaml#/paths/~1cats', 'get' => ['responses' => ['200' => $this->json(self::OBJECT)]]],
             ],
@@ -125,6 +153,8 @@ final class LoadOperationsTest extends TestCase
         self::assertSame([
             'warning ' . self::AT . 'post/responses/404/$ref: Only a request body or response of this document\'s components is read behind "$ref"; common.yaml#/NotFound gives no class.',
             'warning ' . self::AT . 'post/responses/410/$ref: Only a request body or response of this document\'s components is read behind "$ref"; #/components/responsesOld/Gone gives no class.',
+            'warning ' . self::AT . 'post/responses/411/$ref: Only a request body or response of this document\'s components is read behind "$ref"; #/components/responses/Pet/content gives no class.',
+            'warning ' . self::AT . 'post/responses/412/$ref: Only a request body or response of this document\'s components is read behind "$ref"; #Anchor gives no class.',
             'warning ' . self::SPEC . '#/paths/~1cats/$ref: A path item behind "$ref" is not read; its operations give no classes.',
         ], $this->messages($output));
         self::assertSame(['NewPet Request', 'Pet Response'], array_column($this->summary($output), 0));
@@ -135,13 +165,18 @@ final class LoadOperationsTest extends TestCase
         $operation = static fn (string $id): array => ['operationId' => $id, 'requestBody' => ['content' => ['application/json' => ['schema' => self::OBJECT]]]];
         $output = $this->load(
             [
-                'paths' => ['/pets/{id}' => ['post' => $operation('createPet'), 'put' => $operation('updatePet'), 'patch' => $operation('patchPet'), 'delete' => ['requestBody' => $this->json(self::OBJECT)]]],
+                'paths' => ['/pets/{id}' => [
+                    'post' => $operation('createPet'),
+                    'put' => ['operationId' => 'updatePet', 'requestBody' => ['$ref' => '#/components/requestBodies/OldPet']],
+                    'patch' => ['operationId' => ' patchPet ', 'requestBody' => ['$ref' => '#/components/requestBodies/NewPet']],
+                    'delete' => ['requestBody' => $this->json(self::OBJECT)],
+                ]],
                 'components' => ['requestBodies' => ['OldPet' => $this->json(self::OBJECT), 'NewPet' => $this->json(self::OBJECT)]],
             ],
-            new OperationFilter(['*Pet', 'delete /pets/*', 'NewPet'], ['update*', 'Old*']),
+            new OperationFilter(['*Pet', 'delete /pets/*'], ['update*']),
         );
 
-        self::assertSame(['createPet Request', 'delete /pets/{id} Request', 'patchPet Request', 'NewPet Request'], array_column($this->summary($output), 0));
+        self::assertSame(['createPet Request', 'delete /pets/{id} Request', 'NewPet Request'], array_column($this->summary($output), 0));
     }
 
     public function testReadsNoOperationsUnlessAsked(): void

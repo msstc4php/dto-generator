@@ -29,9 +29,9 @@ final class OperationsBuildTest extends TestCase
 
         self::assertSame([], ModelFixture::messages($output));
         self::assertSame([
+            'App\Dto\CreatePetDefaultResponseItem' => ['name: string|null'],
             'App\Dto\CreatePetRequest' => ['kind: App\Dto\CreatePetRequestKind|null'],
             'App\Dto\CreatePet201Response' => ['name: string|null'],
-            'App\Dto\CreatePetDefaultResponseItem' => ['name: string|null'],
         ], ModelFixture::classes($output));
         self::assertSame(['App\Dto\GetPets200Response', 'App\Dto\CreatePetRequestKind'], ModelFixture::enums($output));
     }
@@ -56,13 +56,55 @@ final class OperationsBuildTest extends TestCase
 
     public function testTakesTheNameTheSchemaGivesItself(): void
     {
-        $output = ModelFixture::operations(['paths' => ['/pets' => ['post' => [
-            'requestBody' => $this->json(['x-php-class-name' => 'NewPet'] + self::PET),
-            'responses' => ['200' => $this->json(['title' => 'Ignored'] + self::PET)],
-        ]]]]);
+        $output = ModelFixture::operations([
+            'paths' => ['/pets' => ['post' => [
+                'requestBody' => $this->json(['x-php-class-name' => 'NewPet', 'title' => 'Other'] + self::PET),
+                'responses' => ['200' => $this->json(['title' => 'pet list'] + self::PET), '201' => $this->json(['title' => 'Taken'] + self::PET)],
+            ]]],
+            'components' => ['schemas' => ['Taken' => ['type' => 'object', 'properties' => ['t' => ['type' => 'string']]]]],
+        ]);
 
         self::assertSame([], ModelFixture::messages($output));
-        self::assertSame(['App\Dto\NewPet', 'App\Dto\PostPets200Response'], array_keys(ModelFixture::classes($output)));
+        self::assertSame(['App\Dto\Taken', 'App\Dto\NewPet', 'App\Dto\PetList', 'App\Dto\PostPets201Response'], array_keys(ModelFixture::classes($output)));
+    }
+
+    public function testLeavesTheNamesOfTheComponentsAsTheyAre(): void
+    {
+        $output = ModelFixture::operations([
+            'paths' => ['/batch' => ['post' => ['operationId' => 'batch', 'responses' => ['default' => ['$ref' => '#/components/responses/Batch']]]]],
+            'components' => [
+                'schemas' => ['Batch' => ['type' => 'object', 'properties' => ['response' => self::PET]]],
+                'responses' => ['Batch' => $this->json(['type' => 'object', 'properties' => ['id' => ['type' => 'integer']]])],
+            ],
+        ]);
+
+        self::assertSame(
+            ['warning /project/api/openapi.yaml#/components/responses/Batch/content/application~1json/schema: Class App\Dto\BatchResponse is already generated from /project/api/openapi.yaml#/components/schemas/Batch/properties/response, so this one becomes App\Dto\BatchResponse2; set "x-php-class-name" to name it, in the document or "classNames" of the source.'],
+            ModelFixture::messages($output),
+        );
+        self::assertSame(['name: string|null'], ModelFixture::classes($output)['App\Dto\BatchResponse']);
+        self::assertSame(['id: int|null'], ModelFixture::classes($output)['App\Dto\BatchResponse2']);
+    }
+
+    public function testNamesTheVariantsOfABodyDistributedOverAUnionByTheirPlace(): void
+    {
+        $output = ModelFixture::operations([
+            'paths' => ['/pets' => ['post' => ['operationId' => 'createPet', 'requestBody' => $this->json([
+                'allOf' => [['anyOf' => [['$ref' => '#/components/schemas/Cat'], ['$ref' => '#/components/schemas/Dog']]], ['properties' => ['note' => ['type' => 'string']]]],
+            ])]]],
+            'components' => ['schemas' => [
+                'Cat' => self::PET,
+                'Dog' => ['type' => 'object', 'properties' => ['bark' => ['type' => 'string']]],
+                'CreatePetRequestCat' => ['type' => 'object', 'properties' => ['other' => ['type' => 'string']]],
+            ]],
+        ]);
+
+        self::assertSame(
+            ['warning /project/api/openapi.yaml#/paths/~1pets/post/requestBody/content/application~1json/schema/x-dto-variant/0/0: Class App\Dto\CreatePetRequestCat is already generated from /project/api/openapi.yaml#/components/schemas/CreatePetRequestCat, so this one becomes App\Dto\CreatePetRequestCat2; set "x-php-class-name" to name it, in the document or "classNames" of the source.'],
+            ModelFixture::messages($output),
+        );
+        self::assertArrayHasKey('App\Dto\CreatePetRequestCat2', ModelFixture::classes($output));
+        self::assertArrayHasKey('App\Dto\CreatePetRequestDog', ModelFixture::classes($output));
     }
 
     public function testMakesNoClassOfAScalar(): void

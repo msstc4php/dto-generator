@@ -399,13 +399,12 @@ final class ConfigFactory
 
         $include = $section->stringList('include', ['*']);
         $exclude = $section->stringList('exclude', []);
-        if ($include === []) {
+        if ($section->raw('include') === []) {
             $section->error('include', 'must not be empty');
-
-            return null;
         }
 
-        return new OperationFilter($include, $exclude);
+        // An include with no valid pattern is reported already.
+        return $include === [] ? null : new OperationFilter($include, $exclude);
     }
 
     /**

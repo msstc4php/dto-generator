@@ -215,8 +215,8 @@ extensions by package name. Attributes are written in that order.
 
 Off by default, so that a newer generator adds no classes by itself. `true` reads every operation; an object picks
 them with glob patterns, `include` (default `['*']`) and `exclude` (default `[]`), over the operationId, or
-`<method> <path>` in lower case (`get /pets/{id}`) for an operation without one, and over the names of
-`components/requestBodies` and `components/responses`:
+`<method> <path>` for an operation without one: the method in lower case, the path as written (`get /pets/{petId}`).
+`{}` (and `[]`, which YAML and JSON cannot tell from it) reads every operation too.
 
 ```yaml
 sources:
@@ -226,17 +226,19 @@ sources:
     operations: { exclude: ['checks/create', 'repos/get-content'] }
 ```
 
-- A schema written in a request body or response gives a class or enum named as openapi-generator names it:
-  `<operationId>Request` and `<operationId><status>Response` (`CreatePetRequest`, `CreatePet201Response`,
-  `CreatePetDefaultResponse`); `components/requestBodies/NewPet` gives `NewPetRequest` and `components/responses/Error`
-  `ErrorResponse`. An array or a map of inline objects gives `…Item` and `…Value`, as a named alias does; a scalar gives
-  nothing. `x-php-class-name` (or `classNames`) names it otherwise.
-- The name gives way as the name of an inline schema does: when a component holds it, the schema shares the
-  component's class if the two say the same, else takes the name numbered from 2, with a warning.
+- A schema written in a request body or response gives a class or enum named after its `title`, as openapi-generator
+  names it, or else after its place: `<operationId>Request` and `<operationId><status>Response` (`CreatePetRequest`,
+  `CreatePet201Response`, `CreatePetDefaultResponse`). An array or a map of inline objects gives `…Item` and
+  `…Value`, as a named alias does; a scalar gives nothing. `x-php-class-name` (or `classNames`) names it otherwise.
+- A request body or response behind a `$ref` into `components/requestBodies` or `components/responses` of the same
+  document is read there, once, when an operation that is read names it: `NewPetRequest`, `NotFoundResponse`. Any
+  other `$ref`, and a path item behind a `$ref`, gives a warning and no class.
+- The names give way as inline names do, and only after every class the components give has its name, so turning
+  `operations` on renames none of those: a name a component holds goes to its title's place name, to the component's
+  class when the two say the same, or else is numbered from 2, with a warning.
 - Of a body's media types, the first JSON one (`application/json`, `…+json`) is read, else the first that has a schema.
-- A schema that is a `$ref` alone gives no class: the schema it names has one. A request body or response behind a
-  `$ref` is read where it is, in `components` of the same document; any other `$ref`, and a path item behind a
-  `$ref`, gives a warning and no class.
+- A schema that only names another, a `$ref` alone or an `allOf` of one `$ref` with only annotations beside it
+  (`description`, `title`, `example`, `examples`, `deprecated`), gives no class: the other has one.
 - An operation whose schema the generator cannot represent fails the run, as such a component does; leave it out with
   `exclude`.
 

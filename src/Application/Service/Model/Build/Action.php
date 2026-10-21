@@ -124,10 +124,6 @@ final class Action
         }
 
         // Only once every named schema holds its name, so a derived or titled inline name never takes one.
-        foreach ($placed as [$schema, $placeName, $source]) {
-            $this->declareInline($schema, null, $this->names->className($placeName), $placeName, $config->sources()[$source]->namespace(), $source, $registry, $enums, $diagnostics);
-        }
-
         foreach ($aliases as [$alias, $aliasName, $source]) {
             $this->hoistFromAlias($alias, $aliasName, $config->sources()[$source]->namespace(), $source, $registry, $enums, $diagnostics, $input->graph());
         }
@@ -140,10 +136,18 @@ final class Action
         // Every named class is declared by now, so `allOf` can tell which members it may extend.
         $allOf = new AllOfResolver(new ClassLookup($input->graph(), $registry->declarations()), $config->dto()->allOfStrategy());
         $compositions = [];
-        // Inline classes are planned while walking, so the walk reaches inline objects nested in inline objects.
-        for ($index = 0; ($planned = $registry->plannedAt($index)) !== null; $index++) {
-            $compositions[$index] = $allOf->compose($planned[0], $diagnostics)->withCompanions(...$registry->companions($planned[0]));
-            $this->hoist($planned[0], $compositions[$index], $planned[1], $planned[2], $registry, $enums, $diagnostics, $input->graph());
+        // Inline classes are planned while walking, so the walk reaches inline objects nested in inline objects. The
+        // schemas named by their place come last, so that turning them on renames no class the components give.
+        $index = 0;
+        foreach ([[], $placed] as $round) {
+            foreach ($round as [$schema, $placeName, $source]) {
+                $this->declareInline($schema, $this->title($schema), $this->names->className($placeName), $placeName, $config->sources()[$source]->namespace(), $source, $registry, $enums, $diagnostics);
+            }
+
+            for (; ($planned = $registry->plannedAt($index)) !== null; $index++) {
+                $compositions[$index] = $allOf->compose($planned[0], $diagnostics)->withCompanions(...$registry->companions($planned[0]));
+                $this->hoist($planned[0], $compositions[$index], $planned[1], $planned[2], $registry, $enums, $diagnostics, $input->graph());
+            }
         }
 
         $parents = [];

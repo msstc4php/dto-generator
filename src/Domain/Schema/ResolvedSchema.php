@@ -41,6 +41,14 @@ final class ResolvedSchema
         $this->namedByPlace = $namedByPlace;
     }
 
+    /**
+     * A schema whose name tells where it is, as an inline schema's does: an operation's request body or response.
+     */
+    public static function namedByPlace(Schema $schema, int $source, string $name): self
+    {
+        return new self($schema, $source, $name, true, true);
+    }
+
     public function schema(): Schema
     {
         return $this->schema;

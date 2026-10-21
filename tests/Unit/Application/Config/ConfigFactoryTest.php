@@ -563,6 +563,7 @@ final class ConfigFactoryTest extends TestCase
         yield 'unknown key' => [['only' => ['a']], '/only: Unknown key "only"; expected one of: include, exclude.'];
         yield 'empty include' => [['include' => []], '/include: "include" must not be empty.'];
         yield 'no string' => [['exclude' => [1]], '/exclude/0: Expected a non-empty string.'];
+        yield 'no string to include' => [['include' => [1]], '/include/0: Expected a non-empty string.'];
     }
 
     public function testReadsTheNamesASourceGivesItsSchemas(): void

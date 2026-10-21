@@ -6,13 +6,17 @@ namespace MSSTC4PHP\DtoGenerator\Application\Service\Schemas\Load;
 
 use MSSTC4PHP\DtoGenerator\Application\Config\OperationFilter;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
+use MSSTC4PHP\DtoGenerator\Domain\Exception\InvalidModel;
+use MSSTC4PHP\DtoGenerator\Domain\Schema\JsonPointer;
+use MSSTC4PHP\DtoGenerator\Domain\Schema\Reference;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
 
 /**
- * The schemas of a document's request bodies and responses, named as openapi-generator names them:
+ * The schemas of the request bodies and responses of a document's operations, named as openapi-generator names them:
  * `<operationId> Request` and `<operationId> <status> Response`, `<method> <path>` standing in for a missing
- * operationId; a request body or response of `components` is `<name> Request` or `<name> Response`.
+ * operationId. A body behind a `$ref` into `components` of the document is read there, once, as `<name> Request` or
+ * `<name> Response`.
  *
  * @phpstan-import-type JsonValue from Json
  */
@@ -22,24 +26,35 @@ final class Operations
 
     private const COMPONENTS = ['requestBodies' => 'Request', 'responses' => 'Response'];
 
+    /** Keywords that only describe: a schema with them beside an allOf of one `$ref` says what the `$ref` says. */
+    private const ANNOTATIONS = ['allOf', 'title', 'description', 'example', 'examples', 'deprecated'];
+
     private SchemaLocation $document;
 
-    private OperationFilter $filter;
+    /** @var array<array-key, mixed> */
+    private array $root;
 
     private Diagnostics $diagnostics;
 
     /** @var list<array{string, JsonValue, SchemaLocation}> */
     private array $schemas = [];
 
-    private function __construct(string $path, OperationFilter $filter, Diagnostics $diagnostics)
+    /** @var list<string> pointers of the components already read */
+    private array $components = [];
+
+    /**
+     * @param array<array-key, mixed> $root
+     */
+    private function __construct(string $path, array $root, Diagnostics $diagnostics)
     {
         $this->document = new SchemaLocation($path);
-        $this->filter = $filter;
+        $this->root = $root;
         $this->diagnostics = $diagnostics;
     }
 
     /**
-     * Only the schemas written there: one behind a `$ref` alone has a name of its own.
+     * Only the schemas written there: one that only names another (a `$ref` alone, or in an allOf with nothing but
+     * annotations) gives no class, as the other has one.
      *
      * @param array<array-key, mixed> $root as a Document holds it
      *
@@ -47,20 +62,9 @@ final class Operations
      */
     public static function of(string $path, array $root, OperationFilter $filter, Diagnostics $diagnostics): array
     {
-        $operations = new self($path, $filter, $diagnostics);
+        $operations = new self($path, $root, $diagnostics);
         foreach (self::objects(Json::value($root['paths'] ?? null)) as $pattern => $item) {
-            $operations->pathItem((string) $pattern, $item);
-        }
-
-        $components = self::objects(Json::value($root['components'] ?? null));
-        foreach (self::COMPONENTS as $kind => $suffix) {
-            foreach (self::objects(Json::value($components[$kind] ?? null)) as $name => $object) {
-                if (!$filter->selects((string) $name)) {
-                    continue;
-                }
-
-                $operations->body($object, $name . ' ' . $suffix, $operations->document->child('components', $kind, (string) $name));
-            }
+            $operations->pathItem((string) $pattern, $item, $filter);
         }
 
         return $operations->schemas;
@@ -69,7 +73,7 @@ final class Operations
     /**
      * @param array<array-key, mixed> $item
      */
-    private function pathItem(string $pattern, array $item): void
+    private function pathItem(string $pattern, array $item, OperationFilter $filter): void
     {
         $at = $this->document->child('paths', $pattern);
         if (isset($item['$ref'])) {
@@ -85,8 +89,9 @@ final class Operations
             }
 
             $id = $operation['operationId'] ?? null;
-            $name = is_string($id) && trim($id) !== '' ? $id : $method . ' ' . $pattern;
-            if (!$this->filter->selects($name)) {
+            $id = is_string($id) ? trim($id) : '';
+            $name = $id !== '' ? $id : $method . ' ' . $pattern;
+            if (!$filter->selects($name)) {
                 continue;
             }
 
@@ -110,9 +115,7 @@ final class Operations
     {
         $ref = $body['$ref'] ?? null;
         if (is_string($ref)) {
-            if (!$this->namesComponent($ref)) {
-                $this->diagnostics->warning(sprintf('Only a request body or response of this document\'s components is read behind "$ref"; %s gives no class.', $ref), $at->child('$ref'));
-            }
+            $this->component($ref, $at);
 
             return;
         }
@@ -138,22 +141,63 @@ final class Operations
         }
 
         [$media, $schema] = $chosen;
-        if (is_array($schema) && array_keys($schema) === ['$ref']) {
+        $schema = Json::value($schema);
+        if (!$this->onlyNamesAnother($schema)) {
+            $this->schemas[] = [$name, $schema, $at->child('content', $media, 'schema')];
+        }
+    }
+
+    /**
+     * Reads the request body or response of `components` a `$ref` names, unless it was read already.
+     */
+    private function component(string $ref, SchemaLocation $at): void
+    {
+        $target = null;
+        try {
+            $target = Reference::target($ref, $at);
+        } catch (InvalidModel $exception) {
+            // Reported below as any reference that names no component.
+        }
+
+        $segments = $target instanceof SchemaLocation && $target->file() === $this->document->file() ? JsonPointer::segments($target->pointer()) : [];
+        $suffix = count($segments) === 3 && $segments[0] === 'components' ? self::COMPONENTS[$segments[1]] ?? null : null;
+        if ($suffix === null) {
+            $this->diagnostics->warning(sprintf('Only a request body or response of this document\'s components is read behind "$ref"; %s gives no class.', $ref), $at->child('$ref'));
+
             return;
         }
 
-        $this->schemas[] = [$name, Json::value($schema), $at->child('content', $media, 'schema')];
-    }
-
-    private function namesComponent(string $ref): bool
-    {
-        foreach (array_keys(self::COMPONENTS) as $kind) {
-            if (strpos($ref, '#/components/' . $kind . '/') === 0) {
-                return true;
-            }
+        [, $kind, $name] = $segments;
+        $pointer = JsonPointer::fromSegments('components', $kind, $name);
+        // Several operations name one, and one may name itself.
+        if (in_array($pointer, $this->components, true)) {
+            return;
         }
 
-        return false;
+        $this->components[] = $pointer;
+        $component = JsonPointer::has($this->root, $pointer) ? Json::value(JsonPointer::get($this->root, $pointer)) : null;
+        if (is_array($component)) {
+            $this->body($component, $name . ' ' . $suffix, $this->document->child('components', $kind, $name));
+        }
+    }
+
+    /**
+     * @param JsonValue $schema
+     */
+    private function onlyNamesAnother($schema): bool
+    {
+        if (!is_array($schema)) {
+            return false;
+        }
+
+        if (array_keys($schema) === ['$ref']) {
+            return true;
+        }
+
+        $members = $schema['allOf'] ?? null;
+
+        return is_array($members) && count($members) === 1 && is_array($members[0] ?? null) && array_keys($members[0]) === ['$ref']
+            && array_diff(array_keys($schema), self::ANNOTATIONS) === [];
     }
 
     private function isJson(string $media): bool
