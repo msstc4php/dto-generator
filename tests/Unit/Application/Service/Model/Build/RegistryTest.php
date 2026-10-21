@@ -51,6 +51,51 @@ final class RegistryTest extends TestCase
         self::assertNull($registry->declarations()->classAt('a.yaml#/B'));
     }
 
+    public function testGivesAnEnumWithTheSameCasesTheEnumOfTheOneHoldingTheName(): void
+    {
+        $registry = new Registry();
+        $name = ClassName::fromFqcn('App\Level');
+        $holder = $this->schema(['enum' => ['low', 'high']], 'a.yaml', '/A');
+        self::assertTrue($registry->claim($name, $holder, new Diagnostics()));
+        $registry->addEnum($holder, $this->level($holder, ['LOW' => 'low', 'HIGH' => 'high']), 0);
+
+        $reordered = $this->schema(['description' => 'Level.', 'enum' => ['high', 'low', null]], 'a.yaml', '/B');
+        $narrowed = $this->schema(['enum' => ['low']], 'a.yaml', '/C');
+        $renamed = $this->schema(['enum' => ['low', 'high'], 'x-enum-varnames' => ['LOW', 'TOP']], 'a.yaml', '/D');
+        self::assertFalse($registry->reuse($name, $reordered));
+        self::assertTrue($registry->reuse($name, $reordered, $this->level($reordered, ['HIGH' => 'high', 'LOW' => 'low'])));
+        self::assertFalse($registry->reuse($name, $narrowed, $this->level($narrowed, ['LOW' => 'low'])));
+        self::assertFalse($registry->reuse($name, $renamed, $this->level($renamed, ['LOW' => 'low', 'TOP' => 'high'])));
+        self::assertSame($registry->declarations()->enumAt('a.yaml#/A'), $registry->declarations()->enumAt('a.yaml#/B'));
+        self::assertNull($registry->declarations()->enumAt('a.yaml#/C'));
+    }
+
+    public function testGivesNoEnumToOneThatDiffersInDeprecation(): void
+    {
+        $registry = new Registry();
+        $name = ClassName::fromFqcn('App\\Level');
+        $holder = $this->schema(['enum' => ['low']], 'a.yaml', '/A');
+        self::assertTrue($registry->claim($name, $holder, new Diagnostics()));
+        $registry->addEnum($holder, $this->level($holder, ['LOW' => 'low']), 0);
+
+        $candidate = $this->schema(['description' => 'Level.', 'enum' => ['low']], 'a.yaml', '/B');
+        $deprecated = new EnumModel($name, EnumBacking::from(EnumBacking::STRING), [new EnumCase('LOW', 'low')], new DocModel(null, true), $candidate->location());
+        self::assertFalse($registry->reuse($name, $candidate, $deprecated));
+        self::assertTrue($registry->reuse($name, $candidate, $this->level($candidate, ['LOW' => 'low'])));
+    }
+
+    public function testGivesAnEnumNoClass(): void
+    {
+        $registry = new Registry();
+        $name = ClassName::fromFqcn('App\Level');
+        $holder = $this->schema(self::POINT, 'a.yaml', '/A');
+        self::assertTrue($registry->claim($name, $holder, new Diagnostics()));
+        $registry->planClass($holder, $name, 0);
+
+        $candidate = $this->schema(['enum' => ['low']], 'a.yaml', '/B');
+        self::assertFalse($registry->reuse($name, $candidate, $this->level($candidate, ['LOW' => 'low'])));
+    }
+
     public function testSharesNoClassThatOtherSchemasJoin(): void
     {
         $registry = new Registry();
@@ -76,6 +121,19 @@ final class RegistryTest extends TestCase
 
         self::assertFalse($registry->reuse($name, $this->schema(self::POINT, 'a.yaml', '/B')));
         self::assertNull($registry->declarations()->classAt('a.yaml#/B'));
+    }
+
+    /**
+     * @param array<string, string> $cases
+     */
+    private function level(Schema $schema, array $cases): EnumModel
+    {
+        $enumCases = [];
+        foreach ($cases as $case => $value) {
+            $enumCases[] = new EnumCase($case, $value);
+        }
+
+        return new EnumModel(ClassName::fromFqcn('App\Level'), EnumBacking::from(EnumBacking::STRING), $enumCases, DocModel::none(), $schema->location());
     }
 
     /**

@@ -553,12 +553,15 @@ final class Action
         $short = $this->inlineName($candidate, $title ?? $derived, $wireName, $diagnostics);
         $name = $short === null ? null : $registry->className($namespace, $short, $candidate);
         $taken = $name instanceof ClassName && $registry->isTaken($name);
-        if ($taken && $registry->reuse($name, $candidate)) {
+        if ($taken && $this->reuses($name, $candidate, $registry, $enums)) {
             return;
         }
 
         if ($taken && !$candidate->extensions()->has('x-php-class-name')) {
-            $name = $this->freeName($candidate, $name, $title === null ? null : $derived, $namespace, $registry, $warn ? $diagnostics : new Diagnostics());
+            $name = $this->freeName($candidate, $name, $title === null ? null : $derived, $namespace, $registry, $enums, $warn ? $diagnostics : new Diagnostics());
+            if (!$name instanceof ClassName) {
+                return;
+            }
         }
 
         if (!$name instanceof ClassName || !$registry->claim($name, $candidate, $diagnostics) || !$this->declare($candidate, $name, $source, SchemaShape::isEnum($candidate), $registry, $enums, $diagnostics)) {
@@ -574,12 +577,18 @@ final class Action
      * An inline schema gives way to the schema that holds its name: it takes the name derived from its place, if a title
      * gave the first one, or the first free name numbered from 2. Only a number is worth a warning: the derived name
      * is the one the schema would have without its title.
+     *
+     * @return ?ClassName null when the schema holding the derived name lends its class or enum
      */
-    private function freeName(Schema $candidate, ClassName $taken, ?string $derived, string $namespace, Registry $registry, Diagnostics $diagnostics): ClassName
+    private function freeName(Schema $candidate, ClassName $taken, ?string $derived, string $namespace, Registry $registry, EnumBuilder $enums, Diagnostics $diagnostics): ?ClassName
     {
         $name = $derived === null ? $taken : $registry->className($namespace, $derived, $candidate);
         if (!$registry->isTaken($name)) {
             return $name;
+        }
+
+        if ($derived !== null && $this->reuses($name, $candidate, $registry, $enums)) {
+            return null;
         }
 
         $number = 2;
@@ -593,6 +602,19 @@ final class Action
         );
 
         return $name;
+    }
+
+    private function reuses(ClassName $name, Schema $candidate, Registry $registry, EnumBuilder $enums): bool
+    {
+        $own = null;
+        if (SchemaShape::isEnum($candidate)) {
+            // Only an exact copy shares an enum that has anything to report: the holder reports the same.
+            $problems = new Diagnostics();
+            $own = $enums->build($name, $candidate, $problems);
+            $own = $problems->count() === 0 ? $own : null;
+        }
+
+        return $registry->reuse($name, $candidate, $own);
     }
 
     /**

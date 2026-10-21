@@ -6,6 +6,14 @@ All notable changes to this package are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- An inline enum whose name another enum of its file holds shares that enum when the two have the same cases, even
+  in another order, with another description or with `null`: the members of an `allOf` that restate an enum no longer
+  make a second, numbered one. A schema's own `title` no longer keeps it from sharing the class of a schema that says
+  the same, and the schema holding the name derived from its place can lend it its class too. Of the GitHub
+  specification's 5 name warnings, 1 is left, for two enums with different values.
+
 ## [1.9.0] - 2026-10-21
 
 ### Added
