@@ -14,6 +14,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Builder\ExtensionVocabulary;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\Hierarchy;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\NamedClass;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\NameResolver;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\ObjectDefaults;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\PropertyView;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\ReadWriteMode;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\RequiredCycles;
@@ -28,6 +29,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\DiscriminatorModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\Identifier;
+use MSSTC4PHP\DtoGenerator\Domain\Model\PropertyModel;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Discriminator;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\ResolvedSchema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
@@ -174,14 +176,15 @@ final class Action
         }
 
         [$built, $enums] = $this->used($built, $registry->enums(), $superseded, $input->graph());
-        $output = new Output($built, $diagnostics, $enums);
-        $models = [];
-        $inherited = [];
-        foreach ($output->classes() as $class) {
-            $models[] = $class->model();
-            $inherited[$class->model()->name()->fqcn()] = $output->inheritedProperties($class->model());
+        // Only an Output follows the parents; the object defaults it gives up change what the next one inherits.
+        [$models, $inherited] = $this->models(new Output($built, $diagnostics, $enums));
+        $resolved = [];
+        foreach (ObjectDefaults::resolve($models, $inherited, $diagnostics) as $index => $model) {
+            $resolved[] = new BuiltClass($model, $built[$index]->source());
         }
 
+        $output = new Output($resolved, $diagnostics, $enums);
+        [$models, $inherited] = $this->models($output);
         RequiredCycles::check($models, $diagnostics, $inherited);
         $classSchemas = [];
         foreach ($registry->planned() as $index => [$schema]) {
@@ -195,6 +198,21 @@ final class Action
         }
 
         return new Run($output, $classSchemas);
+    }
+
+    /**
+     * @return array{list<ClassModel>, array<string, list<PropertyModel>>} the models and, by FQCN, what each inherits
+     */
+    private function models(Output $output): array
+    {
+        $models = [];
+        $inherited = [];
+        foreach ($output->classes() as $class) {
+            $models[] = $class->model();
+            $inherited[$class->model()->name()->fqcn()] = $output->inheritedProperties($class->model());
+        }
+
+        return [$models, $inherited];
     }
 
     /**

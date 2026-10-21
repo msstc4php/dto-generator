@@ -9,6 +9,7 @@ use MSSTC4PHP\DtoGenerator\Application\Port\CodeEmitter;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassKind;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
+use MSSTC4PHP\DtoGenerator\Domain\Model\ClassType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\DiscriminatorValues;
 use MSSTC4PHP\DtoGenerator\Domain\Model\DocModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumModel;
@@ -608,6 +609,10 @@ final class PhpParserEmitter implements CodeEmitter
             if ($case !== null) {
                 return new ClassConstFetch($types->nameOf($type->className()), $case);
             }
+        }
+
+        if ($type instanceof ClassType && $value === []) {
+            return new New_($types->nameOf($type->className()));
         }
 
         if ($type instanceof ListType && is_array($value) && Json::isList($value)) {

@@ -285,8 +285,11 @@ if (PHP_VERSION_ID < 80000) {
 
 if (is_file($profile . 'Rules.php.golden')) {
     require $profile . 'Rules.php.golden';
+    require $profile . 'Options.php.golden';
     $guard = (new ReflectionProperty('App\\Dto\\Rules', 'count'))->getAttributes()[0]->newInstance();
     check($guard->limit->max === 3, 'new in attribute arguments');
+    $options = read(new App\Dto\Rules(1), 'options');
+    check($options instanceof App\Dto\Options && read($options, 'verbose') === false, 'new in a default');
 }
 
 echo 'ok ' . basename($profile) . "\n";

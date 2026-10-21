@@ -6,6 +6,7 @@ namespace MSSTC4PHP\DtoGenerator\Domain\Model;
 
 use MSSTC4PHP\DtoGenerator\Domain\Exception\InvalidModel;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
+use MSSTC4PHP\DtoGenerator\Domain\Shared\DefaultValue;
 use MSSTC4PHP\DtoGenerator\Domain\Target\Mutability;
 
 /**
@@ -240,6 +241,26 @@ final class ClassModel
         }
 
         return null;
+    }
+
+    /**
+     * The default the constructor gives a property of the class or an ancestor: a discriminator selecting the class by
+     * one value defaults to it; selected by several, it keeps its own default only when that is one of them.
+     */
+    public function constructorDefaultOf(PropertyModel $property): ?DefaultValue
+    {
+        $selection = $this->discriminatorValuesOf($property->name());
+        $default = $property->default();
+        if (!$selection instanceof DiscriminatorValues) {
+            return $default;
+        }
+
+        $values = $selection->values();
+        if (count($values) === 1) {
+            return new DefaultValue($values[0]);
+        }
+
+        return $default instanceof DefaultValue && in_array($default->value(), $values, true) ? $default : null;
     }
 
     /**

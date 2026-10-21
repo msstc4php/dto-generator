@@ -77,24 +77,9 @@ final class ClassShape
         return $this->class->discriminatorValuesOf($property->name());
     }
 
-    /**
-     * A discriminator selected by one value defaults to it; selected by several, it keeps its own default only when
-     * that is one of them.
-     */
     public function defaultOf(PropertyModel $property): ?DefaultValue
     {
-        $selection = $this->selection($property);
-        $default = $property->default();
-        if (!$selection instanceof DiscriminatorValues) {
-            return $default;
-        }
-
-        $values = $selection->values();
-        if (count($values) === 1) {
-            return new DefaultValue($values[0]);
-        }
-
-        return $default instanceof DefaultValue && in_array($default->value(), $values, true) ? $default : null;
+        return $this->class->constructorDefaultOf($property);
     }
 
     /**

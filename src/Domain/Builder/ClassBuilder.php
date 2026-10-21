@@ -20,6 +20,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\TypeModel;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\DefaultValue;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
+use MSSTC4PHP\DtoGenerator\Domain\Target\Capability;
 use MSSTC4PHP\DtoGenerator\Domain\Target\Mutability;
 use MSSTC4PHP\DtoGenerator\Domain\Target\TargetProfile;
 
@@ -431,8 +432,13 @@ final class ClassBuilder
         }
 
         $inner = $type instanceof NullableType ? $type->inner() : $type;
-        // Only a non-empty list reaches its item type; any other value of a list is checked as a plain mismatch.
         $value = $default->value();
+        // `new X()` waits for every class to be built: ObjectDefaults keeps it only where X takes no arguments.
+        if ($inner instanceof ClassType && $value === [] && $this->target->supports(Capability::from(Capability::NEW_IN_INITIALIZERS))) {
+            return $default;
+        }
+
+        // Only a non-empty list reaches its item type; any other value of a list is checked as a plain mismatch.
         $reachesItems = is_array($value) && $value !== [] && Json::isList($value);
         $unrepresentable = $inner instanceof ListType && !$reachesItems ? null : self::unrepresentable($inner);
         if ($unrepresentable instanceof ClassType) {
