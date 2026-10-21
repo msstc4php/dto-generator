@@ -26,8 +26,8 @@ final class Operations
 
     private const COMPONENTS = ['requestBodies' => 'Request', 'responses' => 'Response'];
 
-    /** Keywords that only describe: a schema with them beside an allOf of one `$ref` says what the `$ref` says. */
-    private const ANNOTATIONS = ['allOf', 'title', 'description', 'example', 'examples', 'deprecated'];
+    /** Keywords that only describe: an allOf of one `$ref` with only these beside it says what the `$ref` says. */
+    private const ANNOTATIONS = ['title', 'description', 'example', 'examples', 'deprecated', 'externalDocs', '$comment', 'nullable', 'readOnly', 'writeOnly'];
 
     private SchemaLocation $document;
 
@@ -176,9 +176,13 @@ final class Operations
 
         $this->components[] = $pointer;
         $component = JsonPointer::has($this->root, $pointer) ? Json::value(JsonPointer::get($this->root, $pointer)) : null;
-        if (is_array($component)) {
-            $this->body($component, $name . ' ' . $suffix, $this->document->child('components', $kind, $name));
+        if (!is_array($component)) {
+            $this->diagnostics->warning(sprintf('"$ref" %s names no request body or response; it gives no class.', $ref), $at->child('$ref'));
+
+            return;
         }
+
+        $this->body($component, $name . ' ' . $suffix, $this->document->child('components', $kind, $name));
     }
 
     /**
@@ -196,8 +200,9 @@ final class Operations
 
         $members = $schema['allOf'] ?? null;
 
-        return is_array($members) && count($members) === 1 && is_array($members[0] ?? null) && array_keys($members[0]) === ['$ref']
-            && array_diff(array_keys($schema), self::ANNOTATIONS) === [];
+        $beside = array_filter(array_keys($schema), static fn ($keyword): bool => $keyword !== 'allOf' && !in_array($keyword, self::ANNOTATIONS, true) && strpos((string) $keyword, 'x-') !== 0);
+
+        return is_array($members) && count($members) === 1 && is_array($members[0] ?? null) && array_keys($members[0]) === ['$ref'] && $beside === [];
     }
 
     private function isJson(string $media): bool

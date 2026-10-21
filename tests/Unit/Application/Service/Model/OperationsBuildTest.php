@@ -29,9 +29,9 @@ final class OperationsBuildTest extends TestCase
 
         self::assertSame([], ModelFixture::messages($output));
         self::assertSame([
-            'App\Dto\CreatePetDefaultResponseItem' => ['name: string|null'],
             'App\Dto\CreatePetRequest' => ['kind: App\Dto\CreatePetRequestKind|null'],
             'App\Dto\CreatePet201Response' => ['name: string|null'],
+            'App\Dto\CreatePetDefaultResponseItem' => ['name: string|null'],
         ], ModelFixture::classes($output));
         self::assertSame(['App\Dto\GetPets200Response', 'App\Dto\CreatePetRequestKind'], ModelFixture::enums($output));
     }
@@ -84,6 +84,23 @@ final class OperationsBuildTest extends TestCase
         );
         self::assertSame(['name: string|null'], ModelFixture::classes($output)['App\Dto\BatchResponse']);
         self::assertSame(['id: int|null'], ModelFixture::classes($output)['App\Dto\BatchResponse2']);
+    }
+
+    public function testLeavesTheNamesTheComponentsGiveTheirInlineObjectsAsTheyAre(): void
+    {
+        $output = ModelFixture::operations([
+            'paths' => ['/batch' => ['get' => ['operationId' => 'batch', 'responses' => ['200' => ['$ref' => '#/components/responses/Batch']]]]],
+            'components' => [
+                'schemas' => ['Batch' => ['type' => 'object', 'properties' => ['responseItem' => self::PET]]],
+                'responses' => ['Batch' => $this->json(['type' => 'array', 'items' => ['type' => 'object', 'properties' => ['id' => ['type' => 'integer']]]])],
+            ],
+        ]);
+
+        self::assertSame(
+            ['warning /project/api/openapi.yaml#/components/responses/Batch/content/application~1json/schema/items: Class App\Dto\BatchResponseItem is already generated from /project/api/openapi.yaml#/components/schemas/Batch/properties/responseItem, so this one becomes App\Dto\BatchResponseItem2; set "x-php-class-name" to name it, in the document or "classNames" of the source.'],
+            ModelFixture::messages($output),
+        );
+        self::assertSame(['name: string|null'], ModelFixture::classes($output)['App\Dto\BatchResponseItem']);
     }
 
     public function testNamesTheVariantsOfABodyDistributedOverAUnionByTheirPlace(): void

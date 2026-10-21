@@ -8,8 +8,7 @@ use InvalidArgumentException;
 
 /**
  * Which operations of a source give classes for their request bodies and responses: glob patterns over the
- * operationId, `<method> <path>` (`get /pets/{id}`) when it has none, or the name of a request body or response of
- * `components`.
+ * operationId, or `<method> <path>` (`get /pets/{id}`) when it has none.
  */
 final class OperationFilter
 {

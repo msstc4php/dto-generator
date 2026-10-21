@@ -106,13 +106,14 @@ final class LoadOperationsTest extends TestCase
             'paths' => ['/pets/{id}' => ['get' => ['operationId' => 'a', 'responses' => [
                 '200' => $this->json(['$ref' => '#/components/schemas/Pet']),
                 '201' => $this->json(['$ref' => '#/components/schemas/Pet', 'description' => 'Created.']),
-                '202' => $this->json(['allOf' => [['$ref' => '#/components/schemas/Pet']], 'description' => 'Accepted.', 'title' => 'A']),
+                '202' => $this->json(['allOf' => [['$ref' => '#/components/schemas/Pet']], 'description' => 'Accepted.', 'title' => 'A', 'nullable' => true, '$comment' => 'c', 'x-examples' => []]),
                 '203' => $this->json(['allOf' => [['$ref' => '#/components/schemas/Pet']], 'required' => ['a']]),
                 '204' => $this->json(['allOf' => [['$ref' => '#/components/schemas/Pet'], ['$ref' => '#/components/schemas/Pet']]]),
                 '205' => $this->json(['allOf' => [['$ref' => '#/components/schemas/Pet', 'description' => 'Pet.']]]),
                 '206' => $this->json(['allOf' => ['a' => ['$ref' => '#/components/schemas/Pet']]]),
                 '207' => $this->json(['allOf' => [true]]),
                 '208' => $this->json(['allOf' => true]),
+                '209' => $this->json(['allOf' => [['$ref' => '#/components/schemas/Pet']], 'nox-a' => 1]),
             ]]]],
             'components' => ['schemas' => ['Pet' => self::OBJECT]],
         ]);
@@ -126,6 +127,7 @@ final class LoadOperationsTest extends TestCase
             ['a 206 Response', self::AT . 'get/responses/206/content/application~1json/schema'],
             ['a 207 Response', self::AT . 'get/responses/207/content/application~1json/schema'],
             ['a 208 Response', self::AT . 'get/responses/208/content/application~1json/schema'],
+            ['a 209 Response', self::AT . 'get/responses/209/content/application~1json/schema'],
         ], $this->summary($output));
     }
 
@@ -143,11 +145,12 @@ final class LoadOperationsTest extends TestCase
                         '411' => ['$ref' => '#/components/responses/Pet/content'],
                         '412' => ['$ref' => '#Anchor'],
                         '413' => ['$ref' => '#/components/responses/Missing'],
+                        '414' => ['$ref' => '#/components/responses/Text'],
                     ],
                 ]],
                 '/cats' => ['$ref' => 'cats.yaml#/paths/~1cats', 'get' => ['responses' => ['200' => $this->json(self::OBJECT)]]],
             ],
-            'components' => ['requestBodies' => ['NewPet' => $this->json(self::OBJECT)], 'responses' => ['Pet' => $this->json(self::OBJECT)]],
+            'components' => ['requestBodies' => ['NewPet' => $this->json(self::OBJECT)], 'responses' => ['Pet' => $this->json(self::OBJECT), 'Text' => 'plain']],
         ]);
 
         self::assertSame([
@@ -155,6 +158,8 @@ final class LoadOperationsTest extends TestCase
             'warning ' . self::AT . 'post/responses/410/$ref: Only a request body or response of this document\'s components is read behind "$ref"; #/components/responsesOld/Gone gives no class.',
             'warning ' . self::AT . 'post/responses/411/$ref: Only a request body or response of this document\'s components is read behind "$ref"; #/components/responses/Pet/content gives no class.',
             'warning ' . self::AT . 'post/responses/412/$ref: Only a request body or response of this document\'s components is read behind "$ref"; #Anchor gives no class.',
+            'warning ' . self::AT . 'post/responses/413/$ref: "$ref" #/components/responses/Missing names no request body or response; it gives no class.',
+            'warning ' . self::AT . 'post/responses/414/$ref: "$ref" #/components/responses/Text names no request body or response; it gives no class.',
             'warning ' . self::SPEC . '#/paths/~1cats/$ref: A path item behind "$ref" is not read; its operations give no classes.',
         ], $this->messages($output));
         self::assertSame(['NewPet Request', 'Pet Response'], array_column($this->summary($output), 0));

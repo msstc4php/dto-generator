@@ -67,7 +67,7 @@ final class Action
         $enums = new EnumBuilder($this->names);
         /** @var list<array{Schema, string, int}> $aliases named non-object schemas with their name and source */
         $aliases = [];
-        /** @var list<array{Schema, string, int}> $placed classes and enums named by their place, with the name and source */
+        /** @var list<array{Schema, string, int, bool}> $placed schemas named by their place, with the name, source and whether it is a class or enum */
         $placed = [];
 
         foreach ($input->graph()->all() as $resolved) {
@@ -101,7 +101,11 @@ final class Action
             }
 
             if (!$isClass && !$isEnum) {
-                $aliases[] = [$schema, $resolved->name(), $source];
+                if ($resolved->isNamedByPlace()) {
+                    $placed[] = [$schema, $resolved->name(), $source, false];
+                } else {
+                    $aliases[] = [$schema, $resolved->name(), $source];
+                }
 
                 continue;
             }
@@ -111,7 +115,7 @@ final class Action
             }
 
             if ($resolved->isNamedByPlace()) {
-                $placed[] = [$schema, $resolved->name(), $source];
+                $placed[] = [$schema, $resolved->name(), $source, true];
 
                 continue;
             }
@@ -140,8 +144,13 @@ final class Action
         // schemas named by their place come last, so that turning them on renames no class the components give.
         $index = 0;
         foreach ([[], $placed] as $round) {
-            foreach ($round as [$schema, $placeName, $source]) {
-                $this->declareInline($schema, $this->title($schema), $this->names->className($placeName), $placeName, $config->sources()[$source]->namespace(), $source, $registry, $enums, $diagnostics);
+            foreach ($round as [$schema, $placeName, $source, $isType]) {
+                $namespace = $config->sources()[$source]->namespace();
+                if ($isType) {
+                    $this->declareInline($schema, $this->title($schema), $this->names->className($placeName), $placeName, $namespace, $source, $registry, $enums, $diagnostics);
+                } else {
+                    $this->hoistFromAlias($schema, $placeName, $namespace, $source, $registry, $enums, $diagnostics, $input->graph());
+                }
             }
 
             for (; ($planned = $registry->plannedAt($index)) !== null; $index++) {

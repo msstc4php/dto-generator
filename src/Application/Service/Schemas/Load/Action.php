@@ -236,7 +236,8 @@ final class Action
 
     /**
      * @return list<array{string, JsonValue}>|null name and node, in document order (numeric names stay strings); null
-     *                                             when the document has no component schemas
+     *                                             when the document has no component schemas, none when they are
+     *                                             malformed (reported)
      */
     private function componentSchemas(Document $document, Diagnostics $diagnostics): ?array
     {
