@@ -285,9 +285,10 @@ final class ClassBuilder
     }
 
     /**
-     * Names that only their signs tell apart ("+1" and "-1"), or that have no other characters ("*"), get their signs
-     * as words, in every view alike; a name one no other matches stays as it is. Spelled names that would meet another
-     * name leave every name as it is, and the collision is reported.
+     * Names that only their signs tell apart ("+1" and "-1", "utc+1" and "utc-1"), or that have no other characters
+     * ("*"), get their signs as words ({@see NameResolver::spelledApart()}), in every view alike; a name one no other
+     * matches stays as it is. Spelled names that would meet another name leave every name as it is, and the collision
+     * is reported.
      *
      * @param list<array{string, Schema}> $sources
      * @param array<array-key, string> $skipped by wire name
@@ -300,25 +301,11 @@ final class ClassBuilder
         foreach ($sources as [$wireName, $schema]) {
             if (!isset($skipped[$wireName]) && !$schema->extensions()->has('x-php-name')) {
                 $plain = $this->names->propertyName($wireName);
-                $groups[$plain === null ? '' : Identifier::asciiLower($plain)][$wireName] = true;
+                $groups[$plain === null ? '' : Identifier::asciiLower($plain)][$wireName] = $wireName;
             }
         }
 
-        $spelled = [];
-        $kept = [];
-        foreach ($groups as $plain => $wireNames) {
-            $spell = $plain === '' || count($wireNames) > 1;
-            foreach (array_keys($wireNames) as $wireName) {
-                $name = $spell ? $this->names->propertyName($this->names->spelled((string) $wireName)) : null;
-                if ($name !== null) {
-                    $spelled[$wireName] = $name;
-                } elseif (!$spell) {
-                    $kept[] = $plain;
-                }
-            }
-        }
-
-        return $this->names->undisputed($spelled, $kept);
+        return $this->names->spelledGroups($groups, fn (string $wireName): ?string => $this->names->propertyName($wireName));
     }
 
     private function propertyName(string $wireName, Schema $schema, Diagnostics $diagnostics): ?string
