@@ -57,6 +57,9 @@ final class Registry
     /** @var list<BuiltEnum> */
     private array $builtEnums = [];
 
+    /** @var array<string, EnumModel> by the location of the schema that made it */
+    private array $enumModels = [];
+
     private ?View $view;
 
     private ?PropertyView $properties;
@@ -193,10 +196,14 @@ final class Registry
 
     /**
      * An inline schema that says all the schema holding the name says, in its file, gets its class or enum instead of
-     * another name: specifications repeat such schemas (OpenAI's Beta copies, GitHub's webhooks). A class that takes the
-     * properties of other schemas of an allOf ({@see join()}) says more than its schema, so it is shared with none.
+     * another name: specifications repeat such schemas (OpenAI's Beta copies, GitHub's webhooks). An enum needs only
+     * the same cases, as the members of an allOf restate one with another order, description or null. A class that
+     * takes the properties of other schemas of an allOf ({@see join()}) says more than its schema, so it is shared
+     * with none.
+     *
+     * @param ?EnumModel $own the enum the candidate makes under the name, if it is one
      */
-    public function reuse(ClassName $name, Schema $candidate): bool
+    public function reuse(ClassName $name, Schema $candidate, ?EnumModel $own = null): bool
     {
         $holder = $this->holders[Identifier::asciiLower($name->fqcn())] ?? null;
         if (!$holder instanceof Schema || $holder->location()->file() !== $candidate->location()->file()) {
@@ -207,8 +214,13 @@ final class Registry
         $at = $candidate->location()->toString();
         $class = $this->classes[$key] ?? null;
         $enum = $this->enums[$key] ?? null;
-        if ((!$class instanceof ClassName && !$enum instanceof EnumType) || array_intersect([$key, $at], $this->unshared) !== []
-            || SchemaFingerprint::of($holder) !== SchemaFingerprint::of($candidate)) {
+        if ((!$class instanceof ClassName && !$enum instanceof EnumType) || array_intersect([$key, $at], $this->unshared) !== []) {
+            return false;
+        }
+
+        $held = $this->enumModels[$key] ?? null;
+        $sameCases = $held instanceof EnumModel && $own instanceof EnumModel && $this->cases($held) === $this->cases($own);
+        if (!$sameCases && SchemaFingerprint::of($holder) !== SchemaFingerprint::of($candidate)) {
             return false;
         }
 
@@ -256,6 +268,7 @@ final class Registry
     public function addEnum(Schema $schema, EnumModel $enum, int $source): void
     {
         $this->enums[$schema->location()->toString()] = EnumType::of($enum);
+        $this->enumModels[$schema->location()->toString()] = $enum;
         $this->builtEnums[] = new BuiltEnum($enum, $source);
     }
 
@@ -397,5 +410,20 @@ final class Registry
         }
 
         return $schemas;
+    }
+
+    /**
+     * @return array<string, int|string> case name → value, by name
+     */
+    private function cases(EnumModel $enum): array
+    {
+        $cases = [];
+        foreach ($enum->cases() as $case) {
+            $cases[$case->name()] = $case->value();
+        }
+
+        ksort($cases);
+
+        return $cases;
     }
 }

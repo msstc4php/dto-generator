@@ -219,6 +219,45 @@ final class SchemaCoverageTest extends TestCase
         self::assertSame(['m: string|null'], $classes['App\Dto\HolderEitherOption1']);
     }
 
+    public function testGivesAMemberTheClassOfTheSameSchemaHoldingTheNameOfItsPlace(): void
+    {
+        $member = ['type' => 'object', 'properties' => ['id' => ['type' => 'integer']]];
+        $output = ModelFixture::build([
+            'User' => ['type' => 'object', 'properties' => ['n' => ['type' => 'string']]],
+            'HolderEitherOption1' => $member,
+            'Holder' => ['type' => 'object', 'properties' => ['either' => ['oneOf' => [['title' => 'User'] + $member, ['type' => 'string']]]]],
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(['either: App\Dto\HolderEitherOption1|string|null'], ModelFixture::classes($output)['App\Dto\Holder']);
+        self::assertArrayNotHasKey('App\Dto\User2', ModelFixture::classes($output));
+    }
+
+    public function testGivesAnEnumThatAnAllOfMemberRestatesTheEnumOfTheFirst(): void
+    {
+        $output = ModelFixture::build(['Job' => ['type' => 'object', 'properties' => ['run' => ['allOf' => [
+            ['type' => 'object', 'properties' => ['state' => ['type' => ['string', 'null'], 'description' => 'State.', 'enum' => ['open', 'closed', null]]]],
+            ['type' => 'object', 'required' => ['state'], 'properties' => ['state' => ['type' => 'string', 'enum' => ['closed', 'open']]]],
+        ]]]]]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(['App\Dto\JobRunState'], ModelFixture::enums($output));
+        self::assertSame(['state: App\Dto\JobRunState'], ModelFixture::classes($output)['App\Dto\JobRun']);
+    }
+
+    public function testNumbersAnEnumThatAnAllOfMemberNarrows(): void
+    {
+        $output = ModelFixture::build(['Job' => ['type' => 'object', 'properties' => ['run' => ['allOf' => [
+            ['type' => 'object', 'properties' => ['state' => ['enum' => ['open', 'closed']]]],
+            ['type' => 'object', 'properties' => ['state' => ['enum' => ['closed']]]],
+        ]]]]]);
+
+        self::assertSame(
+            [str_replace('error ', 'warning ', self::AT) . 'Job/properties/run/allOf/1/properties/state: Class App\Dto\JobRunState is already generated from /project/api/openapi.yaml#/components/schemas/Job/properties/run/allOf/0/properties/state, so this one becomes App\Dto\JobRunState2; set "x-php-class-name" to name it, in the document or "classNames" of the source.'],
+            ModelFixture::messages($output),
+        );
+    }
+
     public function testMakesAClassOfAnInlineDiscriminatedUnionWithInlineVariants(): void
     {
         $output = ModelFixture::build([

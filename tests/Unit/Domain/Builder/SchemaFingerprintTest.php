@@ -87,6 +87,24 @@ final class SchemaFingerprintTest extends TestCase
         yield 'another extension' => [['x-php-name' => 'spot']];
     }
 
+    public function testLeavesOutOnlyTheTitleOfTheSchemaItself(): void
+    {
+        $fingerprint = SchemaFingerprint::of($this->schema(self::SCHEMA));
+        self::assertSame($fingerprint, SchemaFingerprint::of($this->schema(['title' => 'Point'] + self::SCHEMA)));
+
+        $titled = ['type' => 'string', 'title' => 'Tag'];
+        foreach ([
+            ['properties' => ['x' => ['type' => 'integer', 'title' => 'X'], 'tags' => ['type' => 'array', 'items' => ['type' => 'string']]]],
+            ['properties' => ['x' => ['type' => 'integer'], 'tags' => ['type' => 'array', 'items' => $titled]]],
+            ['additionalProperties' => $titled],
+            ['allOf' => [['minProperties' => 1, 'title' => 'Part']]],
+            ['oneOf' => [['required' => ['x'], 'title' => 'One']]],
+            ['anyOf' => [['required' => ['x'], 'title' => 'Any']]],
+        ] as $changes) {
+            self::assertNotSame($fingerprint, SchemaFingerprint::of($this->schema(array_replace(self::SCHEMA, $changes))));
+        }
+    }
+
     public function testTellsTheMembersOfCompositionsApart(): void
     {
         $fingerprints = [];
