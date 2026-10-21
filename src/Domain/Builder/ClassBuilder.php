@@ -307,15 +307,18 @@ final class ClassBuilder
         $spelled = [];
         $kept = [];
         foreach ($groups as $plain => $wireNames) {
-            $spell = $plain === '' || count($wireNames) > 1;
-            foreach (array_keys($wireNames) as $wireName) {
-                $name = $spell ? $this->names->propertyName($this->names->spelled((string) $wireName)) : null;
-                if ($name !== null) {
-                    $spelled[$wireName] = $name;
-                } elseif (!$spell) {
-                    $kept[] = $plain;
-                }
+            if ($plain !== '' && count($wireNames) === 1) {
+                $kept[] = $plain;
+
+                continue;
             }
+
+            $group = [];
+            foreach (array_keys($wireNames) as $wireName) {
+                $group[$wireName] = (string) $wireName;
+            }
+
+            $spelled += array_filter($this->names->spelledApart($group, fn (string $wireName): ?string => $this->names->propertyName($wireName)), 'is_string');
         }
 
         return $this->names->undisputed($spelled, $kept);

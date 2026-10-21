@@ -10,6 +10,46 @@ use PHPUnit\Framework\TestCase;
 final class NameResolverTest extends TestCase
 {
     /**
+     * @param array<array-key, string> $names
+     * @param array<array-key, ?string> $expected
+     *
+     * @dataProvider namesApart
+     */
+    public function testSpellsTheSignsThatTellNamesApart(array $names, array $expected): void
+    {
+        $resolver = new NameResolver();
+
+        self::assertSame($expected, $resolver->spelledApart($names, static fn (string $name): ?string => $resolver->enumCaseName($name)));
+    }
+
+    /**
+     * @return iterable<string, array{array<array-key, string>, array<array-key, ?string>}>
+     */
+    public static function namesApart(): iterable
+    {
+        yield 'leading signs' => [['+1', '-1'], ['PLUS_1', 'MINUS_1']];
+        yield 'signs within' => [['a' => 'Etc/GMT+0', 'b' => 'Etc/GMT-0', 'c' => 'Etc/GMT'], ['a' => 'ETC_GMT_PLUS_0', 'b' => 'ETC_GMT_MINUS_0', 'c' => 'ETC_GMT']];
+        yield 'a sign some lack' => [['x+1', 'x_1'], ['X_PLUS_1', 'X_1']];
+        yield 'a sign at either end' => [['x+', 'x', 'x-'], ['X_PLUS', 'X', 'X_MINUS']];
+        yield 'a sign between letters joins words' => [['in-progress', 'in_progress'], ['IN_PROGRESS', 'IN_PROGRESS']];
+        yield 'no sign to spell' => [['§', '§§'], [null, null]];
+        yield 'a case apart' => [['a.B', 'a.b'], ['A_B', 'A_B']];
+        yield 'leading signs told apart keep their spelling' => [['+a.b', 'a.b'], ['PLUS_A_DOT_B', 'A_B']];
+        yield 'a shared sign stays' => [['v1.0+1', 'v1.0-1'], ['V1_0_PLUS_1', 'V1_0_MINUS_1']];
+        yield 'leading signs alike' => [['+a+b', '+a+B'], ['PLUS_A_PLUS_B', 'PLUS_A_PLUS_B']];
+        yield 'a name without characters' => [['§+', '§-'], ['PLUS', 'MINUS']];
+        yield 'a sign after a digit' => [['a1-b', 'a1_b'], ['A1_MINUS_B', 'A1_B']];
+        yield 'a sign before a digit' => [['a-1b', 'a_1b'], ['A_MINUS_1B', 'A_1B']];
+    }
+
+    public function testComparesSpelledNamesWithoutLetterCase(): void
+    {
+        $resolver = new NameResolver();
+
+        self::assertSame(['a plus 1', 'A plus 1', 'a minus 1'], $resolver->spelledApart(['a+1', 'A+1', 'a-1'], static fn (string $name): string => trim(preg_replace('/ +/', ' ', $name) ?? '')));
+    }
+
+    /**
      * @dataProvider classNames
      */
     public function testDerivesPascalCaseClassNames(string $schemaName, ?string $expected): void

@@ -288,15 +288,18 @@ final class EnumBuilder
         $spelled = [];
         $kept = [];
         foreach ($groups as $case => $indexes) {
-            $spell = $case === '' || count($indexes) > 1;
-            foreach ($indexes as $index) {
-                $name = $spell ? $this->names->enumCaseName($this->names->spelled((string) $values[$index])) : null;
-                if ($name !== null) {
-                    $spelled[$index] = $name;
-                } elseif (!$spell) {
-                    $kept[] = $case;
-                }
+            if ($case !== '' && count($indexes) === 1) {
+                $kept[] = $case;
+
+                continue;
             }
+
+            $group = [];
+            foreach ($indexes as $index) {
+                $group[$index] = (string) $values[$index];
+            }
+
+            $spelled += array_filter($this->names->spelledApart($group, fn (string $value): ?string => $this->names->enumCaseName($value)), 'is_string');
         }
 
         return $this->names->undisputed($spelled, $kept);

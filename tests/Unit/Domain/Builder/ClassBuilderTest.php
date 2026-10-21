@@ -148,6 +148,11 @@ final class ClassBuilderTest extends TestCase
                 ['plus1' => '+1: int|null = NULL', 'minus1' => '-1: int|null = NULL', 'asterisk' => '*: string|null = NULL', '_2' => '2: string|null = NULL'],
                 [],
             ],
+            'names only signs within tell apart' => [
+                ['type' => 'object', 'properties' => ['utc+1' => ['type' => 'integer'], 'utc-1' => ['type' => 'integer'], '1' => ['type' => 'string'], '+1' => ['type' => 'string']]],
+                ['utcPlus1' => 'utc+1: int|null = NULL', 'utcMinus1' => 'utc-1: int|null = NULL', '_1' => '1: string|null = NULL', 'plus1' => '+1: string|null = NULL'],
+                [],
+            ],
             'a spelled name that meets another' => [
                 ['type' => 'object', 'properties' => ['+1' => ['type' => 'integer'], '-1' => ['type' => 'integer'], 'plus1' => ['type' => 'integer'], '*' => ['type' => 'string']]],
                 ['_1' => '+1: int|null = NULL', 'minus1' => '-1: int|null = NULL', 'plus1' => 'plus1: int|null = NULL', 'asterisk' => '*: string|null = NULL'],

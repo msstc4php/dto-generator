@@ -54,6 +54,15 @@ final class EnumBuilderTest extends TestCase
         self::assertSame(['MINUS_X_MINUS_Y' => '-x-y', 'X_Y' => 'x-y'], $this->cases($enum));
     }
 
+    public function testSpellsTheSignsWithinValuesThatOnlyTheyTellApart(): void
+    {
+        [$enum, $messages] = $this->build(['type' => 'string', 'enum' => ['Etc/GMT+1', 'Etc/GMT-1', 'Etc/GMT', 'UTC']]);
+
+        self::assertSame([], $messages);
+        self::assertInstanceOf(EnumModel::class, $enum);
+        self::assertSame(['ETC_GMT_PLUS_1' => 'Etc/GMT+1', 'ETC_GMT_MINUS_1' => 'Etc/GMT-1', 'ETC_GMT' => 'Etc/GMT', 'UTC' => 'UTC'], $this->cases($enum));
+    }
+
     public function testKeepsTheValueWhoseSpelledCaseMeetsAnother(): void
     {
         [$enum, $messages] = $this->build(['type' => 'string', 'enum' => ['+1', '-1', 'plus_1', '*']]);

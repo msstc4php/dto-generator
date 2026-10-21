@@ -15,6 +15,12 @@ All notable changes to this package are documented here. The format follows
   way to every name the components give. With it, the GitHub specification gives 7377 classes instead of 5828 (two
   operations it cannot represent left out), OpenAI 4337 instead of 4319.
 
+### Fixed
+
+- Enum cases and properties that only a sign within the name tells apart (`Etc/GMT+1` and `Etc/GMT-1` of Stripe's
+  timezones) get the sign spelled out, `ETC_GMT_PLUS_1` and `ETC_GMT_MINUS_1`, instead of an error that both become
+  `ETC_GMT_1`. A sign between two letters still joins words, and names a leading sign told apart keep their names.
+
 ### Changed
 
 - An inline enum whose name another enum of its file holds shares that enum when the two have the same cases, even
