@@ -70,6 +70,20 @@ final class RegistryTest extends TestCase
         self::assertNull($registry->declarations()->enumAt('a.yaml#/C'));
     }
 
+    public function testGivesNoEnumToOneThatDiffersInDeprecation(): void
+    {
+        $registry = new Registry();
+        $name = ClassName::fromFqcn('App\\Level');
+        $holder = $this->schema(['enum' => ['low']], 'a.yaml', '/A');
+        self::assertTrue($registry->claim($name, $holder, new Diagnostics()));
+        $registry->addEnum($holder, $this->level($holder, ['LOW' => 'low']), 0);
+
+        $candidate = $this->schema(['description' => 'Level.', 'enum' => ['low']], 'a.yaml', '/B');
+        $deprecated = new EnumModel($name, EnumBacking::from(EnumBacking::STRING), [new EnumCase('LOW', 'low')], new DocModel(null, true), $candidate->location());
+        self::assertFalse($registry->reuse($name, $candidate, $deprecated));
+        self::assertTrue($registry->reuse($name, $candidate, $this->level($candidate, ['LOW' => 'low'])));
+    }
+
     public function testGivesAnEnumNoClass(): void
     {
         $registry = new Registry();

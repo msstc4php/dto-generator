@@ -292,6 +292,18 @@ final class SchemaCoverageTest extends TestCase
         yield 'deprecated' => [['deprecated' => true, 'enum' => ['closed', 'open']], ': Class App\Dto\JobRunState is already generated from /project/api/openapi.yaml#/components/schemas/Job/properties/run/allOf/0/properties/state, so this one becomes App\Dto\JobRunState2; set "x-php-class-name" to name it, in the document or "classNames" of the source.'];
     }
 
+    public function testGivesAnExactCopyOfAnEnumWithAWarningTheEnumItCopies(): void
+    {
+        $state = ['enum' => ['open', 'closed', 'open']];
+        $output = ModelFixture::build(['Job' => ['type' => 'object', 'properties' => ['run' => ['allOf' => [
+            ['type' => 'object', 'properties' => ['state' => $state]],
+            ['type' => 'object', 'properties' => ['state' => $state]],
+        ]]]]]);
+
+        self::assertSame([str_replace('error ', 'warning ', self::AT) . 'Job/properties/run/allOf/0/properties/state/enum/2: Enum value "open" is listed twice.'], ModelFixture::messages($output));
+        self::assertSame(['App\\Dto\\JobRunState'], ModelFixture::enums($output));
+    }
+
     public function testNumbersAnEnumThatAnAllOfMemberNarrows(): void
     {
         $output = ModelFixture::build(['Job' => ['type' => 'object', 'properties' => ['run' => ['allOf' => [

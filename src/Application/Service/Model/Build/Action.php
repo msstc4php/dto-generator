@@ -608,7 +608,7 @@ final class Action
     {
         $own = null;
         if (SchemaShape::isEnum($candidate)) {
-            // An enum that has anything to report is declared, where it reports it, rather than shared.
+            // Only an exact copy shares an enum that has anything to report: the holder reports the same.
             $problems = new Diagnostics();
             $own = $enums->build($name, $candidate, $problems);
             $own = $problems->count() === 0 ? $own : null;

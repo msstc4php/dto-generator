@@ -12,7 +12,8 @@ use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
 
 /**
  * Everything a schema says, its subschemas included, apart from where it is and its own title: two schemas with
- * one fingerprint in one file give the same class. Each `$ref` counts as written, so only within one file does it name the same target.
+ * one fingerprint in one file give the same class. Each `$ref` counts as written, so only within one file does it
+ * name the same target.
  *
  * @phpstan-import-type JsonValue from Json
  */
