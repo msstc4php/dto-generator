@@ -237,8 +237,10 @@ sources:
   `operations` on renames none of those: a name a component holds goes to its title's place name, to the component's
   class when the two say the same, or else is numbered from 2, with a warning.
 - Of a body's media types, the first JSON one (`application/json`, `…+json`) is read, else the first that has a schema.
-- A schema that only names another, a `$ref` alone or an `allOf` of one `$ref` with only annotations beside it
-  (`description`, `title`, `example`, `examples`, `deprecated`), gives no class: the other has one.
+- A schema that only names another, a `$ref` or an `allOf` of one `$ref` with only annotations beside it
+  (`title`, `description`, `example`, `examples`, `deprecated`, `externalDocs`, `$comment`, `nullable`, `readOnly`,
+  `writeOnly`, `x-…`), gives no class: the other has one. A missing request body or response a `$ref` names gives a
+  warning.
 - An operation whose schema the generator cannot represent fails the run, as such a component does; leave it out with
   `exclude`.
 

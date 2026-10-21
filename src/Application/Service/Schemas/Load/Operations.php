@@ -26,7 +26,7 @@ final class Operations
 
     private const COMPONENTS = ['requestBodies' => 'Request', 'responses' => 'Response'];
 
-    /** Keywords that only describe: an allOf of one `$ref` with only these beside it says what the `$ref` says. */
+    /** Keywords that only describe: a `$ref`, or an allOf of one, with only these beside it says what the `$ref` says. */
     private const ANNOTATIONS = ['title', 'description', 'example', 'examples', 'deprecated', 'externalDocs', '$comment', 'nullable', 'readOnly', 'writeOnly'];
 
     private SchemaLocation $document;
@@ -176,7 +176,7 @@ final class Operations
 
         $this->components[] = $pointer;
         $component = JsonPointer::has($this->root, $pointer) ? Json::value(JsonPointer::get($this->root, $pointer)) : null;
-        if (!is_array($component)) {
+        if (!is_array($component) || ($component !== [] && Json::isList($component))) {
             $this->diagnostics->warning(sprintf('"$ref" %s names no request body or response; it gives no class.', $ref), $at->child('$ref'));
 
             return;
@@ -194,15 +194,24 @@ final class Operations
             return false;
         }
 
-        if (array_keys($schema) === ['$ref']) {
-            return true;
+        $members = $schema['allOf'] ?? null;
+        $named = is_array($members) && count($members) === 1 && is_array($members[0] ?? null) && array_keys($members[0]) === ['$ref'];
+        if (isset($schema['$ref']) === $named) {
+            return false;
         }
 
-        $members = $schema['allOf'] ?? null;
+        foreach (array_keys($schema) as $keyword) {
+            if (!in_array($keyword, ['$ref', 'allOf'], true) && !$this->annotates((string) $keyword)) {
+                return false;
+            }
+        }
 
-        $beside = array_filter(array_keys($schema), static fn ($keyword): bool => $keyword !== 'allOf' && !in_array($keyword, self::ANNOTATIONS, true) && strpos((string) $keyword, 'x-') !== 0);
+        return true;
+    }
 
-        return is_array($members) && count($members) === 1 && is_array($members[0] ?? null) && array_keys($members[0]) === ['$ref'] && $beside === [];
+    private function annotates(string $keyword): bool
+    {
+        return in_array($keyword, self::ANNOTATIONS, true) || strpos($keyword, 'x-') === 0;
     }
 
     private function isJson(string $media): bool

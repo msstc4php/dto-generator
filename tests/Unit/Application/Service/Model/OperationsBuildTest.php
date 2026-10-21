@@ -101,6 +101,18 @@ final class OperationsBuildTest extends TestCase
             ModelFixture::messages($output),
         );
         self::assertSame(['name: string|null'], ModelFixture::classes($output)['App\Dto\BatchResponseItem']);
+        self::assertSame(['id: int|null'], ModelFixture::classes($output)['App\Dto\BatchResponseItem2']);
+    }
+
+    public function testLeavesTheNamesOfTheComponentsToTheValuesOfAMap(): void
+    {
+        $output = ModelFixture::operations([
+            'paths' => ['/batch' => ['get' => ['operationId' => 'batch', 'responses' => ['200' => $this->json(['type' => 'object', 'additionalProperties' => ['type' => 'object', 'properties' => ['id' => ['type' => 'integer']]]])]]]],
+            'components' => ['schemas' => ['Batch' => ['type' => 'object', 'properties' => ['_200ResponseValue' => self::PET]]]],
+        ]);
+
+        self::assertSame(['name: string|null'], ModelFixture::classes($output)['App\Dto\Batch200ResponseValue']);
+        self::assertSame(['id: int|null'], ModelFixture::classes($output)['App\Dto\Batch200ResponseValue2']);
     }
 
     public function testNamesTheVariantsOfABodyDistributedOverAUnionByTheirPlace(): void

@@ -144,9 +144,9 @@ final class Action
         // schemas named by their place come last, so that turning them on renames no class the components give.
         $index = 0;
         foreach ([[], $placed] as $round) {
-            foreach ($round as [$schema, $placeName, $source, $isType]) {
+            foreach ($round as [$schema, $placeName, $source, $isClassOrEnum]) {
                 $namespace = $config->sources()[$source]->namespace();
-                if ($isType) {
+                if ($isClassOrEnum) {
                     $this->declareInline($schema, $this->title($schema), $this->names->className($placeName), $placeName, $namespace, $source, $registry, $enums, $diagnostics);
                 } else {
                     $this->hoistFromAlias($schema, $placeName, $namespace, $source, $registry, $enums, $diagnostics, $input->graph());

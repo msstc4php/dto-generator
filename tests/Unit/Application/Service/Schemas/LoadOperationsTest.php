@@ -107,6 +107,8 @@ final class LoadOperationsTest extends TestCase
                 '200' => $this->json(['$ref' => '#/components/schemas/Pet']),
                 '201' => $this->json(['$ref' => '#/components/schemas/Pet', 'description' => 'Created.']),
                 '202' => $this->json(['allOf' => [['$ref' => '#/components/schemas/Pet']], 'description' => 'Accepted.', 'title' => 'A', 'nullable' => true, '$comment' => 'c', 'x-examples' => []]),
+                '210' => $this->json(['$ref' => '#/components/schemas/Pet', 'allOf' => [['$ref' => '#/components/schemas/Pet']]]),
+                '211' => $this->json(['$ref' => '#/components/schemas/Pet', 'required' => ['a']]),
                 '203' => $this->json(['allOf' => [['$ref' => '#/components/schemas/Pet']], 'required' => ['a']]),
                 '204' => $this->json(['allOf' => [['$ref' => '#/components/schemas/Pet'], ['$ref' => '#/components/schemas/Pet']]]),
                 '205' => $this->json(['allOf' => [['$ref' => '#/components/schemas/Pet', 'description' => 'Pet.']]]),
@@ -120,7 +122,8 @@ final class LoadOperationsTest extends TestCase
 
         self::assertSame([
             ['Pet', self::SPEC . '#/components/schemas/Pet'],
-            ['a 201 Response', self::AT . 'get/responses/201/content/application~1json/schema'],
+            ['a 210 Response', self::AT . 'get/responses/210/content/application~1json/schema'],
+            ['a 211 Response', self::AT . 'get/responses/211/content/application~1json/schema'],
             ['a 203 Response', self::AT . 'get/responses/203/content/application~1json/schema'],
             ['a 204 Response', self::AT . 'get/responses/204/content/application~1json/schema'],
             ['a 205 Response', self::AT . 'get/responses/205/content/application~1json/schema'],
@@ -129,6 +132,32 @@ final class LoadOperationsTest extends TestCase
             ['a 208 Response', self::AT . 'get/responses/208/content/application~1json/schema'],
             ['a 209 Response', self::AT . 'get/responses/209/content/application~1json/schema'],
         ], $this->summary($output));
+    }
+
+    /**
+     * @dataProvider annotations
+     */
+    public function testReadsAnAnnotatedReferenceAsTheReference(string $keyword): void
+    {
+        $output = $this->load([
+            'paths' => ['/pets/{id}' => ['get' => ['operationId' => 'a', 'responses' => [
+                '200' => $this->json(['$ref' => '#/components/schemas/Pet', $keyword => 'x']),
+                '201' => $this->json(['allOf' => [['$ref' => '#/components/schemas/Pet']], $keyword => 'x']),
+            ]]]],
+            'components' => ['schemas' => ['Pet' => self::OBJECT]],
+        ]);
+
+        self::assertSame(['Pet'], array_column($this->summary($output), 0));
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function annotations(): iterable
+    {
+        foreach (['title', 'description', 'example', 'examples', 'deprecated', 'externalDocs', '$comment', 'nullable', 'readOnly', 'writeOnly', 'x-examples'] as $keyword) {
+            yield $keyword => [$keyword];
+        }
     }
 
     public function testReadsABodyBehindARefOnlyInTheComponents(): void
@@ -146,11 +175,12 @@ final class LoadOperationsTest extends TestCase
                         '412' => ['$ref' => '#Anchor'],
                         '413' => ['$ref' => '#/components/responses/Missing'],
                         '414' => ['$ref' => '#/components/responses/Text'],
+                        '415' => ['$ref' => '#/components/responses/List'],
                     ],
                 ]],
                 '/cats' => ['$ref' => 'cats.yaml#/paths/~1cats', 'get' => ['responses' => ['200' => $this->json(self::OBJECT)]]],
             ],
-            'components' => ['requestBodies' => ['NewPet' => $this->json(self::OBJECT)], 'responses' => ['Pet' => $this->json(self::OBJECT), 'Text' => 'plain']],
+            'components' => ['requestBodies' => ['NewPet' => $this->json(self::OBJECT)], 'responses' => ['Pet' => $this->json(self::OBJECT), 'Text' => 'plain', 'List' => [['content' => []]]]],
         ]);
 
         self::assertSame([
@@ -160,6 +190,7 @@ final class LoadOperationsTest extends TestCase
             'warning ' . self::AT . 'post/responses/412/$ref: Only a request body or response of this document\'s components is read behind "$ref"; #Anchor gives no class.',
             'warning ' . self::AT . 'post/responses/413/$ref: "$ref" #/components/responses/Missing names no request body or response; it gives no class.',
             'warning ' . self::AT . 'post/responses/414/$ref: "$ref" #/components/responses/Text names no request body or response; it gives no class.',
+            'warning ' . self::AT . 'post/responses/415/$ref: "$ref" #/components/responses/List names no request body or response; it gives no class.',
             'warning ' . self::SPEC . '#/paths/~1cats/$ref: A path item behind "$ref" is not read; its operations give no classes.',
         ], $this->messages($output));
         self::assertSame(['NewPet Request', 'Pet Response'], array_column($this->summary($output), 0));
