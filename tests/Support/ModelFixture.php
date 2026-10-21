@@ -4,14 +4,20 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Tests\Support;
 
+use MSSTC4PHP\DtoGenerator\Application\Config\OperationFilter;
+use MSSTC4PHP\DtoGenerator\Application\Config\SourceConfig;
 use MSSTC4PHP\DtoGenerator\Application\Config\ViewSuffixes;
 use MSSTC4PHP\DtoGenerator\Application\Service\Model\Build\Action;
 use MSSTC4PHP\DtoGenerator\Application\Service\Model\Build\BuiltClass;
 use MSSTC4PHP\DtoGenerator\Application\Service\Model\Build\BuiltEnum;
 use MSSTC4PHP\DtoGenerator\Application\Service\Model\Build\Input;
 use MSSTC4PHP\DtoGenerator\Application\Service\Model\Build\Output;
+use MSSTC4PHP\DtoGenerator\Application\Service\Schemas\Load\Action as LoadAction;
+use MSSTC4PHP\DtoGenerator\Application\Service\Schemas\Load\Input as LoadInput;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\NameResolver;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\SchemaParser;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostic;
+use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\DiscriminatorModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\PropertyModel;
@@ -36,7 +42,31 @@ final class ModelFixture
     {
         $source = ConfigMother::source(GraphFixture::SPEC, $include);
         $graph = GraphFixture::load($schemas, $extraDocuments, $source, $failOnLoadErrors);
-        $target = new TargetProfile(
+        $config = $split instanceof ViewSuffixes ? ConfigMother::readWrite($source, $split, $readWriteModels, $allOfStrategy) : ConfigMother::configWith(AllOfStrategy::from($allOfStrategy), $source);
+
+        return (new Action(new NameResolver()))(new Input($config, self::target(), $graph, []));
+    }
+
+    /**
+     * A run over a whole document whose every operation gives classes; load diagnostics come first.
+     *
+     * @param array<string, array<array-key, mixed>> $root the document without its version
+     */
+    public static function operations(array $root): Output
+    {
+        $config = ConfigMother::config(new SourceConfig(GraphFixture::SPEC, 'App\Dto', '/project/src/Dto', ['*'], [], [], OperationFilter::all()));
+        $loaded = (new LoadAction(new InMemoryDocumentLoader([GraphFixture::SPEC => ['openapi' => '3.1.0'] + $root]), new SchemaParser()))(new LoadInput($config));
+        $output = (new Action(new NameResolver()))(new Input($config, self::target(), $loaded->graph(), []));
+        $diagnostics = new Diagnostics();
+        $diagnostics->merge($loaded->diagnostics());
+        $diagnostics->merge($output->diagnostics());
+
+        return new Output($output->classes(), $diagnostics, $output->enums());
+    }
+
+    private static function target(): TargetProfile
+    {
+        return new TargetProfile(
             PhpVersion::fromString('8.2'),
             MetadataMode::from(MetadataMode::NONE),
             Mutability::from(Mutability::IMMUTABLE),
@@ -44,10 +74,6 @@ final class ModelFixture
             DateTimeClass::from(DateTimeClass::IMMUTABLE),
             true,
         );
-
-        $config = $split instanceof ViewSuffixes ? ConfigMother::readWrite($source, $split, $readWriteModels, $allOfStrategy) : ConfigMother::configWith(AllOfStrategy::from($allOfStrategy), $source);
-
-        return (new Action(new NameResolver()))(new Input($config, $target, $graph, []));
     }
 
     /**

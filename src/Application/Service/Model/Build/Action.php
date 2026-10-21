@@ -67,6 +67,8 @@ final class Action
         $enums = new EnumBuilder($this->names);
         /** @var list<array{Schema, string, int}> $aliases named non-object schemas with their name and source */
         $aliases = [];
+        /** @var list<array{Schema, string, int}> $placed classes and enums named by their place, with the name and source */
+        $placed = [];
 
         foreach ($input->graph()->all() as $resolved) {
             $source = $resolved->source();
@@ -108,6 +110,12 @@ final class Action
                 $diagnostics->warning('"oneOf" and "anyOf" beside "properties" are not represented; the class keeps only its properties.', $schema->location());
             }
 
+            if ($resolved->isNamedByPlace()) {
+                $placed[] = [$schema, $resolved->name(), $source];
+
+                continue;
+            }
+
             $short = $this->shortName($schema, $resolved->name(), $diagnostics);
             $name = $short === null ? null : $registry->className($config->sources()[$source]->namespace(), $short, $schema);
             if ($name instanceof ClassName && $registry->claim($name, $schema, $diagnostics)) {
@@ -116,6 +124,10 @@ final class Action
         }
 
         // Only once every named schema holds its name, so a derived or titled inline name never takes one.
+        foreach ($placed as [$schema, $placeName, $source]) {
+            $this->declareInline($schema, null, $this->names->className($placeName), $placeName, $config->sources()[$source]->namespace(), $source, $registry, $enums, $diagnostics);
+        }
+
         foreach ($aliases as [$alias, $aliasName, $source]) {
             $this->hoistFromAlias($alias, $aliasName, $config->sources()[$source]->namespace(), $source, $registry, $enums, $diagnostics, $input->graph());
         }

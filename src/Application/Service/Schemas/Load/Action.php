@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Application\Service\Schemas\Load;
 
+use MSSTC4PHP\DtoGenerator\Application\Config\OperationFilter;
 use MSSTC4PHP\DtoGenerator\Application\Port\Document;
 use MSSTC4PHP\DtoGenerator\Application\Port\DocumentLoader;
 use MSSTC4PHP\DtoGenerator\Application\Port\DocumentLoadFailed;
@@ -69,13 +70,21 @@ final class Action
 
             $owners[$document->path()] = $index;
             $this->checkOpenApiVersion($document, $diagnostics);
-            foreach ($this->componentSchemas($document, $diagnostics) as [$name, $node]) {
+            $filter = $source->operations();
+            $operations = $filter instanceof OperationFilter ? Operations::of($document->path(), $document->root(), $filter, $diagnostics) : [];
+            foreach ($this->componentSchemas($document, $operations !== [], $diagnostics) as [$name, $node]) {
                 if (!$source->selects($name)) {
                     continue;
                 }
 
                 $location = (new SchemaLocation($document->path()))->child('components', 'schemas', $name);
                 $schema = new ResolvedSchema($reader->component($document, $node, $location, $diagnostics), $index, $name, true);
+                $graph->add($schema);
+                $queue[] = $schema;
+            }
+
+            foreach ($operations as [$name, $node, $location]) {
+                $schema = new ResolvedSchema($reader->component($document, $node, $location, $diagnostics), $index, $name, true, true);
                 $graph->add($schema);
                 $queue[] = $schema;
             }
@@ -223,7 +232,7 @@ final class Action
     /**
      * @return list<array{string, JsonValue}> name and node, in document order; numeric names stay strings
      */
-    private function componentSchemas(Document $document, Diagnostics $diagnostics): array
+    private function componentSchemas(Document $document, bool $hasOperations, Diagnostics $diagnostics): array
     {
         $at = (new SchemaLocation($document->path()))->child('components', 'schemas');
         $components = $document->root()['components'] ?? null;
@@ -235,7 +244,9 @@ final class Action
 
         $schemas = is_array($components) ? ($components['schemas'] ?? null) : null;
         if ($schemas === null) {
-            $diagnostics->warning('The specification has no components/schemas; nothing to generate.', $at);
+            if (!$hasOperations) {
+                $diagnostics->warning('The specification has no components/schemas; nothing to generate.', $at);
+            }
 
             return [];
         }

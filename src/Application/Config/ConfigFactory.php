@@ -379,18 +379,49 @@ final class ConfigFactory
     }
 
     /**
+     * `true` for every operation, or the include and exclude globs over their names.
+     */
+    private function operations(RawSection $source): ?OperationFilter
+    {
+        $raw = $source->raw('operations');
+        if ($raw === null || is_bool($raw)) {
+            return $raw === true ? OperationFilter::all() : null;
+        }
+
+        if (!is_array($raw) || ($raw !== [] && Json::isList($raw))) {
+            $source->error('operations', 'must be true, false or an object of "include" and "exclude"');
+
+            return null;
+        }
+
+        $section = $source->section('operations');
+        $section->rejectUnknownKeys(['include', 'exclude']);
+
+        $include = $section->stringList('include', ['*']);
+        $exclude = $section->stringList('exclude', []);
+        if ($include === []) {
+            $section->error('include', 'must not be empty');
+
+            return null;
+        }
+
+        return new OperationFilter($include, $exclude);
+    }
+
+    /**
      * @return list<SourceConfig>
      */
     private function sources(RawSection $root, string $baseDir): array
     {
         $sources = [];
         foreach ($root->sectionList('sources') as $section) {
-            $section->rejectUnknownKeys(['spec', 'namespace', 'outputDir', 'include', 'exclude', 'classNames', 'propertyNames']);
+            $section->rejectUnknownKeys(['spec', 'namespace', 'outputDir', 'include', 'exclude', 'classNames', 'propertyNames', 'operations']);
             $spec = $section->requiredString('spec');
             $namespace = $section->requiredString('namespace');
             $outputDir = $section->requiredString('outputDir');
             $include = array_values($section->stringList('include', ['*']));
             $exclude = array_values($section->stringList('exclude', []));
+            $operations = $this->operations($section);
 
             if ($namespace !== null) {
                 try {
@@ -415,7 +446,7 @@ final class ConfigFactory
                 continue;
             }
 
-            $sources[] = new SourceConfig($specPath, $namespace, Path::resolve($baseDir, $outputDir), $include, $exclude, $names);
+            $sources[] = new SourceConfig($specPath, $namespace, Path::resolve($baseDir, $outputDir), $include, $exclude, $names, $operations);
         }
 
         return $sources;
