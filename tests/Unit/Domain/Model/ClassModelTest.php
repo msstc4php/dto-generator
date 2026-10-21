@@ -15,6 +15,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\DocModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\PropertyModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ScalarType;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
+use MSSTC4PHP\DtoGenerator\Domain\Shared\DefaultValue;
 use MSSTC4PHP\DtoGenerator\Domain\Target\Mutability;
 use PHPUnit\Framework\TestCase;
 
@@ -256,6 +257,40 @@ final class ClassModelTest extends TestCase
         self::assertSame([$values], $class->withProperties($this->property('name'))->discriminatorValues());
         self::assertSame([$values], $class->withAddedAttributes(new AttributeModel(ClassName::fromFqcn('App\Marker')))->discriminatorValues());
         self::assertSame([$values], $class->withHierarchy(ClassKind::from(ClassKind::FINAL), ClassName::fromFqcn('App\Pet'), null)->discriminatorValues());
+    }
+
+    /**
+     * @dataProvider constructorDefaults
+     *
+     * @param list<string> $values
+     */
+    public function testGivesTheConstructorDefaultADiscriminatorAllows(?string $default, array $values, ?string $expected): void
+    {
+        $kind = $default === null
+            ? $this->property('kind')
+            : new PropertyModel('kind', 'kind', ScalarType::string(), false, new DefaultValue($default), DocModel::none(), new SchemaLocation('a.json'));
+        $class = $this->classWith([$kind]);
+        $class = $values === [] ? $class : $class->withDiscriminatorValues(new DiscriminatorValues('kind', $values));
+
+        $actual = $class->constructorDefaultOf($kind);
+
+        self::assertSame($expected, $actual instanceof DefaultValue ? $actual->value() : null);
+    }
+
+    /**
+     * @return array<string, array{?string, list<string>, ?string}>
+     */
+    public static function constructorDefaults(): array
+    {
+        return [
+            'no discriminator, own default' => ['x', [], 'x'],
+            'no discriminator, no default' => [null, [], null],
+            'one value' => [null, ['cat'], 'cat'],
+            'one value over its own default' => ['dog', ['cat'], 'cat'],
+            'several values, default among them' => ['kitty', ['cat', 'kitty'], 'kitty'],
+            'several values, foreign default' => ['dog', ['cat', 'kitty'], null],
+            'several values, no default' => [null, ['cat', 'kitty'], null],
+        ];
     }
 
     /**

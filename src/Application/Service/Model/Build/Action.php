@@ -176,6 +176,7 @@ final class Action
         }
 
         [$built, $enums] = $this->used($built, $registry->enums(), $superseded, $input->graph());
+        // Only an Output follows the parents; the object defaults it gives up change what the next one inherits.
         [$models, $inherited] = $this->models(new Output($built, $diagnostics, $enums));
         $resolved = [];
         foreach (ObjectDefaults::resolve($models, $inherited, $diagnostics) as $index => $model) {

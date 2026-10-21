@@ -66,6 +66,6 @@ final class ObjectDefaultsTest extends TestCase
      */
     private function messages(Diagnostics $diagnostics): array
     {
-        return array_map(static fn (Diagnostic $d): string => $d->toString(), $diagnostics->all());
+        return array_map(static fn (Diagnostic $diagnostic): string => $diagnostic->toString(), $diagnostics->all());
     }
 }

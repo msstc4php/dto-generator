@@ -140,6 +140,7 @@ final class ObjectDefaultsBuildTest extends TestCase
         self::assertSame([self::AT . 'C/properties/a/default: The default {} cannot be `new App\Dto\A()`: the defaults of App\Dto\A lead back to it; null is used instead.'], ModelFixture::messages($output));
         self::assertSame(['b' => '[]'], $this->defaults($output, 'A'));
         self::assertSame(['c' => '[]'], $this->defaults($output, 'B'));
+        self::assertSame(['a' => 'null'], $this->defaults($output, 'C'));
     }
 
     /**
@@ -156,6 +157,7 @@ final class ObjectDefaultsBuildTest extends TestCase
 
         self::assertSame([self::AT . 'Base/properties/t/default: The default {} cannot be `new App\Dto\T()`: the defaults of App\Dto\T lead back to it; null is used instead.'], ModelFixture::messages($output));
         self::assertSame(['t' => 'null'], $this->defaults($output, 'Base'));
+        self::assertSame(['t' => 'null', 'name' => 'null'], $this->defaults($output, 'Child'));
         self::assertSame(['c' => '[]'], $this->defaults($output, 'T'));
     }
 
