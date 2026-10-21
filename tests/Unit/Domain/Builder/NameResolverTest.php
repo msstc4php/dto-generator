@@ -34,6 +34,7 @@ final class NameResolverTest extends TestCase
         yield 'a sign between letters joins words' => [['in-progress', 'in_progress'], ['IN_PROGRESS', 'IN_PROGRESS']];
         yield 'no sign to spell' => [['§', '§§'], [null, null]];
         yield 'a name without characters beside one with' => [['§-', 'x'], ['MINUS', 'X']];
+        yield 'a name without characters stays so' => [['§', '§+', '§-'], [null, 'PLUS', 'MINUS']];
         yield 'a case apart' => [['a.B', 'a.b'], ['A_B', 'A_B']];
         yield 'leading signs told apart keep their spelling' => [['+a.b', 'a.b'], ['PLUS_A_DOT_B', 'A_B']];
         yield 'a shared sign stays' => [['v1.0+1', 'v1.0-1'], ['V1_0_PLUS_1', 'V1_0_MINUS_1']];
@@ -46,6 +47,14 @@ final class NameResolverTest extends TestCase
         yield 'a leading sign spelled with the rest' => [['+a.b', 'a.b+', 'a.b-'], ['PLUS_A_B', 'A_B_PLUS', 'A_B_MINUS']];
         yield 'one more name spells a sign the others share' => [['a/1+', 'a/1-', 'a_1'], ['A_SLASH_1_PLUS', 'A_SLASH_1_MINUS', 'A_1']];
         yield 'a letter beyond ASCII is no letter' => [['é-x', 'é_x'], ['é_MINUS_X', 'é_X']];
+    }
+
+    public function testKeepsANameNoOtherGivesAndLeavesOutOneThatMeetsAnother(): void
+    {
+        $resolver = new NameResolver();
+        $groups = ['PLUS_1' => [3 => 'plus_1'], '_1' => [1 => '+1', 2 => '-1'], 'X' => [4 => 'x', 5 => 'X'], 'Y' => [6 => 'y']];
+
+        self::assertSame([2 => 'MINUS_1'], $resolver->spelledGroups($groups, static fn (string $name): ?string => $resolver->enumCaseName($name)));
     }
 
     public function testComparesSpelledNamesWithoutLetterCase(): void

@@ -17,6 +17,8 @@ final class NameResolver
     private const ASCII_SEPARATORS = '/[^A-Za-z0-9]+/';
 
     /** Words for the signs that alone tell names apart, such as "+1" and "-1". */
+    private const ASCII_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+
     private const SIGNS = [
         '+' => 'plus', '-' => 'minus', '*' => 'asterisk', '@' => 'at', '#' => 'hash', '$' => 'dollar', '%' => 'percent',
         '&' => 'and', '=' => 'equals', '~' => 'tilde', '^' => 'caret', '<' => 'less', '>' => 'greater', '!' => 'not',
@@ -179,9 +181,11 @@ final class NameResolver
             $shared = $shared === null ? $characters : array_intersect($shared, $characters);
         }
 
-        foreach ([array_intersect_key(self::SIGNS, array_flip(array_diff($present, (array) $shared))), self::SIGNS] as $signs) {
+        $lacking = array_intersect_key(self::SIGNS, array_flip(array_diff($present, (array) $shared)));
+        foreach ([$lacking, self::SIGNS] as $signs) {
             $within = array_map(fn (string $original): ?string => $identifier($this->spelledWithin($original, $signs)), $names);
-            if (!$this->clash($within)) {
+            // A name that stays without characters is reported on its own.
+            if ($signs !== [] && !$this->clash(array_filter($within, 'is_string'))) {
                 return $within;
             }
         }
@@ -200,7 +204,7 @@ final class NameResolver
      *
      * @return array<TKey, string>
      */
-    public function undisputed(array $spelled, array $kept): array
+    private function undisputed(array $spelled, array $kept): array
     {
         $counts = array_count_values(array_map(static fn (string $name): string => Identifier::asciiLower($name), array_merge(array_values($spelled), $kept)));
 
@@ -213,7 +217,7 @@ final class NameResolver
     private function spelledWithin(string $name, array $signs): string
     {
         $characters = str_split($name);
-        $isLetter = static fn (int $at): bool => strspn($characters[$at] ?? '', 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz') === 1;
+        $isLetter = static fn (int $at): bool => strspn($characters[$at] ?? '', self::ASCII_LETTERS) === 1;
         foreach ($characters as $at => $character) {
             if (isset($signs[$character]) && (!$isLetter($at - 1) || !$isLetter($at + 1))) {
                 $characters[$at] = ' ' . $signs[$character] . ' ';

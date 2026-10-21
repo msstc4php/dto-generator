@@ -286,7 +286,7 @@ final class ClassBuilder
 
     /**
      * Names that only their signs tell apart ("+1" and "-1", "utc+1" and "utc-1"), or that have no other characters
-     * ("*"), get their signs as words ({@see NameResolver::spelledApart()}), in every view alike; a name one no other
+     * ("*"), get their signs as words ({@see NameResolver::spelledGroups()}), in every view alike; a name one no other
      * matches stays as it is. Spelled names that would meet another name leave every name as it is, and the collision
      * is reported.
      *
