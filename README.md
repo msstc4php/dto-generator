@@ -255,7 +255,7 @@ Pass the environment variables that `remoteRefs.headers` names and any proxy var
 (`DTO_GENERATOR_VERIFY_CLASSES=0`); only an explicit `verifyClasses: true` loads the project's autoloader. Only the
 extensions installed in the image are available. `target.php: auto` and the bridge's Symfony versions are
 read from the mounted `composer.json` and `composer.lock`. Build arguments: `VERSION` (the generator version the image
-reports to Composer, `1.8.0` by default; the bridge 1.5 requires at least `1.6.0`), `BRIDGE_REPOSITORY` and
+reports to Composer, `1.8.1` by default; the bridge 1.5 requires at least `1.6.0`), `BRIDGE_REPOSITORY` and
 `BRIDGE_VERSION` (where the bridge comes from, `^1.0` by default). `make docker-build` builds `dto-generator:local`
 with the latest tag as `VERSION` and the sibling bridge checkout, if there is one.
 
