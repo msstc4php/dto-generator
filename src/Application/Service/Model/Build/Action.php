@@ -572,11 +572,16 @@ final class Action
 
     /**
      * An inline schema gives way to the schema that holds its name: it takes the name derived from its place, if a title
-     * gave the first one, or the first free name numbered from 2.
+     * gave the first one, or the first free name numbered from 2. Only a number is worth a warning: the derived name
+     * is the one the schema would have without its title.
      */
     private function freeName(Schema $candidate, ClassName $taken, ?string $derived, string $namespace, Registry $registry, Diagnostics $diagnostics): ClassName
     {
         $name = $derived === null ? $taken : $registry->className($namespace, $derived, $candidate);
+        if (!$registry->isTaken($name)) {
+            return $name;
+        }
+
         for ($number = 2; $registry->isTaken($name); $number++) {
             $name = $registry->className($namespace, $registry->baseOf($taken) . $number, $candidate);
         }

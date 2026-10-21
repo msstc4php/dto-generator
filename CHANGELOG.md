@@ -12,6 +12,12 @@ All notable changes to this package are documented here. The format follows
   constructor, instead of `null` with a warning, when the class is not abstract and takes no required argument. Of
   the 31 such warnings of the Kubernetes specification, 5 are left, for an `{}` that lacks a required property.
 
+### Changed
+
+- An inline schema whose `title` names a class another schema holds takes the name derived from its place without a
+  warning, as it would without the title; only a name numbered from 2 still warns. Of the GitHub specification's
+  name warnings 5 are left, of the OpenAI one's none. Class names do not change.
+
 ## [1.8.1] - 2026-10-21
 
 ### Fixed
