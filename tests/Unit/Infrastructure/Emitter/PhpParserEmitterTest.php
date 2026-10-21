@@ -351,6 +351,20 @@ final class PhpParserEmitterTest extends TestCase
         self::assertStringContainsString('public Level|float|null $ratio = 1,', $code);
     }
 
+    public function testCreatesTheClassOfAnEmptyObjectDefault(): void
+    {
+        $tag = new ClassType(ClassName::fromFqcn('App\Meta\Tag'));
+        $class = EmitterFixture::model('App\Dto\Price', null, [
+            EmitterFixture::property('tag', new NullableType($tag), false, new DefaultValue([])),
+            EmitterFixture::property('narrowed', $tag, false, new DefaultValue([])),
+        ]);
+
+        $promoted = (new PhpParserEmitter())->emit($class, EmitterFixture::target('8.2', Mutability::IMMUTABLE));
+
+        self::assertStringContainsString('public ?\App\Meta\Tag $tag = new \App\Meta\Tag(),', $promoted);
+        self::assertStringContainsString('public \App\Meta\Tag $narrowed = new \App\Meta\Tag(),', $promoted);
+    }
+
     public function testEmitsEnumPropertiesAndTheirDefaults(): void
     {
         $currency = EnumType::of($this->currency());

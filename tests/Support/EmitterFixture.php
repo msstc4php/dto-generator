@@ -100,15 +100,23 @@ final class EmitterFixture
     }
 
     /**
-     * `new` in attribute arguments, which only PHP 8.1 and later allow.
+     * `new` in attribute arguments and in a default, which only PHP 8.1 and later allow.
+     *
+     * @return list<ClassModel>
      */
-    public static function rules(string $mutability = Mutability::IMMUTABLE): ClassModel
+    public static function rules(string $mutability = Mutability::IMMUTABLE): array
     {
         $limit = ArgumentValue::newInstance(ClassName::fromFqcn('App\\Attr\\Limit'), AttributeArgument::named('max', ArgumentValue::literal(3)));
 
-        return self::model('App\\Dto\\Rules', null, [
-            self::property('count', ScalarType::int(), true)->withAddedAttributes(new AttributeModel(ClassName::fromFqcn('App\\Attr\\Guard'), [AttributeArgument::positional($limit)])),
-        ], $mutability);
+        return [
+            self::model('App\\Dto\\Rules', null, [
+                self::property('count', ScalarType::int(), true)->withAddedAttributes(new AttributeModel(ClassName::fromFqcn('App\\Attr\\Guard'), [AttributeArgument::positional($limit)])),
+                self::property('options', new NullableType(new ClassType(ClassName::fromFqcn('App\\Dto\\Options'))), false, new DefaultValue([])),
+            ], $mutability),
+            self::model('App\\Dto\\Options', null, [
+                self::property('verbose', ScalarType::bool(), false, new DefaultValue(false)),
+            ], $mutability),
+        ];
     }
 
     /**

@@ -8,8 +8,10 @@ namespace App\Dto;
 
 final class Rules
 {
-    public function __construct(#[\App\Attr\Guard(new \App\Attr\Limit(max: 3))] private int $count)
-    {
+    public function __construct(
+        #[\App\Attr\Guard(new \App\Attr\Limit(max: 3))] private int $count,
+        private ?Options $options = new Options(),
+    ) {
     }
 
     public function getCount(): int
@@ -20,6 +22,18 @@ final class Rules
     public function setCount(int $count): self
     {
         $this->count = $count;
+
+        return $this;
+    }
+
+    public function getOptions(): ?Options
+    {
+        return $this->options;
+    }
+
+    public function setOptions(?Options $options): self
+    {
+        $this->options = $options;
 
         return $this;
     }

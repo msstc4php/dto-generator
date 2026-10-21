@@ -27,7 +27,7 @@ final class GoldenEmitterTest extends TestCase
         $target = EmitterFixture::target($php, $mutability, $accessors, null, $withers);
         $classes = EmitterFixture::classes($mutability);
         if (PhpVersion::fromString($php)->isAtLeast(PhpVersion::fromString('8.1'))) {
-            $classes[] = EmitterFixture::rules($mutability);
+            array_push($classes, ...EmitterFixture::rules($mutability));
         }
 
         foreach ($classes as $class) {

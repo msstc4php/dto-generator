@@ -20,6 +20,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\TypeModel;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\DefaultValue;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
+use MSSTC4PHP\DtoGenerator\Domain\Target\Capability;
 use MSSTC4PHP\DtoGenerator\Domain\Target\Mutability;
 use MSSTC4PHP\DtoGenerator\Domain\Target\TargetProfile;
 
@@ -435,6 +436,11 @@ final class ClassBuilder
         $value = $default->value();
         $reachesItems = is_array($value) && $value !== [] && Json::isList($value);
         $unrepresentable = $inner instanceof ListType && !$reachesItems ? null : self::unrepresentable($inner);
+        // `new X()` waits for every class to be built: ObjectDefaults keeps it only where X takes no arguments.
+        if ($inner instanceof ClassType && $value === [] && $this->target->supports(Capability::from(Capability::NEW_IN_INITIALIZERS))) {
+            return $default;
+        }
+
         if ($unrepresentable instanceof ClassType) {
             $diagnostics->warning(sprintf('A default for %s cannot be a PHP constant expression; null is used instead.', $unrepresentable->describe()), $at);
 

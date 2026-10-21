@@ -14,6 +14,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Builder\ExtensionVocabulary;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\Hierarchy;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\NamedClass;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\NameResolver;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\ObjectDefaults;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\PropertyView;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\ReadWriteMode;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\RequiredCycles;
@@ -174,7 +175,7 @@ final class Action
         }
 
         [$built, $enums] = $this->used($built, $registry->enums(), $superseded, $input->graph());
-        $output = new Output($built, $diagnostics, $enums);
+        $output = new Output($this->withObjectDefaults($built, $diagnostics), $diagnostics, $enums);
         $models = [];
         $inherited = [];
         foreach ($output->classes() as $class) {
@@ -195,6 +196,29 @@ final class Action
         }
 
         return new Run($output, $classSchemas);
+    }
+
+    /**
+     * @param list<BuiltClass> $classes
+     *
+     * @return list<BuiltClass>
+     */
+    private function withObjectDefaults(array $classes, Diagnostics $diagnostics): array
+    {
+        $output = new Output($classes, new Diagnostics(), []);
+        $models = [];
+        $inherited = [];
+        foreach ($classes as $class) {
+            $models[] = $class->model();
+            $inherited[$class->model()->name()->fqcn()] = $output->inheritedProperties($class->model());
+        }
+
+        $resolved = [];
+        foreach (ObjectDefaults::resolve($models, $inherited, $diagnostics) as $index => $model) {
+            $resolved[] = new BuiltClass($model, $classes[$index]->source());
+        }
+
+        return $resolved;
     }
 
     /**

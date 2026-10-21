@@ -229,7 +229,17 @@ final class ClassBuilderTest extends TestCase
             ],
             'empty default for a class' => [
                 ['type' => 'object', 'properties' => ['money' => ['x-php-type' => 'App\\Money', 'default' => []]]],
+                ['money' => "money: App\\Money|null = array (\n)"],
+                [],
+            ],
+            'default for a class' => [
+                ['type' => 'object', 'properties' => ['money' => ['x-php-type' => 'App\\Money', 'default' => ['amount' => 1]]]],
                 ['money' => 'money: App\\Money|null = NULL'],
+                ["warning {$at}/properties/money/default: A default for App\\Money cannot be a PHP constant expression; null is used instead."],
+            ],
+            'empty default for a list of classes' => [
+                ['type' => 'object', 'properties' => ['money' => ['type' => 'array', 'items' => ['x-php-type' => 'App\\Money'], 'default' => [[]]]]],
+                ['money' => 'money: list<App\\Money>|null = NULL'],
                 ["warning {$at}/properties/money/default: A default for App\\Money cannot be a PHP constant expression; null is used instead."],
             ],
             'empty default for a list of maps' => [
@@ -319,6 +329,24 @@ final class ClassBuilderTest extends TestCase
             ['error ' . self::AT . '/x-dto-mutable: Immutable DTOs with public properties requires readonly-properties (PHP 8.1+), but the target is PHP 7.4.'],
             $messages,
         );
+    }
+
+    public function testLeavesNoEmptyObjectDefaultForAClassBeforePhp81(): void
+    {
+        [$class, $messages] = $this->build(
+            ['type' => 'object', 'properties' => ['money' => ['x-php-type' => 'App\\Money', 'default' => []]]],
+            new TargetProfile(
+                PhpVersion::fromString('8.0'),
+                MetadataMode::from(MetadataMode::NONE),
+                Mutability::from(Mutability::MUTABLE),
+                AccessorStyle::from(AccessorStyle::AUTO),
+                DateTimeClass::from(DateTimeClass::IMMUTABLE),
+                true,
+            ),
+        );
+
+        self::assertEquals(new DefaultValue(null), $this->property($class, 'money')->default());
+        self::assertSame(['warning ' . self::AT . '/properties/money/default: A default for App\\Money cannot be a PHP constant expression; null is used instead.'], $messages);
     }
 
     public function testRecognisesSkippedSchemas(): void

@@ -47,7 +47,9 @@ PHPDoc extractor of Symfony 5.4, mistake `non-empty-string` for a class name; th
 - Required arguments come first, then optional ones, each in the order of `properties`.
 - A `default` that does not fit the type is an error; a default on a required property is ignored.
 - A default for an object (a date included) or a map cannot be a PHP constant expression: the property defaults to
-  `null`, with a warning.
+  `null`, with a warning. On PHP 8.1 and newer, the empty object `{}` as the default of a generated class is
+  `new Name()`, when that class is not abstract and its constructor needs no argument; a default leading back to its
+  own class (`{}` of `A` sets `{}` of `B`, which sets `{}` of `A`) is `null`.
 
 ## Composition
 

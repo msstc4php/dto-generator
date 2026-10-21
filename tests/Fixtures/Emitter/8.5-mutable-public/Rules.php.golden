@@ -8,7 +8,9 @@ namespace App\Dto;
 
 final class Rules
 {
-    public function __construct(#[\App\Attr\Guard(new \App\Attr\Limit(max: 3))] public int $count)
-    {
+    public function __construct(
+        #[\App\Attr\Guard(new \App\Attr\Limit(max: 3))] public int $count,
+        public ?Options $options = new Options(),
+    ) {
     }
 }

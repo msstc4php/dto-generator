@@ -6,6 +6,12 @@ All notable changes to this package are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- On PHP 8.1 and newer, a `default: {}` of a property whose type is a generated class is `new Name()` in the
+  constructor, instead of `null` with a warning, when the class is not abstract and takes no required argument. Of
+  the 31 such warnings of the Kubernetes specification, 5 are left, for an `{}` that lacks a required property.
+
 ## [1.8.1] - 2026-10-21
 
 ### Fixed
