@@ -23,10 +23,13 @@ final class AllOfResolver
     /** @var array<string, array{Composition, NamedClass|null}> ancestors resolved while checking requirements */
     private array $ancestors = [];
 
-    public function __construct(ClassLookup $classes, AllOfStrategy $strategy)
+    private Merges $merges;
+
+    public function __construct(ClassLookup $classes, AllOfStrategy $strategy, ?Merges $merges = null)
     {
         $this->classes = $classes;
         $this->strategy = $strategy;
+        $this->merges = $merges ?? new Merges();
     }
 
     public function compose(Schema $schema, Diagnostics $diagnostics): Composition
@@ -109,6 +112,13 @@ final class AllOfResolver
             } else {
                 $strategy = $explicit;
             }
+        } elseif (count($parents) === 1 && $this->merges->has($schema->location())) {
+            $diagnostics->warning(
+                sprintf('A member declares a property of %s again in a way PHP lets no subclass do, so the members are merged instead of extending it.', $parents[array_key_first($parents)]->name()->fqcn()),
+                $schema->location(),
+            );
+
+            return null;
         }
 
         return count($parents) === 1 && $strategy->value() === AllOfStrategy::EXTENDS ? array_key_first($parents) : null;

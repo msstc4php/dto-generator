@@ -14,7 +14,6 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\Identifier;
 use MSSTC4PHP\DtoGenerator\Domain\Model\NullableType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\PropertyModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ScalarType;
-use MSSTC4PHP\DtoGenerator\Domain\Model\TypeModel;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\DefaultValue;
 
 /**
@@ -37,15 +36,21 @@ final class Hierarchy
 
     private Superseded $superseded;
 
+    private Merges $merges;
+
+    /** @var array<string, true> the union bases and variants, by FQCN */
+    private array $inUnion = [];
+
     private Diagnostics $diagnostics;
 
     /**
      * @param list<ClassModel> $classes
      */
-    private function __construct(array $classes, Diagnostics $diagnostics, TypeMeet $meet, Superseded $superseded)
+    private function __construct(array $classes, Diagnostics $diagnostics, TypeMeet $meet, Superseded $superseded, Merges $merges)
     {
         $this->meet = $meet;
         $this->superseded = $superseded;
+        $this->merges = $merges;
         foreach ($classes as $class) {
             $fqcn = $class->name()->fqcn();
             $this->models[$fqcn] = $class;
@@ -58,12 +63,20 @@ final class Hierarchy
     /**
      * @param list<ClassModel> $classes
      * @param array<string, Variants> $unions discriminated base FQCN → its variants
+     * @param Merges $merges takes the classes a next build merges, as they redeclare a property PHP cannot
      *
      * @return list<ClassModel> the classes in the given order
      */
-    public static function link(array $classes, array $unions, Diagnostics $diagnostics, TypeMeet $meet, Superseded $superseded): array
+    public static function link(array $classes, array $unions, Diagnostics $diagnostics, TypeMeet $meet, Superseded $superseded, ?Merges $merges = null): array
     {
-        $hierarchy = new self($classes, $diagnostics, $meet, $superseded);
+        $hierarchy = new self($classes, $diagnostics, $meet, $superseded, $merges ?? new Merges());
+        foreach ($unions as $base => $variants) {
+            $hierarchy->inUnion[$base] = true;
+            foreach ($variants->classes() as $variant) {
+                $hierarchy->inUnion[$variant->fqcn()] = true;
+            }
+        }
+
         $hierarchy->adoptVariants($unions);
         $hierarchy->breakCycles();
         foreach (self::leavesFirst($unions) as $base) {
@@ -72,7 +85,6 @@ final class Hierarchy
             }
         }
 
-        $hierarchy->detachRedeclaring($unions);
         $hierarchy->settle($unions);
         $hierarchy->check();
         $hierarchy->checkDiscriminators($unions);
@@ -310,100 +322,6 @@ final class Hierarchy
     }
 
     /**
-     * PHP lets no subclass give its parent's property another type. A class whose schema does so for a type the
-     * parent's cannot hold declares the properties of its ancestors itself instead of extending them, as the merge
-     * strategy has it; in a union, where the parent selects the class, the redeclaration stays an error.
-     *
-     * @param array<string, Variants> $unions
-     */
-    private function detachRedeclaring(array $unions): void
-    {
-        $inUnion = array_keys($unions);
-        foreach ($unions as $variants) {
-            foreach ($variants->classes() as $variant) {
-                $inUnion[] = $variant->fqcn();
-            }
-        }
-
-        foreach ($this->models as $fqcn => $model) {
-            $ancestors = $this->ancestorsOf($fqcn);
-            if ($ancestors === [] || in_array($fqcn, $inUnion, true) || array_filter($ancestors, static fn (ClassModel $ancestor): bool => in_array($ancestor->name()->fqcn(), $inUnion, true)) !== []) {
-                continue;
-            }
-
-            $inherited = [];
-            foreach (array_reverse($ancestors) as $ancestor) {
-                foreach ($ancestor->properties() as $property) {
-                    $inherited[$property->wireName()] = $property;
-                }
-            }
-
-            $merged = $this->mergedRedeclarations($model, $inherited);
-            if ($merged === null) {
-                continue;
-            }
-
-            $this->diagnostics->warning(
-                sprintf(
-                    '%s gives "%s" another type than %s, which PHP does not let a subclass do; it declares the properties of %s itself instead of extending it.',
-                    $fqcn,
-                    implode('", "', array_keys($merged)),
-                    $ancestors[0]->name()->fqcn(),
-                    $ancestors[0]->name()->fqcn(),
-                ),
-                $merged[array_keys($merged)[0]]->source(),
-            );
-            foreach ($model->properties() as $property) {
-                $inherited[$property->wireName()] = $merged[$property->wireName()] ?? $property;
-            }
-
-            $this->models[$fqcn] = $model->withProperties(...array_values($inherited));
-            $this->parents[$fqcn] = null;
-        }
-    }
-
-    /**
-     * The redeclared properties a merged class can declare, as allOf members meet; null when there are none, or when
-     * one has no meet, another name or default, or leaves a property its parent requires optional, which stays an error.
-     *
-     * @param array<string, PropertyModel> $inherited by wire name
-     *
-     * @return non-empty-array<string, PropertyModel>|null by wire name
-     */
-    private function mergedRedeclarations(ClassModel $model, array $inherited): ?array
-    {
-        $merged = [];
-        foreach ($model->properties() as $property) {
-            $parent = $inherited[$property->wireName()] ?? null;
-            if (!$parent instanceof PropertyModel || $this->narrowsValues($parent, $property)) {
-                continue;
-            }
-
-            $meet = $this->meet->of($parent->type(), $property->type());
-            if (!$meet instanceof TypeModel || $parent->name() !== $property->name() || $this->setDefault($parent) !== $this->setDefault($property) || ($parent->isRequired() && !$property->isRequired())) {
-                return null;
-            }
-
-            $merged[$property->wireName()] = $meet->describe() === $property->type()->describe() ? $property : $property->withType($meet);
-        }
-
-        return $merged === [] ? null : $merged;
-    }
-
-    /**
-     * @return list<ClassModel> nearest first; breakCycles() has run
-     */
-    private function ancestorsOf(string $fqcn): array
-    {
-        $ancestors = [];
-        for ($parent = $this->parents[$fqcn] ?? null; $parent instanceof ClassName && isset($this->models[$parent->fqcn()]); $parent = $this->parents[$parent->fqcn()] ?? null) {
-            $ancestors[] = $this->models[$parent->fqcn()];
-        }
-
-        return $ancestors;
-    }
-
-    /**
      * @param array<string, Variants> $unions
      */
     private function settle(array $unions): void
@@ -558,6 +476,17 @@ final class Hierarchy
             && ($overlap || $this->meet->admits($parent->type(), $child->type()));
     }
 
+    private function joinsAUnion(ClassModel $model): bool
+    {
+        for ($class = $model->name(); $class instanceof ClassName; $class = $this->parents[$class->fqcn()] ?? null) {
+            if (isset($this->inUnion[$class->fqcn()])) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /**
      * The default a schema sets; a null one only stands for a missing value.
      */
@@ -605,6 +534,10 @@ final class Hierarchy
                 );
             } elseif ($byWireName !== null) {
                 $this->diagnostics->error(sprintf('Property "%s" of %s is already declared by %s.', $property->wireName(), $fqcn, $byWireName), $property->source());
+                // A parent that selects the class in a union must stay.
+                if (!$this->joinsAUnion($model)) {
+                    $this->merges->add($model->source());
+                }
             } elseif ($byName !== null) {
                 $this->diagnostics->error(
                     sprintf('Property "%s" of %s becomes $%s, which %s already declares; set "x-php-name", in the document or "propertyNames" of the source.', $property->wireName(), $fqcn, $property->name(), $byName),

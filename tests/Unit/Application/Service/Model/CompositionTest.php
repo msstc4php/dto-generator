@@ -302,115 +302,6 @@ final class CompositionTest extends TestCase
         );
     }
 
-    /**
-     * @dataProvider redeclarations
-     *
-     * @param array<string, mixed> $parent
-     * @param array<string, mixed> $child
-     */
-    public function testReportsARedeclarationConstraintsCannotCheck(array $parent, array $child, bool $required = false): void
-    {
-        $at = self::AT;
-        $output = ModelFixture::build([
-            'Pet' => ['type' => 'object', 'properties' => ['p' => $parent]] + ($required ? ['required' => ['p']] : []),
-            'Cat' => ['allOf' => [self::PET, ['type' => 'object', 'properties' => ['p' => $child]]]],
-            'Meta' => ['type' => 'object', 'properties' => ['id' => ['type' => 'integer']]],
-        ]);
-
-        self::assertContains("error {$at}Cat/allOf/1/properties/p: Property \"p\" of App\\Dto\\Cat is already declared by App\\Dto\\Pet.", ModelFixture::messages($output));
-    }
-
-    /**
-     * @return iterable<string, array{0: array<string, mixed>, 1: array<string, mixed>, 2?: bool}>
-     */
-    public static function redeclarations(): iterable
-    {
-        yield 'another default' => [['type' => 'string', 'default' => 'a'], ['type' => 'string', 'default' => 'b']];
-        yield 'a default the parent lacks' => [['type' => 'string'], ['type' => 'string', 'default' => 'b']];
-        yield 'an enum of other values' => [['type' => 'string', 'enum' => ['a', 'b']], ['type' => 'string', 'enum' => ['c']]];
-        yield 'an enum of other ints' => [['type' => 'string', 'enum' => ['1']], ['type' => 'integer', 'enum' => [1, 2]]];
-        yield 'another name' => [['type' => 'string'], ['type' => 'string', 'x-php-name' => 'q']];
-        yield 'an optional property the parent requires' => [['type' => 'string'], ['type' => 'string', 'format' => 'date'], true];
-    }
-
-    /**
-     * @dataProvider mergedRedeclarations
-     *
-     * @param array<string, mixed> $parent
-     * @param array<string, mixed> $child
-     */
-    public function testDeclaresTheParentsPropertiesInsteadOfExtendingAParentWhoseTypeItChanges(array $parent, array $child, string $type): void
-    {
-        $output = ModelFixture::build([
-            'Pet' => ['type' => 'object', 'properties' => ['id' => ['type' => 'integer'], 'p' => $parent, 'name' => ['type' => 'string']]],
-            'Cat' => ['allOf' => [self::PET, ['type' => 'object', 'properties' => ['lives' => ['type' => 'integer'], 'p' => $child]]]],
-            'Meta' => ['type' => 'object', 'properties' => ['id' => ['type' => 'integer']]],
-        ]);
-
-        self::assertSame(
-            ['warning ' . self::AT . 'Cat/allOf/1/properties/p: App\\Dto\\Cat gives "p" another type than App\\Dto\\Pet, which PHP does not let a subclass do; it declares the properties of App\\Dto\\Pet itself instead of extending it.'],
-            ModelFixture::messages($output),
-        );
-        self::assertSame('final', ModelFixture::hierarchy($output)['App\\Dto\\Cat']);
-        self::assertSame('final', ModelFixture::hierarchy($output)['App\\Dto\\Pet']);
-        self::assertSame(['id: int|null', 'p: ' . $type, 'name: string|null', 'lives: int|null'], ModelFixture::classes($output)['App\\Dto\\Cat']);
-    }
-
-    public function testDeclaresEveryAncestorsPropertiesAndStaysTheParentOfItsSubclasses(): void
-    {
-        $output = ModelFixture::build([
-            'Animal' => ['type' => 'object', 'properties' => ['id' => ['type' => 'string']]],
-            'Pet' => ['allOf' => [['$ref' => '#/components/schemas/Animal'], ['properties' => ['name' => ['type' => 'string']]]]],
-            'Cat' => ['allOf' => [self::PET, ['properties' => ['id' => ['type' => 'string', 'format' => 'date-time'], 'lives' => ['type' => 'integer']]]]],
-            'Kitten' => ['allOf' => [['$ref' => '#/components/schemas/Cat'], ['properties' => ['age' => ['type' => 'integer']]]]],
-        ]);
-
-        self::assertCount(1, ModelFixture::messages($output));
-        self::assertSame(
-            ['App\Dto\Animal' => 'open', 'App\Dto\Pet' => 'final extends App\Dto\Animal', 'App\Dto\Cat' => 'open', 'App\Dto\Kitten' => 'final extends App\Dto\Cat'],
-            ModelFixture::hierarchy($output),
-        );
-        self::assertSame(['id: DateTimeImmutable|null', 'name: string|null', 'lives: int|null'], ModelFixture::classes($output)['App\Dto\Cat']);
-    }
-
-    public function testKeepsTheParentOfAVariantAndTheParentTypesClass(): void
-    {
-        $output = ModelFixture::build([
-            'Animal' => ['oneOf' => [['$ref' => '#/components/schemas/Cat']], 'discriminator' => ['propertyName' => 'kind']],
-            'Cat' => ['allOf' => [self::PET, ['required' => ['kind'], 'properties' => ['kind' => ['type' => 'string'], 'p' => ['$ref' => '#/components/schemas/Meta']]]]],
-            'Pet' => ['type' => 'object', 'properties' => ['p' => ['type' => 'object']]],
-            'Meta' => ['type' => 'object', 'properties' => ['id' => ['type' => 'integer']]],
-            'Box' => ['type' => 'object', 'properties' => ['item' => ['type' => 'object', 'properties' => ['a' => ['type' => 'string']]]]],
-            'Crate' => ['allOf' => [['$ref' => '#/components/schemas/Box'], ['properties' => ['item' => ['$ref' => '#/components/schemas/Box']]]]],
-        ]);
-
-        self::assertContains('error ' . self::AT . 'Cat/allOf/1/properties/p: Property "p" of App\Dto\Cat is already declared by App\Dto\Pet.', ModelFixture::messages($output));
-        self::assertArrayHasKey('App\Dto\BoxItem', ModelFixture::classes($output));
-    }
-
-    public function testKeepsTheParentThatSelectsAVariant(): void
-    {
-        $output = ModelFixture::build([
-            'Pet' => ['type' => 'object', 'required' => ['kind'], 'properties' => ['kind' => ['type' => 'string'], 'p' => ['type' => 'object']], 'discriminator' => ['propertyName' => 'kind']],
-            'Cat' => ['allOf' => [self::PET, ['properties' => ['p' => ['$ref' => '#/components/schemas/Meta']]]]],
-            'Meta' => ['type' => 'object', 'properties' => ['id' => ['type' => 'integer']]],
-        ]);
-
-        self::assertContains('error ' . self::AT . 'Cat/allOf/1/properties/p: Property "p" of App\Dto\Cat is already declared by App\Dto\Pet.', ModelFixture::messages($output));
-    }
-
-    /**
-     * @return iterable<string, array{array<string, mixed>, array<string, mixed>, string}>
-     */
-    public static function mergedRedeclarations(): iterable
-    {
-        yield 'a date over a string' => [['type' => 'string'], ['type' => 'string', 'format' => 'date-time'], 'DateTimeImmutable|null'];
-        yield 'an int over a number' => [['type' => 'number'], ['type' => 'integer'], 'int|null'];
-        yield 'a class over an object' => [['type' => 'object'], ['$ref' => '#/components/schemas/Meta'], 'App\\Dto\\Meta|null'];
-        yield 'a list of narrower items' => [['type' => 'array', 'items' => ['type' => 'object']], ['type' => 'array', 'items' => ['$ref' => '#/components/schemas/Meta']], 'list<App\\Dto\\Meta>|null'];
-        yield 'the meet of both' => [['type' => ['integer', 'string']], ['type' => ['string', 'boolean']], 'string|null'];
-    }
-
     public function testMergesAPropertyIntoTheTypeOfTheValuesBothAdmit(): void
     {
         $output = ModelFixture::build([
@@ -1082,7 +973,10 @@ final class CompositionTest extends TestCase
                     'Pet' => ['allOf' => [['$ref' => '#/components/schemas/Animal'], ['properties' => ['name' => []]]]],
                     'Cat' => ['allOf' => [self::PET, ['properties' => ['id' => ['type' => 'integer']]]]],
                 ],
-                ["error {$at}Cat/allOf/1/properties/id: Property \"id\" of App\\Dto\\Cat is already declared by App\\Dto\\Animal."],
+                [
+                    "warning {$at}Cat: A member declares a property of App\\Dto\\Pet again in a way PHP lets no subclass do, so the members are merged instead of extending it.",
+                    "error {$at}Cat/allOf/1/properties/id: Property \"id\" of App\\Dto\\Cat is int|null here, but string|null in an earlier allOf member.",
+                ],
             ],
             'member that is a plain union' => [
                 ['Either' => ['oneOf' => [['type' => 'string'], ['type' => 'integer']]], 'Cat' => ['allOf' => [['$ref' => '#/components/schemas/Either'], $lives]]],
@@ -1090,7 +984,10 @@ final class CompositionTest extends TestCase
             ],
             'redeclared inherited property' => [
                 ['Pet' => $pet, 'Cat' => ['allOf' => [self::PET, ['properties' => ['name' => ['type' => 'integer']]]]]],
-                ["error {$at}Cat/allOf/1/properties/name: Property \"name\" of App\\Dto\\Cat is already declared by App\\Dto\\Pet."],
+                [
+                    "warning {$at}Cat: A member declares a property of App\\Dto\\Pet again in a way PHP lets no subclass do, so the members are merged instead of extending it.",
+                    "error {$at}Cat/allOf/1/properties/name: Property \"name\" of App\\Dto\\Cat is int|null here, but string|null in an earlier allOf member.",
+                ],
             ],
             'different mutability' => [
                 ['Pet' => $pet + ['x-dto-mutable' => true], 'Cat' => ['allOf' => [self::PET, $lives]]],

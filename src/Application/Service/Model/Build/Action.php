@@ -12,6 +12,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Builder\Directions;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\EnumBuilder;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\ExtensionVocabulary;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\Hierarchy;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\Merges;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\NamedClass;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\NameResolver;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\ObjectDefaults;
@@ -55,11 +56,19 @@ final class Action
         $dto = $input->config()->dto();
         // Always through Views: one schema may ask for views even when the run keeps one model.
         $mode = new ReadWriteMode($dto->readWriteModels());
+        // A class that redeclares a property PHP cannot shows only once built; every build runs again merging it.
+        $merged = new Merges();
+        do {
+            $requested = new Merges();
+            $output = (new Views($input->graph(), $dto->viewSuffixes(), $mode))->build(fn (?View $view): Run => $this->build($input, $view, $mode, $merged, $requested));
+            $settled = $merged->covers($requested);
+            $merged = $merged->with($requested);
+        } while (!$settled);
 
-        return (new Views($input->graph(), $dto->viewSuffixes(), $mode))->build(fn (?View $view): Run => $this->build($input, $view, $mode));
+        return $output;
     }
 
-    private function build(Input $input, ?View $view, ReadWriteMode $mode): Run
+    private function build(Input $input, ?View $view, ReadWriteMode $mode, Merges $merged, Merges $requested): Run
     {
         $diagnostics = new Diagnostics();
         $config = $input->config();
@@ -138,7 +147,7 @@ final class Action
         }
 
         // Every named class is declared by now, so `allOf` can tell which members it may extend.
-        $allOf = new AllOfResolver(new ClassLookup($input->graph(), $registry->declarations()), $config->dto()->allOfStrategy());
+        $allOf = new AllOfResolver(new ClassLookup($input->graph(), $registry->declarations()), $config->dto()->allOfStrategy(), $merged);
         $compositions = [];
         // Inline classes are planned while walking, so the walk reaches inline objects nested in inline objects. The
         // schemas named by their place come last, so that turning them on renames no class the components give.
@@ -196,7 +205,7 @@ final class Action
 
         $unions = $this->unions($input, $registry, $children, $subclasses, $diagnostics);
         $built = [];
-        foreach (Hierarchy::link($models, $unions, $diagnostics, $types->meet(), $superseded) as $index => $model) {
+        foreach (Hierarchy::link($models, $unions, $diagnostics, $types->meet(), $superseded, $requested) as $index => $model) {
             $built[] = new BuiltClass($model, $registry->planned()[$index][2]);
         }
 

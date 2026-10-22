@@ -8,11 +8,12 @@ All notable changes to this package are documented here. The format follows
 
 ### Changed
 
-- A child's schema that gives a property of its parent a type PHP lets no subclass declare (a class over an object, a
-  list of `$ref` items over a list of objects, a date over a string), as the generic envelope of many APIs invites,
-  makes the class declare its ancestors' properties itself instead of extending them, with a warning, where it was an
-  error: each such property takes the type both schemas admit. Another name or default, types with no common values,
-  an optional property the parent requires, or a class in a discriminated union stays an error.
+- A class whose `allOf` member declares a property of its parent again in a way PHP lets no subclass do (a class over
+  an object, a list of `$ref` items over a list of objects, a date over a string), as the generic envelope of many APIs
+  invites, merges its `allOf` instead of extending, as `x-php-all-of: merge` does, with a warning, where it was an
+  error. It is no longer a subtype of the parent; a property both declare takes the type both admit, and merging
+  reports types without common values. A class in a discriminated union and one with `x-php-all-of: extends` keep the
+  error.
 
 ## [1.11.0] - 2026-10-22
 
