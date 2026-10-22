@@ -353,6 +353,11 @@ final class Schema
                     $uses[] = new ReferenceUse($ref, $this->location->child('discriminator', 'mapping', $value));
                 }
             }
+
+            $default = $this->discriminator->defaultRef();
+            if ($default !== null) {
+                $uses[] = new ReferenceUse($default, $this->location->child('discriminator', 'defaultMapping'));
+            }
         }
 
         return $uses;

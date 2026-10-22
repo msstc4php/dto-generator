@@ -188,6 +188,22 @@ final class LoadTest extends TestCase
         self::assertSame([['Pet', 0, true], ['Cat', 0, false]], $this->summary($output));
     }
 
+    public function testFollowsTheDefaultMappingAndReportsOneThatNamesNothing(): void
+    {
+        $output = $this->load(
+            [self::SPEC => $this->spec([
+                'Pet' => ['discriminator' => ['propertyName' => 'kind', 'defaultMapping' => 'Other']],
+                'Cat' => ['discriminator' => ['propertyName' => 'kind', 'defaultMapping' => '#/components/schemas/Missing']],
+                'Other' => ['type' => 'object'],
+            ])],
+            ConfigMother::source(self::SPEC, ['Pet', 'Cat']),
+        );
+
+        self::assertSame([['Pet', 0, true], ['Cat', 0, true], ['Other', 0, false]], $this->summary($output));
+        self::assertCount(1, $this->messages($output));
+        self::assertStringStartsWith('error /project/api/openapi.yaml#/components/schemas/Cat/discriminator/defaultMapping: ', $this->messages($output)[0]);
+    }
+
     public function testNamesWholeFileTargetsAfterTheFile(): void
     {
         $output = $this->load([

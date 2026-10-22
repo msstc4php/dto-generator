@@ -20,11 +20,14 @@ final class DiscriminatorModel
      */
     private array $mapping;
 
+    private ?ClassName $default;
+
     /**
      * @param string $propertyName wire name of the discriminating property
      * @param array<int|string, ClassName> $mapping discriminator value → concrete class
+     * @param ?ClassName $default the class of a missing or unmapped value (OpenAPI 3.2 `defaultMapping`)
      */
-    public function __construct(string $propertyName, array $mapping)
+    public function __construct(string $propertyName, array $mapping, ?ClassName $default = null)
     {
         if ($propertyName === '') {
             throw new InvalidModel('Discriminator property name must not be empty.');
@@ -36,6 +39,7 @@ final class DiscriminatorModel
 
         $this->propertyName = $propertyName;
         $this->mapping = $mapping;
+        $this->default = $default;
     }
 
     public function propertyName(): string
@@ -57,6 +61,25 @@ final class DiscriminatorModel
     public function mapping(): array
     {
         return $this->mapping;
+    }
+
+    public function defaultClass(): ?ClassName
+    {
+        return $this->default;
+    }
+
+    /**
+     * The first value that selects the default class, as a Serializer that takes a default by value names it.
+     */
+    public function defaultValue(): ?string
+    {
+        foreach ($this->mapping as $value => $class) {
+            if ($this->default instanceof ClassName && $class->fqcn() === $this->default->fqcn()) {
+                return (string) $value;
+            }
+        }
+
+        return null;
     }
 
     public function classFor(string $value): ?ClassName

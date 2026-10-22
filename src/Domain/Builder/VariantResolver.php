@@ -239,7 +239,9 @@ final class VariantResolver
             }
         }
 
-        return new Variants($classes, $mapping === [] ? null : new DiscriminatorModel($discriminator->propertyName(), $mapping), $listed);
+        $default = $this->defaultClass($schema, $discriminator, $names, $diagnostics);
+
+        return new Variants($classes, $mapping === [] ? null : new DiscriminatorModel($discriminator->propertyName(), $mapping, $default), $listed);
     }
 
     /**
@@ -313,6 +315,29 @@ final class VariantResolver
         }
 
         return $mapping;
+    }
+
+    /**
+     * @param array<string, string> $names the variants by FQCN
+     */
+    private function defaultClass(Schema $schema, Discriminator $discriminator, array $names, Diagnostics $diagnostics): ?ClassName
+    {
+        $ref = $discriminator->defaultRef();
+        $entry = $schema->location()->child('discriminator', 'defaultMapping');
+        // The loader resolved the target from the entry itself and reported it if it could not.
+        $target = $ref === null ? null : $this->graph->resolve(new ReferenceUse($ref, $entry));
+        if (!$target instanceof ResolvedSchema) {
+            return null;
+        }
+
+        $class = $this->classes->classBehind($target);
+        if (!$class instanceof ClassName || !isset($names[$class->fqcn()])) {
+            $diagnostics->error('The default mapping names a schema that is not one of the variants.', $entry);
+
+            return null;
+        }
+
+        return $class;
     }
 
     /**

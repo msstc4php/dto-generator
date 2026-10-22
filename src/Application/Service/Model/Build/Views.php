@@ -267,7 +267,7 @@ final class Views
     /**
      * What a shared class must be in both builds.
      *
-     * @return array{string, ?string, list<array{string, string}>, array<array-key, string>, list<string>}
+     * @return array{string, ?string, list<array{string, string}>, array<array-key, string>, ?string, list<string>}
      */
     private function shape(ClassModel $model): array
     {
@@ -279,6 +279,7 @@ final class Views
             $parent instanceof ClassName ? $parent->fqcn() : null,
             array_map(static fn (PropertyModel $property): array => [$property->wireName(), $property->type()->describe()], $model->properties()),
             $discriminator instanceof DiscriminatorModel ? array_map(static fn (ClassName $variant): string => $variant->fqcn(), $discriminator->mapping()) : [],
+            $discriminator instanceof DiscriminatorModel && $discriminator->defaultClass() instanceof ClassName ? $discriminator->defaultClass()->fqcn() : null,
             array_map(static fn (ClassName $interface): string => $interface->fqcn(), $model->interfaces()),
         ];
     }

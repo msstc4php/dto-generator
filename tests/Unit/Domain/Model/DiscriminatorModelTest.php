@@ -23,6 +23,19 @@ final class DiscriminatorModelTest extends TestCase
         self::assertSame(['cat' => $cat, 1 => $discriminator->classFor('1')], $discriminator->mapping());
     }
 
+    public function testHasADefaultClassAndItsFirstValue(): void
+    {
+        $cat = ClassName::fromFqcn('App\\Cat');
+        $other = ClassName::fromFqcn('App\\Other');
+        $mapping = ['cat' => $cat, '1' => $other, 'other' => ClassName::fromFqcn('App\\Other')];
+
+        self::assertSame($other, (new DiscriminatorModel('kind', $mapping, $other))->defaultClass());
+        self::assertSame('1', (new DiscriminatorModel('kind', $mapping, $other))->defaultValue());
+        self::assertNull((new DiscriminatorModel('kind', $mapping))->defaultClass());
+        self::assertNull((new DiscriminatorModel('kind', $mapping))->defaultValue());
+        self::assertNull((new DiscriminatorModel('kind', ['cat' => $cat], $other))->defaultValue());
+    }
+
     public function testNeedsAMapping(): void
     {
         $this->expectException(InvalidModel::class);

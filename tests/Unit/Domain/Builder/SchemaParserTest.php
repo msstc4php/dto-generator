@@ -84,6 +84,7 @@ final class SchemaParserTest extends TestCase
         self::assertCount(1, $schema->anyOf());
         self::assertNotNull($schema->discriminator());
         self::assertSame('#/components/schemas/Cat', $schema->discriminator()->refFor('cat'));
+        self::assertNull($schema->discriminator()->defaultRef());
         self::assertSame(['a', 'b'], $schema->enum());
         self::assertFalse($schema->additionalProperties());
     }
@@ -186,6 +187,8 @@ final class SchemaParserTest extends TestCase
             'unquoted null type' => [['type' => ['string', null]], 'Unknown type null; quote it as "null"', '/type/1'],
             'mapping as list' => [['discriminator' => ['propertyName' => 'kind', 'mapping' => ['Dog', 'Cat']]], '"mapping" must be an object', '/discriminator/mapping'],
             'numeric type' => [['type' => 5], 'non-empty list of type names', '/type'],
+            'defaultMapping not a string' => [['discriminator' => ['propertyName' => 'kind', 'defaultMapping' => 5]], '"defaultMapping" must be a non-empty string', '/discriminator/defaultMapping'],
+            'empty defaultMapping' => [['discriminator' => ['propertyName' => 'kind', 'defaultMapping' => '']], '"defaultMapping" must be a non-empty string', '/discriminator/defaultMapping'],
             'numeric mapping key' => [['discriminator' => ['propertyName' => 'kind', 'mapping' => ['1' => 5]]], 'A mapping target must be a non-empty string', '/discriminator/mapping/1'],
         ];
     }

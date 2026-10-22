@@ -157,7 +157,8 @@ Classes are `final`, except the bases of `allOf` and of discriminated unions. At
   A `$self` that names another URI than the document's own location gives a warning: references in the document
   still resolve against where it was read from, and a `$ref` to the `$self` URI does not reach the document. A
   `$self` with a fragment is not read either. With [`sources[].operations`](configuration.md#operations), the `query`
-  method, `additionalOperations`, the `itemSchema` of sequential media types and `components/mediaTypes` are read.
+  method, `additionalOperations`, the `itemSchema` of sequential media types and `components/mediaTypes` are read;
+  so is [`discriminator.defaultMapping`](#discriminator-defaultmapping).
 - **`const`** keeps a date or a `formats` class when `format` names one, and keeps the declared `type` (with a
   warning) when the constant does not fit it. A bare `const` member of `allOf` (`allOf: [{$ref: Code}, {const: x}]`)
   narrows the type to its literal; a constant outside that type (`{type: integer, maximum: 10, allOf: [{const: 50}]}`)
@@ -174,6 +175,11 @@ Classes are `final`, except the bases of `allOf` and of discriminated unions. At
 - **Anchors.** `$ref: '#Pet'` or `'common.yaml#Pet'` names the one schema of that document with `$anchor: Pet` (or
   `$dynamicAnchor: Pet`, read as a plain anchor); none or several is an error, at the first `$ref` to it. The whole document is one scope: a `$id` inside it starts none, and a `$ref` by `$id` is not
   resolved. `classNames` and `propertyNames` keys take JSON pointers only.
+- **`discriminator.defaultMapping`** <a id="discriminator-defaultmapping"></a> (OpenAPI 3.2, read in every version) names the variant for a missing or
+  unmapped value, as `mapping` names one, bare names included; it must be one of the variants. Its constructor does
+  not check the discriminator, which may hold any value, or none when the variant does not require the property; it
+  keeps its own values in the mapping. The variants of an abstract default are unchecked by that discriminator only.
+  Selecting the default when deserializing is up to the serializer: see the bridge.
 - **A bare name in `discriminator.mapping`** is resolved against the file holding the discriminator, not the root
   document.
 - **A mutable DTO with `accessors: public-properties`** still lets code assign the discriminator directly.

@@ -71,7 +71,7 @@ final class SchemaFingerprint
             self::all($schema->oneOf()),
             self::all($schema->anyOf()),
             $discriminator instanceof Discriminator
-                ? [$discriminator->propertyName(), array_map(static fn (string $value): array => [$value, $discriminator->refFor($value)], $discriminator->values())]
+                ? [$discriminator->propertyName(), array_map(static fn (string $value): array => [$value, $discriminator->refFor($value)], $discriminator->values()), $discriminator->defaultRef()]
                 : null,
             self::sorted($keywords),
             self::sorted($schema->extensions()->all()),

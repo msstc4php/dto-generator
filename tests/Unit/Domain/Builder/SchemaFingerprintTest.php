@@ -80,6 +80,7 @@ final class SchemaFingerprintTest extends TestCase
         yield 'no discriminator' => [['discriminator' => null]];
         yield 'discriminator property' => [['discriminator' => ['propertyName' => 'tags', 'mapping' => ['1' => '#/components/schemas/P']]]];
         yield 'discriminator value' => [['discriminator' => ['propertyName' => 'x', 'mapping' => ['2' => '#/components/schemas/P']]]];
+        yield 'discriminator default' => [['discriminator' => ['propertyName' => 'x', 'mapping' => ['1' => '#/components/schemas/P'], 'defaultMapping' => 'P']]];
         yield 'discriminator target' => [['discriminator' => ['propertyName' => 'x', 'mapping' => ['1' => '#/components/schemas/Q']]]];
         yield 'keyword' => [['minProperties' => 2]];
         yield 'another keyword' => [['maxProperties' => 6]];

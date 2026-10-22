@@ -147,7 +147,14 @@ final class SelectingValues
 
         $earlier = $found[$property->name()] ?? null;
         // A farther base that maps the class itself, not a nearer base, is another way in: its values select it too.
-        $keys = self::keysSelecting($model, $earlier === null ? $between : [], $discriminator);
+        $targets = self::targets($model, $earlier === null ? $between : []);
+        $default = $discriminator->defaultClass();
+        // The default takes any value, and none.
+        if ($default instanceof ClassName && in_array($default->fqcn(), $targets, true)) {
+            return;
+        }
+
+        $keys = self::keysSelecting($targets, $discriminator);
         $values = $keys === [] ? null : self::typed($keys, $property, $model, $diagnostics);
         if ($values instanceof DiscriminatorValues) {
             $merged = $earlier === null ? [] : $earlier[1]->values();
@@ -180,11 +187,13 @@ final class SelectingValues
     }
 
     /**
+     * The class and the bases between it and a discriminated base whose values select it.
+     *
      * @param list<ClassModel> $between the ancestors below the discriminated base, and the interfaces the class implements
      *
-     * @return list<int|string>
+     * @return non-empty-list<string> FQCNs
      */
-    private static function keysSelecting(ClassModel $model, array $between, DiscriminatorModel $discriminator): array
+    private static function targets(ClassModel $model, array $between): array
     {
         $targets = [$model->name()->fqcn()];
         foreach ($between as $ancestor) {
@@ -194,6 +203,16 @@ final class SelectingValues
             }
         }
 
+        return $targets;
+    }
+
+    /**
+     * @param non-empty-list<string> $targets
+     *
+     * @return list<int|string>
+     */
+    private static function keysSelecting(array $targets, DiscriminatorModel $discriminator): array
+    {
         $keys = [];
         foreach ($discriminator->mapping() as $key => $target) {
             if (in_array($target->fqcn(), $targets, true)) {

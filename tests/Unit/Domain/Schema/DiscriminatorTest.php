@@ -52,6 +52,21 @@ final class DiscriminatorTest extends TestCase
         self::assertSame('dog.yaml#/Dog', $discriminator->refFor('dog'));
     }
 
+    public function testReadsTheDefaultMappingAsTheMappingIsRead(): void
+    {
+        self::assertNull((new Discriminator('kind'))->defaultRef());
+        self::assertSame('#/components/schemas/Other', (new Discriminator('kind', [], 'Other'))->defaultRef());
+        self::assertSame('other.yaml#/Other', (new Discriminator('kind', [], 'other.yaml#/Other'))->defaultRef());
+    }
+
+    public function testRejectsAnEmptyDefaultMapping(): void
+    {
+        $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('The default mapping of a discriminator must not be empty.');
+
+        new Discriminator('kind', [], '');
+    }
+
     public function testAValueWithASlashButNoHashIsAPathReference(): void
     {
         self::assertSame('schemas/cat.yaml', (new Discriminator('kind', ['cat' => 'schemas/cat.yaml']))->refFor('cat'));

@@ -15,6 +15,9 @@ All notable changes to this package are documented here. The format follows
   such as `application/jsonl` or `text/event-stream` have), whose item gets `…Item`, and `components/mediaTypes`,
   named `<Name>MediaType`. The sequential JSON types (`application/jsonl`, `application/x-ndjson`,
   `application/json-seq`, `…+json-seq`) are preferred as JSON is.
+- `discriminator.defaultMapping` (OpenAPI 3.2) names the variant for a missing or unmapped value: its constructor
+  does not check the discriminator. `DiscriminatorModel::defaultClass()` and `defaultValue()` give it to extensions,
+  and `Discriminator::defaultRef()` reads it in a schema.
 
 ## [1.10.0] - 2026-10-22
 
