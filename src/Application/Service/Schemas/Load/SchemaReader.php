@@ -23,6 +23,8 @@ final class SchemaReader
 
     private SchemaParser $openApi30;
 
+    private SchemaParser $swagger20;
+
     private NameOverrides $names;
 
     private Versions $versions;
@@ -31,6 +33,7 @@ final class SchemaReader
     {
         $this->parser = $parser;
         $this->openApi30 = $parser->forOpenApi30();
+        $this->swagger20 = $parser->forSwagger20();
         $this->names = $names;
         $this->versions = $versions;
     }
@@ -48,7 +51,7 @@ final class SchemaReader
      */
     public function component(Document $document, $node, SchemaLocation $at, Diagnostics $diagnostics): Schema
     {
-        $parser = $this->versions->ofSource($document) ? $this->openApi30 : $this->parser;
+        $parser = $this->parserOf($this->versions->ofSource($document));
 
         return $parser->parse($this->names->apply($node, $at), $at, $diagnostics);
     }
@@ -58,8 +61,20 @@ final class SchemaReader
      */
     public function referenced(Document $document, SchemaLocation $target, SchemaLocation $referredAt, Diagnostics $diagnostics): Schema
     {
-        $parser = $this->versions->ofReferenced($document, $referredAt, $diagnostics) ? $this->openApi30 : $this->parser;
+        $parser = $this->parserOf($this->versions->ofReferenced($document, $referredAt, $diagnostics));
 
         return $parser->parse($this->names->apply(JsonPointer::get($document->root(), $target->pointer()), $target), $target, $diagnostics);
+    }
+
+    /**
+     * @param Versions::OPENAPI_*|Versions::SWAGGER_20 $dialect
+     */
+    private function parserOf(string $dialect): SchemaParser
+    {
+        if ($dialect === Versions::SWAGGER_20) {
+            return $this->swagger20;
+        }
+
+        return $dialect === Versions::OPENAPI_30 ? $this->openApi30 : $this->parser;
     }
 }
