@@ -6,6 +6,8 @@ All notable changes to this package are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.11.0] - 2026-10-22
+
 ### Added
 
 - OpenAPI 3.2 documents are read without a warning, as 3.1, whose schemas they share. A `$self` naming another URI
@@ -18,6 +20,12 @@ All notable changes to this package are documented here. The format follows
 - `discriminator.defaultMapping` (OpenAPI 3.2) names the variant for a missing or unmapped value: its constructor
   does not check the discriminator. `DiscriminatorModel::defaultClass()` and `defaultValue()` give it to extensions,
   and `Discriminator::defaultRef()` reads it in a schema.
+
+### Fixed
+
+- The Docker image builds again: 1.10.0 was published without one, as `roave/security-advisories`, a development
+  dependency, now conflicts with the PHP versions the generator supports. `composer audit` still checks the
+  dependencies in CI.
 
 ## [1.10.0] - 2026-10-22
 
@@ -417,7 +425,8 @@ First release.
 - A manifest per output directory: stale classes are deleted, files without the `@generated` header are never
   overwritten.
 
-[Unreleased]: https://github.com/msstc4php/dto-generator/compare/v1.10.0...HEAD
+[Unreleased]: https://github.com/msstc4php/dto-generator/compare/v1.11.0...HEAD
+[1.11.0]: https://github.com/msstc4php/dto-generator/compare/v1.10.0...v1.11.0
 [1.10.0]: https://github.com/msstc4php/dto-generator/compare/v1.9.0...v1.10.0
 [1.9.0]: https://github.com/msstc4php/dto-generator/compare/v1.8.1...v1.9.0
 [1.8.1]: https://github.com/msstc4php/dto-generator/compare/v1.8.0...v1.8.1
