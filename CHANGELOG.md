@@ -15,6 +15,9 @@ All notable changes to this package are documented here. The format follows
   both admit. A child type that adds nothing PHP holds leaves the parent's property, with a warning. Another name or
   default, types with no common values, a variant of a discriminated union and a class with `x-php-all-of` keep the
   error.
+- A discriminated `oneOf`/`anyOf` beside `properties` whose inline variants only restrict those properties, one of
+  them allowing several values of the discriminating property (GitHub's `checks/create` body), ignores the
+  discriminator with a warning and gives a class of the properties, where the variant was an error.
 
 ## [1.11.0] - 2026-10-22
 
