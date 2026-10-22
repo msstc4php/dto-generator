@@ -1,6 +1,6 @@
 {
     "name": "msstc4php/dto-generator",
-    "description": "Generates immutable or mutable PHP DTO classes from OpenAPI 3.x schemas, tailored to the target PHP version.",
+    "description": "Generates immutable or mutable PHP DTO classes from OpenAPI 3.0–3.2 schemas, tailored to the target PHP version.",
     "type": "composer-plugin",
     "license": "MIT",
     "keywords": [

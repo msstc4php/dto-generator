@@ -183,12 +183,13 @@ final class Action
     }
 
     /**
-     * A file that failed once is reported once, however many sources or references point into it.
+     * A file that failed once is reported once, however many sources or references point into it; the first read of a
+     * document checks its `$self`.
      */
     private function load(string $path, SchemaLocation $requestedAt, Input $input, Diagnostics $diagnostics, GraphBuilder $graph, Reads $reads): ?Document
     {
         $document = $graph->isUnloadable($path) ? null : $this->read($path, $requestedAt, $input, $diagnostics, $graph, $reads);
-        if ($document instanceof Document && $reads->isFirstRead($document->path())) {
+        if ($document instanceof Document && $reads->markChecked($document->path())) {
             $this->checkSelf($document, $diagnostics);
         }
 
@@ -208,8 +209,14 @@ final class Action
 
         $self = $root['$self'];
         $at = new SchemaLocation($document->path());
+        if (is_string($self) && strpos($self, '#') !== false) {
+            $diagnostics->warning(sprintf('"$self" "%s" must not have a fragment; it is not read.', $self), $at->child('$self'));
+
+            return;
+        }
+
         try {
-            if (is_string($self) && Reference::target($self, $at)->file() === $at->file()) {
+            if ($self === '' || (is_string($self) && Reference::target($self, $at)->file() === $at->file())) {
                 return;
             }
         } catch (InvalidModel $exception) {

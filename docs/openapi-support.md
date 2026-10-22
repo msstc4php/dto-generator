@@ -1,6 +1,6 @@
 # OpenAPI support
 
-The generator reads OpenAPI 3.1, [3.2](#openapi-32) and 3.0 documents in YAML or JSON and generates a class for each schema in
+The generator reads OpenAPI 3.0, 3.1 and [3.2](#openapi-32) documents in YAML or JSON and generates a class for each schema in
 `components/schemas` that `sources[].include` selects, plus the schemas those refer to. Schemas follow JSON Schema
 2020-12, as OpenAPI 3.1 does; [3.0 keywords](#openapi-30) are read as 3.1 writes them. With
 [`sources[].operations`](configuration.md#operations), the schemas written in request bodies and responses give
@@ -150,13 +150,13 @@ Classes are `final`, except the bases of `allOf` and of discriminated unions. At
     `exclusiveMaximum`; without a numeric bound beside it it gives a warning, and a number in its place is read as
     in 3.1, with a warning.
 
-- **OpenAPI 3.2** <a id="openapi-32"></a> documents (`openapi: 3.2.x`) are read as 3.1: their schemas are the same.
-  A `$self` that names another URI than the document's own location gives a warning: references in the document
-  still resolve against where it was read from, and a `$ref` to the `$self` URI does not reach the document.
-
   A document that states no `openapi` version is read in the version of the document that refers to it first; one
   that 3.0 and 3.1 documents both refer to gives a warning. In a 3.1 document `nullable` has no effect and gives a
   warning; use `type: [T, 'null']`.
+- **OpenAPI 3.2** <a id="openapi-32"></a> documents (`openapi: 3.2.x`) are read as 3.1: their schemas are the same.
+  A `$self` that names another URI than the document's own location gives a warning: references in the document
+  still resolve against where it was read from, and a `$ref` to the `$self` URI does not reach the document. A
+  `$self` with a fragment is not read either.
 - **`const`** keeps a date or a `formats` class when `format` names one, and keeps the declared `type` (with a
   warning) when the constant does not fit it. A bare `const` member of `allOf` (`allOf: [{$ref: Code}, {const: x}]`)
   narrows the type to its literal; a constant outside that type (`{type: integer, maximum: 10, allOf: [{const: 50}]}`)

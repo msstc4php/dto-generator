@@ -383,9 +383,28 @@ final class LoadTest extends TestCase
         yield 'its absolute path' => ['/project/api/openapi.yaml', null];
         yield 'another file' => ['public.yaml', '"public.yaml"'];
         yield 'a URL' => ['https://example.com/openapi.yaml', '"https://example.com/openapi.yaml"'];
-        yield 'a fragment' => ['openapi.yaml#Root', '"openapi.yaml#Root"'];
-        yield 'empty' => ['', '""'];
+        yield 'empty, the base URI itself' => ['', null];
         yield 'not a string' => [42, 'that is not a string'];
+    }
+
+    /**
+     * @dataProvider fragments
+     */
+    public function testWarnsAboutASelfWithAFragment(string $self): void
+    {
+        $output = $this->load([self::SPEC => ['openapi' => '3.2.0', '$self' => $self, 'components' => ['schemas' => []]]]);
+
+        self::assertSame(['warning /project/api/openapi.yaml#/$self: "$self" "' . $self . '" must not have a fragment; it is not read.'], $this->messages($output));
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function fragments(): iterable
+    {
+        yield 'an anchor' => ['openapi.yaml#Root'];
+        yield 'a pointer' => ['openapi.yaml#/x'];
+        yield 'an empty fragment' => ['openapi.yaml#'];
     }
 
     public function testWarnsOnceAboutTheSelfOfAReferencedDocument(): void

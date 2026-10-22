@@ -15,8 +15,8 @@ final class Reads
     /** @var array<string, true> */
     private array $documents = [];
 
-    /** @var array<string, true> documents whose first read was answered */
-    private array $read = [];
+    /** @var array<string, true> */
+    private array $checked = [];
 
     /** @var array<string, Document> by URL */
     private array $remote = [];
@@ -33,15 +33,15 @@ final class Reads
     }
 
     /**
-     * True only the first time it is asked about a document: what is checked once per document is checked then.
+     * @return bool true when the document was not marked yet
      */
-    public function isFirstRead(string $path): bool
+    public function markChecked(string $path): bool
     {
-        if (isset($this->read[$path])) {
+        if (isset($this->checked[$path])) {
             return false;
         }
 
-        $this->read[$path] = true;
+        $this->checked[$path] = true;
 
         return true;
     }
