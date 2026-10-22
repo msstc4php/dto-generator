@@ -54,8 +54,19 @@ final class ModelFixture
      */
     public static function operations(array $root): Output
     {
-        $config = ConfigMother::config(new SourceConfig(GraphFixture::SPEC, 'App\Dto', '/project/src/Dto', ['*'], [], [], OperationFilter::all()));
-        $loaded = (new LoadAction(new InMemoryDocumentLoader([GraphFixture::SPEC => ['openapi' => '3.1.0'] + $root]), new SchemaParser()))(new LoadInput($config));
+        return self::document(['openapi' => '3.1.0'] + $root, OperationFilter::all());
+    }
+
+    /**
+     * A run over a whole document as written, its version included; load diagnostics come first.
+     *
+     * @param array<string, mixed> $root
+     * @param array<string, array<array-key, mixed>> $others other documents by path
+     */
+    public static function document(array $root, ?OperationFilter $operations = null, array $others = []): Output
+    {
+        $config = ConfigMother::config(new SourceConfig(GraphFixture::SPEC, 'App\Dto', '/project/src/Dto', ['*'], [], [], $operations));
+        $loaded = (new LoadAction(new InMemoryDocumentLoader([GraphFixture::SPEC => $root] + $others), new SchemaParser()))(new LoadInput($config));
         $output = (new Action(new NameResolver()))(new Input($config, self::target(), $loaded->graph(), []));
         $diagnostics = new Diagnostics();
         $diagnostics->merge($loaded->diagnostics());

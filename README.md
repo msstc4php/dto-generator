@@ -7,7 +7,7 @@
 [![Last commit](https://img.shields.io/github/last-commit/msstc4php/dto-generator/main)](https://github.com/msstc4php/dto-generator/commits/main)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Generates PHP DTO classes from the `components/schemas` of an OpenAPI 3.0, 3.1 or 3.2 document, written for the PHP version your
+Generates PHP DTO classes from the `components/schemas` of an OpenAPI 3.0, 3.1 or 3.2 document (or the `definitions` of a Swagger 2.0 one), written for the PHP version your
 project runs on — from 7.4 to 8.5.
 
 Point it at a YAML or JSON spec and it writes one class per schema: typed constructor, immutable `with*()` methods

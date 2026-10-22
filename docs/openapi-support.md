@@ -1,6 +1,6 @@
 # OpenAPI support
 
-The generator reads OpenAPI 3.0, 3.1 and [3.2](#openapi-32) documents in YAML or JSON and generates a class for each schema in
+The generator reads OpenAPI 3.0, 3.1 and [3.2](#openapi-32) documents, and the definitions of [Swagger 2.0](#swagger-20) ones, in YAML or JSON and generates a class for each schema in
 `components/schemas` that `sources[].include` selects, plus the schemas those refer to. Schemas follow JSON Schema
 2020-12, as OpenAPI 3.1 does; [3.0 keywords](#openapi-30) are read as 3.1 writes them. With
 [`sources[].operations`](configuration.md#operations), the schemas written in request bodies and responses give
@@ -160,6 +160,11 @@ Classes are `final`, except the bases of `allOf` and of discriminated unions. At
   `$self` with a fragment is not read either. With [`sources[].operations`](configuration.md#operations), the `query`
   method, `additionalOperations`, the `itemSchema` of sequential media types and `components/mediaTypes` are read;
   so is [`discriminator.defaultMapping`](#discriminator-defaultmapping).
+- **Swagger 2.0** <a id="swagger-20"></a> documents (`swagger: '2.0'`, without `openapi`) give a class for each schema
+  in `definitions`, read as OpenAPI 3.0 schemas, which they nearly are: `discriminator: petType` names the property
+  as `discriminator: {propertyName: petType}` does, `x-nullable: true` admits `null` as `nullable: true` does, and
+  `type: file` is binary content (`string`). The documents they refer to are read as 2.0 too, unless they state
+  another version. Their operations are not read; `sources[].operations` gives a warning there.
 - **`const`** keeps a date or a `formats` class when `format` names one, and keeps the declared `type` (with a
   warning) when the constant does not fit it. A bare `const` member of `allOf` (`allOf: [{$ref: Code}, {const: x}]`)
   narrows the type to its literal; a constant outside that type (`{type: integer, maximum: 10, allOf: [{const: 50}]}`)
