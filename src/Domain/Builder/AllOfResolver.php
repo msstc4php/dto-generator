@@ -23,10 +23,16 @@ final class AllOfResolver
     /** @var array<string, array{Composition, NamedClass|null}> ancestors resolved while checking requirements */
     private array $ancestors = [];
 
-    public function __construct(ClassLookup $classes, AllOfStrategy $strategy)
+    private Merges $merges;
+
+    /**
+     * @param Merges $merges the class schemas to merge, as a member redeclares a property PHP cannot
+     */
+    public function __construct(ClassLookup $classes, AllOfStrategy $strategy, Merges $merges)
     {
         $this->classes = $classes;
         $this->strategy = $strategy;
+        $this->merges = $merges;
     }
 
     public function compose(Schema $schema, Diagnostics $diagnostics): Composition
@@ -98,6 +104,7 @@ final class AllOfResolver
     private function parentIndex(Schema $schema, array $parents, Diagnostics $diagnostics): ?int
     {
         $strategy = $this->strategy;
+        $redeclared = $this->merges->of($schema->location());
         if ($schema->extensions()->has('x-php-all-of')) {
             $at = $schema->location()->child('x-php-all-of');
             $value = $schema->extensions()->get('x-php-all-of');
@@ -109,6 +116,17 @@ final class AllOfResolver
             } else {
                 $strategy = $explicit;
             }
+        } elseif (count($parents) === 1 && $redeclared instanceof RedeclaredProperty) {
+            $diagnostics->warning(
+                sprintf(
+                    'Property "%s" is declared again with a type PHP lets no subclass declare, so the members are merged instead of extending %s; "x-php-all-of: merge" says so, "extends" keeps the error.',
+                    $redeclared->wireName(),
+                    $parents[array_key_first($parents)]->name()->fqcn(),
+                ),
+                $redeclared->location(),
+            );
+
+            return null;
         }
 
         return count($parents) === 1 && $strategy->value() === AllOfStrategy::EXTENDS ? array_key_first($parents) : null;

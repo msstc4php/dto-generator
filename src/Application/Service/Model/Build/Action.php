@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Application\Service\Model\Build;
 
+use LogicException;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\AllOfResolver;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\ClassBuilder;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\ClassLookup;
@@ -12,6 +13,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Builder\Directions;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\EnumBuilder;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\ExtensionVocabulary;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\Hierarchy;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\Merges;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\NamedClass;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\NameResolver;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\ObjectDefaults;
@@ -55,11 +57,24 @@ final class Action
         $dto = $input->config()->dto();
         // Always through Views: one schema may ask for views even when the run keeps one model.
         $mode = new ReadWriteMode($dto->readWriteModels());
+        // Redeclarations PHP forbids surface only in Hierarchy; everything is built again with them merged until none is new.
+        $merged = new Merges();
+        $builds = 0;
+        do {
+            $requested = new Merges();
+            $buildView = fn (?View $view): Run => $this->build($input, $view, $mode, $merged, $requested);
+            $output = (new Views($input->graph(), $dto->viewSuffixes(), $mode))->build($buildView);
+            $settled = $merged->covers($requested);
+            $merged->addAll($requested);
+            if (++$builds > count($input->graph()->all()) + 1) {
+                throw new LogicException('The builds that merge redeclaring classes do not settle.');
+            }
+        } while (!$settled);
 
-        return (new Views($input->graph(), $dto->viewSuffixes(), $mode))->build(fn (?View $view): Run => $this->build($input, $view, $mode));
+        return $output;
     }
 
-    private function build(Input $input, ?View $view, ReadWriteMode $mode): Run
+    private function build(Input $input, ?View $view, ReadWriteMode $mode, Merges $merged, Merges $requested): Run
     {
         $diagnostics = new Diagnostics();
         $config = $input->config();
@@ -138,7 +153,7 @@ final class Action
         }
 
         // Every named class is declared by now, so `allOf` can tell which members it may extend.
-        $allOf = new AllOfResolver(new ClassLookup($input->graph(), $registry->declarations()), $config->dto()->allOfStrategy());
+        $allOf = new AllOfResolver(new ClassLookup($input->graph(), $registry->declarations()), $config->dto()->allOfStrategy(), $merged);
         $compositions = [];
         // Inline classes are planned while walking, so the walk reaches inline objects nested in inline objects. The
         // schemas named by their place come last, so that turning them on renames no class the components give.
@@ -196,8 +211,16 @@ final class Action
 
         $unions = $this->unions($input, $registry, $children, $subclasses, $diagnostics);
         $built = [];
-        foreach (Hierarchy::link($models, $unions, $diagnostics, $types->meet(), $superseded) as $index => $model) {
+        $found = new Merges();
+        foreach (Hierarchy::link($models, $unions, $diagnostics, $types->meet(), $superseded, $found) as $index => $model) {
             $built[] = new BuiltClass($model, $registry->planned()[$index][2]);
+        }
+
+        // A class whose document chooses how its allOf resolves keeps that choice, and the error.
+        foreach ($registry->planned() as [$schema]) {
+            if (!$schema->extensions()->has('x-php-all-of')) {
+                $requested->take($found, $schema->location());
+            }
         }
 
         [$built, $enums] = $this->used($built, $registry->enums(), $superseded, $input->graph());

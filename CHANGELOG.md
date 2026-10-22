@@ -6,6 +6,16 @@ All notable changes to this package are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- A class whose `allOf` member declares a property of its parent again with a type PHP lets no subclass declare (a
+  class over an object, a list of `$ref` items over a list of objects, a date over a string), as the generic envelope
+  of many APIs invites, merges its `allOf` instead of extending, as `x-php-all-of: merge` does, with a warning at the
+  property, where it was an error. It is no longer a subtype of the parent; a property both declare takes the type
+  both admit. A child type that adds nothing PHP holds leaves the parent's property, with a warning. Another name or
+  default, types with no common values, a variant of a discriminated union and a class with `x-php-all-of` keep the
+  error.
+
 ## [1.11.0] - 2026-10-22
 
 ### Added

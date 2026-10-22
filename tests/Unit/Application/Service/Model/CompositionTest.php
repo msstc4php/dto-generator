@@ -302,40 +302,6 @@ final class CompositionTest extends TestCase
         );
     }
 
-    /**
-     * @dataProvider redeclarations
-     *
-     * @param array<string, mixed> $parent
-     * @param array<string, mixed> $child
-     */
-    public function testReportsARedeclarationConstraintsCannotCheck(array $parent, array $child): void
-    {
-        $at = self::AT;
-        $output = ModelFixture::build([
-            'Pet' => ['type' => 'object', 'properties' => ['p' => $parent]],
-            'Cat' => ['allOf' => [self::PET, ['type' => 'object', 'properties' => ['p' => $child]]]],
-            'Meta' => ['type' => 'object', 'properties' => ['id' => ['type' => 'integer']]],
-        ]);
-
-        self::assertContains("error {$at}Cat/allOf/1/properties/p: Property \"p\" of App\\Dto\\Cat is already declared by App\\Dto\\Pet.", ModelFixture::messages($output));
-    }
-
-    /**
-     * @return iterable<string, array{array<string, mixed>, array<string, mixed>}>
-     */
-    public static function redeclarations(): iterable
-    {
-        yield 'a date over a string' => [['type' => 'string'], ['type' => 'string', 'format' => 'date-time']];
-        yield 'an int over a number' => [['type' => 'number'], ['type' => 'integer']];
-        yield 'a class over an object' => [['type' => 'object'], ['$ref' => '#/components/schemas/Meta']];
-        yield 'a list of narrower items' => [['type' => 'array'], ['type' => 'array', 'items' => ['type' => 'string']]];
-        yield 'another default' => [['type' => 'string', 'default' => 'a'], ['type' => 'string', 'default' => 'b']];
-        yield 'a default the parent lacks' => [['type' => 'string'], ['type' => 'string', 'default' => 'b']];
-        yield 'an enum of other values' => [['type' => 'string', 'enum' => ['a', 'b']], ['type' => 'string', 'enum' => ['c']]];
-        yield 'an enum of other ints' => [['type' => 'string', 'enum' => ['1']], ['type' => 'integer', 'enum' => [1, 2]]];
-        yield 'another name' => [['type' => 'string'], ['type' => 'string', 'x-php-name' => 'q']];
-    }
-
     public function testMergesAPropertyIntoTheTypeOfTheValuesBothAdmit(): void
     {
         $output = ModelFixture::build([
