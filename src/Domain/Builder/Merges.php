@@ -35,7 +35,7 @@ final class Merges
     {
         $property = $other->of($class);
         if ($property !== null) {
-            $this->properties[$class->toString()] ??= $property;
+            $this->properties[$class->toString()] = $property;
         }
     }
 

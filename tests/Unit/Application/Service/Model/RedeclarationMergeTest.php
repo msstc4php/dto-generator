@@ -88,6 +88,18 @@ final class RedeclarationMergeTest extends TestCase
         self::assertSame('final extends App\Dto\Pet', ModelFixture::hierarchy($output)['App\Dto\Cat']);
     }
 
+    public function testNamesTheFirstPropertyThatAsksForTheMerge(): void
+    {
+        $output = ModelFixture::build([
+            'Pet' => ['type' => 'object', 'properties' => ['p' => ['type' => 'object'], 'q' => ['type' => 'string']]],
+            'Cat' => ['allOf' => [self::PET, ['properties' => ['p' => ['$ref' => '#/components/schemas/Meta'], 'q' => ['type' => 'string', 'format' => 'date']]]]],
+            'Meta' => self::META,
+        ]);
+
+        self::assertSame([self::mergeWarning('Cat/allOf/1')], ModelFixture::messages($output));
+        self::assertSame(['p: App\Dto\Meta|null', 'q: DateTimeImmutable|null'], ModelFixture::classes($output)['App\Dto\Cat']);
+    }
+
     public function testMergesEveryAncestorAndStaysTheParentOfItsSubclassesInAnyOrder(): void
     {
         $kitten = ['allOf' => [['$ref' => '#/components/schemas/Cat'], ['properties' => ['q' => ['type' => 'integer']]]]];
