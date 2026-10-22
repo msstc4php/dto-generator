@@ -7,7 +7,7 @@
 [![Last commit](https://img.shields.io/github/last-commit/msstc4php/dto-generator/main)](https://github.com/msstc4php/dto-generator/commits/main)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Generates PHP DTO classes from the `components/schemas` of an OpenAPI 3.1 or 3.0 document, written for the PHP version your
+Generates PHP DTO classes from the `components/schemas` of an OpenAPI 3.0, 3.1 or 3.2 document, written for the PHP version your
 project runs on — from 7.4 to 8.5.
 
 Point it at a YAML or JSON spec and it writes one class per schema: typed constructor, immutable `with*()` methods
@@ -23,7 +23,7 @@ when it is out of date.
 - **Immutable or mutable** DTOs, per project or per schema; getters or public properties.
 - **Read and write models** for `readOnly`/`writeOnly` on request: `PetRead` without the write-only properties,
   `PetWrite` without the read-only ones, per project or per schema; classes that do not depend on them stay shared.
-- **OpenAPI 3.1 / JSON Schema 2020-12:** objects, arrays, maps (`additionalProperties`), enums, nullable types,
+- **OpenAPI 3.1 and 3.2 / JSON Schema 2020-12:** objects, arrays, maps (`additionalProperties`), enums, nullable types,
   defaults, `format`, internal and cross-file `$ref` (recursive types included), `allOf` as inheritance or merge,
   `oneOf`/`anyOf` with a discriminator (abstract base class) or as a union type, inline property schemas lifted into
   named classes.

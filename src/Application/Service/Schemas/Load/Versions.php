@@ -42,11 +42,12 @@ final class Versions
     }
 
     /**
-     * Whether the generator reads the version: OpenAPI 3.1, or 3.0, which it rewrites as 3.1.
+     * Whether the generator reads the version: OpenAPI 3.1 or 3.2, whose schemas are alike, or 3.0, which it rewrites
+     * as 3.1.
      */
     public static function isUnderstood(string $version): bool
     {
-        return self::isOpenApi30($version) || preg_match('/^3\.1(?:\.\d+)?\z/', $version) === 1;
+        return self::isOpenApi30($version) || preg_match('/^3\.[12](?:\.\d+)?\z/', $version) === 1;
     }
 
     public function ofSource(Document $document): bool

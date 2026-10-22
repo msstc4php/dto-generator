@@ -47,6 +47,21 @@ final class LoadRemoteTest extends TestCase
         self::assertSame([[self::MONEY, true], ['https://schemas.example.com/common/v1/currency.yaml', true]], $remote->loads());
     }
 
+    public function testResolvesTheSelfOfARemoteDocumentAgainstItsUrl(): void
+    {
+        $remote = new InMemoryRemoteDocuments([
+            self::MONEY => ['$self' => 'money.yaml', 'Money' => ['$ref' => 'rate.yaml#/Rate']],
+            'https://schemas.example.com/common/v1/rate.yaml' => ['$self' => '/common/v2/rate.yaml', 'Rate' => ['type' => 'number']],
+        ]);
+
+        $output = $this->load($remote, ['https://schemas.example.com/common/'], true, ['price' => ['$ref' => self::MONEY . '#/Money']]);
+
+        self::assertSame(
+            ['warning https://schemas.example.com/common/v1/rate.yaml#/$self: "$self" "/common/v2/rate.yaml" is not read: references in this document resolve against where it was read from, and a "$ref" to that URI does not reach it.'],
+            $this->messages($output),
+        );
+    }
+
     public function testFollowsAnAnchorInAnAllowedRemoteDocument(): void
     {
         $remote = new InMemoryRemoteDocuments([

@@ -15,6 +15,9 @@ final class Reads
     /** @var array<string, true> */
     private array $documents = [];
 
+    /** @var array<string, true> */
+    private array $checked = [];
+
     /** @var array<string, Document> by URL */
     private array $remote = [];
 
@@ -27,6 +30,20 @@ final class Reads
     public function document(string $path): void
     {
         $this->documents[$path] = true;
+    }
+
+    /**
+     * @return bool true when the document was not marked yet
+     */
+    public function markChecked(string $path): bool
+    {
+        if (isset($this->checked[$path])) {
+            return false;
+        }
+
+        $this->checked[$path] = true;
+
+        return true;
     }
 
     public function remote(Document $document): void

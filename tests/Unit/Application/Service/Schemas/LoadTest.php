@@ -339,7 +339,7 @@ final class LoadTest extends TestCase
      *
      * @dataProvider understoodVersions
      */
-    public function testReadsOpenApi30And31WithoutAWarning($version): void
+    public function testReadsOpenApi30To32WithoutAWarning($version): void
     {
         $output = $this->load([self::SPEC => ['openapi' => $version, 'components' => ['schemas' => []]]]);
 
@@ -354,6 +354,78 @@ final class LoadTest extends TestCase
         yield '3.0.3' => ['3.0.3'];
         yield '3.0 from unquoted YAML' => [3.0];
         yield '3.1.1' => ['3.1.1'];
+        yield '3.2.0' => ['3.2.0'];
+        yield '3.2 from unquoted YAML' => [3.2];
+    }
+
+    /**
+     * @param JsonValue $self
+     *
+     * @dataProvider selves
+     */
+    public function testWarnsAboutASelfThatNamesAnotherUri($self, ?string $shown): void
+    {
+        $output = $this->load([self::SPEC => ['openapi' => '3.2.0', '$self' => $self, 'components' => ['schemas' => []]]]);
+
+        self::assertSame(
+            $shown === null ? [] : ['warning /project/api/openapi.yaml#/$self: "$self" ' . $shown . ' is not read: references in this document resolve against where it was read from, and a "$ref" to that URI does not reach it.'],
+            $this->messages($output),
+        );
+    }
+
+    /**
+     * @return iterable<string, array{JsonValue, ?string}>
+     */
+    public static function selves(): iterable
+    {
+        yield 'its file name' => ['openapi.yaml', null];
+        yield 'its relative path' => ['../api/openapi.yaml', null];
+        yield 'its absolute path' => ['/project/api/openapi.yaml', null];
+        yield 'another file' => ['public.yaml', '"public.yaml"'];
+        yield 'a URL' => ['https://example.com/openapi.yaml', '"https://example.com/openapi.yaml"'];
+        yield 'empty, the base URI itself' => ['', null];
+        yield 'not a string' => [42, 'that is not a string'];
+    }
+
+    /**
+     * @dataProvider fragments
+     */
+    public function testWarnsAboutASelfWithAFragment(string $self): void
+    {
+        $output = $this->load([self::SPEC => ['openapi' => '3.2.0', '$self' => $self, 'components' => ['schemas' => []]]]);
+
+        self::assertSame(['warning /project/api/openapi.yaml#/$self: "$self" "' . $self . '" must not have a fragment; it is not read.'], $this->messages($output));
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function fragments(): iterable
+    {
+        yield 'an anchor' => ['openapi.yaml#Root'];
+        yield 'a pointer' => ['openapi.yaml#/x'];
+        yield 'an empty fragment' => ['openapi.yaml#'];
+    }
+
+    public function testWarnsOnceAboutTheSelfOfAReferencedDocument(): void
+    {
+        $output = $this->load([
+            self::SPEC => self::spec(['A' => ['$ref' => 'shared.yaml#/Name'], 'B' => ['$ref' => 'shared.yaml#/Name']]),
+            '/project/api/shared.yaml' => ['$self' => 'https://example.com/shared.yaml', 'Name' => ['type' => 'string']],
+        ]);
+
+        self::assertSame(
+            ['warning /project/api/shared.yaml#/$self: "$self" "https://example.com/shared.yaml" is not read: references in this document resolve against where it was read from, and a "$ref" to that URI does not reach it.'],
+            $this->messages($output),
+        );
+    }
+
+    public function testReadsOpenApi32SchemasAs31(): void
+    {
+        $output = $this->load([self::SPEC => ['openapi' => '3.2.0', 'components' => ['schemas' => ['Name' => ['type' => 'string', 'nullable' => true]]]]]);
+
+        self::assertFalse($output->graph()->all()[0]->schema()->isNullable());
+        self::assertSame(['warning /project/api/openapi.yaml#/components/schemas/Name/nullable: "nullable" is OpenAPI 3.0 and has no effect in 3.1; write type: [T, \'null\'].'], $this->messages($output));
     }
 
     /**
@@ -371,8 +443,8 @@ final class LoadTest extends TestCase
      */
     public static function otherVersions(): iterable
     {
-        yield '3.2.0' => ['3.2.0', 'Expected OpenAPI 3.0 or 3.1, found "3.2.0"; keywords specific to that version are not understood.'];
-        yield '3.0.3 with a suffix' => ['3.0.3-rc', 'Expected OpenAPI 3.0 or 3.1, found "3.0.3-rc"; keywords specific to that version are not understood.'];
+        yield '3.3.0' => ['3.3.0', 'Expected OpenAPI 3.0, 3.1 or 3.2, found "3.3.0"; keywords specific to that version are not understood.'];
+        yield '3.0.3 with a suffix' => ['3.0.3-rc', 'Expected OpenAPI 3.0, 3.1 or 3.2, found "3.0.3-rc"; keywords specific to that version are not understood.'];
     }
 
     public function testReadsNullableInOpenApi30AndInTheDocumentsItRefersTo(): void
@@ -739,7 +811,8 @@ final class LoadTest extends TestCase
         return [
             '3.1' => [3.1, 0],
             '3.0' => [3.0, 0],
-            '3.2' => [3.2, 1],
+            '3.2' => [3.2, 0],
+            '3.3' => [3.3, 1],
         ];
     }
 

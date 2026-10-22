@@ -64,7 +64,10 @@ final class VersionsTest extends TestCase
         yield '3.1.0 with a suffix' => ['3.1.0-rc', false];
         yield 'a prefix before 3.1' => ['v3.1', false];
         yield '3.10' => ['3.10', false];
-        yield '3.2.0' => ['3.2.0', false];
+        yield '3.2.0' => ['3.2.0', true];
+        yield '3.2' => ['3.2', true];
+        yield '3.3.0' => ['3.3.0', false];
+        yield '3.20' => ['3.20', false];
     }
 
     public function testReadsADocumentWithoutAVersionInThatOfTheDocumentReferringToItFirst(): void
