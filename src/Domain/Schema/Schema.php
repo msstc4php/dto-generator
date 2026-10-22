@@ -292,6 +292,19 @@ final class Schema
         return $this->discriminator;
     }
 
+    /**
+     * The same schema read as a union without a discriminator, which cannot tell its variants apart.
+     *
+     * @internal for the loader
+     */
+    public function withoutDiscriminator(): self
+    {
+        $schema = clone $this;
+        $schema->discriminator = null;
+
+        return $schema;
+    }
+
     public function hasKeyword(string $name): bool
     {
         return array_key_exists($name, $this->keywords);

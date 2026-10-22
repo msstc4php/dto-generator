@@ -146,6 +146,10 @@ final class SchemaTest extends TestCase
         self::assertSame($part, $schema->items());
         self::assertSame($part, $schema->additionalProperties());
         self::assertSame($discriminator, $schema->discriminator());
+        $without = $schema->withoutDiscriminator();
+        self::assertNull($without->discriminator());
+        self::assertSame($discriminator, $schema->discriminator());
+        self::assertSame([$part, $part], $without->oneOf());
     }
 
     public function testAdditionalPropertiesAcceptsBooleans(): void
