@@ -158,7 +158,7 @@ vendor/bin/dto-generator generate --config=api/dto.yaml # default: dto-generator
 |---|---|
 | `0` | Success; with `--check`, the output is up to date |
 | `1` | `--check`: the output is out of date |
-| `2` | Errors in the schemas, a [conflict with an existing file](#how-the-output-is-managed), a write that failed, or an unexpected failure (a PHP fatal error included; `255` on PHP 7.4) |
+| `2` | Errors in the schemas, a [conflict with an existing file](#how-the-output-is-managed), a write that failed, or an unexpected failure (a PHP fatal error included; `255` on PHP 7.4, and `1` when some Linux builds of PHP 7.4–8.1 run out of memory, as they end before any shutdown function) |
 | `3` | An invalid config or invalid options |
 
 Every error is reported at once, on stderr, with its place in the schema:

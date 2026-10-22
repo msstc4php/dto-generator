@@ -138,6 +138,10 @@ final class DtoGeneratorTest extends TestCase
 
     public function testExitsWithTheGenerationCodeOnAFatalError(): void
     {
+        if (!$this->runsShutdownFunctionsAfterRunningOutOfMemory()) {
+            self::markTestSkipped('This PHP build ends with exit code 1 when it runs out of memory, before any shutdown function.');
+        }
+
         // A request beyond the limit fails at once, without allocating anything.
         $script = sprintf(<<<'PHP_WRAP'
             <?php
@@ -168,6 +172,21 @@ final class DtoGeneratorTest extends TestCase
         self::assertSame(PHP_VERSION_ID >= 80000 ? 2 : 255, $code, (string) $stderr);
         self::assertSame('', $stdout);
         self::assertStringContainsString('Allowed memory size of 2147483648 bytes exhausted', (string) $stderr);
+    }
+
+    /**
+     * Some Linux builds of PHP 7.4–8.1 (Ubuntu packages rebuilt on 2026-10-19 UTC) skip them.
+     */
+    private function runsShutdownFunctionsAfterRunningOutOfMemory(): bool
+    {
+        $script = 'register_shutdown_function(static function () { echo "ran"; }); str_repeat("x", 4 * 1024 * 1024 * 1024);';
+        $process = proc_open([PHP_BINARY, '-d', 'memory_limit=2G', '-d', 'display_errors=0', '-r', $script], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+        self::assertIsResource($process);
+        $stdout = stream_get_contents($pipes[1]);
+        stream_get_contents($pipes[2]);
+        proc_close($process);
+
+        return $stdout === 'ran';
     }
 
     public function testMapsAnInputErrorToTheConfigExitCode(): void
