@@ -343,7 +343,7 @@ final class CompositionTest extends TestCase
     {
         $output = ModelFixture::build([
             'Pet' => ['type' => 'object', 'properties' => ['id' => ['type' => 'integer'], 'p' => $parent, 'name' => ['type' => 'string']]],
-            'Cat' => ['allOf' => [self::PET, ['type' => 'object', 'properties' => ['p' => $child, 'lives' => ['type' => 'integer']]]]],
+            'Cat' => ['allOf' => [self::PET, ['type' => 'object', 'properties' => ['lives' => ['type' => 'integer'], 'p' => $child]]]],
             'Meta' => ['type' => 'object', 'properties' => ['id' => ['type' => 'integer']]],
         ]);
 
@@ -371,6 +371,21 @@ final class CompositionTest extends TestCase
             ModelFixture::hierarchy($output),
         );
         self::assertSame(['id: DateTimeImmutable|null', 'name: string|null', 'lives: int|null'], ModelFixture::classes($output)['App\Dto\Cat']);
+    }
+
+    public function testKeepsTheParentOfAVariantAndTheParentTypesClass(): void
+    {
+        $output = ModelFixture::build([
+            'Animal' => ['oneOf' => [['$ref' => '#/components/schemas/Cat']], 'discriminator' => ['propertyName' => 'kind']],
+            'Cat' => ['allOf' => [self::PET, ['required' => ['kind'], 'properties' => ['kind' => ['type' => 'string'], 'p' => ['$ref' => '#/components/schemas/Meta']]]]],
+            'Pet' => ['type' => 'object', 'properties' => ['p' => ['type' => 'object']]],
+            'Meta' => ['type' => 'object', 'properties' => ['id' => ['type' => 'integer']]],
+            'Box' => ['type' => 'object', 'properties' => ['item' => ['type' => 'object', 'properties' => ['a' => ['type' => 'string']]]]],
+            'Crate' => ['allOf' => [['$ref' => '#/components/schemas/Box'], ['properties' => ['item' => ['$ref' => '#/components/schemas/Box']]]]],
+        ]);
+
+        self::assertContains('error ' . self::AT . 'Cat/allOf/1/properties/p: Property "p" of App\Dto\Cat is already declared by App\Dto\Pet.', ModelFixture::messages($output));
+        self::assertArrayHasKey('App\Dto\BoxItem', ModelFixture::classes($output));
     }
 
     public function testKeepsTheParentThatSelectsAVariant(): void

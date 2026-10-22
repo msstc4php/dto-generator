@@ -318,17 +318,16 @@ final class Hierarchy
      */
     private function detachRedeclaring(array $unions): void
     {
-        $inUnion = [];
-        foreach ($unions as $base => $variants) {
-            $inUnion[$base] = true;
+        $inUnion = array_keys($unions);
+        foreach ($unions as $variants) {
             foreach ($variants->classes() as $variant) {
-                $inUnion[$variant->fqcn()] = true;
+                $inUnion[] = $variant->fqcn();
             }
         }
 
         foreach ($this->models as $fqcn => $model) {
             $ancestors = $this->ancestorsOf($fqcn);
-            if ($ancestors === [] || isset($inUnion[$fqcn]) || array_filter($ancestors, static fn (ClassModel $ancestor): bool => isset($inUnion[$ancestor->name()->fqcn()])) !== []) {
+            if ($ancestors === [] || in_array($fqcn, $inUnion, true) || array_filter($ancestors, static fn (ClassModel $ancestor): bool => in_array($ancestor->name()->fqcn(), $inUnion, true)) !== []) {
                 continue;
             }
 
@@ -385,7 +384,6 @@ final class Hierarchy
                 return null;
             }
 
-            $this->superseded->add($parent->type());
             $merged[$property->wireName()] = $meet->describe() === $property->type()->describe() ? $property : $property->withType($meet);
         }
 
