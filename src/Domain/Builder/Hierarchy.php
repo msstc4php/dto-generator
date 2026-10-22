@@ -14,6 +14,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\Identifier;
 use MSSTC4PHP\DtoGenerator\Domain\Model\NullableType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\PropertyModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ScalarType;
+use MSSTC4PHP\DtoGenerator\Domain\Model\TypeModel;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\DefaultValue;
 
 /**
@@ -38,8 +39,8 @@ final class Hierarchy
 
     private Merges $merges;
 
-    /** @var array<string, string> the union bases and variants, by FQCN */
-    private array $inUnion = [];
+    /** @var array<string, string> the variants of the unions, by FQCN */
+    private array $variants = [];
 
     private Diagnostics $diagnostics;
 
@@ -63,17 +64,16 @@ final class Hierarchy
     /**
      * @param list<ClassModel> $classes
      * @param array<string, Variants> $unions discriminated base FQCN → its variants
-     * @param Merges $merges takes the classes a next build merges, as they redeclare a property PHP cannot
+     * @param Merges $merges takes the classes a next build may merge, as they redeclare a property PHP cannot
      *
      * @return list<ClassModel> the classes in the given order
      */
-    public static function link(array $classes, array $unions, Diagnostics $diagnostics, TypeMeet $meet, Superseded $superseded, ?Merges $merges = null): array
+    public static function link(array $classes, array $unions, Diagnostics $diagnostics, TypeMeet $meet, Superseded $superseded, Merges $merges): array
     {
-        $hierarchy = new self($classes, $diagnostics, $meet, $superseded, $merges ?? new Merges());
-        foreach ($unions as $base => $variants) {
-            $hierarchy->inUnion[$base] = $base;
+        $hierarchy = new self($classes, $diagnostics, $meet, $superseded, $merges);
+        foreach ($unions as $variants) {
             foreach ($variants->classes() as $variant) {
-                $hierarchy->inUnion[$variant->fqcn()] = $variant->fqcn();
+                $hierarchy->variants[$variant->fqcn()] = $variant->fqcn();
             }
         }
 
@@ -476,15 +476,23 @@ final class Hierarchy
             && ($overlap || $this->meet->admits($parent->type(), $child->type()));
     }
 
-    private function joinsAUnion(ClassModel $model): bool
+    private function isOrExtendsAVariant(ClassModel $model): bool
     {
         for ($class = $model->name(); $class instanceof ClassName; $class = $this->parents[$class->fqcn()] ?? null) {
-            if (isset($this->inUnion[$class->fqcn()])) {
+            if (isset($this->variants[$class->fqcn()])) {
                 return true;
             }
         }
 
         return false;
+    }
+
+    /**
+     * Whether a merge could join the two: the same PHP name and default.
+     */
+    private function declaresAlike(PropertyModel $parent, PropertyModel $child): bool
+    {
+        return $parent->name() === $child->name() && $this->setDefault($parent) === $this->setDefault($child);
     }
 
     /**
@@ -517,7 +525,9 @@ final class Hierarchy
             [$byWireName, $inherited] = $wireNames[$property->wireName()] ?? [null, null];
             $byName = $names[Identifier::asciiLower($property->name())] ?? null;
             $kept[] = $property;
-            if ($inherited instanceof PropertyModel && $this->narrowsValues($inherited, $property)) {
+            $meet = $inherited instanceof PropertyModel && $this->declaresAlike($inherited, $property) ? $this->meet->of($inherited->type(), $property->type()) : null;
+            // A child type whose meet is the parent's says nothing PHP holds beyond it, as a narrowing does.
+            if ($inherited instanceof PropertyModel && ($this->narrowsValues($inherited, $property) || ($meet instanceof TypeModel && $meet->describe() === $inherited->type()->describe()))) {
                 array_pop($kept);
                 $this->superseded->add($property->type());
                 $this->diagnostics->warning(
@@ -534,9 +544,9 @@ final class Hierarchy
                 );
             } elseif ($byWireName !== null) {
                 $this->diagnostics->error(sprintf('Property "%s" of %s is already declared by %s.', $property->wireName(), $fqcn, $byWireName), $property->source());
-                // A parent that selects the class in a union must stay.
-                if (!$this->joinsAUnion($model)) {
-                    $this->merges->add($model->source());
+                // A parent that selects a variant must stay.
+                if ($meet instanceof TypeModel && !$this->isOrExtendsAVariant($model)) {
+                    $this->merges->add($model->source(), $property->wireName(), $property->source());
                 }
             } elseif ($byName !== null) {
                 $this->diagnostics->error(

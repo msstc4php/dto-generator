@@ -7,37 +7,45 @@ namespace MSSTC4PHP\DtoGenerator\Domain\Builder;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
 
 /**
- * The class schemas whose allOf a build merges although it could extend: a member redeclares an inherited property
+ * The class schemas whose allOf a build merges although it could extend: a member declares an inherited property again
  * with a type PHP lets no subclass declare, which Hierarchy finds once the types are known, for the next build.
  */
 final class Merges
 {
-    /** @var array<string, string> by schema location */
-    private array $locations = [];
+    /** @var array<string, array{string, SchemaLocation}> wire name and place of the first such property, by class schema */
+    private array $properties = [];
 
-    public function add(SchemaLocation $location): void
+    public function add(SchemaLocation $class, string $wireName, SchemaLocation $property): void
     {
-        $this->locations[$location->toString()] = $location->toString();
-    }
-
-    public function has(SchemaLocation $location): bool
-    {
-        return isset($this->locations[$location->toString()]);
+        $this->properties[$class->toString()] ??= [$wireName, $property];
     }
 
     /**
-     * Whether the other holds no location this one lacks.
+     * @return array{string, SchemaLocation}|null the wire name and place of the property that asks for it
      */
-    public function covers(self $other): bool
+    public function of(SchemaLocation $class): ?array
     {
-        return array_diff_key($other->locations, $this->locations) === [];
+        return $this->properties[$class->toString()] ?? null;
     }
 
-    public function with(self $other): self
+    /**
+     * Takes the class schema the other holds, if it does.
+     */
+    public function take(self $other, SchemaLocation $class): void
     {
-        $merges = new self();
-        $merges->locations = $this->locations + $other->locations;
+        $property = $other->of($class);
+        if ($property !== null) {
+            $this->properties[$class->toString()] ??= $property;
+        }
+    }
 
-        return $merges;
+    public function covers(self $other): bool
+    {
+        return array_diff_key($other->properties, $this->properties) === [];
+    }
+
+    public function addAll(self $other): void
+    {
+        $this->properties += $other->properties;
     }
 }

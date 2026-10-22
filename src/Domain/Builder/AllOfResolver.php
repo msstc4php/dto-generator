@@ -25,11 +25,14 @@ final class AllOfResolver
 
     private Merges $merges;
 
-    public function __construct(ClassLookup $classes, AllOfStrategy $strategy, ?Merges $merges = null)
+    /**
+     * @param Merges $merges the class schemas to merge, as a member redeclares a property PHP cannot
+     */
+    public function __construct(ClassLookup $classes, AllOfStrategy $strategy, Merges $merges)
     {
         $this->classes = $classes;
         $this->strategy = $strategy;
-        $this->merges = $merges ?? new Merges();
+        $this->merges = $merges;
     }
 
     public function compose(Schema $schema, Diagnostics $diagnostics): Composition
@@ -112,10 +115,15 @@ final class AllOfResolver
             } else {
                 $strategy = $explicit;
             }
-        } elseif (count($parents) === 1 && $this->merges->has($schema->location())) {
+        } elseif (count($parents) === 1 && $this->merges->of($schema->location()) !== null) {
+            [$wireName, $at] = $this->merges->of($schema->location());
             $diagnostics->warning(
-                sprintf('A member declares a property of %s again in a way PHP lets no subclass do, so the members are merged instead of extending it.', $parents[array_key_first($parents)]->name()->fqcn()),
-                $schema->location(),
+                sprintf(
+                    'Property "%s" is declared again with a type PHP lets no subclass declare, so the members are merged instead of extending %s; "x-php-all-of: merge" says so, "extends" keeps the error.',
+                    $wireName,
+                    $parents[array_key_first($parents)]->name()->fqcn(),
+                ),
+                $at,
             );
 
             return null;

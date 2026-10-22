@@ -973,10 +973,7 @@ final class CompositionTest extends TestCase
                     'Pet' => ['allOf' => [['$ref' => '#/components/schemas/Animal'], ['properties' => ['name' => []]]]],
                     'Cat' => ['allOf' => [self::PET, ['properties' => ['id' => ['type' => 'integer']]]]],
                 ],
-                [
-                    "warning {$at}Cat: A member declares a property of App\\Dto\\Pet again in a way PHP lets no subclass do, so the members are merged instead of extending it.",
-                    "error {$at}Cat/allOf/1/properties/id: Property \"id\" of App\\Dto\\Cat is int|null here, but string|null in an earlier allOf member.",
-                ],
+                ["error {$at}Cat/allOf/1/properties/id: Property \"id\" of App\\Dto\\Cat is already declared by App\\Dto\\Animal."],
             ],
             'member that is a plain union' => [
                 ['Either' => ['oneOf' => [['type' => 'string'], ['type' => 'integer']]], 'Cat' => ['allOf' => [['$ref' => '#/components/schemas/Either'], $lives]]],
@@ -984,10 +981,7 @@ final class CompositionTest extends TestCase
             ],
             'redeclared inherited property' => [
                 ['Pet' => $pet, 'Cat' => ['allOf' => [self::PET, ['properties' => ['name' => ['type' => 'integer']]]]]],
-                [
-                    "warning {$at}Cat: A member declares a property of App\\Dto\\Pet again in a way PHP lets no subclass do, so the members are merged instead of extending it.",
-                    "error {$at}Cat/allOf/1/properties/name: Property \"name\" of App\\Dto\\Cat is int|null here, but string|null in an earlier allOf member.",
-                ],
+                ["error {$at}Cat/allOf/1/properties/name: Property \"name\" of App\\Dto\\Cat is already declared by App\\Dto\\Pet."],
             ],
             'different mutability' => [
                 ['Pet' => $pet + ['x-dto-mutable' => true], 'Cat' => ['allOf' => [self::PET, $lives]]],

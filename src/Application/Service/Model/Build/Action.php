@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Application\Service\Model\Build;
 
+use LogicException;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\AllOfResolver;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\ClassBuilder;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\ClassLookup;
@@ -56,13 +57,18 @@ final class Action
         $dto = $input->config()->dto();
         // Always through Views: one schema may ask for views even when the run keeps one model.
         $mode = new ReadWriteMode($dto->readWriteModels());
-        // A class that redeclares a property PHP cannot shows only once built; every build runs again merging it.
+        // Redeclarations PHP forbids surface only in Hierarchy; everything is built again with them merged until none is new.
         $merged = new Merges();
+        $builds = 0;
         do {
             $requested = new Merges();
-            $output = (new Views($input->graph(), $dto->viewSuffixes(), $mode))->build(fn (?View $view): Run => $this->build($input, $view, $mode, $merged, $requested));
+            $build = fn (?View $view): Run => $this->build($input, $view, $mode, $merged, $requested);
+            $output = (new Views($input->graph(), $dto->viewSuffixes(), $mode))->build($build);
             $settled = $merged->covers($requested);
-            $merged = $merged->with($requested);
+            $merged->addAll($requested);
+            if (++$builds > count($input->graph()->all()) + 1) {
+                throw new LogicException('The builds that merge redeclaring classes do not settle.');
+            }
         } while (!$settled);
 
         return $output;
@@ -205,8 +211,16 @@ final class Action
 
         $unions = $this->unions($input, $registry, $children, $subclasses, $diagnostics);
         $built = [];
-        foreach (Hierarchy::link($models, $unions, $diagnostics, $types->meet(), $superseded, $requested) as $index => $model) {
+        $found = new Merges();
+        foreach (Hierarchy::link($models, $unions, $diagnostics, $types->meet(), $superseded, $found) as $index => $model) {
             $built[] = new BuiltClass($model, $registry->planned()[$index][2]);
+        }
+
+        // A class whose document chooses how its allOf resolves keeps that choice, and the error.
+        foreach ($registry->planned() as [$schema]) {
+            if (!$schema->extensions()->has('x-php-all-of')) {
+                $requested->take($found, $schema->location());
+            }
         }
 
         [$built, $enums] = $this->used($built, $registry->enums(), $superseded, $input->graph());

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Tests\Unit\Application\Service\Model;
 
+use MSSTC4PHP\DtoGenerator\Application\Service\Model\Build\Output;
 use MSSTC4PHP\DtoGenerator\Tests\Support\ModelFixture;
 use PHPUnit\Framework\TestCase;
 
@@ -15,47 +16,76 @@ final class RedeclarationMergeTest extends TestCase
 
     private const META = ['type' => 'object', 'properties' => ['id' => ['type' => 'integer']]];
 
-    private const MERGED = 'warning ' . self::AT . 'Cat: A member declares a property of App\Dto\Pet again in a way PHP lets no subclass do, so the members are merged instead of extending it.';
+    private const MERGED = '/properties/p: Property "p" is declared again with a type PHP lets no subclass declare, so the members are merged instead of extending App\Dto\Pet; "x-php-all-of: merge" says so, "extends" keeps the error.';
+
+    private const KEPT = 'error ' . self::AT . 'Cat/allOf/1/properties/p: Property "p" of App\Dto\Cat is already declared by App\Dto\Pet.';
 
     /**
-     * @dataProvider redeclarations
+     * @dataProvider merged
      *
      * @param array<string, mixed> $parent
      * @param array<string, mixed> $child
-     * @param list<string> $messages after the warning
      */
-    public function testMergesAClassThatRedeclaresAPropertyPhpCannot(array $parent, array $child, bool $required, string $type, array $messages): void
+    public function testMergesAClassThatRedeclaresAPropertyPhpCannot(array $parent, array $child, bool $required, string $type): void
     {
-        $output = ModelFixture::build([
-            'Pet' => ['type' => 'object', 'properties' => ['id' => ['type' => 'integer'], 'p' => $parent]] + ($required ? ['required' => ['p']] : []),
-            'Cat' => ['allOf' => [self::PET, ['type' => 'object', 'properties' => ['lives' => ['type' => 'integer'], 'p' => $child]]]],
-            'Meta' => self::META,
-        ]);
+        $output = $this->build($parent, $child, $required);
 
-        self::assertSame(array_merge([self::MERGED], $messages), ModelFixture::messages($output));
+        self::assertSame([$this->mergeWarning('Cat/allOf/1')], ModelFixture::messages($output));
         self::assertSame('final', ModelFixture::hierarchy($output)['App\Dto\Cat']);
         self::assertSame('final', ModelFixture::hierarchy($output)['App\Dto\Pet']);
         self::assertSame(['id: int|null', 'p: ' . $type, 'lives: int|null'], ModelFixture::classes($output)['App\Dto\Cat']);
     }
 
     /**
-     * @return iterable<string, array{array<string, mixed>, array<string, mixed>, bool, string, list<string>}>
+     * @return iterable<string, array{array<string, mixed>, array<string, mixed>, bool, string}>
      */
-    public static function redeclarations(): iterable
+    public static function merged(): iterable
     {
-        $at = self::AT . 'Cat/allOf/1/properties/p: Property "p" of App\Dto\Cat ';
+        yield 'a date over a string' => [['type' => 'string'], ['type' => 'string', 'format' => 'date-time'], false, 'DateTimeImmutable|null'];
+        yield 'an int over a number' => [['type' => 'number'], ['type' => 'integer'], false, 'int|null'];
+        yield 'a class over an object' => [['type' => 'object'], ['$ref' => '#/components/schemas/Meta'], false, 'App\Dto\Meta|null'];
+        yield 'a list of classes over a list of objects' => [['type' => 'array', 'items' => ['type' => 'object']], ['type' => 'array', 'items' => ['$ref' => '#/components/schemas/Meta']], false, 'list<App\Dto\Meta>|null'];
+        yield 'a list of narrower items' => [['type' => 'array'], ['type' => 'array', 'items' => ['type' => 'string']], false, 'list<string>|null'];
+        yield 'the values both admit' => [['type' => ['integer', 'string']], ['type' => ['string', 'boolean']], false, 'string|null'];
+        yield 'a property the parent requires' => [['type' => 'string'], ['type' => 'string', 'format' => 'date'], true, 'DateTimeImmutable'];
+    }
 
-        yield 'a date over a string' => [['type' => 'string'], ['type' => 'string', 'format' => 'date-time'], false, 'DateTimeImmutable|null', []];
-        yield 'an int over a number' => [['type' => 'number'], ['type' => 'integer'], false, 'int|null', []];
-        yield 'a class over an object' => [['type' => 'object'], ['$ref' => '#/components/schemas/Meta'], false, 'App\Dto\Meta|null', []];
-        yield 'a list of classes over a list of objects' => [['type' => 'array', 'items' => ['type' => 'object']], ['type' => 'array', 'items' => ['$ref' => '#/components/schemas/Meta']], false, 'list<App\Dto\Meta>|null', []];
-        yield 'the values both admit' => [['type' => ['integer', 'string']], ['type' => ['string', 'boolean']], false, 'string|null', []];
-        yield 'a property the parent requires' => [['type' => 'string'], ['type' => 'string', 'format' => 'date'], true, 'DateTimeImmutable', []];
-        yield 'another default' => [['type' => 'string', 'default' => 'a'], ['type' => 'string', 'default' => 'b'], false, 'string|null', ['error ' . $at . 'has another PHP name or default here than in an earlier allOf member.']];
-        yield 'a default the parent lacks' => [['type' => 'string'], ['type' => 'string', 'default' => 'b'], false, 'string|null', ['error ' . $at . 'has another PHP name or default here than in an earlier allOf member.']];
-        yield 'another name' => [['type' => 'string'], ['type' => 'string', 'x-php-name' => 'q'], false, 'string|null', ['error ' . $at . 'has another PHP name or default here than in an earlier allOf member.']];
-        yield 'no common values' => [['type' => 'string'], ['type' => 'integer'], false, 'string|null', ['error ' . $at . 'is int|null here, but string|null in an earlier allOf member.']];
-        yield 'an enum of other values' => [['type' => 'string', 'enum' => ['a', 'b']], ['type' => 'string', 'enum' => ['c']], false, 'App\Dto\PetP|null', ['error ' . $at . 'is App\Dto\CatP|null here, but App\Dto\PetP|null in an earlier allOf member.']];
+    /**
+     * @dataProvider unmerged
+     *
+     * @param array<string, mixed> $parent
+     * @param array<string, mixed> $child
+     */
+    public function testKeepsTheErrorOfARedeclarationAMergeCouldNotJoin(array $parent, array $child): void
+    {
+        $output = $this->build($parent, $child, false);
+
+        self::assertSame([self::KEPT], ModelFixture::messages($output));
+        self::assertSame('final extends App\Dto\Pet', ModelFixture::hierarchy($output)['App\Dto\Cat']);
+    }
+
+    /**
+     * @return iterable<string, array{array<string, mixed>, array<string, mixed>}>
+     */
+    public static function unmerged(): iterable
+    {
+        yield 'another default' => [['type' => 'string', 'default' => 'a'], ['type' => 'string', 'default' => 'b']];
+        yield 'a default the parent lacks' => [['type' => 'string'], ['type' => 'string', 'default' => 'b']];
+        yield 'another name' => [['type' => 'string'], ['type' => 'string', 'x-php-name' => 'q']];
+        yield 'no common values' => [['type' => 'string'], ['type' => 'integer']];
+        yield 'an enum of other values' => [['type' => 'string', 'enum' => ['a', 'b']], ['type' => 'string', 'enum' => ['c']]];
+        yield 'an enum of other ints' => [['type' => 'string', 'enum' => ['1']], ['type' => 'integer', 'enum' => [1, 2]]];
+    }
+
+    public function testKeepsTheParentsTypeWhereTheChildsSaysNothingMore(): void
+    {
+        $output = $this->build(['type' => 'array', 'items' => ['type' => 'object']], ['items' => ['$ref' => '#/components/schemas/Meta']], false);
+
+        self::assertSame(
+            ['warning ' . self::AT . 'Cat/allOf/1/properties/p: Property "p" of App\Dto\Cat shares values with the one App\Dto\Pet declares, whose type list<array<array-key, mixed>>|null the class keeps.'],
+            ModelFixture::messages($output),
+        );
+        self::assertSame('final extends App\Dto\Pet', ModelFixture::hierarchy($output)['App\Dto\Cat']);
     }
 
     public function testMergesEveryAncestorAndStaysTheParentOfItsSubclassesInAnyOrder(): void
@@ -68,7 +98,7 @@ final class RedeclarationMergeTest extends TestCase
         foreach ([['Kitten' => $kitten, 'Cat' => $cat, 'Pet' => $pet, 'Animal' => $animal], ['Animal' => $animal, 'Pet' => $pet, 'Cat' => $cat, 'Kitten' => $kitten]] as $schemas) {
             $output = ModelFixture::build($schemas);
 
-            self::assertSame([self::MERGED], ModelFixture::messages($output));
+            self::assertSame([$this->mergeWarning('Cat/allOf/1')], ModelFixture::messages($output));
             self::assertSame('final extends App\Dto\Cat', ModelFixture::hierarchy($output)['App\Dto\Kitten']);
             self::assertSame('open', ModelFixture::hierarchy($output)['App\Dto\Cat']);
             self::assertSame(['s: string', 'p: string|null'], ModelFixture::classes($output)['App\Dto\Cat']);
@@ -84,7 +114,7 @@ final class RedeclarationMergeTest extends TestCase
         ]);
 
         self::assertSame(
-            [self::MERGED, 'error ' . self::AT . 'Cat/allOf/1/properties/userId: Property "userId" becomes $userId, which "user_id" already uses; set "x-php-name" on one of them, in the document or "propertyNames" of the source.'],
+            [$this->mergeWarning('Cat/allOf/1'), 'error ' . self::AT . 'Cat/allOf/1/properties/userId: Property "userId" becomes $userId, which "user_id" already uses; set "x-php-name" on one of them, in the document or "propertyNames" of the source.'],
             ModelFixture::messages($output),
         );
     }
@@ -111,7 +141,20 @@ final class RedeclarationMergeTest extends TestCase
             'Meta' => self::META,
         ]);
 
-        self::assertSame([self::MERGED], ModelFixture::messages($output));
+        self::assertSame([$this->mergeWarning('Cat/allOf/1')], ModelFixture::messages($output));
+    }
+
+    public function testMergesTheBaseOfAUnion(): void
+    {
+        $output = ModelFixture::build([
+            'Pet' => ['type' => 'object', 'properties' => ['kind' => ['type' => 'string'], 'p' => ['type' => 'object']]],
+            'Cat' => ['allOf' => [self::PET, ['properties' => ['p' => ['$ref' => '#/components/schemas/Meta']]]], 'discriminator' => ['propertyName' => 'kind']],
+            'Kitten' => ['allOf' => [['$ref' => '#/components/schemas/Cat'], ['properties' => ['age' => ['type' => 'integer']]]]],
+            'Meta' => self::META,
+        ]);
+
+        self::assertSame([$this->mergeWarning('Cat/allOf/1')], ModelFixture::messages($output));
+        self::assertSame('abstract by kind {Kitten: App\Dto\Kitten}', ModelFixture::hierarchy($output)['App\Dto\Cat']);
     }
 
     /**
@@ -126,8 +169,8 @@ final class RedeclarationMergeTest extends TestCase
             'Meta' => self::META,
         ]);
 
-        self::assertContains('error ' . self::AT . 'Cat/allOf/1/properties/p: Property "p" of App\Dto\Cat is already declared by App\Dto\Pet.', ModelFixture::messages($output));
-        self::assertNotContains(self::MERGED, ModelFixture::messages($output));
+        self::assertContains(self::KEPT, ModelFixture::messages($output));
+        self::assertSame([], array_filter(ModelFixture::messages($output), static fn (string $message): bool => strpos($message, 'merged instead') !== false));
     }
 
     /**
@@ -144,5 +187,23 @@ final class RedeclarationMergeTest extends TestCase
             'Feline' => ['allOf' => [self::PET, ['required' => ['kind'], 'properties' => ['claws' => ['type' => 'boolean']]]]],
             'Animal' => ['oneOf' => [['$ref' => '#/components/schemas/Feline']], 'discriminator' => ['propertyName' => 'kind']],
         ]];
+    }
+
+    /**
+     * @param array<string, mixed> $parent
+     * @param array<string, mixed> $child
+     */
+    private function build(array $parent, array $child, bool $required): Output
+    {
+        return ModelFixture::build([
+            'Pet' => ['type' => 'object', 'properties' => ['id' => ['type' => 'integer'], 'p' => $parent]] + ($required ? ['required' => ['p']] : []),
+            'Cat' => ['allOf' => [self::PET, ['type' => 'object', 'properties' => ['lives' => ['type' => 'integer'], 'p' => $child]]]],
+            'Meta' => self::META,
+        ]);
+    }
+
+    private function mergeWarning(string $member): string
+    {
+        return 'warning ' . self::AT . $member . self::MERGED;
     }
 }
