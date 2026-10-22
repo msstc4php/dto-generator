@@ -104,6 +104,7 @@ final class AllOfResolver
     private function parentIndex(Schema $schema, array $parents, Diagnostics $diagnostics): ?int
     {
         $strategy = $this->strategy;
+        $redeclared = $this->merges->of($schema->location());
         if ($schema->extensions()->has('x-php-all-of')) {
             $at = $schema->location()->child('x-php-all-of');
             $value = $schema->extensions()->get('x-php-all-of');
@@ -115,15 +116,14 @@ final class AllOfResolver
             } else {
                 $strategy = $explicit;
             }
-        } elseif (count($parents) === 1 && $this->merges->of($schema->location()) !== null) {
-            [$wireName, $at] = $this->merges->of($schema->location());
+        } elseif (count($parents) === 1 && $redeclared instanceof RedeclaredProperty) {
             $diagnostics->warning(
                 sprintf(
                     'Property "%s" is declared again with a type PHP lets no subclass declare, so the members are merged instead of extending %s; "x-php-all-of: merge" says so, "extends" keeps the error.',
-                    $wireName,
+                    $redeclared->wireName(),
                     $parents[array_key_first($parents)]->name()->fqcn(),
                 ),
-                $at,
+                $redeclared->location(),
             );
 
             return null;

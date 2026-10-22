@@ -16,7 +16,7 @@ final class RedeclarationMergeTest extends TestCase
 
     private const META = ['type' => 'object', 'properties' => ['id' => ['type' => 'integer']]];
 
-    private const MERGED = '/properties/p: Property "p" is declared again with a type PHP lets no subclass declare, so the members are merged instead of extending App\Dto\Pet; "x-php-all-of: merge" says so, "extends" keeps the error.';
+    private const MERGED = 'warning ' . self::AT . 'Cat/allOf/1/properties/p: Property "p" is declared again with a type PHP lets no subclass declare, so the members are merged instead of extending App\Dto\Pet; "x-php-all-of: merge" says so, "extends" keeps the error.';
 
     private const KEPT = 'error ' . self::AT . 'Cat/allOf/1/properties/p: Property "p" of App\Dto\Cat is already declared by App\Dto\Pet.';
 
@@ -30,7 +30,7 @@ final class RedeclarationMergeTest extends TestCase
     {
         $output = $this->build($parent, $child, $required);
 
-        self::assertSame([$this->mergeWarning('Cat/allOf/1')], ModelFixture::messages($output));
+        self::assertSame([self::MERGED], ModelFixture::messages($output));
         self::assertSame('final', ModelFixture::hierarchy($output)['App\Dto\Cat']);
         self::assertSame('final', ModelFixture::hierarchy($output)['App\Dto\Pet']);
         self::assertSame(['id: int|null', 'p: ' . $type, 'lives: int|null'], ModelFixture::classes($output)['App\Dto\Cat']);
@@ -96,7 +96,7 @@ final class RedeclarationMergeTest extends TestCase
             'Meta' => self::META,
         ]);
 
-        self::assertSame([self::mergeWarning('Cat/allOf/1')], ModelFixture::messages($output));
+        self::assertSame([self::MERGED], ModelFixture::messages($output));
         self::assertSame(['p: App\Dto\Meta|null', 'q: DateTimeImmutable|null'], ModelFixture::classes($output)['App\Dto\Cat']);
     }
 
@@ -110,7 +110,7 @@ final class RedeclarationMergeTest extends TestCase
         foreach ([['Kitten' => $kitten, 'Cat' => $cat, 'Pet' => $pet, 'Animal' => $animal], ['Animal' => $animal, 'Pet' => $pet, 'Cat' => $cat, 'Kitten' => $kitten]] as $schemas) {
             $output = ModelFixture::build($schemas);
 
-            self::assertSame([$this->mergeWarning('Cat/allOf/1')], ModelFixture::messages($output));
+            self::assertSame([self::MERGED], ModelFixture::messages($output));
             self::assertSame('final extends App\Dto\Cat', ModelFixture::hierarchy($output)['App\Dto\Kitten']);
             self::assertSame('open', ModelFixture::hierarchy($output)['App\Dto\Cat']);
             self::assertSame(['s: string', 'p: string|null'], ModelFixture::classes($output)['App\Dto\Cat']);
@@ -126,7 +126,7 @@ final class RedeclarationMergeTest extends TestCase
         ]);
 
         self::assertSame(
-            [$this->mergeWarning('Cat/allOf/1'), 'error ' . self::AT . 'Cat/allOf/1/properties/userId: Property "userId" becomes $userId, which "user_id" already uses; set "x-php-name" on one of them, in the document or "propertyNames" of the source.'],
+            [self::MERGED, 'error ' . self::AT . 'Cat/allOf/1/properties/userId: Property "userId" becomes $userId, which "user_id" already uses; set "x-php-name" on one of them, in the document or "propertyNames" of the source.'],
             ModelFixture::messages($output),
         );
     }
@@ -145,6 +145,30 @@ final class RedeclarationMergeTest extends TestCase
         self::assertSame([], array_filter(ModelFixture::messages($output), static fn (string $message): bool => strncmp($message, 'error', 5) === 0));
     }
 
+    public function testNamesThePropertyTheFirstViewFinds(): void
+    {
+        $output = ModelFixture::views([
+            'Pet' => ['type' => 'object', 'properties' => ['p' => ['type' => 'object', 'readOnly' => true], 'q' => ['type' => 'string']]],
+            'Cat' => ['allOf' => [self::PET, ['properties' => ['p' => ['$ref' => '#/components/schemas/Meta', 'readOnly' => true], 'q' => ['type' => 'string', 'format' => 'date']]]]],
+            'Meta' => self::META,
+        ]);
+
+        $merged = array_values(array_filter(ModelFixture::messages($output), static fn (string $message): bool => strpos($message, 'merged instead') !== false));
+        self::assertSame([str_replace('App\Dto\Pet;', 'App\Dto\PetRead;', self::MERGED)], $merged);
+    }
+
+    public function testFollowsAnExplicitMergeWithoutAWarning(): void
+    {
+        $output = ModelFixture::build([
+            'Pet' => ['type' => 'object', 'properties' => ['p' => ['type' => 'object']]],
+            'Cat' => ['x-php-all-of' => 'merge', 'allOf' => [self::PET, ['properties' => ['p' => ['$ref' => '#/components/schemas/Meta']]]]],
+            'Meta' => self::META,
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(['p: App\Dto\Meta|null'], ModelFixture::classes($output)['App\Dto\Cat']);
+    }
+
     public function testMergesAClassOfAnotherMutability(): void
     {
         $output = ModelFixture::build([
@@ -153,7 +177,7 @@ final class RedeclarationMergeTest extends TestCase
             'Meta' => self::META,
         ]);
 
-        self::assertSame([$this->mergeWarning('Cat/allOf/1')], ModelFixture::messages($output));
+        self::assertSame([self::MERGED], ModelFixture::messages($output));
     }
 
     public function testMergesTheBaseOfAUnion(): void
@@ -165,7 +189,7 @@ final class RedeclarationMergeTest extends TestCase
             'Meta' => self::META,
         ]);
 
-        self::assertSame([$this->mergeWarning('Cat/allOf/1')], ModelFixture::messages($output));
+        self::assertSame([self::MERGED], ModelFixture::messages($output));
         self::assertSame('abstract by kind {Kitten: App\Dto\Kitten}', ModelFixture::hierarchy($output)['App\Dto\Cat']);
     }
 
@@ -212,10 +236,5 @@ final class RedeclarationMergeTest extends TestCase
             'Cat' => ['allOf' => [self::PET, ['type' => 'object', 'properties' => ['lives' => ['type' => 'integer'], 'p' => $child]]]],
             'Meta' => self::META,
         ]);
-    }
-
-    private function mergeWarning(string $member): string
-    {
-        return 'warning ' . self::AT . $member . self::MERGED;
     }
 }

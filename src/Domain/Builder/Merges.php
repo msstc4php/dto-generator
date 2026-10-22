@@ -12,30 +12,27 @@ use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
  */
 final class Merges
 {
-    /** @var array<string, array{string, SchemaLocation}> wire name and place of the first such property, by class schema */
+    /** @var array<string, RedeclaredProperty> the first such property, by class schema */
     private array $properties = [];
 
     public function add(SchemaLocation $class, string $wireName, SchemaLocation $property): void
     {
-        $this->properties[$class->toString()] ??= [$wireName, $property];
+        $this->properties[$class->toString()] ??= new RedeclaredProperty($wireName, $property);
     }
 
-    /**
-     * @return array{string, SchemaLocation}|null the wire name and place of the property that asks for it
-     */
-    public function of(SchemaLocation $class): ?array
+    public function of(SchemaLocation $class): ?RedeclaredProperty
     {
         return $this->properties[$class->toString()] ?? null;
     }
 
     /**
-     * Takes the class schema the other holds, if it does.
+     * Takes the class schema the other holds, if it does; the first view to ask names the property.
      */
     public function take(self $other, SchemaLocation $class): void
     {
         $property = $other->of($class);
-        if ($property !== null) {
-            $this->properties[$class->toString()] = $property;
+        if ($property instanceof RedeclaredProperty) {
+            $this->properties[$class->toString()] ??= $property;
         }
     }
 

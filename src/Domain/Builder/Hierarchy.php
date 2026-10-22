@@ -472,7 +472,7 @@ final class Hierarchy
         $overlap = $wide instanceof EnumType && $narrow instanceof EnumType && $wide->backing()->value() === $narrow->backing()->value()
             && array_intersect_key($wide->cases(), $narrow->cases()) !== [];
 
-        return $sameKind && $parent->name() === $child->name() && $this->setDefault($parent) === $this->setDefault($child)
+        return $sameKind && $this->declaresAlike($parent, $child)
             && ($overlap || $this->meet->admits($parent->type(), $child->type()));
     }
 
@@ -485,6 +485,14 @@ final class Hierarchy
         }
 
         return false;
+    }
+
+    /**
+     * A child type whose meet is the parent's says nothing PHP holds beyond it, as a narrowing does.
+     */
+    private function keepsTheParents(PropertyModel $inherited, PropertyModel $child, ?TypeModel $meet): bool
+    {
+        return $this->narrowsValues($inherited, $child) || ($meet instanceof TypeModel && $meet->describe() === $inherited->type()->describe());
     }
 
     /**
@@ -525,9 +533,12 @@ final class Hierarchy
             [$byWireName, $inherited] = $wireNames[$property->wireName()] ?? [null, null];
             $byName = $names[Identifier::asciiLower($property->name())] ?? null;
             $kept[] = $property;
-            $meet = $inherited instanceof PropertyModel && $this->declaresAlike($inherited, $property) ? $this->meet->of($inherited->type(), $property->type()) : null;
-            // A child type whose meet is the parent's says nothing PHP holds beyond it, as a narrowing does.
-            if ($inherited instanceof PropertyModel && ($this->narrowsValues($inherited, $property) || ($meet instanceof TypeModel && $meet->describe() === $inherited->type()->describe()))) {
+            $meet = null;
+            if ($inherited instanceof PropertyModel && $this->declaresAlike($inherited, $property)) {
+                $meet = $this->meet->of($inherited->type(), $property->type());
+            }
+
+            if ($inherited instanceof PropertyModel && $this->keepsTheParents($inherited, $property, $meet)) {
                 array_pop($kept);
                 $this->superseded->add($property->type());
                 $this->diagnostics->warning(

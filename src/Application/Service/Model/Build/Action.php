@@ -62,8 +62,8 @@ final class Action
         $builds = 0;
         do {
             $requested = new Merges();
-            $build = fn (?View $view): Run => $this->build($input, $view, $mode, $merged, $requested);
-            $output = (new Views($input->graph(), $dto->viewSuffixes(), $mode))->build($build);
+            $buildView = fn (?View $view): Run => $this->build($input, $view, $mode, $merged, $requested);
+            $output = (new Views($input->graph(), $dto->viewSuffixes(), $mode))->build($buildView);
             $settled = $merged->covers($requested);
             $merged->addAll($requested);
             if (++$builds > count($input->graph()->all()) + 1) {
