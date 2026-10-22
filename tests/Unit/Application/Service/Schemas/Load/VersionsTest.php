@@ -25,7 +25,7 @@ final class VersionsTest extends TestCase
     public function testTellsOpenApi30FromItsVersion($version, ?string $normalized, bool $openApi30): void
     {
         self::assertSame($normalized, Versions::normalize($version));
-        self::assertSame($openApi30, (new Versions())->ofSource(new Document('/p/a.yaml', ['openapi' => $version])));
+        self::assertSame($openApi30 ? Versions::OPENAPI_30 : Versions::OPENAPI_31, (new Versions())->ofSource(new Document('/p/a.yaml', ['openapi' => $version])));
     }
 
     /**
@@ -80,19 +80,19 @@ final class VersionsTest extends TestCase
         $deeper = new Document('/p/deeper.yaml', []);
         $stated = new Document('/p/stated.yaml', ['openapi' => '3.1.0']);
 
-        self::assertTrue($versions->ofSource($old));
-        self::assertFalse($versions->ofSource($new));
-        self::assertTrue($versions->ofReferenced($shared, new SchemaLocation('/p/old.yaml', '/a'), $diagnostics));
-        self::assertTrue($versions->ofReferenced($deeper, new SchemaLocation('/p/shared.yaml', '/b'), $diagnostics));
-        self::assertFalse($versions->ofReferenced($stated, new SchemaLocation('/p/old.yaml', '/c'), $diagnostics));
-        self::assertFalse($versions->ofReferenced(new Document('/p/unknown.yaml', []), new SchemaLocation('/p/elsewhere.yaml', '/d'), $diagnostics));
-        self::assertTrue($versions->ofReferenced($shared, new SchemaLocation('/p/old.yaml', '/e'), $diagnostics));
+        self::assertSame(Versions::OPENAPI_30, $versions->ofSource($old));
+        self::assertSame(Versions::OPENAPI_31, $versions->ofSource($new));
+        self::assertSame(Versions::OPENAPI_30, $versions->ofReferenced($shared, new SchemaLocation('/p/old.yaml', '/a'), $diagnostics));
+        self::assertSame(Versions::OPENAPI_30, $versions->ofReferenced($deeper, new SchemaLocation('/p/shared.yaml', '/b'), $diagnostics));
+        self::assertSame(Versions::OPENAPI_31, $versions->ofReferenced($stated, new SchemaLocation('/p/old.yaml', '/c'), $diagnostics));
+        self::assertSame(Versions::OPENAPI_31, $versions->ofReferenced(new Document('/p/unknown.yaml', []), new SchemaLocation('/p/elsewhere.yaml', '/d'), $diagnostics));
+        self::assertSame(Versions::OPENAPI_30, $versions->ofReferenced($shared, new SchemaLocation('/p/old.yaml', '/e'), $diagnostics));
         self::assertSame([], $this->messages($diagnostics));
 
-        self::assertTrue($versions->ofReferenced($shared, new SchemaLocation('/p/new.yaml', '/f'), $diagnostics));
-        self::assertTrue($versions->ofReferenced($shared, new SchemaLocation('/p/new.yaml', '/g'), $diagnostics));
+        self::assertSame(Versions::OPENAPI_30, $versions->ofReferenced($shared, new SchemaLocation('/p/new.yaml', '/f'), $diagnostics));
+        self::assertSame(Versions::OPENAPI_30, $versions->ofReferenced($shared, new SchemaLocation('/p/new.yaml', '/g'), $diagnostics));
         self::assertSame(
-            ['warning /p/new.yaml#/f: /p/shared.yaml states no "openapi" version and is read as OpenAPI 3.0, the version of the document that referred to it first, though /p/new.yaml, which refers to it here, is 3.1.'],
+            ['warning /p/new.yaml#/f: /p/shared.yaml states no version ("openapi" or "swagger") and is read as OpenAPI 3.0, the version of the document that referred to it first, though /p/new.yaml, which refers to it here, is OpenAPI 3.1 or 3.2.'],
             $this->messages($diagnostics),
         );
     }
@@ -104,12 +104,28 @@ final class VersionsTest extends TestCase
         $versions->ofSource(new Document('/p/old.yaml', ['openapi' => '3.0.3']));
         $shared = new Document('/p/shared.yaml', []);
 
-        self::assertFalse($versions->ofReferenced($shared, new SchemaLocation('/p/new.yaml', '/a'), $diagnostics));
-        self::assertFalse($versions->ofReferenced($shared, new SchemaLocation('/p/old.yaml', '/b'), $diagnostics));
+        self::assertSame(Versions::OPENAPI_31, $versions->ofReferenced($shared, new SchemaLocation('/p/new.yaml', '/a'), $diagnostics));
+        self::assertSame(Versions::OPENAPI_31, $versions->ofReferenced($shared, new SchemaLocation('/p/old.yaml', '/b'), $diagnostics));
         self::assertSame(
-            ['warning /p/old.yaml#/b: /p/shared.yaml states no "openapi" version and is read as OpenAPI 3.1, the version of the document that referred to it first, though /p/old.yaml, which refers to it here, is 3.0.'],
+            ['warning /p/old.yaml#/b: /p/shared.yaml states no version ("openapi" or "swagger") and is read as OpenAPI 3.1 or 3.2, the version of the document that referred to it first, though /p/old.yaml, which refers to it here, is OpenAPI 3.0.'],
             $this->messages($diagnostics),
         );
+    }
+
+    public function testReadsASwaggerDocumentAndThoseItRefersTo(): void
+    {
+        $versions = new Versions();
+        $diagnostics = new Diagnostics();
+        $swagger = new Document('/p/swagger.yaml', ['swagger' => '2.0']);
+
+        self::assertSame(Versions::SWAGGER_20, $versions->ofSource($swagger));
+        self::assertSame(Versions::SWAGGER_20, $versions->ofReferenced(new Document('/p/shared.yaml', []), new SchemaLocation('/p/swagger.yaml', '/a'), $diagnostics));
+        self::assertSame(Versions::OPENAPI_30, $versions->ofSource(new Document('/p/both.yaml', ['swagger' => '2.0', 'openapi' => '3.0.0'])));
+        self::assertSame(Versions::SWAGGER_20, $versions->ofSource(new Document('/p/other.yaml', ['swagger' => '1.2'])));
+        self::assertTrue(Versions::isSwagger(['swagger' => '2.0']));
+        self::assertFalse(Versions::isSwagger(['swagger' => '2.0', 'openapi' => '3.1.0']));
+        self::assertFalse(Versions::isSwagger([]));
+        self::assertSame([], $this->messages($diagnostics));
     }
 
     /**

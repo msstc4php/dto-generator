@@ -803,7 +803,7 @@ final class LoadTest extends TestCase
         $output = $this->load([self::SPEC => self::spec(['' => ['type' => 'object'], 'User' => []])]);
 
         self::assertSame(
-            ['error /project/api/openapi.yaml#/components/schemas/: A component schema name must not be empty.'],
+            ['error /project/api/openapi.yaml#/components/schemas/: A schema name in components/schemas must not be empty.'],
             $this->messages($output),
         );
         self::assertSame([['User', 0, true]], $this->summary($output));

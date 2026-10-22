@@ -10,15 +10,22 @@ use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
 
 /**
- * Which documents are OpenAPI 3.0, whose `nullable` admits null. A document read through a `$ref` is in the version it
- * states, or else in that of the document that refers to it first.
+ * The dialect each document's schemas are written in: OpenAPI 3.1 (or 3.2, alike), 3.0, whose `nullable` admits null,
+ * or Swagger 2.0. A document read through a `$ref` is in the version it states, or else in that of the document that
+ * refers to it first.
  *
  * @phpstan-import-type JsonValue from Json
  */
 final class Versions
 {
-    /** @var array<string, bool> by document path */
-    private array $openApi30 = [];
+    public const OPENAPI_31 = 'OpenAPI 3.1 or 3.2';
+
+    public const OPENAPI_30 = 'OpenAPI 3.0';
+
+    public const SWAGGER_20 = 'Swagger 2.0';
+
+    /** @var array<string, self::OPENAPI_*|self::SWAGGER_20> by document path */
+    private array $dialects = [];
 
     /** @var list<string> documents without a version read from both versions, reported once */
     private array $mixed = [];
@@ -50,41 +57,80 @@ final class Versions
         return self::isOpenApi30($version) || preg_match('/^3\.[12](?:\.\d+)?\z/', $version) === 1;
     }
 
-    public function ofSource(Document $document): bool
+    /**
+     * A document with `swagger` and no `openapi`, whose schemas are its `definitions`.
+     *
+     * @param array<array-key, mixed> $root
+     */
+    public static function isSwagger(array $root): bool
     {
-        return $this->openApi30[$document->path()] = self::isOpenApi30($this->stated($document));
+        return !array_key_exists('openapi', $root) && array_key_exists('swagger', $root);
     }
 
-    public function ofReferenced(Document $document, SchemaLocation $referredAt, Diagnostics $diagnostics): bool
+    /**
+     * Where the document keeps the schemas a source reads.
+     *
+     * @param array<array-key, mixed> $root
+     *
+     * @return array{'components', 'schemas'}|array{'definitions'}
+     */
+    public static function schemasPlace(array $root): array
+    {
+        return self::isSwagger($root) ? ['definitions'] : ['components', 'schemas'];
+    }
+
+    /**
+     * @return self::OPENAPI_*|self::SWAGGER_20
+     */
+    public function ofSource(Document $document): string
+    {
+        return $this->dialects[$document->path()] = $this->stated($document->root()) ?? self::OPENAPI_31;
+    }
+
+    /**
+     * @return self::OPENAPI_*|self::SWAGGER_20
+     */
+    public function ofReferenced(Document $document, SchemaLocation $referredAt, Diagnostics $diagnostics): string
     {
         $path = $document->path();
-        $stated = $this->stated($document);
-        $referrer = $this->openApi30[$referredAt->file()] ?? false;
-        if ($stated !== null || !isset($this->openApi30[$path])) {
-            return $this->openApi30[$path] = $stated !== null ? self::isOpenApi30($stated) : $referrer;
+        $stated = $this->stated($document->root());
+        $referrer = $this->dialects[$referredAt->file()] ?? self::OPENAPI_31;
+        if ($stated !== null || !isset($this->dialects[$path])) {
+            return $this->dialects[$path] = $stated ?? $referrer;
         }
 
-        if ($this->openApi30[$path] !== $referrer && !in_array($path, $this->mixed, true)) {
+        if ($this->dialects[$path] !== $referrer && !in_array($path, $this->mixed, true)) {
             $this->mixed[] = $path;
             $diagnostics->warning(
                 sprintf(
-                    '%s states no "openapi" version and is read as OpenAPI %s, the version of the document that referred to it first, though %s, which refers to it here, is %s.',
+                    '%s states no version ("openapi" or "swagger") and is read as %s, the version of the document that referred to it first, though %s, which refers to it here, is %s.',
                     $path,
-                    $this->openApi30[$path] ? '3.0' : '3.1',
+                    $this->dialects[$path],
                     $referredAt->file(),
-                    $referrer ? '3.0' : '3.1',
+                    $referrer,
                 ),
                 $referredAt,
             );
         }
 
-        return $this->openApi30[$path];
+        return $this->dialects[$path];
     }
 
-    private function stated(Document $document): ?string
+    /**
+     * @param array<array-key, mixed> $root
+     *
+     * @return self::OPENAPI_*|self::SWAGGER_20|null
+     */
+    private function stated(array $root): ?string
     {
-        $root = $document->root();
+        if (self::isSwagger($root)) {
+            return self::SWAGGER_20;
+        }
 
-        return array_key_exists('openapi', $root) ? self::normalize(Json::value($root['openapi'])) : null;
+        if (!array_key_exists('openapi', $root)) {
+            return null;
+        }
+
+        return self::isOpenApi30(self::normalize(Json::value($root['openapi']))) ? self::OPENAPI_30 : self::OPENAPI_31;
     }
 }

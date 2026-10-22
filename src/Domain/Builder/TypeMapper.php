@@ -122,7 +122,7 @@ final class TypeMapper
 
         if (SchemaShape::isClass($schema)) {
             $diagnostics->error(
-                'This inline object is not generated (only properties of generated classes get one); move it to components/schemas and use $ref.',
+                'This inline object is not generated (only properties of generated classes get one); move it to components/schemas (definitions in Swagger 2.0) and use $ref.',
                 $schema->location(),
             );
 

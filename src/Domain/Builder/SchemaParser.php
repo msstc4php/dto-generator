@@ -31,6 +31,9 @@ final class SchemaParser
     /** Whether nodes are read as OpenAPI 3.0 writes them, which {@see OpenApi30} rewrites. */
     private bool $openApi30 = false;
 
+    /** Whether nodes are read as Swagger 2.0 writes them, which {@see Swagger20} rewrites as 3.0 first. */
+    private bool $swagger20 = false;
+
     public function claiming(KeywordChecks $checks): self
     {
         $parser = clone $this;
@@ -46,6 +49,17 @@ final class SchemaParser
     {
         $parser = clone $this;
         $parser->openApi30 = true;
+
+        return $parser;
+    }
+
+    /**
+     * The parser of a document in Swagger 2.0.
+     */
+    public function forSwagger20(): self
+    {
+        $parser = $this->forOpenApi30();
+        $parser->swagger20 = true;
 
         return $parser;
     }
@@ -72,6 +86,8 @@ final class SchemaParser
         $this->quiet = $outer || is_string($node['x-php-type'] ?? null) || ($node['x-php-skip'] ?? null) === true;
 
         try {
+            $node = $this->swagger20 ? Swagger20::asOpenApi30($node, $location, $diagnostics, $this->quiet) : $node;
+
             return $this->parseObject($this->openApi30 ? OpenApi30::asOpenApi31($node, $location, $diagnostics, $this->quiet) : $node, $builder, $location, $diagnostics);
         } finally {
             $this->quiet = $outer;

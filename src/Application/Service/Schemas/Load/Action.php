@@ -11,6 +11,7 @@ use MSSTC4PHP\DtoGenerator\Application\Port\DocumentLoadFailed;
 use MSSTC4PHP\DtoGenerator\Application\Port\RemoteDocuments;
 use MSSTC4PHP\DtoGenerator\Application\Port\RemoteRequest;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\SchemaParser;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\Swagger20;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\UnionDistribution;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\UnusableDiscriminators;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
@@ -70,12 +71,23 @@ final class Action
             }
 
             $owners[$document->path()] = $index;
-            $this->checkOpenApiVersion($document, $diagnostics);
+            $this->checkVersion($document, $diagnostics);
+            $place = Versions::schemasPlace($document->root());
+            $operations = [];
             $filter = $source->operations();
-            $operations = $filter instanceof OperationFilter ? Operations::of($document->path(), $document->root(), $filter, $diagnostics) : [];
-            $components = $this->componentSchemas($document, $diagnostics);
+            if ($filter instanceof OperationFilter && $place === ['definitions']) {
+                $diagnostics->warning('The operations of a Swagger 2.0 document are not read; its definitions give the classes.', $config->location()->child('sources', (string) $index, 'operations'));
+            } elseif ($filter instanceof OperationFilter) {
+                $operations = Operations::of($document->path(), $document->root(), $filter, $diagnostics);
+            }
+
+            $components = $this->componentSchemas($document, $place, $diagnostics);
+            if ($components !== null && $place === ['definitions']) {
+                $components = Swagger20::withDiscriminatorValues($components);
+            }
+
             if ($components === null && $operations === []) {
-                $diagnostics->warning('The specification has no components/schemas; nothing to generate.', (new SchemaLocation($document->path()))->child('components', 'schemas'));
+                $diagnostics->warning(sprintf('The specification has no %s; nothing to generate.', implode('/', $place)), (new SchemaLocation($document->path()))->child(...$place));
             }
 
             foreach ($components ?? [] as [$name, $node]) {
@@ -83,7 +95,7 @@ final class Action
                     continue;
                 }
 
-                $location = (new SchemaLocation($document->path()))->child('components', 'schemas', $name);
+                $location = (new SchemaLocation($document->path()))->child(...array_merge($place, [$name]));
                 $schema = new ResolvedSchema($reader->component($document, $node, $location, $diagnostics), $index, $name, true);
                 $graph->add($schema);
                 $queue[] = $schema;
@@ -260,8 +272,18 @@ final class Action
         }
     }
 
-    private function checkOpenApiVersion(Document $document, Diagnostics $diagnostics): void
+    private function checkVersion(Document $document, Diagnostics $diagnostics): void
     {
+        if (Versions::isSwagger($document->root())) {
+            $swagger = Versions::normalize(Json::value($document->root()['swagger']));
+            if ($swagger !== '2.0') {
+                $found = $swagger === null ? 'a value that is not a string' : sprintf('"%s"', $swagger);
+                $diagnostics->warning(sprintf('Expected Swagger 2.0, found %s; the document is read as Swagger 2.0.', $found), (new SchemaLocation($document->path()))->child('swagger'));
+            }
+
+            return;
+        }
+
         $version = Versions::normalize(Json::value($document->root()['openapi'] ?? null));
         $at = (new SchemaLocation($document->path()))->child('openapi');
         if ($version === null) {
@@ -276,36 +298,35 @@ final class Action
     }
 
     /**
+     * @param array{'components', 'schemas'}|array{'definitions'} $place where the document keeps its schemas
+     *
      * @return list<array{string, JsonValue}>|null name and node, in document order (numeric names stay strings); null
-     *                                             when the document has no component schemas, an empty list when
-     *                                             they are malformed (reported)
+     *                                             when the document has none, an empty list when they are malformed
+     *                                             (reported)
      */
-    private function componentSchemas(Document $document, Diagnostics $diagnostics): ?array
+    private function componentSchemas(Document $document, array $place, Diagnostics $diagnostics): ?array
     {
-        $at = (new SchemaLocation($document->path()))->child('components', 'schemas');
-        $components = $document->root()['components'] ?? null;
-        if ($components !== null && (!is_array($components) || ($components !== [] && Json::isList($components)))) {
-            $diagnostics->error('"components" must be an object.', (new SchemaLocation($document->path()))->child('components'));
+        $root = new SchemaLocation($document->path());
+        $schemas = $document->root();
+        foreach ($place as $index => $key) {
+            $schemas = $schemas[$key] ?? null;
+            if ($schemas === null) {
+                return null;
+            }
 
-            return [];
+            if (!is_array($schemas) || ($schemas !== [] && Json::isList($schemas))) {
+                $diagnostics->error(sprintf('"%s" must be an object.', $key), $root->child(...array_slice($place, 0, $index + 1)));
+
+                return [];
+            }
         }
 
-        $schemas = is_array($components) ? ($components['schemas'] ?? null) : null;
-        if ($schemas === null) {
-            return null;
-        }
-
-        if (!is_array($schemas) || ($schemas !== [] && Json::isList($schemas))) {
-            $diagnostics->error('"schemas" must be an object.', $at);
-
-            return [];
-        }
-
+        $at = $root->child(...$place);
         $pairs = [];
         foreach ($schemas as $name => $node) {
             $name = (string) $name;
             if ($name === '') {
-                $diagnostics->error('A component schema name must not be empty.', $at->child(''));
+                $diagnostics->error(sprintf('A schema name in %s must not be empty.', implode('/', $place)), $at->child(''));
 
                 continue;
             }
