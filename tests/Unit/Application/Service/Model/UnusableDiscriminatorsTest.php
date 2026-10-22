@@ -19,9 +19,9 @@ final class UnusableDiscriminatorsTest extends TestCase
      *
      * @param list<array<string, mixed>> $variants
      */
-    public function testReadsAUnionThatOnlyRestrictsTheSchemaAsItsProperties(array $variants, int $several): void
+    public function testReadsAUnionThatOnlyRestrictsTheSchemaAsItsProperties(array $variants, int $several, string $union = 'oneOf'): void
     {
-        $output = $this->generate($variants);
+        $output = $this->generate($variants, [], $union);
 
         self::assertSame(
             [
@@ -35,7 +35,7 @@ final class UnusableDiscriminatorsTest extends TestCase
     }
 
     /**
-     * @return iterable<string, array{list<array<string, mixed>>, int}>
+     * @return iterable<string, array{0: list<array<string, mixed>>, 1: int, 2?: 'anyOf'}>
      */
     public static function restrictingVariants(): iterable
     {
@@ -44,6 +44,7 @@ final class UnusableDiscriminatorsTest extends TestCase
         yield 'an enum of several values' => [[$completed, ['properties' => ['status' => ['enum' => ['queued', 'in_progress']]]]], 2];
         yield 'no enum' => [[['properties' => ['status' => ['type' => 'string']]], $completed], 1];
         yield 'no such property' => [[$completed, ['required' => ['name']]], 2];
+        yield 'anyOf' => [[$completed, ['properties' => ['status' => ['enum' => ['queued', 'in_progress']]]]], 2, 'anyOf'];
         yield 'several values beside null' => [[$completed, ['type' => 'object', 'properties' => ['status' => ['enum' => ['a', null, 'b']]]]], 2];
     }
 
@@ -82,10 +83,10 @@ final class UnusableDiscriminatorsTest extends TestCase
      * @param list<array<string, mixed>> $variants
      * @param array<string, mixed> $schema
      */
-    private function generate(array $variants, array $schema = []): Output
+    private function generate(array $variants, array $schema = [], string $union = 'oneOf'): Output
     {
         return ModelFixture::operations(['components' => ['schemas' => [
-            'Run' => $schema + ['type' => 'object', 'properties' => self::PROPERTIES, 'oneOf' => $variants, 'discriminator' => ['propertyName' => 'status']],
+            'Run' => $schema + ['type' => 'object', 'properties' => self::PROPERTIES, $union => $variants, 'discriminator' => ['propertyName' => 'status']],
             'Other' => ['type' => 'object', 'properties' => ['status' => ['type' => 'string']]],
             'Status' => ['type' => 'string', 'enum' => ['a', 'b']],
         ]]]);
