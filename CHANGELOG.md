@@ -6,6 +6,14 @@ All notable changes to this package are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- A child's schema that gives a property of its parent a type PHP lets no subclass declare (a class over an object, a
+  list of `$ref` items over a list of objects, a date over a string), as the generic envelope of many APIs invites,
+  makes the class declare its ancestors' properties itself instead of extending them, with a warning, where it was an
+  error: each such property takes the type both schemas admit. Another name or default, types with no common values,
+  an optional property the parent requires, or a class in a discriminated union stays an error.
+
 ## [1.11.0] - 2026-10-22
 
 ### Added

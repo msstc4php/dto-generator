@@ -14,6 +14,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\Identifier;
 use MSSTC4PHP\DtoGenerator\Domain\Model\NullableType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\PropertyModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ScalarType;
+use MSSTC4PHP\DtoGenerator\Domain\Model\TypeModel;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\DefaultValue;
 
 /**
@@ -71,6 +72,7 @@ final class Hierarchy
             }
         }
 
+        $hierarchy->detachRedeclaring($unions);
         $hierarchy->settle($unions);
         $hierarchy->check();
         $hierarchy->checkDiscriminators($unions);
@@ -305,6 +307,102 @@ final class Hierarchy
         foreach ($members as $member) {
             $this->models[$member] = $this->models[$member]->withProperties(...$this->unshared($this->models[$member]->properties(), $common));
         }
+    }
+
+    /**
+     * PHP lets no subclass give its parent's property another type. A class whose schema does so for a type the
+     * parent's cannot hold declares the properties of its ancestors itself instead of extending them, as the merge
+     * strategy has it; in a union, where the parent selects the class, the redeclaration stays an error.
+     *
+     * @param array<string, Variants> $unions
+     */
+    private function detachRedeclaring(array $unions): void
+    {
+        $inUnion = [];
+        foreach ($unions as $base => $variants) {
+            $inUnion[$base] = true;
+            foreach ($variants->classes() as $variant) {
+                $inUnion[$variant->fqcn()] = true;
+            }
+        }
+
+        foreach ($this->models as $fqcn => $model) {
+            $ancestors = $this->ancestorsOf($fqcn);
+            if ($ancestors === [] || isset($inUnion[$fqcn]) || array_filter($ancestors, static fn (ClassModel $ancestor): bool => isset($inUnion[$ancestor->name()->fqcn()])) !== []) {
+                continue;
+            }
+
+            $inherited = [];
+            foreach (array_reverse($ancestors) as $ancestor) {
+                foreach ($ancestor->properties() as $property) {
+                    $inherited[$property->wireName()] = $property;
+                }
+            }
+
+            $merged = $this->mergedRedeclarations($model, $inherited);
+            if ($merged === null) {
+                continue;
+            }
+
+            $this->diagnostics->warning(
+                sprintf(
+                    '%s gives "%s" another type than %s, which PHP does not let a subclass do; it declares the properties of %s itself instead of extending it.',
+                    $fqcn,
+                    implode('", "', array_keys($merged)),
+                    $ancestors[0]->name()->fqcn(),
+                    $ancestors[0]->name()->fqcn(),
+                ),
+                $merged[array_keys($merged)[0]]->source(),
+            );
+            foreach ($model->properties() as $property) {
+                $inherited[$property->wireName()] = $merged[$property->wireName()] ?? $property;
+            }
+
+            $this->models[$fqcn] = $model->withProperties(...array_values($inherited));
+            $this->parents[$fqcn] = null;
+        }
+    }
+
+    /**
+     * The redeclared properties a merged class can declare, as allOf members meet; null when there are none, or when
+     * one has no meet, another name or default, or leaves a property its parent requires optional, which stays an error.
+     *
+     * @param array<string, PropertyModel> $inherited by wire name
+     *
+     * @return non-empty-array<string, PropertyModel>|null by wire name
+     */
+    private function mergedRedeclarations(ClassModel $model, array $inherited): ?array
+    {
+        $merged = [];
+        foreach ($model->properties() as $property) {
+            $parent = $inherited[$property->wireName()] ?? null;
+            if (!$parent instanceof PropertyModel || $this->narrowsValues($parent, $property)) {
+                continue;
+            }
+
+            $meet = $this->meet->of($parent->type(), $property->type());
+            if (!$meet instanceof TypeModel || $parent->name() !== $property->name() || $this->setDefault($parent) !== $this->setDefault($property) || ($parent->isRequired() && !$property->isRequired())) {
+                return null;
+            }
+
+            $this->superseded->add($parent->type());
+            $merged[$property->wireName()] = $meet->describe() === $property->type()->describe() ? $property : $property->withType($meet);
+        }
+
+        return $merged === [] ? null : $merged;
+    }
+
+    /**
+     * @return list<ClassModel> nearest first; breakCycles() has run
+     */
+    private function ancestorsOf(string $fqcn): array
+    {
+        $ancestors = [];
+        for ($parent = $this->parents[$fqcn] ?? null; $parent instanceof ClassName && isset($this->models[$parent->fqcn()]); $parent = $this->parents[$parent->fqcn()] ?? null) {
+            $ancestors[] = $this->models[$parent->fqcn()];
+        }
+
+        return $ancestors;
     }
 
     /**
