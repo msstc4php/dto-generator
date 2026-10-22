@@ -93,6 +93,132 @@ final class LoadOperationsTest extends TestCase
         ], $this->summary($output));
     }
 
+    public function testReadsTheQueryMethodAndAdditionalOperations(): void
+    {
+        $output = $this->load(['paths' => ['/pets/{id}' => [
+            'query' => ['operationId' => 'searchPets', 'requestBody' => $this->json(self::OBJECT)],
+            'additionalOperations' => [
+                'LINK' => ['responses' => ['200' => $this->json(self::OBJECT)]],
+                'COPY' => ['operationId' => 'copyPet', 'responses' => ['201' => $this->json(self::OBJECT)]],
+                'POST' => ['operationId' => 'other', 'responses' => ['200' => $this->json(self::OBJECT)]],
+                'query' => ['operationId' => 'again', 'responses' => ['200' => $this->json(self::OBJECT)]],
+                'PURGE' => 'not an operation',
+                '1' => ['responses' => ['200' => $this->json(self::OBJECT)]],
+            ],
+        ]]]);
+
+        self::assertSame([
+            'warning ' . self::AT . 'additionalOperations/POST: "POST" has its own field in a path item; it is not read here.',
+            'warning ' . self::AT . 'additionalOperations/query: "query" has its own field in a path item; it is not read here.',
+        ], $this->messages($output));
+        self::assertSame([
+            ['searchPets Request', self::AT . 'query/requestBody/content/application~1json/schema'],
+            ['link /pets/{id} 200 Response', self::AT . 'additionalOperations/LINK/responses/200/content/application~1json/schema'],
+            ['copyPet 201 Response', self::AT . 'additionalOperations/COPY/responses/201/content/application~1json/schema'],
+            ['1 /pets/{id} 200 Response', self::AT . 'additionalOperations/1/responses/200/content/application~1json/schema'],
+        ], $this->summary($output));
+    }
+
+    public function testFiltersAdditionalOperationsByTheirMethodInLowerCase(): void
+    {
+        $output = $this->load(
+            ['paths' => ['/pets/{id}' => ['additionalOperations' => [
+                'LINK' => ['responses' => ['200' => $this->json(self::OBJECT)]],
+                'UNLINK' => ['responses' => ['200' => $this->json(self::OBJECT)]],
+            ]]]],
+            new OperationFilter(['link *'], []),
+        );
+
+        self::assertSame(['link /pets/{id} 200 Response'], array_column($this->summary($output), 0));
+    }
+
+    public function testReadsTheItemSchemaOfASequentialMediaType(): void
+    {
+        $content = static fn (array $media): array => ['content' => $media];
+        $output = $this->load(['paths' => ['/pets/{id}' => ['get' => [
+            'operationId' => 'a',
+            'responses' => [
+                '200' => $content(['text/event-stream' => ['itemSchema' => self::OBJECT], 'application/jsonl' => ['itemSchema' => self::OBJECT]]),
+                '201' => $content(['text/event-stream' => ['itemSchema' => self::OBJECT], 'application/x-ndjson' => ['itemSchema' => self::OBJECT]]),
+                '202' => $content(['text/event-stream' => ['itemSchema' => self::OBJECT], 'application/json-seq' => ['itemSchema' => self::OBJECT]]),
+                '203' => $content(['text/event-stream' => ['itemSchema' => self::OBJECT], 'application/geo+json-seq' => ['itemSchema' => self::OBJECT]]),
+                '207' => $content(['text/event-stream' => ['itemSchema' => self::OBJECT], 'Application/JSONL; charset=utf-8' => ['itemSchema' => self::OBJECT]]),
+                '208' => $content(['text/event-stream' => ['itemSchema' => self::OBJECT], 'application/json-seq-x' => ['itemSchema' => self::OBJECT]]),
+                '204' => $content(['text/event-stream' => ['itemSchema' => self::OBJECT]]),
+                '205' => $content(['application/jsonl' => ['schema' => self::OBJECT, 'itemSchema' => self::OBJECT]]),
+                '206' => $content(['application/jsonl' => ['itemSchema' => ['$ref' => '#/components/schemas/Pet']]]),
+            ],
+        ]]], 'components' => ['schemas' => ['Pet' => self::OBJECT]]]);
+
+        self::assertSame([], $this->messages($output));
+        self::assertSame([
+            ['Pet', self::SPEC . '#/components/schemas/Pet'],
+            ['a 200 Response Item', self::AT . 'get/responses/200/content/application~1jsonl/itemSchema'],
+            ['a 201 Response Item', self::AT . 'get/responses/201/content/application~1x-ndjson/itemSchema'],
+            ['a 202 Response Item', self::AT . 'get/responses/202/content/application~1json-seq/itemSchema'],
+            ['a 203 Response Item', self::AT . 'get/responses/203/content/application~1geo+json-seq/itemSchema'],
+            ['a 207 Response Item', self::AT . 'get/responses/207/content/Application~1JSONL; charset=utf-8/itemSchema'],
+            ['a 208 Response Item', self::AT . 'get/responses/208/content/text~1event-stream/itemSchema'],
+            ['a 204 Response Item', self::AT . 'get/responses/204/content/text~1event-stream/itemSchema'],
+            ['a 205 Response', self::AT . 'get/responses/205/content/application~1jsonl/schema'],
+        ], $this->summary($output));
+    }
+
+    public function testReadsTheMediaTypesOfComponentsTheContentNames(): void
+    {
+        $output = $this->load([
+            'paths' => ['/pets/{id}' => [
+                'get' => ['operationId' => 'a', 'responses' => [
+                    '200' => ['content' => ['application/jsonl' => ['$ref' => '#/components/mediaTypes/Log']]],
+                    '201' => ['content' => ['text/plain' => ['schema' => self::OBJECT], 'application/json' => ['$ref' => '#/components/mediaTypes/Pet']]],
+                    '202' => ['content' => ['application/json' => ['$ref' => '#/components/mediaTypes/Alias']]],
+                    '204' => ['$ref' => '#/components/responses/Events'],
+                    '203' => ['content' => ['application/json' => ['$ref' => '#/components/mediaTypes/Pet', 'schema' => self::OBJECT]]],
+                ]],
+                'put' => ['operationId' => 'b', 'requestBody' => ['content' => ['application/json' => ['$ref' => '#/components/mediaTypes/Pet']]]],
+            ]],
+            'components' => [
+                'mediaTypes' => [
+                    'Log' => ['itemSchema' => self::OBJECT],
+                    'Pet' => ['schema' => self::OBJECT],
+                    'Alias' => ['$ref' => '#/components/mediaTypes/Pet'],
+                    'Event' => ['schema' => self::OBJECT],
+                ],
+                'responses' => ['Events' => ['content' => ['application/json' => ['$ref' => '#/components/mediaTypes/Event']]]],
+            ],
+        ]);
+
+        self::assertSame([], $this->messages($output));
+        self::assertSame([
+            ['Log Media Type Item', self::SPEC . '#/components/mediaTypes/Log/itemSchema'],
+            ['Pet Media Type', self::SPEC . '#/components/mediaTypes/Pet/schema'],
+            ['Event Media Type', self::SPEC . '#/components/mediaTypes/Event/schema'],
+        ], $this->summary($output));
+    }
+
+    public function testReadsAMediaTypeBehindARefOnlyInTheComponents(): void
+    {
+        $content = static fn (string $ref): array => ['content' => ['application/json' => ['$ref' => $ref]]];
+        $output = $this->load([
+            'paths' => ['/pets/{id}' => ['get' => ['operationId' => 'a', 'responses' => [
+                '200' => $content('#/components/schemas/Pet'),
+                '201' => $content('#/components/mediaTypes/Missing'),
+                '202' => $content('#/components/responses/Pet'),
+                '203' => $content('#/components/mediaTypes/List'),
+                '205' => ['content' => ['application/json' => ['$ref' => '#/components/mediaTypes/Missing'], 'text/csv' => ['schema' => self::OBJECT]]],
+            ]]]],
+            'components' => ['schemas' => ['Pet' => self::OBJECT], 'responses' => ['Pet' => $this->json(self::OBJECT)], 'mediaTypes' => ['List' => [['schema' => self::OBJECT]]]],
+        ]);
+
+        self::assertSame([
+            'warning ' . self::AT . 'get/responses/200/content/application~1json/$ref: Only a media type of this document\'s components is read behind "$ref"; #/components/schemas/Pet gives no class.',
+            'warning ' . self::AT . 'get/responses/201/content/application~1json/$ref: "$ref" #/components/mediaTypes/Missing names no media type; it gives no class.',
+            'warning ' . self::AT . 'get/responses/202/content/application~1json/$ref: Only a media type of this document\'s components is read behind "$ref"; #/components/responses/Pet gives no class.',
+            'warning ' . self::AT . 'get/responses/203/content/application~1json/$ref: "$ref" #/components/mediaTypes/List names no media type; it gives no class.',
+        ], $this->messages($output));
+        self::assertSame(['Pet'], array_column($this->summary($output), 0));
+    }
+
     public function testNamesAnOperationWithABlankIdAfterItsPlace(): void
     {
         $output = $this->load(['paths' => ['/pets/{id}' => ['get' => ['operationId' => ' ', 'responses' => ['200' => $this->json(self::OBJECT)]]]]]);
