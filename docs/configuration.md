@@ -239,8 +239,9 @@ sources:
   `operations` on renames none of those: a name a component holds goes to its title's place name, to the component's
   class when the two say the same, or else is numbered from 2, with a warning.
 - Of a body's media types, the first JSON one (`application/json`, `…+json`, and the sequential `application/jsonl`,
-  `application/x-ndjson`, `application/json-seq`, `…+json-seq`) is read, else the first that has a schema. Without
-  a `schema`, the `itemSchema` of a sequential media type (OpenAPI 3.2) gives the class of one item:
+  `application/x-ndjson`, `application/json-seq`, `…+json-seq`) is read, else the first that has a schema, even
+  when it is behind a `$ref` that gives nothing. Without a `schema`, an `itemSchema` (OpenAPI 3.2, written for
+  sequential media types such as `application/jsonl` or `text/event-stream`) gives the class of one item:
   `StreamLogs200ResponseItem`. A media type behind a `$ref` into `components/mediaTypes` is read there, once:
   `LogMediaType`, `LogMediaTypeItem`.
 - A schema that only names another, a `$ref` or an `allOf` of one `$ref` with only annotations beside it

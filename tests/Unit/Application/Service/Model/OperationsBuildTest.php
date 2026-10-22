@@ -47,7 +47,7 @@ final class OperationsBuildTest extends TestCase
         ]);
 
         self::assertSame([], ModelFixture::messages($output));
-        self::assertSame(['App\\Dto\\StreamLogs200ResponseItem', 'App\\Dto\\FilterMediaType'], array_keys(ModelFixture::classes($output)));
+        self::assertSame(['App\Dto\StreamLogs200ResponseItem', 'App\Dto\FilterMediaType'], array_keys(ModelFixture::classes($output)));
     }
 
     public function testGivesWayToAComponentHoldingTheName(): void

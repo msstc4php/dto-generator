@@ -11,9 +11,10 @@ All notable changes to this package are documented here. The format follows
 - OpenAPI 3.2 documents are read without a warning, as 3.1, whose schemas they share. A `$self` naming another URI
   than the document's location gives a warning, as references keep resolving against that location.
 - `sources[].operations` reads what OpenAPI 3.2 adds to operations: the `query` method, `additionalOperations`
-  (`link /pets` for `LINK` in the filter), the `itemSchema` of sequential media types (`application/jsonl`,
-  `application/x-ndjson`, `application/json-seq`, `text/event-stream`), whose item gets `…Item`, and
-  `components/mediaTypes`, named `<Name>MediaType`.
+  (`link /pets` for `LINK` in the filter), the `itemSchema` of a media type without `schema` (as sequential ones
+  such as `application/jsonl` or `text/event-stream` have), whose item gets `…Item`, and `components/mediaTypes`,
+  named `<Name>MediaType`. The sequential JSON types (`application/jsonl`, `application/x-ndjson`,
+  `application/json-seq`, `…+json-seq`) are preferred as JSON is.
 
 ## [1.10.0] - 2026-10-22
 

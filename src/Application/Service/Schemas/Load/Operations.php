@@ -15,7 +15,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
 /**
  * The schemas of the request bodies and responses of a document's operations, named as openapi-generator names them:
  * `<operationId> Request` and `<operationId> <status> Response`, `<method> <path>` standing in for a missing
- * operationId; the `itemSchema` of a sequential media type gives `… Item`. A body or media type behind a `$ref` into
+ * operationId; an `itemSchema` without `schema`, as sequential media types have, gives `… Item`. A body or media type behind a `$ref` into
  * `components` of the document is read there, once, as `<name> Request`, `<name> Response` or `<name> Media Type`.
  *
  * @phpstan-import-type JsonValue from Json
@@ -28,8 +28,7 @@ final class Operations
 
     private const MEDIA_TYPES = ['mediaTypes' => 'Media Type'];
 
-    /** Media types whose items `itemSchema` describes, as JSON: they are preferred as JSON is. */
-    private const JSON_SEQUENCES = ['application/jsonl', 'application/x-ndjson', 'application/json-seq'];
+    private const JSON_TYPES = ['application/json', 'application/jsonl', 'application/x-ndjson', 'application/json-seq'];
 
     /** Keywords that only describe: a `$ref`, or an allOf of one, with only these beside it says what the `$ref` says. */
     private const ANNOTATIONS = ['title', 'description', 'example', 'examples', 'deprecated', 'externalDocs', '$comment', 'nullable', 'readOnly', 'writeOnly'];
@@ -94,16 +93,17 @@ final class Operations
             }
         }
 
-        foreach (self::objects(Json::value($item['additionalOperations'] ?? null)) as $method => $operation) {
-            $method = (string) $method;
+        foreach (self::objects(Json::value($item['additionalOperations'] ?? null)) as $key => $operation) {
+            $method = (string) $key;
+            $lower = strtolower($method);
             $operationAt = $at->child('additionalOperations', $method);
-            if (in_array(strtolower($method), self::METHODS, true)) {
+            if (in_array($lower, self::METHODS, true)) {
                 $this->diagnostics->warning(sprintf('"%s" has its own field in a path item; it is not read here.', $method), $operationAt);
 
                 continue;
             }
 
-            $this->operation(strtolower($method), $pattern, $operation, $filter, $operationAt);
+            $this->operation($lower, $pattern, $operation, $filter, $operationAt);
         }
     }
 
@@ -134,6 +134,7 @@ final class Operations
      * A JSON media type, else the first that has a schema; the others mostly say the same in another encoding.
      *
      * @param array<array-key, mixed> $body a request body or response
+     * @param non-empty-string $name
      */
     private function body(array $body, string $name, SchemaLocation $at): void
     {
@@ -150,7 +151,7 @@ final class Operations
         $chosen = null;
         foreach (self::objects(Json::value($body['content'] ?? null)) as $media => $content) {
             $media = (string) $media;
-            if (!is_string($content['$ref'] ?? null) && !array_key_exists('schema', $content) && !array_key_exists('itemSchema', $content)) {
+            if (!$this->describes($content)) {
                 continue;
             }
 
@@ -172,9 +173,10 @@ final class Operations
     }
 
     /**
-     * Its `schema`, else the `itemSchema` of a sequential media type, which describes one item.
+     * Its `schema`, else its `itemSchema`, which describes one item of a sequential media type.
      *
      * @param array<array-key, mixed> $content
+     * @param non-empty-string $name
      */
     private function mediaType(array $content, string $name, SchemaLocation $at): void
     {
@@ -202,9 +204,10 @@ final class Operations
     /**
      * The component of this document a `$ref` names, unless it was read already.
      *
-     * @param non-empty-array<string, string> $kinds the suffix of the name of each kind of component read
+     * @param non-empty-array<non-empty-string, non-empty-string> $kinds the suffix of the name of each kind of component read
+     * @param non-empty-string $what
      *
-     * @return array{array<array-key, mixed>, string, SchemaLocation}|null the component, its name and location
+     * @return array{array<array-key, mixed>, non-empty-string, SchemaLocation}|null the component, its name and location
      */
     private function component(string $ref, SchemaLocation $at, array $kinds, string $what): ?array
     {
@@ -270,11 +273,19 @@ final class Operations
         return in_array($keyword, self::ANNOTATIONS, true) || strpos($keyword, 'x-') === 0;
     }
 
+    /**
+     * @param array<array-key, mixed> $content
+     */
+    private function describes(array $content): bool
+    {
+        return is_string($content['$ref'] ?? null) || array_key_exists('schema', $content) || array_key_exists('itemSchema', $content);
+    }
+
     private function isJson(string $media): bool
     {
         $type = strtolower(trim(explode(';', $media)[0]));
 
-        return $type === 'application/json' || substr($type, -5) === '+json' || substr($type, -9) === '+json-seq' || in_array($type, self::JSON_SEQUENCES, true);
+        return in_array($type, self::JSON_TYPES, true) || preg_match('~\+json(?:-seq)?\z~', $type) === 1;
     }
 
     /**
