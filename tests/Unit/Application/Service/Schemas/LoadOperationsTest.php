@@ -103,6 +103,7 @@ final class LoadOperationsTest extends TestCase
                 'POST' => ['operationId' => 'other', 'responses' => ['200' => $this->json(self::OBJECT)]],
                 'query' => ['operationId' => 'again', 'responses' => ['200' => $this->json(self::OBJECT)]],
                 'PURGE' => 'not an operation',
+                '1' => ['responses' => ['200' => $this->json(self::OBJECT)]],
             ],
         ]]]);
 
@@ -114,6 +115,7 @@ final class LoadOperationsTest extends TestCase
             ['searchPets Request', self::AT . 'query/requestBody/content/application~1json/schema'],
             ['link /pets/{id} 200 Response', self::AT . 'additionalOperations/LINK/responses/200/content/application~1json/schema'],
             ['copyPet 201 Response', self::AT . 'additionalOperations/COPY/responses/201/content/application~1json/schema'],
+            ['1 /pets/{id} 200 Response', self::AT . 'additionalOperations/1/responses/200/content/application~1json/schema'],
         ], $this->summary($output));
     }
 
@@ -166,6 +168,7 @@ final class LoadOperationsTest extends TestCase
                     '200' => ['content' => ['application/jsonl' => ['$ref' => '#/components/mediaTypes/Log']]],
                     '201' => ['content' => ['text/plain' => ['schema' => self::OBJECT], 'application/json' => ['$ref' => '#/components/mediaTypes/Pet']]],
                     '202' => ['content' => ['application/json' => ['$ref' => '#/components/mediaTypes/Alias']]],
+                    '203' => ['content' => ['application/json' => ['$ref' => '#/components/mediaTypes/Pet', 'schema' => self::OBJECT]]],
                 ]],
                 'put' => ['operationId' => 'b', 'requestBody' => ['content' => ['application/json' => ['$ref' => '#/components/mediaTypes/Pet']]]],
             ]],
