@@ -74,9 +74,13 @@ final class Swagger20
             foreach (self::parents($node) as $parent) {
                 $index = $at[$parent] ?? null;
                 $parentNode = $index === null ? null : $definitions[$index][1];
-                $discriminator = is_array($parentNode) ? $parentNode['discriminator'] ?? null : null;
+                if (!is_array($parentNode)) {
+                    continue;
+                }
+
+                $discriminator = $parentNode['discriminator'] ?? null;
                 $discriminator = is_string($discriminator) ? ['propertyName' => $discriminator] : $discriminator;
-                if ($index === null || !is_array($parentNode) || !is_array($discriminator)) {
+                if (!is_array($discriminator)) {
                     continue;
                 }
 

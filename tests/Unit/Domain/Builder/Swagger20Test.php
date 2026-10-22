@@ -47,7 +47,7 @@ final class Swagger20Test extends TestCase
         $at = new SchemaLocation('/a.yaml', '/definitions/A');
 
         self::assertSame(['x-nullable' => 'true'], Swagger20::asOpenApi30(['x-nullable' => 'true'], $at, $diagnostics, false));
-        self::assertSame(['x-nullable' => 1], Swagger20::asOpenApi30(['x-nullable' => 1], $at, $diagnostics, true));
+        self::assertSame(['x-nullable' => 1], Swagger20::asOpenApi30(['x-nullable' => 1], new SchemaLocation('/a.yaml', '/definitions/Quiet'), $diagnostics, true));
         self::assertSame(['warning /a.yaml#/definitions/A/x-nullable: "x-nullable" must be a boolean; it has no effect.'], array_map(static fn (Diagnostic $d): string => $d->toString(), $diagnostics->all()));
     }
 
@@ -60,7 +60,10 @@ final class Swagger20Test extends TestCase
             ['Elk', 'not a schema'],
             ['Cat', ['allOf' => [['$ref' => '#/definitions/Pet']], 'x-discriminator-value' => 'cat']],
             ['Dog~1', ['allOf' => [['$ref' => '#/definitions/Missing'], ['$ref' => '#/definitions/Elk'], ['$ref' => '#/definitions/Plain'], ['$ref' => '#/definitions/Pet']], 'x-discriminator-value' => 7]],
-            ['Owl', ['allOf' => ['not a schema', ['$ref' => 'other.yaml#/definitions/Pet'], ['$ref' => 'x/definitions/Pet'], ['$ref' => '#/x/Pet'], ['$ref' => '#/definitions/Pet/x'], ['$ref' => '#/defi~2'], ['$ref' => '#/definitions/Pet']], 'x-discriminator-value' => 'owl']],
+            ['Owl', ['allOf' => ['not a schema', ['$ref' => 'other.yaml#/definitions/Pet'], ['$ref' => '#/defi~2'], ['$ref' => '#/definitions/Pet']], 'x-discriminator-value' => 'owl']],
+            ['Eel', ['allOf' => [['$ref' => 'x/definitions/Pet']], 'x-discriminator-value' => 'eel']],
+            ['Rat', ['allOf' => [['$ref' => '#/x/Pet']], 'x-discriminator-value' => 'rat']],
+            ['Hen', ['allOf' => [['$ref' => '#/definitions/Pet/x']], 'x-discriminator-value' => 'hen']],
             ['Mule', ['allOf' => [['$ref' => '#/definitions/Pet'], ['$ref' => '#/definitions/Bug']], 'x-discriminator-value' => 'mule']],
             ['Ant', ['allOf' => [['$ref' => '#/definitions/Bug']], 'x-discriminator-value' => 'ant']],
             ['Fox', ['allOf' => [['$ref' => '#/definitions/Pet']], 'x-discriminator-value' => 'cat']],
