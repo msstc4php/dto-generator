@@ -15,16 +15,21 @@ use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
 /**
  * The schemas of the request bodies and responses of a document's operations, named as openapi-generator names them:
  * `<operationId> Request` and `<operationId> <status> Response`, `<method> <path>` standing in for a missing
- * operationId. A body behind a `$ref` into `components` of the document is read there, once, as `<name> Request` or
- * `<name> Response`.
+ * operationId; the `itemSchema` of a sequential media type gives `… Item`. A body or media type behind a `$ref` into
+ * `components` of the document is read there, once, as `<name> Request`, `<name> Response` or `<name> Media Type`.
  *
  * @phpstan-import-type JsonValue from Json
  */
 final class Operations
 {
-    private const METHODS = ['get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace'];
+    private const METHODS = ['get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace', 'query'];
 
-    private const COMPONENTS = ['requestBodies' => 'Request', 'responses' => 'Response'];
+    private const BODIES = ['requestBodies' => 'Request', 'responses' => 'Response'];
+
+    private const MEDIA_TYPES = ['mediaTypes' => 'Media Type'];
+
+    /** Media types whose items `itemSchema` describes, as JSON: they are preferred as JSON is. */
+    private const JSON_SEQUENCES = ['application/jsonl', 'application/x-ndjson', 'application/json-seq'];
 
     /** Keywords that only describe: a `$ref`, or an allOf of one, with only these beside it says what the `$ref` says. */
     private const ANNOTATIONS = ['title', 'description', 'example', 'examples', 'deprecated', 'externalDocs', '$comment', 'nullable', 'readOnly', 'writeOnly'];
@@ -84,25 +89,44 @@ final class Operations
 
         foreach (self::METHODS as $method) {
             $operation = $item[$method] ?? null;
-            if (!is_array($operation)) {
+            if (is_array($operation)) {
+                $this->operation($method, $pattern, $operation, $filter, $at->child($method));
+            }
+        }
+
+        foreach (self::objects(Json::value($item['additionalOperations'] ?? null)) as $method => $operation) {
+            $method = (string) $method;
+            $operationAt = $at->child('additionalOperations', $method);
+            if (in_array(strtolower($method), self::METHODS, true)) {
+                $this->diagnostics->warning(sprintf('"%s" has its own field in a path item; it is not read here.', $method), $operationAt);
+
                 continue;
             }
 
-            $id = $operation['operationId'] ?? null;
-            $id = is_string($id) ? trim($id) : '';
-            $name = $id !== '' ? $id : $method . ' ' . $pattern;
-            if (!$filter->selects($name)) {
-                continue;
-            }
+            $this->operation(strtolower($method), $pattern, $operation, $filter, $operationAt);
+        }
+    }
 
-            $requestBody = Json::value($operation['requestBody'] ?? null);
-            if (is_array($requestBody)) {
-                $this->body($requestBody, $name . ' Request', $at->child($method, 'requestBody'));
-            }
+    /**
+     * @param array<array-key, mixed> $operation
+     */
+    private function operation(string $method, string $pattern, array $operation, OperationFilter $filter, SchemaLocation $at): void
+    {
+        $id = $operation['operationId'] ?? null;
+        $id = is_string($id) ? trim($id) : '';
 
-            foreach (self::objects(Json::value($operation['responses'] ?? null)) as $status => $response) {
-                $this->body($response, $name . ' ' . $status . ' Response', $at->child($method, 'responses', (string) $status));
-            }
+        $name = $id !== '' ? $id : $method . ' ' . $pattern;
+        if (!$filter->selects($name)) {
+            return;
+        }
+
+        $requestBody = Json::value($operation['requestBody'] ?? null);
+        if (is_array($requestBody)) {
+            $this->body($requestBody, $name . ' Request', $at->child('requestBody'));
+        }
+
+        foreach (self::objects(Json::value($operation['responses'] ?? null)) as $status => $response) {
+            $this->body($response, $name . ' ' . $status . ' Response', $at->child('responses', (string) $status));
         }
     }
 
@@ -115,7 +139,10 @@ final class Operations
     {
         $ref = $body['$ref'] ?? null;
         if (is_string($ref)) {
-            $this->component($ref, $at);
+            $component = $this->component($ref, $at, self::BODIES, 'request body or response');
+            if ($component !== null) {
+                $this->body(...$component);
+            }
 
             return;
         }
@@ -123,34 +150,63 @@ final class Operations
         $chosen = null;
         foreach (self::objects(Json::value($body['content'] ?? null)) as $media => $content) {
             $media = (string) $media;
-            if (!array_key_exists('schema', $content)) {
+            if (!is_string($content['$ref'] ?? null) && !array_key_exists('schema', $content) && !array_key_exists('itemSchema', $content)) {
                 continue;
             }
 
             if ($this->isJson($media)) {
-                $chosen = [$media, $content['schema']];
+                $chosen = [$media, $content];
 
                 break;
             }
 
-            $chosen ??= [$media, $content['schema']];
+            $chosen ??= [$media, $content];
         }
 
         if ($chosen === null) {
             return;
         }
 
-        [$media, $schema] = $chosen;
-        $schema = Json::value($schema);
+        [$media, $content] = $chosen;
+        $this->mediaType($content, $name, $at->child('content', $media));
+    }
+
+    /**
+     * Its `schema`, else the `itemSchema` of a sequential media type, which describes one item.
+     *
+     * @param array<array-key, mixed> $content
+     */
+    private function mediaType(array $content, string $name, SchemaLocation $at): void
+    {
+        $ref = $content['$ref'] ?? null;
+        if (is_string($ref)) {
+            $component = $this->component($ref, $at, self::MEDIA_TYPES, 'media type');
+            if ($component !== null) {
+                $this->mediaType(...$component);
+            }
+
+            return;
+        }
+
+        $field = array_key_exists('schema', $content) ? 'schema' : 'itemSchema';
+        if (!array_key_exists($field, $content)) {
+            return;
+        }
+
+        $schema = Json::value($content[$field]);
         if (!$this->onlyNamesAnother($schema)) {
-            $this->schemas[] = [$name, $schema, $at->child('content', $media, 'schema')];
+            $this->schemas[] = [$field === 'schema' ? $name : $name . ' Item', $schema, $at->child($field)];
         }
     }
 
     /**
-     * Reads the request body or response of `components` a `$ref` names, unless it was read already.
+     * The component of this document a `$ref` names, unless it was read already.
+     *
+     * @param non-empty-array<string, string> $kinds the suffix of the name of each kind of component read
+     *
+     * @return array{array<array-key, mixed>, string, SchemaLocation}|null the component, its name and location
      */
-    private function component(string $ref, SchemaLocation $at): void
+    private function component(string $ref, SchemaLocation $at, array $kinds, string $what): ?array
     {
         $target = null;
         try {
@@ -160,29 +216,29 @@ final class Operations
         }
 
         $segments = $target instanceof SchemaLocation && $target->file() === $this->document->file() ? JsonPointer::segments($target->pointer()) : [];
-        $suffix = count($segments) === 3 && $segments[0] === 'components' ? self::COMPONENTS[$segments[1]] ?? null : null;
+        $suffix = count($segments) === 3 && $segments[0] === 'components' ? $kinds[$segments[1]] ?? null : null;
         if ($suffix === null) {
-            $this->diagnostics->warning(sprintf('Only a request body or response of this document\'s components is read behind "$ref"; %s gives no class.', $ref), $at->child('$ref'));
+            $this->diagnostics->warning(sprintf('Only a %s of this document\'s components is read behind "$ref"; %s gives no class.', $what, $ref), $at->child('$ref'));
 
-            return;
+            return null;
         }
 
         [, $kind, $name] = $segments;
         $pointer = JsonPointer::fromSegments('components', $kind, $name);
         // Several operations name one, and one may name itself.
         if (in_array($pointer, $this->components, true)) {
-            return;
+            return null;
         }
 
         $this->components[] = $pointer;
         $component = JsonPointer::has($this->root, $pointer) ? Json::value(JsonPointer::get($this->root, $pointer)) : null;
         if (!is_array($component) || ($component !== [] && Json::isList($component))) {
-            $this->diagnostics->warning(sprintf('"$ref" %s names no request body or response; it gives no class.', $ref), $at->child('$ref'));
+            $this->diagnostics->warning(sprintf('"$ref" %s names no %s; it gives no class.', $ref, $what), $at->child('$ref'));
 
-            return;
+            return null;
         }
 
-        $this->body($component, $name . ' ' . $suffix, $this->document->child('components', $kind, $name));
+        return [$component, $name . ' ' . $suffix, $this->document->child('components', $kind, $name)];
     }
 
     /**
@@ -218,7 +274,7 @@ final class Operations
     {
         $type = strtolower(trim(explode(';', $media)[0]));
 
-        return $type === 'application/json' || substr($type, -5) === '+json';
+        return $type === 'application/json' || substr($type, -5) === '+json' || substr($type, -9) === '+json-seq' || in_array($type, self::JSON_SEQUENCES, true);
     }
 
     /**

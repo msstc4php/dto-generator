@@ -36,6 +36,20 @@ final class OperationsBuildTest extends TestCase
         self::assertSame(['App\Dto\GetPets200Response', 'App\Dto\CreatePetRequestKind'], ModelFixture::enums($output));
     }
 
+    public function testNamesTheItemsOfAStreamAndTheMediaTypesOfComponents(): void
+    {
+        $output = ModelFixture::operations([
+            'paths' => ['/logs' => [
+                'get' => ['operationId' => 'streamLogs', 'responses' => ['200' => ['content' => ['application/jsonl' => ['itemSchema' => self::PET]]]]],
+                'query' => ['operationId' => 'searchLogs', 'requestBody' => ['content' => ['application/json' => ['$ref' => '#/components/mediaTypes/Filter']]]],
+            ]],
+            'components' => ['mediaTypes' => ['Filter' => ['schema' => self::PET]]],
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(['App\\Dto\\StreamLogs200ResponseItem', 'App\\Dto\\FilterMediaType'], array_keys(ModelFixture::classes($output)));
+    }
+
     public function testGivesWayToAComponentHoldingTheName(): void
     {
         $output = ModelFixture::operations([

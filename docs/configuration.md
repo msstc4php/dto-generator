@@ -216,7 +216,9 @@ extensions by package name. Attributes are written in that order.
 Off by default, so that a newer generator adds no classes by itself. `true` reads every operation; an object picks
 them with glob patterns, `include` (default `['*']`) and `exclude` (default `[]`), over the operationId, or
 `<method> <path>` for an operation without one: the method in lower case, the path as written (`get /pets/{petId}`).
-`{}` (and `[]`, which YAML and JSON cannot tell from it) reads every operation too.
+`{}` (and `[]`, which YAML and JSON cannot tell from it) reads every operation too. The OpenAPI 3.2 `query` method and
+the methods of `additionalOperations` (`link /pets/{petId}` for `LINK`) count as the others; an entry of
+`additionalOperations` for a method that has its own field gives a warning and is not read.
 
 ```yaml
 sources:
@@ -236,7 +238,11 @@ sources:
 - The names give way as inline names do, and only after every class the components give has its name, so turning
   `operations` on renames none of those: a name a component holds goes to its title's place name, to the component's
   class when the two say the same, or else is numbered from 2, with a warning.
-- Of a body's media types, the first JSON one (`application/json`, `…+json`) is read, else the first that has a schema.
+- Of a body's media types, the first JSON one (`application/json`, `…+json`, and the sequential `application/jsonl`,
+  `application/x-ndjson`, `application/json-seq`, `…+json-seq`) is read, else the first that has a schema. Without
+  a `schema`, the `itemSchema` of a sequential media type (OpenAPI 3.2) gives the class of one item:
+  `StreamLogs200ResponseItem`. A media type behind a `$ref` into `components/mediaTypes` is read there, once:
+  `LogMediaType`, `LogMediaTypeItem`.
 - A schema that only names another, a `$ref` or an `allOf` of one `$ref` with only annotations beside it
   (`title`, `description`, `example`, `examples`, `deprecated`, `externalDocs`, `$comment`, `nullable`, `readOnly`,
   `writeOnly`, `x-…`), gives no class: the other has one. A missing request body or response a `$ref` names gives a
