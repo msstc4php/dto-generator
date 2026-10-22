@@ -232,7 +232,7 @@ final class SchemaTest extends TestCase
             ->property('list', $list)
             ->allOf($base)
             ->additionalProperties($extra)
-            ->discriminator(new Discriminator('kind', ['cat' => 'Cat']))
+            ->discriminator(new Discriminator('kind', ['cat' => 'Cat'], 'Other'))
             ->build()
         ;
 
@@ -243,6 +243,7 @@ final class SchemaTest extends TestCase
                 ['#/components/schemas/Extra', '/additionalProperties'],
                 ['base.yaml', '/allOf/0'],
                 ['#/components/schemas/Cat', '/discriminator/mapping/cat'],
+                ['#/components/schemas/Other', '/discriminator/defaultMapping'],
             ],
             array_map(static fn (ReferenceUse $use): array => [$use->ref(), $use->location()->pointer()], $schema->references()),
         );

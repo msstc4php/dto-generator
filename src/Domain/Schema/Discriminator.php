@@ -20,10 +20,13 @@ final class Discriminator
      */
     private array $mapping;
 
+    private ?string $defaultMapping;
+
     /**
      * @param array<int|string, string> $mapping discriminator value → `$ref`
+     * @param ?string $defaultMapping OpenAPI 3.2: the `$ref` of the variant for a missing or unmapped value
      */
-    public function __construct(string $propertyName, array $mapping = [])
+    public function __construct(string $propertyName, array $mapping = [], ?string $defaultMapping = null)
     {
         if ($propertyName === '') {
             throw new InvalidModel('Discriminator property name must not be empty.');
@@ -35,13 +38,17 @@ final class Discriminator
             }
         }
 
+        if ($defaultMapping === '') {
+            throw new InvalidModel('The default mapping of a discriminator must not be empty.');
+        }
+
         $this->propertyName = $propertyName;
         $this->mapping = [];
         foreach ($mapping as $value => $ref) {
-            $this->mapping[$value] = $this->isBareName($ref)
-                ? '#' . str_replace('%', '%25', JsonPointer::fromSegments('components', 'schemas', $ref))
-                : $ref;
+            $this->mapping[$value] = $this->reference($ref);
         }
+
+        $this->defaultMapping = $defaultMapping === null ? null : $this->reference($defaultMapping);
     }
 
     public function propertyName(): string
@@ -60,6 +67,16 @@ final class Discriminator
     public function refFor(string $value): ?string
     {
         return $this->mapping[$value] ?? null;
+    }
+
+    public function defaultRef(): ?string
+    {
+        return $this->defaultMapping;
+    }
+
+    private function reference(string $ref): string
+    {
+        return $this->isBareName($ref) ? '#' . str_replace('%', '%25', JsonPointer::fromSegments('components', 'schemas', $ref)) : $ref;
     }
 
     /**

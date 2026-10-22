@@ -360,6 +360,13 @@ final class SchemaParser
             $mapping[$discriminatorValue] = $ref;
         }
 
-        return new Discriminator($propertyName, $mapping);
+        $default = $value['defaultMapping'] ?? null;
+        if ($default !== null && (!is_string($default) || $default === '')) {
+            $diagnostics->error('"defaultMapping" must be a non-empty string.', $at->child('defaultMapping'));
+
+            return null;
+        }
+
+        return new Discriminator($propertyName, $mapping, $default);
     }
 }
