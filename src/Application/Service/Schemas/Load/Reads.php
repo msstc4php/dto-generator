@@ -15,6 +15,9 @@ final class Reads
     /** @var array<string, true> */
     private array $documents = [];
 
+    /** @var array<string, true> documents whose first read was answered */
+    private array $read = [];
+
     /** @var array<string, Document> by URL */
     private array $remote = [];
 
@@ -27,6 +30,20 @@ final class Reads
     public function document(string $path): void
     {
         $this->documents[$path] = true;
+    }
+
+    /**
+     * True only the first time it is asked about a document: what is checked once per document is checked then.
+     */
+    public function isFirstRead(string $path): bool
+    {
+        if (isset($this->read[$path])) {
+            return false;
+        }
+
+        $this->read[$path] = true;
+
+        return true;
     }
 
     public function remote(Document $document): void

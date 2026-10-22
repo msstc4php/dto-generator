@@ -6,6 +6,11 @@ All notable changes to this package are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- OpenAPI 3.2 documents are read without a warning, as 3.1, whose schemas they share. A `$self` naming another URI
+  than the document's location gives a warning, as references keep resolving against that location.
+
 ## [1.10.0] - 2026-10-22
 
 ### Added

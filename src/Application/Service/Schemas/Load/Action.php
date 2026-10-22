@@ -187,10 +187,43 @@ final class Action
      */
     private function load(string $path, SchemaLocation $requestedAt, Input $input, Diagnostics $diagnostics, GraphBuilder $graph, Reads $reads): ?Document
     {
-        if ($graph->isUnloadable($path)) {
-            return null;
+        $document = $graph->isUnloadable($path) ? null : $this->read($path, $requestedAt, $input, $diagnostics, $graph, $reads);
+        if ($document instanceof Document && $reads->isFirstRead($document->path())) {
+            $this->checkSelf($document, $diagnostics);
         }
 
+        return $document;
+    }
+
+    /**
+     * References resolve against where a document was read from; an OpenAPI 3.2 `$self` naming another URI would move
+     * them, and would let other documents refer to this one by it.
+     */
+    private function checkSelf(Document $document, Diagnostics $diagnostics): void
+    {
+        $root = $document->root();
+        if (!array_key_exists('$self', $root)) {
+            return;
+        }
+
+        $self = $root['$self'];
+        $at = new SchemaLocation($document->path());
+        try {
+            if (is_string($self) && Reference::target($self, $at)->file() === $at->file()) {
+                return;
+            }
+        } catch (InvalidModel $exception) {
+            // Reported below as any other URI.
+        }
+
+        $diagnostics->warning(
+            sprintf('"$self" %s is not read: references in this document resolve against where it was read from, and a "$ref" to that URI does not reach it.', is_string($self) ? '"' . $self . '"' : 'that is not a string'),
+            $at->child('$self'),
+        );
+    }
+
+    private function read(string $path, SchemaLocation $requestedAt, Input $input, Diagnostics $diagnostics, GraphBuilder $graph, Reads $reads): ?Document
+    {
         try {
             if (!Url::isUrl($path)) {
                 $document = $this->loader->load($path);
@@ -230,7 +263,7 @@ final class Action
         }
 
         if (!Versions::isUnderstood($version)) {
-            $diagnostics->warning(sprintf('Expected OpenAPI 3.0 or 3.1, found "%s"; keywords specific to that version are not understood.', $version), $at);
+            $diagnostics->warning(sprintf('Expected OpenAPI 3.0, 3.1 or 3.2, found "%s"; keywords specific to that version are not understood.', $version), $at);
         }
     }
 

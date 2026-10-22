@@ -5,7 +5,7 @@ under `.claude/docs/`; this file stays lean.
 
 ## What this is
 
-`msstc4php/dto-generator`: PHP DTO classes from OpenAPI 3.1 (and 3.0) schemas, for target
+`msstc4php/dto-generator`: PHP DTO classes from OpenAPI 3.1 (and 3.0, 3.2) schemas, for target
 PHP 7.4–8.5. Hexagonal layout (`Domain`, `Application`, `Infrastructure`,
 `Presentation`, public SPI in `Contract`), enforced by `deptrac.yaml`. Design:
 `docs/internal/specs/2026-10-01-dto-generator-design.md`; stage plans:
