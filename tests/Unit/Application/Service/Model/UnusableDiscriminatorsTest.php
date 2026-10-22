@@ -19,13 +19,13 @@ final class UnusableDiscriminatorsTest extends TestCase
      *
      * @param list<array<string, mixed>> $variants
      */
-    public function testReadsAUnionThatOnlyRestrictsTheSchemaAsItsProperties(array $variants, int $several, string $union = 'oneOf'): void
+    public function testReadsAUnionThatOnlyRestrictsTheSchemaAsItsProperties(array $variants, string $several, string $union = 'oneOf'): void
     {
         $output = $this->generate($variants, [], $union);
 
         self::assertSame(
             [
-                'warning ' . self::AT . 'Run/discriminator: The discriminator is ignored, as its inline variants only restrict the properties of the schema, and variant ' . $several . ' allows several values of "status"; the class keeps the properties.',
+                'warning ' . self::AT . 'Run/discriminator: The discriminator is ignored, as its inline variants only restrict the properties of the schema, and ' . $several . ' allows several values of "status"; the class keeps the properties.',
                 'warning ' . self::AT . 'Run: "oneOf" and "anyOf" beside "properties" are not represented; the class keeps only its properties.',
             ],
             ModelFixture::messages($output),
@@ -35,17 +35,43 @@ final class UnusableDiscriminatorsTest extends TestCase
     }
 
     /**
-     * @return iterable<string, array{0: list<array<string, mixed>>, 1: int, 2?: 'anyOf'}>
+     * @return iterable<string, array{0: list<array<string, mixed>>, 1: string, 2?: 'anyOf'}>
      */
     public static function restrictingVariants(): iterable
     {
         $completed = ['properties' => ['status' => ['enum' => ['completed']]], 'required' => ['status', 'conclusion']];
 
-        yield 'an enum of several values' => [[$completed, ['properties' => ['status' => ['enum' => ['queued', 'in_progress']]]]], 2];
-        yield 'no enum' => [[['properties' => ['status' => ['type' => 'string']]], $completed], 1];
-        yield 'no such property' => [[$completed, ['required' => ['name']]], 2];
-        yield 'anyOf' => [[$completed, ['properties' => ['status' => ['enum' => ['queued', 'in_progress']]]]], 2, 'anyOf'];
-        yield 'several values beside null' => [[$completed, ['type' => 'object', 'properties' => ['status' => ['enum' => ['a', null, 'b']]]]], 2];
+        yield 'an enum of several values' => [[$completed, ['properties' => ['status' => ['enum' => ['queued', 'in_progress']]]]], 'oneOf/1'];
+        yield 'no enum' => [[['properties' => ['status' => ['type' => 'string']]], $completed], 'oneOf/0'];
+        yield 'no such property' => [[$completed, ['required' => ['name']]], 'oneOf/1'];
+        yield 'anyOf' => [[$completed, ['properties' => ['status' => ['enum' => ['queued', 'in_progress']]]]], 'anyOf/1', 'anyOf'];
+        yield 'several values beside null' => [[$completed, ['type' => 'object', 'properties' => ['status' => ['enum' => ['a', null, 'b']]]]], 'oneOf/1'];
+        yield 'annotations' => [[$completed + ['title' => 'Done', 'minProperties' => 1, 'x-note' => 'n'], ['properties' => ['status' => ['enum' => ['a', 'b']]], 'additionalProperties' => true]], 'oneOf/1'];
+    }
+
+    public function testLooksAtTheVariantsOfBothUnions(): void
+    {
+        $output = ModelFixture::operations(['components' => ['schemas' => ['Run' => [
+            'type' => 'object',
+            'properties' => self::PROPERTIES,
+            'oneOf' => [['properties' => ['status' => ['const' => 'a']]]],
+            'anyOf' => [['properties' => ['status' => ['enum' => ['b', 'c']]]], ['properties' => ['status' => ['const' => 'd']], 'not' => []]],
+            'discriminator' => ['propertyName' => 'status'],
+        ]]]]);
+
+        self::assertSame([], array_filter(ModelFixture::messages($output), static fn (string $message): bool => strpos($message, 'discriminator is ignored, as') !== false));
+    }
+
+    public function testReadsTheReadAndTheWriteModelAlike(): void
+    {
+        $output = ModelFixture::views(['Run' => [
+            'type' => 'object',
+            'properties' => ['id' => ['type' => 'integer', 'readOnly' => true]] + self::PROPERTIES,
+            'oneOf' => [['properties' => ['status' => ['const' => 'a']]], ['properties' => ['status' => ['enum' => ['b', 'c']]]]],
+            'discriminator' => ['propertyName' => 'status'],
+        ]]);
+
+        self::assertSame(['App\Dto\RunRead' => 'final', 'App\Dto\RunWrite' => 'final'], ModelFixture::hierarchy($output));
     }
 
     /**
@@ -58,7 +84,10 @@ final class UnusableDiscriminatorsTest extends TestCase
     {
         $output = $this->generate($variants, $schema);
 
-        self::assertSame([], array_filter(ModelFixture::messages($output), static fn (string $message): bool => strpos($message, 'discriminator is ignored') !== false));
+        self::assertSame([], array_filter(ModelFixture::messages($output), static fn (string $message): bool => strpos($message, 'discriminator is ignored, as') !== false));
+        $hierarchy = ModelFixture::hierarchy($output)['App\Dto\Run'] ?? '';
+        $errors = array_filter(ModelFixture::messages($output), static fn (string $message): bool => strncmp($message, 'error', 5) === 0);
+        self::assertTrue(strncmp($hierarchy, 'abstract', 8) === 0 || $errors !== [], $hierarchy);
     }
 
     /**
@@ -76,6 +105,16 @@ final class UnusableDiscriminatorsTest extends TestCase
         yield 'a status behind a $ref' => [[['properties' => ['status' => ['$ref' => '#/components/schemas/Status']]], ['properties' => ['status' => ['const' => 'done']]]]];
         yield 'a status with an allOf' => [[['properties' => ['status' => ['allOf' => [['const' => 'a']]]]], ['properties' => ['status' => ['const' => 'done']]]]];
         yield 'a status that is a union' => [[['properties' => ['status' => ['oneOf' => [['const' => 'a'], ['const' => 'b']]]]], ['properties' => ['status' => ['const' => 'done']]]]];
+        yield 'a variant that is a union' => [[$several, ['oneOf' => [['$ref' => '#/components/schemas/Other'], ['type' => 'object']]]]];
+        yield 'a variant with a discriminator' => [[$several, ['properties' => ['status' => ['type' => 'string']], 'discriminator' => ['propertyName' => 'status']]]];
+        yield 'a variant with not' => [[$several, ['not' => ['required' => ['name']]]]];
+        yield 'a variant with a schema for other properties' => [[$several, ['additionalProperties' => ['$ref' => '#/components/schemas/Other']]]];
+        yield 'a variant with items' => [[$several, ['items' => ['type' => 'string']]]];
+        yield 'a variant with an enum' => [[$several, ['enum' => [['status' => 'a']]]]];
+        yield 'a variant that may be an array' => [[$several, ['type' => ['object', 'array']]]];
+        yield 'a status that may only be null' => [[['properties' => ['status' => ['enum' => [null]]]], ['properties' => ['status' => ['const' => 'done']]]]];
+        yield 'a mapping' => [[$several, ['properties' => ['status' => ['const' => 'done']]]], ['discriminator' => ['propertyName' => 'status', 'mapping' => ['x' => 'Other']]]];
+        yield 'a default mapping' => [[$several, ['properties' => ['status' => ['const' => 'done']]]], ['discriminator' => ['propertyName' => 'status', 'defaultMapping' => 'Other']]];
         yield 'a schema without properties' => [[$several, ['properties' => ['status' => ['const' => 'done']]]], ['properties' => []]];
     }
 

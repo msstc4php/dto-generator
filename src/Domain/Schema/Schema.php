@@ -294,6 +294,8 @@ final class Schema
 
     /**
      * The same schema read as a union without a discriminator, which cannot tell its variants apart.
+     *
+     * @internal for the loader
      */
     public function withoutDiscriminator(): self
     {
