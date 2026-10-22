@@ -273,13 +273,14 @@ final class Views
     {
         $parent = $model->parent();
         $discriminator = $model->discriminator();
+        $default = $discriminator instanceof DiscriminatorModel ? $discriminator->defaultClass() : null;
 
         return [
             $model->kind()->value(),
             $parent instanceof ClassName ? $parent->fqcn() : null,
             array_map(static fn (PropertyModel $property): array => [$property->wireName(), $property->type()->describe()], $model->properties()),
             $discriminator instanceof DiscriminatorModel ? array_map(static fn (ClassName $variant): string => $variant->fqcn(), $discriminator->mapping()) : [],
-            $discriminator instanceof DiscriminatorModel && $discriminator->defaultClass() instanceof ClassName ? $discriminator->defaultClass()->fqcn() : null,
+            $default instanceof ClassName ? $default->fqcn() : null,
             array_map(static fn (ClassName $interface): string => $interface->fqcn(), $model->interfaces()),
         ];
     }

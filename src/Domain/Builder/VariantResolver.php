@@ -239,9 +239,7 @@ final class VariantResolver
             }
         }
 
-        $default = $this->defaultClass($schema, $discriminator, $names, $diagnostics);
-
-        return new Variants($classes, $mapping === [] ? null : new DiscriminatorModel($discriminator->propertyName(), $mapping, $default), $listed);
+        return new Variants($classes, $mapping === [] ? null : new DiscriminatorModel($discriminator->propertyName(), $mapping, $this->defaultClass($schema, $discriminator, $names, $diagnostics)), $listed);
     }
 
     /**

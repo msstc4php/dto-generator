@@ -71,6 +71,41 @@ final class DefaultMappingBuildTest extends TestCase
         );
     }
 
+    public function testNamesTheDefaultByTheValueTheMappingGivesIt(): void
+    {
+        $output = ModelFixture::build([
+            'Pet' => [
+                'oneOf' => [['$ref' => '#/components/schemas/Cat'], ['$ref' => '#/components/schemas/Other']],
+                'discriminator' => ['propertyName' => 'kind', 'mapping' => ['cat' => 'Cat', 'memo' => 'Other'], 'defaultMapping' => 'Other'],
+            ],
+            'Cat' => self::KIND,
+            'Other' => self::OPTIONAL_KIND,
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(['App\Dto\Other', 'memo'], $this->defaultOf($output, 'App\Dto\Pet'));
+        self::assertSame(['App\Dto\Cat' => ["kind: 'cat'"]], ModelFixture::selections($output));
+    }
+
+    public function testKeepsTheCheckAnotherDiscriminatedBaseGivesTheDefault(): void
+    {
+        $output = ModelFixture::build([
+            'Signal' => [
+                'oneOf' => [['$ref' => '#/components/schemas/Ping'], ['$ref' => '#/components/schemas/Note']],
+                'discriminator' => ['propertyName' => 'kind', 'mapping' => ['ping' => 'Ping'], 'defaultMapping' => 'Note'],
+            ],
+            'Feed' => [
+                'oneOf' => [['$ref' => '#/components/schemas/Note']],
+                'discriminator' => ['propertyName' => 'kind', 'mapping' => ['memo' => 'Note']],
+            ],
+            'Ping' => self::KIND,
+            'Note' => self::OPTIONAL_KIND,
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(["kind: 'memo'"], ModelFixture::selections($output)['App\Dto\Note'] ?? null);
+    }
+
     public function testRefusesADefaultThatIsNoVariant(): void
     {
         $output = ModelFixture::build(

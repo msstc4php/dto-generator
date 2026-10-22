@@ -179,7 +179,9 @@ Classes are `final`, except the bases of `allOf` and of discriminated unions. At
   version) names the variant for a missing or unmapped value, as `mapping` names one, bare names included; it must
   be one of the variants. Its constructor does
   not check the discriminator, which may hold any value, or none when the variant does not require the property; it
-  keeps its own values in the mapping. The variants of an abstract default are unchecked by that discriminator only.
+  keeps its own values in the mapping. The default, or the variants of an abstract default, are unchecked by that
+  discriminator only: another discriminated base reading the same property still checks the values it maps to them.
+  `defaultMapping: null` counts as absent, as `mapping: null` does.
   Selecting the default when deserializing is up to the serializer: see the bridge.
 - **A bare name in `discriminator.mapping`** is resolved against the file holding the discriminator, not the root
   document.

@@ -85,6 +85,10 @@ final class SchemaParserTest extends TestCase
         self::assertNotNull($schema->discriminator());
         self::assertSame('#/components/schemas/Cat', $schema->discriminator()->refFor('cat'));
         self::assertNull($schema->discriminator()->defaultRef());
+        $ignored = (new SchemaParser())->parse(['discriminator' => ['propertyName' => 'kind', 'defaultMapping' => null]], $this->root(), $diagnostics);
+        self::assertSame([], $diagnostics->all());
+        self::assertNotNull($ignored->discriminator());
+        self::assertNull($ignored->discriminator()->defaultRef());
         self::assertSame(['a', 'b'], $schema->enum());
         self::assertFalse($schema->additionalProperties());
     }
