@@ -81,8 +81,8 @@ final class Swagger20
                 }
 
                 $mapping = $discriminator['mapping'] ?? [];
-                if (is_array($mapping) && !array_key_exists((string) $value, $mapping)) {
-                    $mapping[(string) $value] = '#' . JsonPointer::fromSegments('definitions', $name);
+                if (is_array($mapping) && !array_key_exists($value, $mapping)) {
+                    $mapping[$value] = '#' . JsonPointer::fromSegments('definitions', $name);
                     $discriminator['mapping'] = $mapping;
                     $parentNode['discriminator'] = $discriminator;
                     $definitions[$index][1] = $parentNode;
@@ -103,7 +103,7 @@ final class Swagger20
         $parents = [];
         foreach (is_array($node) && is_array($node['allOf'] ?? null) ? $node['allOf'] : [] as $member) {
             $ref = is_array($member) ? $member['$ref'] ?? null : null;
-            if (!is_string($ref) || strncmp($ref, '#/', 2) !== 0) {
+            if (!is_string($ref) || strncmp($ref, '#', 1) !== 0) {
                 continue;
             }
 

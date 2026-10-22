@@ -55,23 +55,27 @@ final class Swagger20Test extends TestCase
     {
         $definitions = [
             ['Pet', ['discriminator' => 'kind']],
-            ['Cat', ['allOf' => [['$ref' => '#/definitions/Pet']], 'x-discriminator-value' => 'cat']],
-            ['Dog~1', ['allOf' => [['$ref' => '#/definitions/Pet'], ['$ref' => '#/definitions/Missing']], 'x-discriminator-value' => 7]],
-            ['Fox', ['allOf' => [['$ref' => '#/definitions/Pet']], 'x-discriminator-value' => 'cat']],
-            ['Owl', ['allOf' => [['$ref' => 'other.yaml#/definitions/Pet'], ['$ref' => '#/x/Pet'], ['$ref' => '#/definitions/Pet/x'], ['$ref' => '#/defi~2'], 'not a schema'], 'x-discriminator-value' => 'owl']],
-            ['Eel', ['allOf' => [['$ref' => '#/definitions/Plain']], 'x-discriminator-value' => 'eel']],
-            ['Plain', ['type' => 'object']],
-            ['Ant', ['allOf' => [['$ref' => '#/definitions/Bug']], 'x-discriminator-value' => 'ant']],
             ['Bug', ['discriminator' => ['propertyName' => 'kind', 'mapping' => ['ant' => 'Other']]]],
-            ['Bee', ['allOf' => [['$ref' => '#/definitions/Pet']], 'x-discriminator-value' => true]],
+            ['Plain', ['type' => 'object']],
             ['Elk', 'not a schema'],
+            ['Cat', ['allOf' => [['$ref' => '#/definitions/Pet']], 'x-discriminator-value' => 'cat']],
+            ['Dog~1', ['allOf' => [['$ref' => '#/definitions/Missing'], ['$ref' => '#/definitions/Elk'], ['$ref' => '#/definitions/Plain'], ['$ref' => '#/definitions/Pet']], 'x-discriminator-value' => 7]],
+            ['Owl', ['allOf' => ['not a schema', ['$ref' => 'other.yaml#/definitions/Pet'], ['$ref' => 'x/definitions/Pet'], ['$ref' => '#/x/Pet'], ['$ref' => '#/definitions/Pet/x'], ['$ref' => '#/defi~2'], ['$ref' => '#/definitions/Pet']], 'x-discriminator-value' => 'owl']],
+            ['Mule', ['allOf' => [['$ref' => '#/definitions/Pet'], ['$ref' => '#/definitions/Bug']], 'x-discriminator-value' => 'mule']],
+            ['Ant', ['allOf' => [['$ref' => '#/definitions/Bug']], 'x-discriminator-value' => 'ant']],
+            ['Fox', ['allOf' => [['$ref' => '#/definitions/Pet']], 'x-discriminator-value' => 'cat']],
+            ['Bee', ['allOf' => [['$ref' => '#/definitions/Pet']], 'x-discriminator-value' => true]],
+            ['Yak', ['allOf' => 'not a list', 'x-discriminator-value' => 'yak']],
+            ['Gnu', 'not a schema'],
         ];
 
         $result = Swagger20::withDiscriminatorValues($definitions);
 
-        self::assertSame(['propertyName' => 'kind', 'mapping' => ['cat' => '#/definitions/Cat', '7' => '#/definitions/Dog~01']], $result[0][1]['discriminator'] ?? null);
-        self::assertSame(['type' => 'object'], $result[6][1]);
-        self::assertSame(['propertyName' => 'kind', 'mapping' => ['ant' => 'Other']], $result[8][1]['discriminator'] ?? null);
-        self::assertSame(array_slice($definitions, 1, 7), array_slice($result, 1, 7));
+        self::assertSame(
+            ['propertyName' => 'kind', 'mapping' => ['cat' => '#/definitions/Cat', 7 => '#/definitions/Dog~01', 'owl' => '#/definitions/Owl', 'mule' => '#/definitions/Mule']],
+            $result[0][1]['discriminator'] ?? null,
+        );
+        self::assertSame(['propertyName' => 'kind', 'mapping' => ['ant' => 'Other', 'mule' => '#/definitions/Mule']], $result[1][1]['discriminator'] ?? null);
+        self::assertSame(array_slice($definitions, 2), array_slice($result, 2));
     }
 }
