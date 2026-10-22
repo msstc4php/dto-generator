@@ -22,8 +22,7 @@
     "require-dev": {
         "composer/composer": "^2.8",
         "doctrine/annotations": "^1.14 || ^2.0",
-        "phpunit/phpunit": "^9.6",
-        "roave/security-advisories": "dev-latest"
+        "phpunit/phpunit": "^9.6"
     },
     "bin": [
         "bin/dto-generator"
