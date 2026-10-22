@@ -77,7 +77,7 @@ final class UnusableDiscriminators
      */
     private static function onlyRestricts(Schema $member, array $own): bool
     {
-        $keywords = array_diff(array_map('strval', array_keys($member->keywords())), self::ANNOTATIONS);
+        $keywords = array_diff(array_keys($member->keywords()), self::ANNOTATIONS);
 
         return $member->ref() === null && SchemaShape::mayBeObject($member) && $member->enum() === null
             && $member->allOf() === [] && !SchemaShape::hasUnion($member) && !$member->discriminator() instanceof Discriminator
