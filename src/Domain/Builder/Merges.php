@@ -12,12 +12,12 @@ use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
  */
 final class Merges
 {
-    /** @var array<string, true> by schema location */
+    /** @var array<string, string> by schema location */
     private array $locations = [];
 
     public function add(SchemaLocation $location): void
     {
-        $this->locations[$location->toString()] = true;
+        $this->locations[$location->toString()] = $location->toString();
     }
 
     public function has(SchemaLocation $location): bool

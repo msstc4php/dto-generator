@@ -38,7 +38,7 @@ final class Hierarchy
 
     private Merges $merges;
 
-    /** @var array<string, true> the union bases and variants, by FQCN */
+    /** @var array<string, string> the union bases and variants, by FQCN */
     private array $inUnion = [];
 
     private Diagnostics $diagnostics;
@@ -71,9 +71,9 @@ final class Hierarchy
     {
         $hierarchy = new self($classes, $diagnostics, $meet, $superseded, $merges ?? new Merges());
         foreach ($unions as $base => $variants) {
-            $hierarchy->inUnion[$base] = true;
+            $hierarchy->inUnion[$base] = $base;
             foreach ($variants->classes() as $variant) {
-                $hierarchy->inUnion[$variant->fqcn()] = true;
+                $hierarchy->inUnion[$variant->fqcn()] = $variant->fqcn();
             }
         }
 

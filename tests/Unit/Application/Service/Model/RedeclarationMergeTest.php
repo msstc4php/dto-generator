@@ -117,7 +117,7 @@ final class RedeclarationMergeTest extends TestCase
     /**
      * @dataProvider kept
      *
-     * @param array<string, mixed> $schemas
+     * @param array<string, array<array-key, mixed>> $schemas
      */
     public function testKeepsTheParentAVariantOrTheDocumentAsksFor(array $schemas): void
     {
@@ -131,7 +131,7 @@ final class RedeclarationMergeTest extends TestCase
     }
 
     /**
-     * @return iterable<string, array{array<string, mixed>}>
+     * @return iterable<string, array{array<string, array<array-key, mixed>>}>
      */
     public static function kept(): iterable
     {
