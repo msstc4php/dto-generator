@@ -15,7 +15,7 @@ final class Swagger20Test extends TestCase
     public function testReadsTheDefinitionsAsOpenApi30Schemas(): void
     {
         $output = ModelFixture::document(['swagger' => '2.0', 'definitions' => [
-            'Pet' => ['type' => 'object', 'discriminator' => 'petType', 'required' => ['petType'], 'properties' => [
+            'Pet' => ['type' => 'object', 'discriminator' => 'petType', 'required' => ['petType', 'name', 'tag'], 'properties' => [
                 'petType' => ['type' => 'string'],
                 'name' => ['type' => 'string', 'x-nullable' => true],
                 'photo' => ['type' => 'file'],
@@ -29,9 +29,33 @@ final class Swagger20Test extends TestCase
         self::assertSame([], ModelFixture::messages($output));
         self::assertSame('abstract by petType {Cat: App\Dto\Cat}', ModelFixture::hierarchy($output)['App\Dto\Pet']);
         self::assertSame(
-            ['petType: string', 'name: string|null', 'photo: string|null', 'avatar: string|null', 'tag: string|null', 'size: int<2, max>|null'],
+            ['petType: string', 'name: string|null', 'photo: string|null', 'avatar: string|null', 'tag: string', 'size: int<2, max>|null'],
             ModelFixture::classes($output)['App\Dto\Pet'],
         );
+    }
+
+    public function testSelectsAChildByItsDiscriminatorValue(): void
+    {
+        $output = ModelFixture::document(['swagger' => 2.0, 'definitions' => [
+            'Pet' => ['type' => 'object', 'discriminator' => 'petType', 'required' => ['petType'], 'properties' => ['petType' => ['type' => 'string']]],
+            'Cat' => ['x-discriminator-value' => 'cat', 'allOf' => [['$ref' => '#/definitions/Pet'], ['properties' => ['lives' => ['type' => 'integer']]]]],
+            'Dog' => ['allOf' => [['$ref' => '#/definitions/Pet'], ['properties' => ['good' => ['type' => 'boolean']], 'items' => ['type' => 'file']]]],
+        ]]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame('abstract by petType {cat: App\Dto\Cat, Dog: App\Dto\Dog}', ModelFixture::hierarchy($output)['App\Dto\Pet']);
+    }
+
+    public function testReadsASwaggerDocumentAnOpenApiOneRefersTo(): void
+    {
+        $output = ModelFixture::document(
+            ['openapi' => '3.1.0', 'components' => ['schemas' => ['Pet' => ['type' => 'object', 'properties' => ['files' => ['type' => 'array', 'items' => ['$ref' => 'legacy.yaml#/definitions/Upload']]]]]]],
+            null,
+            ['/project/api/legacy.yaml' => ['swagger' => '2.0', 'definitions' => ['Upload' => ['type' => 'object', 'required' => ['data'], 'properties' => ['data' => ['type' => 'file', 'x-nullable' => true]]]]]],
+        );
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(['data: string|null'], ModelFixture::classes($output)['App\Dto\Upload']);
     }
 
     public function testReadsTheDocumentsItRefersToAsSwagger(): void
@@ -68,7 +92,7 @@ final class Swagger20Test extends TestCase
     {
         $output = ModelFixture::document(['swagger' => true, 'definitions' => []]);
 
-        self::assertSame(['warning ' . self::AT . 'swagger: Expected Swagger 2.0, found "not a string"; the document is read as Swagger 2.0.'], ModelFixture::messages($output));
+        self::assertSame(['warning ' . self::AT . 'swagger: Expected Swagger 2.0, found a value that is not a string; the document is read as Swagger 2.0.'], ModelFixture::messages($output));
     }
 
     public function testWarnsAboutADocumentWithoutDefinitions(): void
@@ -92,7 +116,7 @@ final class Swagger20Test extends TestCase
             OperationFilter::all(),
         );
 
-        self::assertSame(['warning /project/dto-generator.yaml#/sources/0/spec: The operations of a Swagger 2.0 document are not read; its definitions give the classes.'], ModelFixture::messages($output));
+        self::assertSame(['warning /project/dto-generator.yaml#/sources/0/operations: The operations of a Swagger 2.0 document are not read; its definitions give the classes.'], ModelFixture::messages($output));
         self::assertSame(['App\Dto\Pet'], array_keys(ModelFixture::classes($output)));
     }
 }

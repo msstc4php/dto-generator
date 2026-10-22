@@ -476,7 +476,7 @@ final class ConfigFactory
                 // Without a specification the key is still checked, against any path.
                 $target = Reference::target($ref, new SchemaLocation($spec ?? '/'));
             } catch (InvalidModel $exception) {
-                $section->report(sprintf('Expected a reference to a schema of the specification, like "#/components/schemas/Pet": %s', $exception->getMessage()), $ref);
+                $section->report(sprintf('Expected a reference to a schema of the specification, like "#/components/schemas/Pet" or "#/definitions/Pet": %s', $exception->getMessage()), $ref);
 
                 continue;
             }

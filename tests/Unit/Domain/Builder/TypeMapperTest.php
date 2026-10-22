@@ -160,15 +160,15 @@ final class TypeMapperTest extends TestCase
             'undeclared inline enum' => [['type' => 'string', 'enum' => ['a']], 'string', ["warning {$at}: This inline enum is not generated (only properties of generated classes get one), so the property keeps its plain type."]],
             'allOf of two typed schemas' => [['allOf' => [['type' => 'string'], ['type' => 'integer']]], 'mixed', ["error {$at}: \"allOf\" combines several typed schemas that are not objects, which no PHP type expresses; keep one of them."]],
             'allOf with oneOf' => [['allOf' => [['$ref' => '#/components/schemas/Tag']], 'oneOf' => [['type' => 'string']]], 'mixed', ["error {$at}: \"allOf\" together with \"oneOf\" or \"anyOf\" is not supported."]],
-            'undeclared allOf object' => [['allOf' => [['$ref' => '#/components/schemas/Tag'], ['properties' => ['x' => []]]]], 'mixed', ["error {$at}: This inline object is not generated (only properties of generated classes get one); move it to components/schemas and use \$ref."]],
+            'undeclared allOf object' => [['allOf' => [['$ref' => '#/components/schemas/Tag'], ['properties' => ['x' => []]]]], 'mixed', ["error {$at}: This inline object is not generated (only properties of generated classes get one); move it to components/schemas (definitions in Swagger 2.0) and use \$ref."]],
             'oneOf and anyOf together' => [['oneOf' => [['type' => 'string']], 'anyOf' => [['type' => 'boolean']]], 'string|bool', ["warning {$at}: \"oneOf\" and \"anyOf\" together become one union, which admits more than the schema does."]],
-            'properties beside oneOf' => [['properties' => ['a' => []], 'oneOf' => [['type' => 'string']]], 'mixed', ["error {$at}: This inline object is not generated (only properties of generated classes get one); move it to components/schemas and use \$ref."]],
+            'properties beside oneOf' => [['properties' => ['a' => []], 'oneOf' => [['type' => 'string']]], 'mixed', ["error {$at}: This inline object is not generated (only properties of generated classes get one); move it to components/schemas (definitions in Swagger 2.0) and use \$ref."]],
             'oneOf of untyped inline objects' => [
                 ['oneOf' => [['properties' => ['a' => []]], ['type' => 'null'], ['properties' => ['b' => []]]]],
                 'mixed',
                 [
-                    "error {$at}/oneOf/0: This inline object is not generated (only properties of generated classes get one); move it to components/schemas and use \$ref.",
-                    "error {$at}/oneOf/2: This inline object is not generated (only properties of generated classes get one); move it to components/schemas and use \$ref.",
+                    "error {$at}/oneOf/0: This inline object is not generated (only properties of generated classes get one); move it to components/schemas (definitions in Swagger 2.0) and use \$ref.",
+                    "error {$at}/oneOf/2: This inline object is not generated (only properties of generated classes get one); move it to components/schemas (definitions in Swagger 2.0) and use \$ref.",
                 ],
             ],
             'string with allOf and a typed oneOf' => [
@@ -176,7 +176,7 @@ final class TypeMapperTest extends TestCase
                 'string|int',
                 ["warning {$at}: \"allOf\" beside a typed \"oneOf\" or \"anyOf\" is not represented; the union alone gives the type."],
             ],
-            'oneOf with an inline object' => [['oneOf' => [['type' => 'object', 'properties' => ['a' => []]], ['type' => 'string']]], 'mixed', ["error {$at}/oneOf/0: This inline object is not generated (only properties of generated classes get one); move it to components/schemas and use \$ref."]],
+            'oneOf with an inline object' => [['oneOf' => [['type' => 'object', 'properties' => ['a' => []]], ['type' => 'string']]], 'mixed', ["error {$at}/oneOf/0: This inline object is not generated (only properties of generated classes get one); move it to components/schemas (definitions in Swagger 2.0) and use \$ref."]],
             'string anyOf with an untyped enum member' => [
                 ['type' => 'string', 'anyOf' => [['pattern' => 'a'], ['enum' => ['b']]]],
                 'mixed',
@@ -187,7 +187,7 @@ final class TypeMapperTest extends TestCase
             'nullable class by reference' => [['$ref' => '#/components/schemas/MaybeTag'], 'App\Dto\Tag|null', []],
             'map schema' => [['type' => 'object', 'additionalProperties' => ['type' => 'string']], 'array<array-key, string>', []],
             'nullable map schema' => [['type' => ['object', 'null'], 'additionalProperties' => ['type' => 'integer']], 'array<array-key, int>|null', []],
-            'undeclared inline object' => [['type' => 'object', 'properties' => ['a' => []]], 'mixed', ["error {$at}: This inline object is not generated (only properties of generated classes get one); move it to components/schemas and use \$ref."]],
+            'undeclared inline object' => [['type' => 'object', 'properties' => ['a' => []]], 'mixed', ["error {$at}: This inline object is not generated (only properties of generated classes get one); move it to components/schemas (definitions in Swagger 2.0) and use \$ref."]],
             'enum by reference' => [['$ref' => '#/components/schemas/Currency'], 'App\Dto\Currency', []],
             'nullable enum by reference' => [['$ref' => '#/components/schemas/MaybeCurrency'], 'App\Dto\MaybeCurrency|null', []],
             'ungenerated enum by reference' => [['$ref' => '#/components/schemas/Failed'], 'mixed', []],

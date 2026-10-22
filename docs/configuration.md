@@ -178,7 +178,7 @@ extensions by package name. Attributes are written in that order.
 | `spec` | yes | The OpenAPI document (YAML or JSON) |
 | `namespace` | yes | Namespace of the generated classes |
 | `outputDir` | yes | Where the classes and the manifest go |
-| `include` | no, `['*']` | Glob patterns over the names in `components/schemas` |
+| `include` | no, `['*']` | Glob patterns over the names in `components/schemas` (`definitions` in Swagger 2.0) |
 | `exclude` | no, `[]` | Glob patterns to leave out |
 | `classNames` | no, `{}` | Class or enum names by schema: `'<$ref>': Name`, as `x-php-class-name` |
 | `propertyNames` | no, `{}` | PHP property names by property schema: `'<$ref>': name`, as `x-php-name` |

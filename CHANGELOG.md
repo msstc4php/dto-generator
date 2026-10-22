@@ -9,8 +9,8 @@ All notable changes to this package are documented here. The format follows
 ### Added
 
 - Swagger 2.0 documents: each schema in `definitions` gives a class, read as an OpenAPI 3.0 schema; a string
-  `discriminator` names the property, `x-nullable: true` admits `null`, `type: file` is a string. Operations of a 2.0
-  document are not read.
+  `discriminator` names the property, `x-discriminator-value` selects a subtype, `x-nullable: true` admits `null`,
+  `type: file` is a string. Operations of a 2.0 document are not read.
 
 ## [1.12.0] - 2026-10-22
 

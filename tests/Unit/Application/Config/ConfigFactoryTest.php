@@ -602,7 +602,7 @@ final class ConfigFactoryTest extends TestCase
         self::assertNull($config);
         self::assertSame(
             [
-                'error ' . self::PATH . '#/sources/0/classNames/#anchor: Expected a reference to a schema of the specification, like "#/components/schemas/Pet": $ref "#anchor" names an anchor; a JSON pointer ("#/components/schemas/Pet") is expected here.',
+                'error ' . self::PATH . '#/sources/0/classNames/#anchor: Expected a reference to a schema of the specification, like "#/components/schemas/Pet" or "#/definitions/Pet": $ref "#anchor" names an anchor; a JSON pointer ("#/components/schemas/Pet") is expected here.',
                 'error ' . self::PATH . '#/sources/0/classNames/#~1a: Expected a non-empty string.',
                 'error ' . self::PATH . '#/sources/0/classNames/#~1b: Expected a non-empty string.',
                 'error ' . self::PATH . '#/sources/0/propertyNames: "propertyNames" must be an object.',

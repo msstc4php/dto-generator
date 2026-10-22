@@ -11,6 +11,7 @@ use MSSTC4PHP\DtoGenerator\Application\Port\DocumentLoadFailed;
 use MSSTC4PHP\DtoGenerator\Application\Port\RemoteDocuments;
 use MSSTC4PHP\DtoGenerator\Application\Port\RemoteRequest;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\SchemaParser;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\Swagger20;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\UnionDistribution;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\UnusableDiscriminators;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
@@ -70,16 +71,21 @@ final class Action
             }
 
             $owners[$document->path()] = $index;
-            $this->checkOpenApiVersion($document, $diagnostics);
-            $swagger = Versions::isSwagger($document->root());
+            $this->checkVersion($document, $diagnostics);
+            $place = Versions::schemasPlace($document->root());
+            $operations = [];
             $filter = $source->operations();
-            if ($swagger && $filter instanceof OperationFilter) {
-                $diagnostics->warning('The operations of a Swagger 2.0 document are not read; its definitions give the classes.', $specAt);
+            if ($filter instanceof OperationFilter && $place === ['definitions']) {
+                $diagnostics->warning('The operations of a Swagger 2.0 document are not read; its definitions give the classes.', $config->location()->child('sources', (string) $index, 'operations'));
+            } elseif ($filter instanceof OperationFilter) {
+                $operations = Operations::of($document->path(), $document->root(), $filter, $diagnostics);
             }
 
-            $operations = $filter instanceof OperationFilter && !$swagger ? Operations::of($document->path(), $document->root(), $filter, $diagnostics) : [];
-            $place = $swagger ? ['definitions'] : ['components', 'schemas'];
             $components = $this->componentSchemas($document, $place, $diagnostics);
+            if ($components !== null && $place === ['definitions']) {
+                $components = Swagger20::withDiscriminatorValues($components);
+            }
+
             if ($components === null && $operations === []) {
                 $diagnostics->warning(sprintf('The specification has no %s; nothing to generate.', implode('/', $place)), (new SchemaLocation($document->path()))->child(...$place));
             }
@@ -266,12 +272,13 @@ final class Action
         }
     }
 
-    private function checkOpenApiVersion(Document $document, Diagnostics $diagnostics): void
+    private function checkVersion(Document $document, Diagnostics $diagnostics): void
     {
         if (Versions::isSwagger($document->root())) {
             $swagger = Versions::normalize(Json::value($document->root()['swagger']));
             if ($swagger !== '2.0') {
-                $diagnostics->warning(sprintf('Expected Swagger 2.0, found "%s"; the document is read as Swagger 2.0.', $swagger ?? 'not a string'), (new SchemaLocation($document->path()))->child('swagger'));
+                $found = $swagger === null ? 'a value that is not a string' : sprintf('"%s"', $swagger);
+                $diagnostics->warning(sprintf('Expected Swagger 2.0, found %s; the document is read as Swagger 2.0.', $found), (new SchemaLocation($document->path()))->child('swagger'));
             }
 
             return;
@@ -319,7 +326,7 @@ final class Action
         foreach ($schemas as $name => $node) {
             $name = (string) $name;
             if ($name === '') {
-                $diagnostics->error('A component schema name must not be empty.', $at->child(''));
+                $diagnostics->error(sprintf('A schema name in %s must not be empty.', implode('/', $place)), $at->child(''));
 
                 continue;
             }

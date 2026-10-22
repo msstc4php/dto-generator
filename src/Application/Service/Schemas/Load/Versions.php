@@ -18,7 +18,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
  */
 final class Versions
 {
-    public const OPENAPI_31 = 'OpenAPI 3.1';
+    public const OPENAPI_31 = 'OpenAPI 3.1 or 3.2';
 
     public const OPENAPI_30 = 'OpenAPI 3.0';
 
@@ -68,6 +68,18 @@ final class Versions
     }
 
     /**
+     * Where the document keeps the schemas a source reads.
+     *
+     * @param array<array-key, mixed> $root
+     *
+     * @return array{'components', 'schemas'}|array{'definitions'}
+     */
+    public static function schemasPlace(array $root): array
+    {
+        return self::isSwagger($root) ? ['definitions'] : ['components', 'schemas'];
+    }
+
+    /**
      * @return self::OPENAPI_*|self::SWAGGER_20
      */
     public function ofSource(Document $document): string
@@ -91,7 +103,7 @@ final class Versions
             $this->mixed[] = $path;
             $diagnostics->warning(
                 sprintf(
-                    '%s states no "openapi" version and is read as %s, the version of the document that referred to it first, though %s, which refers to it here, is %s.',
+                    '%s states no version ("openapi" or "swagger") and is read as %s, the version of the document that referred to it first, though %s, which refers to it here, is %s.',
                     $path,
                     $this->dialects[$path],
                     $referredAt->file(),

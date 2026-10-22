@@ -86,7 +86,7 @@ final class SchemaParser
         $this->quiet = $outer || is_string($node['x-php-type'] ?? null) || ($node['x-php-skip'] ?? null) === true;
 
         try {
-            $node = $this->swagger20 ? Swagger20::asOpenApi30($node) : $node;
+            $node = $this->swagger20 ? Swagger20::asOpenApi30($node, $location, $diagnostics, $this->quiet) : $node;
 
             return $this->parseObject($this->openApi30 ? OpenApi30::asOpenApi31($node, $location, $diagnostics, $this->quiet) : $node, $builder, $location, $diagnostics);
         } finally {

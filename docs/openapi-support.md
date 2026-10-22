@@ -164,7 +164,11 @@ Classes are `final`, except the bases of `allOf` and of discriminated unions. At
   in `definitions`, read as OpenAPI 3.0 schemas, which they nearly are: `discriminator: petType` names the property
   as `discriminator: {propertyName: petType}` does, `x-nullable: true` admits `null` as `nullable: true` does, and
   `type: file` is binary content (`string`). The documents they refer to are read as 2.0 too, unless they state
-  another version. Their operations are not read; `sources[].operations` gives a warning there.
+  another version. A definition that extends a discriminated one through `allOf` is selected by its
+  `x-discriminator-value`, as swagger-codegen reads it, or else by its name. A subtype with nothing of its own
+  (`Dog: {allOf: [$ref: Pet]}`) gives no class, as in 3.x, and the parent's discriminator then has no variant to
+  select. Keys of `classNames` and `propertyNames` name its schemas by `#/definitions/...`. Their operations are not
+  read; `sources[].operations` gives a warning there.
 - **`const`** keeps a date or a `formats` class when `format` names one, and keeps the declared `type` (with a
   warning) when the constant does not fit it. A bare `const` member of `allOf` (`allOf: [{$ref: Code}, {const: x}]`)
   narrows the type to its literal; a constant outside that type (`{type: integer, maximum: 10, allOf: [{const: 50}]}`)
