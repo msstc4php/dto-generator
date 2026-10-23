@@ -24,6 +24,10 @@ All notable changes to this package are documented here. The format follows
   makes the `allOf` an error that combines several typed schemas: it adds nothing, so `allOf: [$ref: Tag, {type: object}]` is
   `Tag`, without `null` unless the object member admits it too; beside a member that can be no object it stays an
   error.
+- A variant of a discriminated union that declares a property of its parent again with a type PHP lets no subclass
+  declare (Bitbucket's `team.links`), or one with no value in common, keeps the parent's property with a warning, where
+  it was an error, in the read and the write model alike: unlike other classes, a variant cannot merge its members
+  instead of extending.
 - `x-enum-descriptions` as a list gives the descriptions by position, as openapi-generator reads it (Zoom), unless
   every position is also an enum value, at another position; it was an error for any enum but `0`, `1`, ….
 - A `type` that admits none of the enum values (Zoom's and Vimeo's `type: array` with the values of its items) ignores

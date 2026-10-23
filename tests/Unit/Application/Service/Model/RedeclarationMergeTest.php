@@ -198,7 +198,7 @@ final class RedeclarationMergeTest extends TestCase
      *
      * @param array<string, array<array-key, mixed>> $schemas
      */
-    public function testKeepsTheParentAVariantOrTheDocumentAsksFor(array $schemas): void
+    public function testKeepsTheParentTheDocumentAsksFor(array $schemas): void
     {
         $output = ModelFixture::build($schemas + [
             'Pet' => ['type' => 'object', 'properties' => ['kind' => ['type' => 'string'], 'p' => ['type' => 'object']]],
@@ -217,12 +217,83 @@ final class RedeclarationMergeTest extends TestCase
         $cat = ['allOf' => [self::PET, ['required' => ['kind'], 'properties' => ['p' => ['$ref' => '#/components/schemas/Meta']]]]];
 
         yield 'x-php-all-of: extends' => [['Cat' => ['x-php-all-of' => 'extends'] + $cat]];
-        yield 'a variant' => [['Cat' => $cat, 'Animal' => ['oneOf' => [['$ref' => '#/components/schemas/Cat']], 'discriminator' => ['propertyName' => 'kind']]]];
+    }
+
+    public function testLeavesOutTheInlineClassOfTheTypeAVariantCannotTake(): void
+    {
+        $animal = ['oneOf' => [['$ref' => '#/components/schemas/Cat']], 'discriminator' => ['propertyName' => 'kind']];
+        $output = ModelFixture::build([
+            'Pet' => ['type' => 'object', 'properties' => ['kind' => ['type' => 'string'], 'p' => ['type' => 'object'], 'q' => ['type' => 'string', 'default' => 'a']]],
+            'Cat' => ['allOf' => [self::PET, ['properties' => ['p' => ['type' => 'object', 'properties' => ['id' => ['type' => 'integer']]], 'q' => ['type' => 'string', 'default' => 'b']]]]],
+            'Animal' => $animal,
+        ]);
+
+        self::assertArrayNotHasKey('App\\Dto\\CatP', ModelFixture::classes($output));
+        self::assertContains('error ' . self::AT . 'Cat/allOf/1/properties/q: Property "q" of App\\Dto\\Cat is already declared by App\\Dto\\Pet.', ModelFixture::messages($output));
+    }
+
+    public function testKeepsTheParentOfAVariantInEveryViewAndSaysWhatItDoesNotRequire(): void
+    {
+        $output = ModelFixture::views([
+            'Pet' => ['type' => 'object', 'properties' => ['kind' => ['type' => 'string'], 'links' => ['$ref' => '#/components/schemas/Links']]],
+            'Links' => ['type' => 'object', 'properties' => ['self' => ['type' => 'string']]],
+            'CatLinks' => ['allOf' => [['$ref' => '#/components/schemas/Links'], ['properties' => ['id' => ['type' => 'integer', 'readOnly' => true]]]]],
+            'Cat' => ['x-php-all-of' => 'extends', 'allOf' => [self::PET, ['required' => ['links'], 'properties' => ['links' => ['$ref' => '#/components/schemas/CatLinks']]]]],
+            'Animal' => ['oneOf' => [['$ref' => '#/components/schemas/Cat']], 'discriminator' => ['propertyName' => 'kind']],
+        ]);
+
+        $messages = ModelFixture::messages($output);
+        self::assertSame([], array_values(array_filter($messages, static fn (string $message): bool => strncmp($message, 'error', 5) === 0)));
+        self::assertCount(1, array_filter($messages, static fn (string $message): bool => strpos($message, 'is a variant, which keeps its parent, so it keeps App\\Dto\\Links|null and does not require it.') !== false));
+        self::assertSame(['kind: string|null', 'links: App\\Dto\\Links|null'], ModelFixture::classes($output)['App\\Dto\\Pet']);
+    }
+
+    public function testSaysWhenAVariantDeclaresATypeWithNoValueInCommon(): void
+    {
+        $output = ModelFixture::build([
+            'Pet' => ['type' => 'object', 'properties' => ['kind' => ['type' => 'string'], 'n' => ['type' => 'integer']]],
+            'Cat' => ['allOf' => [self::PET, ['properties' => ['n' => ['type' => 'string']]]]],
+            'Animal' => ['oneOf' => [['$ref' => '#/components/schemas/Cat']], 'discriminator' => ['propertyName' => 'kind']],
+        ]);
+
+        self::assertContains(
+            'warning ' . self::AT . 'Cat/allOf/1/properties/n: Property "n" of App\\Dto\\Cat is string|null, which has no value in common with the type App\\Dto\\Pet declares, unless the two are classes of different read or write models; the class is a variant, which keeps its parent, so it keeps int|null.',
+            ModelFixture::messages($output),
+        );
+    }
+
+    /**
+     * @dataProvider variants
+     *
+     * @param array<string, array<array-key, mixed>> $schemas
+     */
+    public function testKeepsTheTypeOfTheParentOfAVariant(array $schemas, string $at): void
+    {
+        $output = ModelFixture::build($schemas + [
+            'Pet' => ['type' => 'object', 'properties' => ['kind' => ['type' => 'string'], 'p' => ['type' => 'object']]],
+            'Meta' => self::META,
+        ]);
+
+        self::assertSame(
+            ['warning ' . self::AT . $at . ': Property "p" of App\\Dto\\Cat is App\\Dto\\Meta|null, which PHP lets no subclass of App\\Dto\\Pet declare; the class is a variant, which keeps its parent, so it keeps array<array-key, mixed>|null.'],
+            array_values(array_filter(ModelFixture::messages($output), static fn (string $message): bool => strpos($message, 'is a variant') !== false)),
+        );
+        self::assertNotContains('p: App\\Dto\\Meta|null', ModelFixture::classes($output)['App\\Dto\\Cat']);
+    }
+
+    /**
+     * @return iterable<string, array{array<string, array<array-key, mixed>>, string}>
+     */
+    public static function variants(): iterable
+    {
+        $cat = ['allOf' => [self::PET, ['required' => ['kind'], 'properties' => ['p' => ['$ref' => '#/components/schemas/Meta']]]]];
+
+        yield 'a variant' => [['Cat' => $cat, 'Animal' => ['oneOf' => [['$ref' => '#/components/schemas/Cat']], 'discriminator' => ['propertyName' => 'kind']]], 'Cat/allOf/1/properties/p'];
         yield 'a subclass of a variant' => [[
             'Cat' => ['allOf' => [['$ref' => '#/components/schemas/Feline'], ['properties' => ['p' => ['$ref' => '#/components/schemas/Meta']]]]],
             'Feline' => ['allOf' => [self::PET, ['required' => ['kind'], 'properties' => ['claws' => ['type' => 'boolean']]]]],
             'Animal' => ['oneOf' => [['$ref' => '#/components/schemas/Feline']], 'discriminator' => ['propertyName' => 'kind']],
-        ]];
+        ], 'Cat/allOf/1/properties/p'];
     }
 
     /**

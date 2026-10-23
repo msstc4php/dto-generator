@@ -553,10 +553,28 @@ final class Hierarchy
                     ),
                     $property->source(),
                 );
+            } elseif ($inherited instanceof PropertyModel && $this->declaresAlike($inherited, $property) && $this->isOrExtendsAVariant($model)) {
+                // A parent that selects a variant must stay, so the variant cannot merge its members instead; whether the
+                // types meet is not asked, as a read or write model of the narrower class no longer extends the parent's.
+                array_pop($kept);
+                $this->superseded->add($property->type());
+                $this->diagnostics->warning(
+                    sprintf(
+                        'Property "%s" of %s is %s, which %s; the class is a variant, which keeps its parent, so it keeps %s%s.',
+                        $property->wireName(),
+                        $fqcn,
+                        $property->type()->describe(),
+                        $meet instanceof TypeModel
+                            ? sprintf('PHP lets no subclass of %s declare', $byWireName)
+                            : sprintf('has no value in common with the type %s declares, unless the two are classes of different read or write models', $byWireName),
+                        $inherited->type()->describe(),
+                        $property->isRequired() && !$inherited->isRequired() ? ' and does not require it' : '',
+                    ),
+                    $property->source(),
+                );
             } elseif ($byWireName !== null) {
                 $this->diagnostics->error(sprintf('Property "%s" of %s is already declared by %s.', $property->wireName(), $fqcn, $byWireName), $property->source());
-                // A parent that selects a variant must stay.
-                if ($meet instanceof TypeModel && !$this->isOrExtendsAVariant($model)) {
+                if ($meet instanceof TypeModel) {
                     $this->merges->add($model->source(), $property->wireName(), $property->source());
                 }
             } elseif ($byName !== null) {
