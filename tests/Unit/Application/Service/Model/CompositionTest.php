@@ -71,7 +71,7 @@ final class CompositionTest extends TestCase
         $output = ModelFixture::build([
             'MaybeTag' => ['type' => ['object', 'null'], 'properties' => ['name' => ['type' => 'string']]],
             'Name' => ['type' => 'string'],
-            'Holder' => ['type' => 'object', 'required' => ['strict', 'lenient'], 'properties' => [
+            'Holder' => ['type' => 'object', 'required' => ['strict', 'lenient', 'either'], 'properties' => [
                 'strict' => ['allOf' => [$nullable, ['type' => 'object']]],
                 'lenient' => ['allOf' => [$nullable, ['type' => ['object', 'null']]]],
                 'name' => ['allOf' => [['$ref' => '#/components/schemas/Name'], ['type' => 'object']]],
@@ -108,7 +108,7 @@ final class CompositionTest extends TestCase
 
         self::assertSame(
             [
-                'strict: App\\Dto\\MaybeTag', 'lenient: App\\Dto\\MaybeTag|null', 'name: mixed', 'broken: mixed', 'looped: mixed', 'chained: mixed', 'wrapped: mixed', 'scalars: mixed', 'anyScalars: mixed', 'either: App\\Dto\\MaybeTag|string|null', 'money: App\\Money|null',
+                'strict: App\\Dto\\MaybeTag', 'lenient: App\\Dto\\MaybeTag|null', 'name: mixed', 'broken: mixed', 'looped: mixed', 'chained: mixed', 'wrapped: mixed', 'scalars: mixed', 'anyScalars: mixed', 'either: App\\Dto\\MaybeTag|string', 'money: App\\Money|null',
                 'date: mixed', 'stamp: mixed', 'email: mixed', 'level: mixed', 'tags: mixed', 'flag: mixed', 'counts: array<array-key, int>|null', 'anything: mixed', 'dateOrTag: DateTimeImmutable|App\\Dto\\MaybeTag|null', 'nullDate: mixed',
             ],
             ModelFixture::classes($output)['App\\Dto\\Holder'],

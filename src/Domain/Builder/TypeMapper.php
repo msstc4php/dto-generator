@@ -406,8 +406,12 @@ final class TypeMapper
      */
     private function withNullOf(TypeModel $type, array $plain): TypeModel
     {
+        if (!$type instanceof NullableType) {
+            return $type;
+        }
+
         foreach ($plain as $member) {
-            if ($type instanceof NullableType && !$member->isNullable()) {
+            if (!$member->isNullable()) {
                 return $type->inner();
             }
         }
