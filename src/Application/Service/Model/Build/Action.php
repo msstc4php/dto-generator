@@ -130,8 +130,6 @@ final class Action
 
             if ($schema->allOf() === [] && SchemaShape::hasUnion($schema) && !SchemaShape::isDiscriminated($schema)) {
                 $diagnostics->warning('"oneOf" and "anyOf" beside "properties" are not represented; the class keeps only its properties.', $schema->location());
-            } elseif ($isClass && $schema->allOf() !== [] && SchemaShape::hasUnion($schema) && !$schema->discriminator() instanceof Discriminator) {
-                $diagnostics->warning('"oneOf" and "anyOf" beside "allOf" are not represented; the class keeps the members of its "allOf" and its own properties.', $schema->location());
             }
 
             if ($resolved->isNamedByPlace()) {
@@ -435,6 +433,10 @@ final class Action
     private function declare(Schema $schema, ClassName $name, int $source, bool $isEnum, Registry $registry, EnumBuilder $enums, Diagnostics $diagnostics): bool
     {
         if (!$isEnum) {
+            if (SchemaShape::hasUnionBesideAllOf($schema)) {
+                $diagnostics->warning('"oneOf" and "anyOf" beside "allOf" are not represented; the class keeps the members of its "allOf" and its own properties.', $schema->location());
+            }
+
             $registry->planClass($schema, $name, $source);
 
             return true;

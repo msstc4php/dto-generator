@@ -252,6 +252,28 @@ final class CompositionTest extends TestCase
         );
     }
 
+    public function testWarnsAboutAUnionBesideTheAllOfOfAnInlineClassOrAMergedOne(): void
+    {
+        $at = self::AT;
+        $inline = [
+            'allOf' => [['$ref' => '#/components/schemas/Options'], ['$ref' => '#/components/schemas/ById']],
+            'anyOf' => [['required' => ['id']], ['required' => ['carrier']]],
+        ];
+        $schemas = [
+            'Options' => ['type' => 'object', 'properties' => ['carrier' => ['type' => 'string']]],
+            'ById' => ['type' => 'object', 'properties' => ['id' => ['type' => 'string']]],
+            'Holder' => ['type' => 'object', 'properties' => ['request' => $inline]],
+        ];
+        $warning = "warning {$at}Holder/properties/request: \"oneOf\" and \"anyOf\" beside \"allOf\" are not represented; the class keeps the members of its \"allOf\" and its own properties.";
+
+        foreach ([AllOfStrategy::EXTENDS, AllOfStrategy::MERGE] as $strategy) {
+            $output = ModelFixture::build($schemas, [], ['*'], $strategy);
+
+            self::assertSame([$warning], ModelFixture::messages($output), $strategy);
+            self::assertSame(['carrier: string|null', 'id: string|null'], ModelFixture::classes($output)['App\\Dto\\HolderRequest'], $strategy);
+        }
+    }
+
     public function testCollectsPropertiesOfInlineMembersAndOwnProperties(): void
     {
         $output = ModelFixture::build([
