@@ -57,7 +57,7 @@ final class CompositionTest extends TestCase
         self::assertSame(
             [
                 "error {$at}Holder/properties/objects: \"allOf\" combines several typed schemas that are not objects, which no PHP type expresses; keep one of them.",
-                "error {$at}Holder/properties/contradiction: \"allOf\" combines several typed schemas that are not objects, which no PHP type expresses; keep one of them.",
+                "error {$at}Holder/properties/contradiction: An \"allOf\" member requires an object beside one that can be no object, so no value passes; drop one of them.",
                 "error {$at}Holder/properties/map: \"allOf\" combines several typed schemas that are not objects, which no PHP type expresses; keep one of them.",
             ],
             ModelFixture::messages($output),
@@ -91,6 +91,8 @@ final class CompositionTest extends TestCase
                 'flag' => ['allOf' => [['type' => 'boolean'], ['type' => 'object']]],
                 'counts' => ['allOf' => [['type' => 'object', 'additionalProperties' => ['type' => 'integer']], ['type' => 'object']]],
                 'anything' => ['allOf' => [['$ref' => '#/components/schemas/Any'], ['type' => ['object', 'null']], ['type' => 'object']]],
+                'dateOrTag' => ['allOf' => [['oneOf' => [['type' => 'string', 'format' => 'date-time'], ['$ref' => '#/components/schemas/MaybeTag']]], ['type' => 'object']]],
+                'nullDate' => ['allOf' => [['type' => ['string', 'null'], 'format' => 'date-time'], ['type' => ['object', 'null']]]],
             ]],
             'Stamp' => ['type' => 'string', 'format' => 'date-time'],
             'Email' => ['type' => 'string', 'x-php-type' => 'App\\Email'],
@@ -106,26 +108,27 @@ final class CompositionTest extends TestCase
 
         self::assertSame(
             [
-                'strict: App\\Dto\\MaybeTag', 'lenient: App\\Dto\\MaybeTag|null', 'name: mixed', 'broken: mixed', 'looped: mixed', 'chained: mixed', 'wrapped: mixed', 'scalars: mixed', 'anyScalars: mixed', 'either: App\\Dto\\MaybeTag|null', 'money: App\\Money|null',
-                'date: mixed', 'stamp: mixed', 'email: mixed', 'level: mixed', 'tags: mixed', 'flag: mixed', 'counts: array<array-key, int>|null', 'anything: mixed',
+                'strict: App\\Dto\\MaybeTag', 'lenient: App\\Dto\\MaybeTag|null', 'name: mixed', 'broken: mixed', 'looped: mixed', 'chained: mixed', 'wrapped: mixed', 'scalars: mixed', 'anyScalars: mixed', 'either: App\\Dto\\MaybeTag|string|null', 'money: App\\Money|null',
+                'date: mixed', 'stamp: mixed', 'email: mixed', 'level: mixed', 'tags: mixed', 'flag: mixed', 'counts: array<array-key, int>|null', 'anything: mixed', 'dateOrTag: DateTimeImmutable|App\\Dto\\MaybeTag|null', 'nullDate: mixed',
             ],
             ModelFixture::classes($output)['App\\Dto\\Holder'],
         );
         self::assertSame(
             [
-                "error {$at}Holder/properties/name: \"allOf\" combines several typed schemas that are not objects, which no PHP type expresses; keep one of them.",
-                "error {$at}Holder/properties/chained: \"allOf\" combines several typed schemas that are not objects, which no PHP type expresses; keep one of them.",
-                "error {$at}Holder/properties/wrapped: \"allOf\" combines several typed schemas that are not objects, which no PHP type expresses; keep one of them.",
-                "error {$at}Holder/properties/scalars: \"allOf\" combines several typed schemas that are not objects, which no PHP type expresses; keep one of them.",
-                "error {$at}Holder/properties/anyScalars: \"allOf\" combines several typed schemas that are not objects, which no PHP type expresses; keep one of them.",
-                "error {$at}Holder/properties/date: \"allOf\" combines several typed schemas that are not objects, which no PHP type expresses; keep one of them.",
-                "error {$at}Holder/properties/stamp: \"allOf\" combines several typed schemas that are not objects, which no PHP type expresses; keep one of them.",
-                "error {$at}Holder/properties/email: \"allOf\" combines several typed schemas that are not objects, which no PHP type expresses; keep one of them.",
-                "error {$at}Holder/properties/level: \"allOf\" combines several typed schemas that are not objects, which no PHP type expresses; keep one of them.",
-                "error {$at}Holder/properties/tags: \"allOf\" combines several typed schemas that are not objects, which no PHP type expresses; keep one of them.",
-                "error {$at}Holder/properties/flag: \"allOf\" combines several typed schemas that are not objects, which no PHP type expresses; keep one of them.",
+                "error {$at}Holder/properties/name: An \"allOf\" member requires an object beside one that can be no object, so no value passes; drop one of them.",
+                "error {$at}Holder/properties/chained: An \"allOf\" member requires an object beside one that can be no object, so no value passes; drop one of them.",
+                "error {$at}Holder/properties/wrapped: An \"allOf\" member requires an object beside one that can be no object, so no value passes; drop one of them.",
+                "error {$at}Holder/properties/scalars: An \"allOf\" member requires an object beside one that can be no object, so no value passes; drop one of them.",
+                "error {$at}Holder/properties/anyScalars: An \"allOf\" member requires an object beside one that can be no object, so no value passes; drop one of them.",
+                "error {$at}Holder/properties/date: An \"allOf\" member requires an object beside one that can be no object, so no value passes; drop one of them.",
+                "error {$at}Holder/properties/stamp: An \"allOf\" member requires an object beside one that can be no object, so no value passes; drop one of them.",
+                "error {$at}Holder/properties/email: An \"allOf\" member requires an object beside one that can be no object, so no value passes; drop one of them.",
+                "error {$at}Holder/properties/level: An \"allOf\" member requires an object beside one that can be no object, so no value passes; drop one of them.",
+                "error {$at}Holder/properties/tags: An \"allOf\" member requires an object beside one that can be no object, so no value passes; drop one of them.",
+                "error {$at}Holder/properties/flag: An \"allOf\" member requires an object beside one that can be no object, so no value passes; drop one of them.",
+                "error {$at}Holder/properties/nullDate: An \"allOf\" member requires an object beside one that can be no object, so no value passes; drop one of them.",
             ],
-            array_values(array_filter(ModelFixture::messages($output), static fn (string $message): bool => strpos($message, 'combines') !== false)),
+            array_values(array_filter(ModelFixture::messages($output), static fn (string $message): bool => strpos($message, 'no value passes') !== false)),
         );
     }
 

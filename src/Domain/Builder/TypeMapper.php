@@ -142,14 +142,14 @@ final class TypeMapper
 
         if ($specific !== []) {
             if ($plain !== [] && !$this->canBeObject($specific[0])) {
-                $diagnostics->error('"allOf" combines several typed schemas that are not objects, which no PHP type expresses; keep one of them.', $schema->location());
+                $diagnostics->error('An "allOf" member requires an object beside one that can be no object, so no value passes; drop one of them.', $schema->location());
 
                 return new MixedType();
             }
 
             $type = $this->mapWithin($specific[0], $diagnostics, $aliases);
             if ($plain !== []) {
-                $type = $this->asObject($type, $plain);
+                $type = $this->withNullOf($type, $plain);
             }
 
             return $this->consts->narrow($schema, $type, $diagnostics);
@@ -359,7 +359,7 @@ final class TypeMapper
      * type cannot, as a date or an `x-php-type` makes a string a class. A reference that loops or that the loader could
      * not follow is taken for one.
      *
-     * @param list<string> $seen
+     * @param list<string> $seen the schemas on the path to this one, so two references to one schema are no loop
      */
     private function canBeObject(Schema $schema, array $seen = []): bool
     {
@@ -399,25 +399,20 @@ final class TypeMapper
     }
 
     /**
-     * The class and map parts of a type that `{type: object}` members restrict, `null` only when each of those admits it;
-     * any other type stays as it is (`mixed`, a union without such parts).
+     * Every member of an allOf applies: the type keeps `null` only when each `{type: object}` member admits it too. A
+     * union keeps its other members, which a date format or `x-php-type` may make classes as well.
      *
      * @param non-empty-list<Schema> $plain
      */
-    private function asObject(TypeModel $type, array $plain): TypeModel
+    private function withNullOf(TypeModel $type, array $plain): TypeModel
     {
-        $nullable = $type instanceof NullableType;
-        $object = $type instanceof NullableType ? $type->inner() : $type;
-        if ($object instanceof UnionType) {
-            $members = array_filter($object->members(), static fn (TypeModel $member): bool => $member instanceof ClassType || $member instanceof MapType);
-            $object = $members === [] ? $object : UnionType::of(...$members);
-        }
-
         foreach ($plain as $member) {
-            $nullable = $nullable && $member->isNullable();
+            if ($type instanceof NullableType && !$member->isNullable()) {
+                return $type->inner();
+            }
         }
 
-        return $nullable ? NullableType::of($object) : $object;
+        return $type;
     }
 
     private function mixedEnum(Schema $schema, Diagnostics $diagnostics): TypeModel
