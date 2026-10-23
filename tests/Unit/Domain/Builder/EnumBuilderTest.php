@@ -183,20 +183,26 @@ final class EnumBuilderTest extends TestCase
             'only null' => [['enum' => [null]], false, ["error {$at}/enum: The enum has no value besides null."]],
             'float' => [['enum' => ['a', 1.5]], false, ["error {$at}/enum/1: Enum value 1.5 cannot back a PHP enum; use strings or integers."]],
             'boolean' => [['enum' => [true]], false, ["error {$at}/enum/0: Enum value true cannot back a PHP enum; use strings or integers."]],
-            'type mismatch' => [['type' => 'integer', 'enum' => ['a']], false, ["error {$at}/type: \"type\" does not match the enum values, which are strings."]],
+            'type mismatch' => [['type' => ['integer', 'string'], 'enum' => ['a']], false, ["error {$at}/type: \"type\" does not match the enum values, which are strings."]],
             'nullable type' => [['type' => ['string', 'null'], 'enum' => ['a']], true, []],
             'duplicate' => [['enum' => ["a/\u{00FC}", "a/\u{00FC}"]], true, ["warning {$at}/enum/1: Enum value \"a/\u{00FC}\" is listed twice."]],
             'string and integer one' => [['enum' => ['1', 1]], false, ["error {$at}/enum: The enum mixes strings and integers, which no PHP enum can back."]],
             'whole float' => [['enum' => [2.0]], false, ["error {$at}/enum/0: Enum value 2.0 cannot back a PHP enum; use strings or integers."]],
-            'integers declared as strings' => [['type' => 'string', 'enum' => [1]], false, ["error {$at}/type: \"type\" does not match the enum values, which are integers."]],
+            'integers declared as strings or arrays' => [['type' => ['string', 'array', 'integer'], 'enum' => [1]], false, ["error {$at}/type: \"type\" does not match the enum values, which are integers."]],
             'empty descriptions' => [['enum' => ['a'], 'x-enum-descriptions' => []], true, []],
-            'descriptions as a list' => [['enum' => ['a'], 'x-enum-descriptions' => ['A']], true, ["error {$at}/x-enum-descriptions: \"x-enum-descriptions\" reads as a list (as does a map keyed \"0\", \"1\", … in order), which is ambiguous unless each position N holds enum value N; map each enum value to its description."]],
-            'descriptions listed out of order' => [['enum' => [2, 1, 0], 'x-enum-descriptions' => ['Two.', 'One.', 'Zero.']], true, ["error {$at}/x-enum-descriptions: \"x-enum-descriptions\" reads as a list (as does a map keyed \"0\", \"1\", … in order), which is ambiguous unless each position N holds enum value N; map each enum value to its description."]],
+            'descriptions as a list' => [['enum' => ['a'], 'x-enum-descriptions' => ['A']], true, []],
+            'more descriptions than values' => [['enum' => ['a'], 'x-enum-descriptions' => ['A', 'B', 5]], true, [
+                "error {$at}/x-enum-descriptions/1: \"x-enum-descriptions\" lists more descriptions than the enum has values.",
+                "error {$at}/x-enum-descriptions/2: \"x-enum-descriptions\" lists more descriptions than the enum has values.",
+            ]],
+            'a listed description not a string' => [['enum' => ['a', 'b'], 'x-enum-descriptions' => ['A', 5]], true, ["error {$at}/x-enum-descriptions/1: An enum description must be a string."]],
+            'descriptions listed for values only some positions hold' => [['enum' => [1, 2], 'x-enum-descriptions' => ['One.', 'Two.']], true, []],
+            'descriptions listed out of order' => [['enum' => [2, 1, 0], 'x-enum-descriptions' => ['Two.', 'One.', 'Zero.']], true, ["error {$at}/x-enum-descriptions: \"x-enum-descriptions\" reads as a list of descriptions by position or as a map keyed by the values \"0\", \"1\", …, which tell different values apart; map each enum value to its description."]],
             'descriptions listed for part of the values' => [['enum' => [0, 1], 'x-enum-descriptions' => ['Zero.']], true, []],
             'descriptions listed past a null' => [['enum' => [null, 0, 1], 'x-enum-descriptions' => ['Zero.', 'One.']], true, []],
             'descriptions listed with a duplicate' => [['enum' => [0, 0, 1], 'x-enum-descriptions' => ['Zero.', 'One.']], true, [
                 "warning {$at}/enum/1: Enum value 0 is listed twice.",
-                "error {$at}/x-enum-descriptions: \"x-enum-descriptions\" reads as a list (as does a map keyed \"0\", \"1\", … in order), which is ambiguous unless each position N holds enum value N; map each enum value to its description.",
+                "error {$at}/x-enum-descriptions: \"x-enum-descriptions\" reads as a list of descriptions by position or as a map keyed by the values \"0\", \"1\", …, which tell different values apart; map each enum value to its description.",
             ]],
             'number type for integers' => [['type' => 'number', 'enum' => [1, 2]], true, []],
             'every problem at once' => [['enum' => ['a', 1.5, true, 'A']], false, [
@@ -298,6 +304,11 @@ final class EnumBuilderTest extends TestCase
         return [
             'part of the values' => [['enum' => [0, 1], 'x-enum-descriptions' => ['Zero.']], ['Zero.', null]],
             'past a null' => [['enum' => [null, 0, 1], 'x-enum-descriptions' => ['Zero.', 'One.']], ['Zero.', 'One.']],
+            'strings by position' => [['enum' => ['master', 'sub'], 'x-enum-descriptions' => ['Master pays.', 'Sub pays.']], ['Master pays.', 'Sub pays.']],
+            'integers by position' => [['enum' => [1, 2], 'x-enum-descriptions' => ['One.', 'Two.']], ['One.', 'Two.']],
+            'numeric strings by position' => [['enum' => ['5', '0'], 'x-enum-descriptions' => ['Five.', 'Zero.']], ['Five.', 'Zero.']],
+            'a value listed twice' => [['enum' => ['a', 'a', 'b'], 'x-enum-descriptions' => ['First.', 'Second.', 'B.']], ['First.', 'B.']],
+            'numeric strings in order' => [['type' => 'string', 'enum' => ['0', '1'], 'x-enum-descriptions' => ['Zero.', 'One.']], ['Zero.', 'One.']],
         ];
     }
 }

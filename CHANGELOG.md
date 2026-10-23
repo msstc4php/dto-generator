@@ -17,9 +17,15 @@ All notable changes to this package are documented here. The format follows
 ### Fixed
 
 - An `allOf` member that only says `type: object` beside another typed member (Asana, Bitbucket, Plaid) no longer
-  makes the `allOf` an error that combines several typed schemas: it keeps the object part of that member, so
-  `allOf: [$ref: Tag, {type: object}]` is `Tag`, without `null` unless the object member admits it too; beside a member
-  that can be no object it stays an error.
+  makes the `allOf` an error that combines several typed schemas: it adds nothing, so `allOf: [$ref: Tag, {type: object}]` is
+  `Tag`, without `null` unless the object member admits it too; beside a member that can be no object it stays an
+  error.
+- `x-enum-descriptions` as a list gives the descriptions by position, as openapi-generator reads it (Zoom), unless
+  every position is also an enum value, at another position; it was an error for any enum but `0`, `1`, ….
+- A `type` that admits none of the enum values (Zoom's and Vimeo's `type: array` with the values of its items) ignores
+  the enum with a warning, where it was an error; the property keeps its type.
+- A `default` that does not fit the type (Xero's `default: "false"` of a boolean) is a warning, where it was an error;
+  the property defaults to `null`, as before.
 
 ## [1.13.0] - 2026-10-23
 

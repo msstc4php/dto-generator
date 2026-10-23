@@ -46,7 +46,8 @@ PHPDoc extractor of Symfony 5.4, mistake `non-empty-string` for a class name; th
 - A property listed in `required` and not nullable is a required constructor argument.
 - Any other property is nullable, defaulting to the schema's `default` or to `null`.
 - Required arguments come first, then optional ones, each in the order of `properties`.
-- A `default` that does not fit the type is an error; a default on a required property is ignored.
+- A `default` that does not fit the type (Xero's `default: "false"` of a boolean) gives a warning and the property
+  defaults to `null`; a default on a required property is ignored.
 - A default for an object (a date included) or a map cannot be a PHP constant expression: the property defaults to
   `null`, with a warning. On PHP 8.1 and newer, the empty object `{}` as the default of a generated class is
   `new Name()`, when that class is not abstract and its constructor needs no argument; a default leading back to its
@@ -59,6 +60,7 @@ PHPDoc extractor of Symfony 5.4, mistake `non-empty-string` for a class name; th
 |---|---|
 | `enum` of strings or of integers | PHP 8.1+: a backed `enum`. 7.4 and 8.0: a `final class` of constants; the property is `string`/`int` with `@phpstan-var Name::*` |
 | `enum` mixing strings and integers | no PHP enum: a union of the literals (see [Types](#types)), with a warning |
+| `enum` whose values `type` admits none of (`type: array` with the values of its items, as Zoom and Vimeo write; `type: string` with integers) | the enum is ignored, with a warning: the property keeps its type (`list<string>`) |
 | `allOf` with one `$ref` plus own properties, `extends` strategy | `class Child extends Base`; `Base` is not `final` |
 | an `allOf` member that only says `type: object` (no properties, `required`, composition, enum, `const`, `patternProperties`, discriminator or schema for other properties; `additionalProperties: true` and annotations allowed) beside members that are objects | the object part of the other member: `allOf: [$ref: Tag, {type: object, description: …}]` is `Tag`, as Asana, Bitbucket and Plaid write it, and of `Tag` or a string, `Tag`; it still rules out `null` unless it admits it; beside an untyped member the type stays `mixed`. Its other keywords (`minProperties`, `not`, …) give no PHP type and are left to validation. Beside a member that can be no object, however written (a string with a date format or an `x-php-type`, an enum, a list), it stays a contradiction, an error |
 | `allOf` with several `$ref`, or the `merge` strategy | one class with all the properties. A property several members describe gets the narrower type when one admits every value of the other (`string` and a date, `number` and `integer`, `T|null` and `T`, a list of anything and a list of `T`, an object of any properties and a class, a class and one that has all its properties, alike, requires them, admits `null` only if the first does and may have more, when the first says nothing but its properties, which it requires and annotations and is no variant of a discriminated union, whose values it checks; a class and one that extends it, also through other classes, without read or write model views); inline objects of that property (or of its items or values) in several members become one class with the properties of all, unless a `$ref` reaches one of them, they are alternatives of a union, or the second says more than its properties (its own `allOf`, `additionalProperties`, `x-` keys, keywords of the class); other types are an error |
