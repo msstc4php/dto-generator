@@ -102,8 +102,9 @@ final class SchemaShape
             return false;
         }
 
+        // A union beside an allOf is left to validation, unless a discriminator asks for variants.
         if ($schema->allOf() !== []) {
-            return !self::hasUnion($schema) && self::composesObjects($schema);
+            return (!self::hasUnion($schema) || !$schema->discriminator() instanceof Discriminator) && self::composesObjects($schema);
         }
 
         return self::isDiscriminated($schema) || $schema->propertyNames() !== [];

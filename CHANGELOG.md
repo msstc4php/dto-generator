@@ -20,6 +20,8 @@ All notable changes to this package are documented here. The format follows
 
 ### Fixed
 
+- An `allOf` that makes a class beside a `oneOf` or `anyOf` without a discriminator (Shipengine) gives that class with a
+  warning that the union is not represented, where the pair was an error.
 - A schema that holds itself in a list or a map through `$ref` (Vercel's `EdgeConfigItemValue`, a JSON value) is typed
   with `mixed` inside, where it was an error that the `$ref` chain loops.
 - A named `allOf` of one `$ref` to a class with a `discriminator` (Twitter's problems, Bitbucket's states) is a

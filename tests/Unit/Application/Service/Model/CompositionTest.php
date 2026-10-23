@@ -230,6 +230,28 @@ final class CompositionTest extends TestCase
         self::assertSame('final extends App\\Dto\\Pet', ModelFixture::hierarchy($output)['App\\Dto\\Cat']);
     }
 
+    public function testBuildsTheClassOfAnAllOfBesideAUnionWithoutDiscriminator(): void
+    {
+        $at = self::AT;
+        $output = ModelFixture::build([
+            'Options' => ['type' => 'object', 'properties' => ['carrier' => ['type' => 'string']]],
+            'ById' => ['type' => 'object', 'required' => ['id'], 'properties' => ['id' => ['type' => 'string']]],
+            'ByShipment' => ['type' => 'object', 'required' => ['shipment'], 'properties' => ['shipment' => ['type' => 'object']]],
+            'Request' => [
+                'type' => 'object',
+                'allOf' => [['$ref' => '#/components/schemas/Options']],
+                'oneOf' => [['$ref' => '#/components/schemas/ById'], ['$ref' => '#/components/schemas/ByShipment']],
+                'required' => ['carrier'],
+            ],
+        ]);
+
+        self::assertSame('final extends App\\Dto\\Options', ModelFixture::hierarchy($output)['App\\Dto\\Request']);
+        self::assertContains(
+            "warning {$at}Request: \"oneOf\" and \"anyOf\" beside \"allOf\" are not represented; the class keeps the members of its \"allOf\" and its own properties.",
+            ModelFixture::messages($output),
+        );
+    }
+
     public function testCollectsPropertiesOfInlineMembersAndOwnProperties(): void
     {
         $output = ModelFixture::build([

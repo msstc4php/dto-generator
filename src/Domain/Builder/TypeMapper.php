@@ -104,7 +104,7 @@ final class TypeMapper
             return $this->reference($schema, $ref, $diagnostics, $aliases);
         }
 
-        if (SchemaShape::mayBeObject($schema) && $schema->allOf() !== [] && SchemaShape::hasUnion($schema)) {
+        if (!SchemaShape::isClass($schema) && SchemaShape::mayBeObject($schema) && $schema->allOf() !== [] && SchemaShape::hasUnion($schema)) {
             $diagnostics->error('"allOf" together with "oneOf" or "anyOf" is not supported.', $schema->location());
 
             return new MixedType();
