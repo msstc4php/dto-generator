@@ -129,7 +129,8 @@ final class TypeMapper
             return new MixedType();
         }
 
-        $typed = $this->withoutPlainObjects($this->typed($schema->allOf(), false));
+        $members = $this->typed($schema->allOf(), false);
+        $typed = $this->withoutPlainObjects($members);
         if (count($typed) > 1) {
             $diagnostics->error('"allOf" combines several typed schemas that are not objects, which no PHP type expresses; keep one of them.', $schema->location());
 
@@ -137,7 +138,14 @@ final class TypeMapper
         }
 
         if ($typed !== []) {
-            return $this->consts->narrow($schema, $this->mapWithin($typed[0], $diagnostics, $aliases), $diagnostics);
+            $type = $this->mapWithin($typed[0], $diagnostics, $aliases);
+            // A dropped `{type: object}` still rules out null, as every member of an allOf applies.
+            $dropped = array_filter($members, static fn (Schema $member): bool => !in_array($member, $typed, true) && !$member->isNullable());
+            if ($type instanceof NullableType && $dropped !== []) {
+                $type = $type->inner();
+            }
+
+            return $this->consts->narrow($schema, $type, $diagnostics);
         }
 
         if (SchemaShape::isMixedEnum($schema)) {
@@ -338,7 +346,8 @@ final class TypeMapper
     }
 
     /**
-     * A member that only says "object" adds nothing to members that are objects (`allOf: [$ref, {type: object}]`).
+     * A member that only says "object" adds nothing to members that are objects (`allOf: [$ref, {type: object}]`); beside
+     * one that is not, it is a contradiction.
      *
      * @param list<Schema> $typed
      *
@@ -348,12 +357,32 @@ final class TypeMapper
     {
         $specific = array_values(array_filter($typed, static fn (Schema $member): bool => !SchemaShape::isPlainObject($member)));
         foreach ($specific as $member) {
-            if ($member->ref() === null && !SchemaShape::mayBeObject($member)) {
+            $target = $this->target($member);
+            // A reference the loader could not follow is reported there; it is taken for an object here.
+            if ($target->ref() === null && !SchemaShape::mayBeObject($target)) {
                 return $typed;
             }
         }
 
         return $specific === [] ? $typed : $specific;
+    }
+
+    /**
+     * The schema a chain of `$ref` leads to; the last one reached when the chain breaks or loops.
+     *
+     * @param list<string> $seen
+     */
+    private function target(Schema $schema, array $seen = []): Schema
+    {
+        $ref = $schema->ref();
+        $key = $schema->location()->toString();
+        if ($ref === null || in_array($key, $seen, true)) {
+            return $schema;
+        }
+
+        $target = $this->graph->resolve(new ReferenceUse($ref, $schema->location()));
+
+        return $target instanceof ResolvedSchema ? $this->target($target->schema(), [...$seen, $key]) : $schema;
     }
 
     private function mixedEnum(Schema $schema, Diagnostics $diagnostics): TypeModel

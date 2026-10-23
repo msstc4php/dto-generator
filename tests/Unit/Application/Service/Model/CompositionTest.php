@@ -64,6 +64,39 @@ final class CompositionTest extends TestCase
         );
     }
 
+    public function testKeepsWhatADroppedObjectMemberSays(): void
+    {
+        $at = self::AT;
+        $nullable = ['$ref' => '#/components/schemas/MaybeTag'];
+        $output = ModelFixture::build([
+            'MaybeTag' => ['type' => ['object', 'null'], 'properties' => ['name' => ['type' => 'string']]],
+            'Name' => ['type' => 'string'],
+            'Holder' => ['type' => 'object', 'required' => ['strict', 'lenient'], 'properties' => [
+                'strict' => ['allOf' => [$nullable, ['type' => 'object']]],
+                'lenient' => ['allOf' => [$nullable, ['type' => ['object', 'null']]]],
+                'name' => ['allOf' => [['$ref' => '#/components/schemas/Name'], ['type' => 'object']]],
+                'broken' => ['allOf' => [['$ref' => '#/components/schemas/Gone'], ['type' => 'object']]],
+                'looped' => ['allOf' => [['$ref' => '#/components/schemas/Loop'], ['type' => 'object']]],
+                'chained' => ['allOf' => [['$ref' => '#/components/schemas/NameAlias'], ['type' => 'object']]],
+            ]],
+            'Loop' => ['$ref' => '#/components/schemas/Loop2'],
+            'Loop2' => ['$ref' => '#/components/schemas/Loop'],
+            'NameAlias' => ['$ref' => '#/components/schemas/Name'],
+        ], [], ['*'], AllOfStrategy::EXTENDS, false);
+
+        self::assertSame(
+            ['strict: App\\Dto\\MaybeTag', 'lenient: App\\Dto\\MaybeTag|null', 'name: mixed', 'broken: mixed', 'looped: mixed', 'chained: mixed'],
+            ModelFixture::classes($output)['App\\Dto\\Holder'],
+        );
+        self::assertSame(
+            [
+                "error {$at}Holder/properties/name: \"allOf\" combines several typed schemas that are not objects, which no PHP type expresses; keep one of them.",
+                "error {$at}Holder/properties/chained: \"allOf\" combines several typed schemas that are not objects, which no PHP type expresses; keep one of them.",
+            ],
+            array_values(array_filter(ModelFixture::messages($output), static fn (string $message): bool => strpos($message, 'combines') !== false)),
+        );
+    }
+
     public function testCollectsPropertiesOfInlineMembersAndOwnProperties(): void
     {
         $output = ModelFixture::build([
