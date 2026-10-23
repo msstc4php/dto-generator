@@ -131,6 +131,26 @@ final class SchemaShape
     }
 
     /**
+     * An `allOf` member that only annotates, or only says "object": every value that passes the other members passes it.
+     */
+    public static function addsNothing(Schema $schema): bool
+    {
+        return self::isPlainObject($schema) || (
+            $schema->types() === []
+            && $schema->ref() === null
+            && !$schema->extensions()->has('x-php-type')
+            && $schema->propertyNames() === []
+            && $schema->required() === []
+            && !self::isComposed($schema)
+            && $schema->enum() === null
+            && $schema->keywordNames() === []
+            && $schema->additionalProperties() === null
+            && !$schema->items() instanceof Schema
+            && !$schema->discriminator() instanceof Discriminator
+        );
+    }
+
+    /**
      * `type: object` and nothing that types or constrains its members: any object passes.
      */
     public static function isPlainObject(Schema $schema): bool

@@ -163,21 +163,66 @@ final class CompositionTest extends TestCase
                 'type' => 'object',
                 'required' => ['type'],
                 'properties' => ['type' => ['type' => 'string'], 'title' => ['type' => 'string']],
-                'discriminator' => ['propertyName' => 'type', 'mapping' => ['about:blank' => '#/components/schemas/Generic']],
+                'discriminator' => ['propertyName' => 'type', 'mapping' => [
+                    'about:blank' => '#/components/schemas/Generic',
+                    'plain' => '#/components/schemas/Plain',
+                    'described' => '#/components/schemas/Described',
+                    'chained' => '#/components/schemas/Chained',
+                ]],
             ],
-            'Generic' => ['description' => 'Nothing beyond the status.', 'allOf' => [$problem]],
+            'Generic' => ['description' => 'Nothing beyond the status.', 'allOf' => [$problem], 'x-php-class-name' => 'GenericProblem'],
             'Plain' => ['allOf' => [$problem, ['type' => 'object', 'title' => 'P']]],
+            'Described' => ['allOf' => [$problem, ['description' => 'Described.']]],
+            'ProblemRef' => $problem,
+            'Chained' => ['allOf' => [['$ref' => '#/components/schemas/ProblemRef']]],
+            'ErrorAlias' => ['description' => 'Another name.', 'allOf' => [$problem]],
             'Tag' => ['type' => 'object', 'properties' => ['name' => ['type' => 'string']]],
             'Label' => ['allOf' => [['$ref' => '#/components/schemas/Tag']]],
-            'Holder' => ['type' => 'object', 'properties' => ['label' => ['$ref' => '#/components/schemas/Label']]],
+            'Holder' => ['type' => 'object', 'properties' => [
+                'label' => ['$ref' => '#/components/schemas/Label'],
+                'generic' => ['$ref' => '#/components/schemas/Generic'],
+                'error' => ['$ref' => '#/components/schemas/ErrorAlias'],
+            ]],
         ]);
 
         self::assertSame([], ModelFixture::messages($output));
         $hierarchy = ModelFixture::hierarchy($output);
-        self::assertSame('final extends App\\Dto\\Problem', $hierarchy['App\\Dto\\Generic']);
-        self::assertSame('final extends App\\Dto\\Problem', $hierarchy['App\\Dto\\Plain']);
+        foreach (['GenericProblem', 'Plain', 'Described', 'Chained'] as $subtype) {
+            self::assertSame('final extends App\\Dto\\Problem', $hierarchy['App\\Dto\\' . $subtype], $subtype);
+        }
+
         self::assertArrayNotHasKey('App\\Dto\\Label', $hierarchy);
-        self::assertSame(['label: App\\Dto\\Tag|null'], ModelFixture::classes($output)['App\\Dto\\Holder']);
+        self::assertArrayNotHasKey('App\\Dto\\ErrorAlias', $hierarchy);
+        self::assertSame(
+            ['label: App\\Dto\\Tag|null', 'generic: App\\Dto\\GenericProblem|null', 'error: App\\Dto\\Problem|null'],
+            ModelFixture::classes($output)['App\\Dto\\Holder'],
+        );
+    }
+
+    public function testKeepsAnotherNameOfWhatIsNoDiscriminatedClass(): void
+    {
+        $output = ModelFixture::build([
+            'Money' => ['type' => 'object', 'x-php-type' => 'App\\Money', 'discriminator' => ['propertyName' => 'currency']],
+            'Price' => ['allOf' => [['$ref' => '#/components/schemas/Money']]],
+            'Name' => ['allOf' => [['type' => 'string']]],
+            'LoopA' => ['$ref' => '#/components/schemas/LoopB'],
+            'LoopB' => ['$ref' => '#/components/schemas/LoopA'],
+            'Looped' => ['allOf' => [['$ref' => '#/components/schemas/LoopA']]],
+            'Holder' => ['type' => 'object', 'properties' => ['price' => ['$ref' => '#/components/schemas/Price'], 'name' => ['$ref' => '#/components/schemas/Name']]],
+        ], [], ['*'], AllOfStrategy::EXTENDS, false);
+
+        self::assertSame(['App\\Dto\\Holder'], array_keys(ModelFixture::hierarchy($output)));
+        self::assertSame(['price: App\\Money|null', 'name: string|null'], ModelFixture::classes($output)['App\\Dto\\Holder']);
+    }
+
+    public function testExtendsAUnionBaseByAMemberThatAddsNothing(): void
+    {
+        $output = ModelFixture::build([
+            'Pet' => ['type' => 'object', 'properties' => ['kind' => ['type' => 'string']], 'oneOf' => [['$ref' => '#/components/schemas/Cat']], 'discriminator' => ['propertyName' => 'kind']],
+            'Cat' => ['allOf' => [['$ref' => '#/components/schemas/Pet']]],
+        ]);
+
+        self::assertSame('final extends App\\Dto\\Pet', ModelFixture::hierarchy($output)['App\\Dto\\Cat']);
     }
 
     public function testCollectsPropertiesOfInlineMembersAndOwnProperties(): void

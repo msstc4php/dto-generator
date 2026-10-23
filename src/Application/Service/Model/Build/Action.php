@@ -669,20 +669,53 @@ final class Action
     }
 
     /**
-     * `allOf: [$ref: Base]` alone (`{type: object}` beside it adds nothing) reads as another name of Base, but for a base
-     * with a discriminator it is how a subtype that adds nothing is written (Twitter's problems): a class extending Base.
+     * `allOf: [$ref: Base]` alone (members that add nothing aside) reads as another name of Base, but for a base with a
+     * discriminator it is how a subtype that adds nothing is written (Twitter's problems): a class extending Base, when
+     * the base has no mapping or its mapping names the schema.
      */
     private function isBareSubtype(Schema $schema, SchemaGraph $graph): bool
     {
-        $members = array_values(array_filter($schema->allOf(), static fn (Schema $member): bool => !SchemaShape::isPlainObject($member)));
-        $ref = count($members) === 1 ? $members[0]->ref() : null;
-        if ($ref === null || !SchemaShape::mayBeObject($schema) || SchemaShape::hasUnion($schema) || $schema->propertyNames() !== []) {
+        $members = array_values(array_filter($schema->allOf(), static fn (Schema $member): bool => !SchemaShape::addsNothing($member)));
+        if (count($members) !== 1 || !SchemaShape::mayBeObject($schema) || SchemaShape::hasUnion($schema) || $schema->propertyNames() !== []) {
             return false;
         }
 
-        $target = $graph->resolve(new ReferenceUse($ref, $members[0]->location()));
+        $base = $this->referenced($members[0], $graph);
+        $discriminator = $base instanceof Schema && SchemaShape::isClass($base) ? $base->discriminator() : null;
+        if (!$discriminator instanceof Discriminator) {
+            return false;
+        }
 
-        return $target instanceof ResolvedSchema && $target->schema()->discriminator() instanceof Discriminator && SchemaShape::isClass($target->schema());
+        $at = $schema->location()->toString();
+        $named = $discriminator->entries() === [];
+        foreach ($discriminator->entries() as [$value, $ref]) {
+            $target = $graph->resolve(new ReferenceUse($ref, $base->location()->child('discriminator', 'mapping', $value)));
+            $named = $named || ($target instanceof ResolvedSchema && $target->location()->toString() === $at);
+        }
+
+        return $named;
+    }
+
+    /**
+     * The schema a chain of `$ref` leads to from a member; null when the member is no reference, or the chain breaks
+     * or loops.
+     *
+     * @param list<string> $seen
+     */
+    private function referenced(Schema $member, SchemaGraph $graph, array $seen = []): ?Schema
+    {
+        $ref = $member->ref();
+        $key = $member->location()->toString();
+        if ($ref === null || in_array($key, $seen, true)) {
+            return null;
+        }
+
+        $target = $graph->resolve(new ReferenceUse($ref, $member->location()));
+        if (!$target instanceof ResolvedSchema) {
+            return null;
+        }
+
+        return $target->schema()->ref() === null ? $target->schema() : $this->referenced($target->schema(), $graph, [...$seen, $key]);
     }
 
     /**

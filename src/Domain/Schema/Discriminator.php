@@ -64,6 +64,19 @@ final class Discriminator
         return array_map('strval', array_keys($this->mapping));
     }
 
+    /**
+     * @return list<array{string, string}> each value of the mapping with its `$ref`, in order
+     */
+    public function entries(): array
+    {
+        $entries = [];
+        foreach ($this->mapping as $value => $ref) {
+            $entries[] = [(string) $value, $ref];
+        }
+
+        return $entries;
+    }
+
     public function refFor(string $value): ?string
     {
         return $this->mapping[$value] ?? null;
