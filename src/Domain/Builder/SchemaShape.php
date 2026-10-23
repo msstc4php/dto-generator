@@ -93,8 +93,9 @@ final class SchemaShape
     }
 
     /**
-     * A schema the builder turns into a class (spec §5.3): an object with its own properties, an `allOf` of objects, or
-     * a `oneOf`/`anyOf` with a discriminator. x-php-type maps it to an existing class instead.
+     * A schema the builder turns into a class (spec §5.3): an object with its own properties, an `allOf` of objects (a
+     * `oneOf`/`anyOf` beside it without a discriminator left to validation), or a `oneOf`/`anyOf` with a discriminator.
+     * x-php-type maps it to an existing class instead.
      */
     public static function isClass(Schema $schema): bool
     {
@@ -102,8 +103,9 @@ final class SchemaShape
             return false;
         }
 
+        // With a discriminator, a union beside an allOf asks for variants the class cannot also extend: an error.
         if ($schema->allOf() !== []) {
-            return !self::hasUnion($schema) && self::composesObjects($schema);
+            return (!self::hasUnion($schema) || self::hasUnionBesideAllOf($schema)) && self::composesObjects($schema);
         }
 
         return self::isDiscriminated($schema) || $schema->propertyNames() !== [];
@@ -176,6 +178,14 @@ final class SchemaShape
     public static function isComposed(Schema $schema): bool
     {
         return $schema->allOf() !== [] || self::hasUnion($schema);
+    }
+
+    /**
+     * A `oneOf`/`anyOf` without a discriminator beside an `allOf`: the class of the `allOf` does not represent it.
+     */
+    public static function hasUnionBesideAllOf(Schema $schema): bool
+    {
+        return $schema->allOf() !== [] && self::hasUnion($schema) && !$schema->discriminator() instanceof Discriminator;
     }
 
     public static function hasUnion(Schema $schema): bool

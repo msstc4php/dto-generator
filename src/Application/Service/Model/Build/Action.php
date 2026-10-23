@@ -112,7 +112,7 @@ final class Action
                 continue;
             }
 
-            if (SchemaShape::mayBeObject($schema) && $schema->allOf() !== [] && SchemaShape::hasUnion($schema)) {
+            if (!$isClass && SchemaShape::mayBeObject($schema) && $schema->allOf() !== [] && SchemaShape::hasUnion($schema)) {
                 $diagnostics->error('"allOf" together with "oneOf" or "anyOf" is not supported.', $schema->location());
 
                 continue;
@@ -433,6 +433,10 @@ final class Action
     private function declare(Schema $schema, ClassName $name, int $source, bool $isEnum, Registry $registry, EnumBuilder $enums, Diagnostics $diagnostics): bool
     {
         if (!$isEnum) {
+            if (SchemaShape::hasUnionBesideAllOf($schema)) {
+                $diagnostics->warning('"oneOf" and "anyOf" beside "allOf" are not represented; the class keeps the members of its "allOf" and its own properties.', $schema->location());
+            }
+
             $registry->planClass($schema, $name, $source);
 
             return true;
