@@ -680,8 +680,10 @@ final class Action
             return false;
         }
 
-        $base = $this->referenced($members[0], $graph);
-        $discriminator = $base instanceof Schema && SchemaShape::isClass($base) ? $base->discriminator() : null;
+        $chain = $graph->chain($members[0]);
+        $base = $chain[count($chain) - 1];
+        // A chain that breaks or loops ends in a reference; an inline member that is a class made the schema one already.
+        $discriminator = $base->ref() === null && SchemaShape::isClass($base) ? $base->discriminator() : null;
         if (!$discriminator instanceof Discriminator) {
             return false;
         }
@@ -690,32 +692,10 @@ final class Action
         $named = $discriminator->entries() === [];
         foreach ($discriminator->entries() as [$value, $ref]) {
             $target = $graph->resolve(new ReferenceUse($ref, $base->location()->child('discriminator', 'mapping', $value)));
-            $named = $named || ($target instanceof ResolvedSchema && $target->location()->toString() === $at);
+            $named = $named || ($target instanceof ResolvedSchema && in_array($at, array_map(static fn (Schema $link): string => $link->location()->toString(), $graph->chain($target->schema())), true));
         }
 
         return $named;
-    }
-
-    /**
-     * The schema a chain of `$ref` leads to from a member; null when the member is no reference, or the chain breaks
-     * or loops.
-     *
-     * @param list<string> $seen
-     */
-    private function referenced(Schema $member, SchemaGraph $graph, array $seen = []): ?Schema
-    {
-        $ref = $member->ref();
-        $key = $member->location()->toString();
-        if ($ref === null || in_array($key, $seen, true)) {
-            return null;
-        }
-
-        $target = $graph->resolve(new ReferenceUse($ref, $member->location()));
-        if (!$target instanceof ResolvedSchema) {
-            return null;
-        }
-
-        return $target->schema()->ref() === null ? $target->schema() : $this->referenced($target->schema(), $graph, [...$seen, $key]);
     }
 
     /**

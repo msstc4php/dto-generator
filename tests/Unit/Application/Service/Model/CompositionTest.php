@@ -168,6 +168,8 @@ final class CompositionTest extends TestCase
                     'plain' => '#/components/schemas/Plain',
                     'described' => '#/components/schemas/Described',
                     'chained' => '#/components/schemas/Chained',
+                    'annotated' => '#/components/schemas/Annotated',
+                    'through' => '#/components/schemas/ViaRef',
                 ]],
             ],
             'Generic' => ['description' => 'Nothing beyond the status.', 'allOf' => [$problem], 'x-php-class-name' => 'GenericProblem'],
@@ -176,6 +178,9 @@ final class CompositionTest extends TestCase
             'ProblemRef' => $problem,
             'Chained' => ['allOf' => [['$ref' => '#/components/schemas/ProblemRef']]],
             'ErrorAlias' => ['description' => 'Another name.', 'allOf' => [$problem]],
+            'Annotated' => ['allOf' => [$problem, ['title' => 'A', 'example' => ['type' => 'annotated'], 'readOnly' => true, 'nullable' => true, 'externalDocs' => ['url' => 'https://example.com']]]],
+            'ViaRef' => ['$ref' => '#/components/schemas/Via'],
+            'Via' => ['allOf' => [$problem]],
             'Tag' => ['type' => 'object', 'properties' => ['name' => ['type' => 'string']]],
             'Label' => ['allOf' => [['$ref' => '#/components/schemas/Tag']]],
             'Holder' => ['type' => 'object', 'properties' => [
@@ -187,7 +192,7 @@ final class CompositionTest extends TestCase
 
         self::assertSame([], ModelFixture::messages($output));
         $hierarchy = ModelFixture::hierarchy($output);
-        foreach (['GenericProblem', 'Plain', 'Described', 'Chained'] as $subtype) {
+        foreach (['GenericProblem', 'Plain', 'Described', 'Chained', 'Annotated', 'Via'] as $subtype) {
             self::assertSame('final extends App\\Dto\\Problem', $hierarchy['App\\Dto\\' . $subtype], $subtype);
         }
 

@@ -21,7 +21,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
 final class ObjectShape
 {
     /** Keywords that tell about a schema without restricting its values. */
-    private const ANNOTATIONS = ['title', 'examples', 'example', '$comment', 'externalDocs', 'xml'];
+    public const ANNOTATIONS = ['title', 'examples', 'example', '$comment', 'externalDocs', 'xml'];
 
     private function __construct()
     {

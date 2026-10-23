@@ -10,6 +10,9 @@ use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaType;
 
 final class SchemaShape
 {
+    /** Keywords an `allOf` member may have without restricting what the others admit: a member cannot widen them. */
+    private const SAYS_NOTHING_IN_ALL_OF = [...ObjectShape::ANNOTATIONS, 'readOnly', 'writeOnly', 'nullable', 'deprecated', 'default'];
+
     private function __construct()
     {
     }
@@ -143,7 +146,7 @@ final class SchemaShape
             && $schema->required() === []
             && !self::isComposed($schema)
             && $schema->enum() === null
-            && $schema->keywordNames() === []
+            && array_diff($schema->keywordNames(), self::SAYS_NOTHING_IN_ALL_OF) === []
             && $schema->additionalProperties() === null
             && !$schema->items() instanceof Schema
             && !$schema->discriminator() instanceof Discriminator
