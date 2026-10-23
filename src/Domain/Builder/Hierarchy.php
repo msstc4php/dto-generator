@@ -553,18 +553,20 @@ final class Hierarchy
                     ),
                     $property->source(),
                 );
-            } elseif ($meet instanceof TypeModel && $inherited instanceof PropertyModel && $this->isOrExtendsAVariant($model)) {
-                // A parent that selects a variant must stay, so the variant cannot merge its members instead.
+            } elseif ($inherited instanceof PropertyModel && $this->declaresAlike($inherited, $property) && $this->isOrExtendsAVariant($model)) {
+                // A parent that selects a variant must stay, so the variant cannot merge its members instead; whether the
+                // types meet is not asked, as a read or write model of the narrower class no longer extends the parent's.
                 array_pop($kept);
                 $this->superseded->add($property->type());
                 $this->diagnostics->warning(
                     sprintf(
-                        'Property "%s" of %s is %s, which PHP lets no subclass of %s declare, and the class is a variant, which keeps its parent; the class keeps %s.',
+                        'Property "%s" of %s is %s, which PHP lets no subclass of %s declare, and the class is a variant, which keeps its parent; the class keeps %s%s.',
                         $property->wireName(),
                         $fqcn,
-                        $meet->describe(),
+                        $property->type()->describe(),
                         $byWireName,
                         $inherited->type()->describe(),
+                        $property->isRequired() && !$inherited->isRequired() ? ' and does not require it' : '',
                     ),
                     $property->source(),
                 );

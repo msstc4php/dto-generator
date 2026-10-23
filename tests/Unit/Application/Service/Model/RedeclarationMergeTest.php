@@ -232,6 +232,22 @@ final class RedeclarationMergeTest extends TestCase
         self::assertContains('error ' . self::AT . 'Cat/allOf/1/properties/q: Property "q" of App\\Dto\\Cat is already declared by App\\Dto\\Pet.', ModelFixture::messages($output));
     }
 
+    public function testKeepsTheParentOfAVariantInEveryViewAndSaysWhatItDoesNotRequire(): void
+    {
+        $output = ModelFixture::views([
+            'Pet' => ['type' => 'object', 'properties' => ['kind' => ['type' => 'string'], 'links' => ['$ref' => '#/components/schemas/Links']]],
+            'Links' => ['type' => 'object', 'properties' => ['self' => ['type' => 'string']]],
+            'CatLinks' => ['allOf' => [['$ref' => '#/components/schemas/Links'], ['properties' => ['id' => ['type' => 'integer', 'readOnly' => true]]]]],
+            'Cat' => ['x-php-all-of' => 'extends', 'allOf' => [self::PET, ['required' => ['links'], 'properties' => ['links' => ['$ref' => '#/components/schemas/CatLinks']]]]],
+            'Animal' => ['oneOf' => [['$ref' => '#/components/schemas/Cat']], 'discriminator' => ['propertyName' => 'kind']],
+        ]);
+
+        $messages = ModelFixture::messages($output);
+        self::assertSame([], array_values(array_filter($messages, static fn (string $message): bool => strncmp($message, 'error', 5) === 0)));
+        self::assertCount(1, array_filter($messages, static fn (string $message): bool => strpos($message, 'is a variant, which keeps its parent; the class keeps App\\Dto\\Links|null and does not require it.') !== false));
+        self::assertSame(['kind: string|null', 'links: App\\Dto\\Links|null'], ModelFixture::classes($output)['App\\Dto\\Pet']);
+    }
+
     /**
      * @dataProvider variants
      *
