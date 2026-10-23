@@ -222,7 +222,7 @@ final class EnumBuilder
 
         if ($this->isAmbiguousList($raw, $schema)) {
             $diagnostics->error(
-                '"x-enum-descriptions" reads as a list (as does a map keyed "0", "1", … in order), which is ambiguous unless each position N holds enum value N; map each enum value to its description.',
+                '"x-enum-descriptions" reads as a list of descriptions by position or as a map keyed by the values "0", "1", …, which tell different values apart; map each enum value to its description.',
                 $at,
             );
 
@@ -231,13 +231,22 @@ final class EnumBuilder
 
         $known = array_map('strval', $values);
         $descriptions = [];
-        foreach ($raw as $value => $description) {
-            $value = (string) $value;
+        // A list gives the description of the value at its position.
+        $positions = Json::isList($raw) ? SchemaShape::backableValues($schema) : null;
+        foreach ($raw as $key => $description) {
+            if ($positions !== null && !array_key_exists($key, $positions)) {
+                $diagnostics->error('"x-enum-descriptions" lists more descriptions than the enum has values.', $at->child((string) $key));
+
+                continue;
+            }
+
+            $value = (string) ($positions === null ? $key : $positions[$key]);
             if (!in_array($value, $known, true)) {
-                $diagnostics->error(sprintf('There is no enum value "%s".', $value), $at->child($value));
+                $diagnostics->error(sprintf('There is no enum value "%s".', $value), $at->child((string) $key));
             } elseif (!is_string($description)) {
-                $diagnostics->error('An enum description must be a string.', $at->child($value));
-            } else {
+                $diagnostics->error('An enum description must be a string.', $at->child((string) $key));
+            } elseif (!isset($descriptions[$value])) {
+                // A value listed twice keeps the description of its first position, as the enum keeps that one.
                 $descriptions[$value] = $description;
             }
         }
@@ -247,7 +256,8 @@ final class EnumBuilder
 
     /**
      * JSON decodes a map keyed 0..n-1 as a list, and openapi-generator lists descriptions by position, so a list is read
-     * only where both readings agree. Positions count every non-null value, duplicates included, as openapi-generator does.
+     * only where both readings agree. Positions count the string and integer values ({@see SchemaShape::backableValues()}),
+     * duplicates included, as openapi-generator does.
      *
      * @param array<array-key, mixed> $raw
      */
@@ -257,14 +267,18 @@ final class EnumBuilder
             return false;
         }
 
-        $positions = array_values(array_filter($schema->enum() ?? [], static fn ($value): bool => $value !== null));
+        $positions = SchemaShape::backableValues($schema);
+        $known = array_map('strval', $positions);
+        $inOrder = true;
         foreach (array_keys($raw) as $position) {
-            if (($positions[$position] ?? null) !== $position) {
-                return true;
+            if (!in_array((string) $position, $known, true)) {
+                return false;
             }
+
+            $inOrder = $inOrder && (string) ($positions[$position] ?? '') === (string) $position;
         }
 
-        return false;
+        return !$inOrder;
     }
 
     /**

@@ -489,7 +489,7 @@ final class ClassBuilderTest extends TestCase
     {
         [$class, $messages] = $this->build(['type' => 'object', 'properties' => ['v' => $property]]);
 
-        self::assertSame(['error ' . self::AT . "/properties/v/default: Default {$value} does not match {$type}; null is used instead."], $messages);
+        self::assertSame(['warning ' . self::AT . "/properties/v/default: Default {$value} does not match {$type}; null is used instead."], $messages);
         self::assertEquals(new DefaultValue(null), $this->property($class, 'v')->default());
     }
 

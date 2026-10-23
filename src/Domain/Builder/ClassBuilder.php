@@ -466,7 +466,7 @@ final class ClassBuilder
         }
 
         if (!DefaultFit::fits($default->value(), $inner)) {
-            $diagnostics->error(
+            $diagnostics->warning(
                 sprintf(
                     'Default %s does not match %s; null is used instead.',
                     json_encode($default->value(), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION | JSON_INVALID_UTF8_SUBSTITUTE),
