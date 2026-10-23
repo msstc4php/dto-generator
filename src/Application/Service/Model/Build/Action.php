@@ -84,6 +84,8 @@ final class Action
         $aliases = [];
         /** @var list<array{Schema, string, int, bool}> $placed schemas named by their place, with the name, source and whether it is a class or enum */
         $placed = [];
+        /** @var list<array{Schema, ClassName, string, int, bool}> $numbered named schemas whose name another holds, with that name, the namespace, source and whether it is an enum */
+        $numbered = [];
 
         foreach ($input->graph()->all() as $resolved) {
             $source = $resolved->source();
@@ -136,10 +138,24 @@ final class Action
             }
 
             $short = $this->shortName($schema, $resolved->name(), $diagnostics);
-            $name = $short === null ? null : $registry->className($config->sources()[$source]->namespace(), $short, $schema);
+            $namespace = $config->sources()[$source]->namespace();
+            $name = $short === null ? null : $registry->className($namespace, $short, $schema);
+            if ($name instanceof ClassName && $this->givesWay($name, $schema, $registry)) {
+                $numbered[] = [$schema, $name, $namespace, $source, $isEnum];
+
+                continue;
+            }
+
             if ($name instanceof ClassName && $registry->claim($name, $schema, $diagnostics)) {
                 $this->declare($schema, $name, $source, $isEnum, $registry, $enums, $diagnostics);
             }
+        }
+
+        // Numbered only now, so that a number never takes the name of a schema further down (`Notary2`).
+        foreach ($numbered as [$schema, $taken, $namespace, $source, $isEnum]) {
+            $name = $this->numbered($schema, $taken, $taken->shortName(), $namespace, $registry, $diagnostics);
+            $registry->claim($name, $schema, $diagnostics);
+            $this->declare($schema, $name, $source, $isEnum, $registry, $enums, $diagnostics);
         }
 
         // Only once every named schema holds its name, so a derived or titled inline name never takes one.
@@ -639,9 +655,27 @@ final class Action
             return null;
         }
 
+        return $this->numbered($candidate, $taken, $registry->baseOf($taken), $namespace, $registry, $diagnostics);
+    }
+
+    /**
+     * A schema whose name only another one's letter case or separators gave first (`user` after `User`, or two places a
+     * `$ref` points into that end alike) is numbered; an explicit name or a read or write suffix keeps the clash an error.
+     */
+    private function givesWay(ClassName $name, Schema $schema, Registry $registry): bool
+    {
+        return $registry->isTaken($name) && !$schema->extensions()->has('x-php-class-name') && !$registry->involvesAView($name);
+    }
+
+    /**
+     * The first free name numbered from 2 after the base, with a warning: a named schema numbers its own name (`USER3`),
+     * an inline one the name of the schema holding its own (`UserAddress2`).
+     */
+    private function numbered(Schema $candidate, ClassName $taken, string $base, string $namespace, Registry $registry, Diagnostics $diagnostics): ClassName
+    {
         $number = 2;
         do {
-            $name = $registry->className($namespace, $registry->baseOf($taken) . $number++, $candidate);
+            $name = $registry->className($namespace, $base . $number++, $candidate);
         } while ($registry->isTaken($name));
 
         $diagnostics->warning(

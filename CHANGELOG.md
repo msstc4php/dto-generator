@@ -6,6 +6,14 @@ All notable changes to this package are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Named schemas whose names differ only in letter case or separators (DocuSign's `notary` and `Notary`, SendGrid's
+  `metadata` and `_metadata`), and places a `$ref` points into that end in the same name (Linode's
+  `…/properties/replication_type`), no longer stop the generation: the later one is numbered from 2 with a warning,
+  after every named schema holds its name. An explicit `x-php-class-name` and a read or write suffix still make a
+  clash an error.
+
 ### Fixed
 
 - An `allOf` member that only says `type: object` beside a `$ref` (Asana, Bitbucket, Plaid) no longer makes the
