@@ -33,6 +33,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\EnumModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\Identifier;
 use MSSTC4PHP\DtoGenerator\Domain\Model\PropertyModel;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Discriminator;
+use MSSTC4PHP\DtoGenerator\Domain\Schema\ReferenceUse;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\ResolvedSchema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaGraph;
@@ -95,7 +96,7 @@ final class Action
                 continue;
             }
 
-            $isClass = SchemaShape::isClass($schema);
+            $isClass = SchemaShape::isClass($schema) || $this->isBareSubtype($schema, $input->graph());
             $isEnum = SchemaShape::isEnum($schema);
             if ($isClass) {
                 ExtensionVocabulary::checkClass($schema, $diagnostics, $input->aliases());
@@ -665,6 +666,23 @@ final class Action
     private function givesWay(ClassName $name, Schema $schema, Registry $registry): bool
     {
         return $registry->isTaken($name) && !$schema->extensions()->has('x-php-class-name') && !$registry->involvesAView($name);
+    }
+
+    /**
+     * `allOf: [$ref: Base]` alone (`{type: object}` beside it adds nothing) reads as another name of Base, but for a base
+     * with a discriminator it is how a subtype that adds nothing is written (Twitter's problems): a class extending Base.
+     */
+    private function isBareSubtype(Schema $schema, SchemaGraph $graph): bool
+    {
+        $members = array_values(array_filter($schema->allOf(), static fn (Schema $member): bool => !SchemaShape::isPlainObject($member)));
+        $ref = count($members) === 1 ? $members[0]->ref() : null;
+        if ($ref === null || !SchemaShape::mayBeObject($schema) || SchemaShape::hasUnion($schema) || $schema->propertyNames() !== []) {
+            return false;
+        }
+
+        $target = $graph->resolve(new ReferenceUse($ref, $members[0]->location()));
+
+        return $target instanceof ResolvedSchema && $target->schema()->discriminator() instanceof Discriminator && SchemaShape::isClass($target->schema());
     }
 
     /**

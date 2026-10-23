@@ -155,6 +155,31 @@ final class CompositionTest extends TestCase
         self::assertSame(['strict: App\\Dto\\Tag', 'lenient: App\\Dto\\Tag|null'], ModelFixture::classes($swagger)['App\\Dto\\Holder']);
     }
 
+    public function testExtendsABaseWithADiscriminatorByAMemberThatAddsNothing(): void
+    {
+        $problem = ['$ref' => '#/components/schemas/Problem'];
+        $output = ModelFixture::build([
+            'Problem' => [
+                'type' => 'object',
+                'required' => ['type'],
+                'properties' => ['type' => ['type' => 'string'], 'title' => ['type' => 'string']],
+                'discriminator' => ['propertyName' => 'type', 'mapping' => ['about:blank' => '#/components/schemas/Generic']],
+            ],
+            'Generic' => ['description' => 'Nothing beyond the status.', 'allOf' => [$problem]],
+            'Plain' => ['allOf' => [$problem, ['type' => 'object', 'title' => 'P']]],
+            'Tag' => ['type' => 'object', 'properties' => ['name' => ['type' => 'string']]],
+            'Label' => ['allOf' => [['$ref' => '#/components/schemas/Tag']]],
+            'Holder' => ['type' => 'object', 'properties' => ['label' => ['$ref' => '#/components/schemas/Label']]],
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        $hierarchy = ModelFixture::hierarchy($output);
+        self::assertSame('final extends App\\Dto\\Problem', $hierarchy['App\\Dto\\Generic']);
+        self::assertSame('final extends App\\Dto\\Problem', $hierarchy['App\\Dto\\Plain']);
+        self::assertArrayNotHasKey('App\\Dto\\Label', $hierarchy);
+        self::assertSame(['label: App\\Dto\\Tag|null'], ModelFixture::classes($output)['App\\Dto\\Holder']);
+    }
+
     public function testCollectsPropertiesOfInlineMembersAndOwnProperties(): void
     {
         $output = ModelFixture::build([
