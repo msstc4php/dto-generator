@@ -6,6 +6,8 @@ All notable changes to this package are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.13.0] - 2026-10-23
+
 ### Added
 
 - Swagger 2.0 documents: each schema in `definitions` gives a class, read as an OpenAPI 3.0 schema; a string
@@ -446,7 +448,8 @@ First release.
 - A manifest per output directory: stale classes are deleted, files without the `@generated` header are never
   overwritten.
 
-[Unreleased]: https://github.com/msstc4php/dto-generator/compare/v1.12.0...HEAD
+[Unreleased]: https://github.com/msstc4php/dto-generator/compare/v1.13.0...HEAD
+[1.13.0]: https://github.com/msstc4php/dto-generator/compare/v1.12.0...v1.13.0
 [1.12.0]: https://github.com/msstc4php/dto-generator/compare/v1.11.0...v1.12.0
 [1.11.0]: https://github.com/msstc4php/dto-generator/compare/v1.10.0...v1.11.0
 [1.10.0]: https://github.com/msstc4php/dto-generator/compare/v1.9.0...v1.10.0
