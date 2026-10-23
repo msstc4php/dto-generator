@@ -131,6 +131,16 @@ final class ClassBuilderTest extends TestCase
                     "warning {$at}/properties/AB: Property \"AB\" becomes \$ab, which \"ab\" already uses, so it is \$ab3; set \"x-php-name\" to name it, in the document or \"propertyNames\" of the source.",
                 ],
             ],
+            'a number an explicit name further down holds' => [
+                ['type' => 'object', 'properties' => ['url' => ['type' => 'string'], 'URL' => ['type' => 'string'], 'link' => ['type' => 'string', 'x-php-name' => 'url2']]],
+                ['url' => 'url: string|null = NULL', 'url3' => 'URL: string|null = NULL', 'url2' => 'link: string|null = NULL'],
+                ["warning {$at}/properties/URL: Property \"URL\" becomes \$url, which \"url\" already uses, so it is \$url3; set \"x-php-name\" to name it, in the document or \"propertyNames\" of the source."],
+            ],
+            'a required empty name' => [
+                ['type' => 'object', 'required' => [''], 'properties' => ['' => ['type' => 'string']]],
+                [],
+                ["warning {$at}/properties/: Property name \"\" has no usable characters, so the class leaves it out, though it is required; set \"x-php-name\" to keep it, in the document or \"propertyNames\" of the source."],
+            ],
             'an explicit name another holds' => [
                 ['type' => 'object', 'properties' => ['url' => ['type' => 'string'], 'link' => ['type' => 'string', 'x-php-name' => 'URL']]],
                 ['url' => 'url: string|null = NULL'],

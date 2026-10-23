@@ -89,11 +89,7 @@ final class ClassBuilder
         // The other view's properties are left out quietly, unlike x-php-skip.
         $skipped = self::skippedWireNames($sources) + ($view instanceof PropertyView ? $view->excluded(self::kept($sources)) : []);
         $spelled = $this->spelledNames($sources, self::skippedWireNames($sources));
-        // A number never takes the name another property has by itself.
-        $natural = [];
-        foreach ($sources as [$wireName]) {
-            $natural[Identifier::asciiLower($spelled[$wireName] ?? $this->names->propertyName($wireName) ?? '')] = true;
-        }
+        $spelled = array_replace($spelled, $this->numberedNames($sources, self::skippedWireNames($sources), $spelled, $diagnostics));
         foreach ($sources as [$wireName, $propertySchema]) {
             ExtensionVocabulary::checkProperty($propertySchema, $diagnostics, $this->aliases);
             if (self::isSkipped($propertySchema, $diagnostics) && $composition->isRequired($wireName)) {
@@ -147,27 +143,13 @@ final class ClassBuilder
 
             // Accessors are case-insensitive in PHP, so $url and $URL would both declare getUrl().
             $key = Identifier::asciiLower($property->name());
-            if (isset($taken[$key]) && $propertySchema->extensions()->has('x-php-name')) {
+            if (isset($taken[$key])) {
                 $diagnostics->error(
                     sprintf('Property "%s" becomes $%s, which "%s" already uses; set "x-php-name" on one of them, in the document or "propertyNames" of the source.', $wireName, $property->name(), $taken[$key]),
                     $propertySchema->location(),
                 );
 
                 continue;
-            }
-
-            if (isset($taken[$key])) {
-                $number = 2;
-                while (isset($taken[$key . $number]) || isset($natural[$key . $number])) {
-                    $number++;
-                }
-
-                $diagnostics->warning(
-                    sprintf('Property "%s" becomes $%s, which "%s" already uses, so it is $%s; set "x-php-name" to name it, in the document or "propertyNames" of the source.', $wireName, $property->name(), $taken[$key], $property->name() . $number),
-                    $propertySchema->location(),
-                );
-                $property = $property->withName($property->name() . $number);
-                $key .= $number;
             }
 
             $taken[$key] = $wireName;
@@ -279,7 +261,7 @@ final class ClassBuilder
      */
     private function property(string $wireName, Schema $schema, bool $required, array $spelled, Diagnostics $diagnostics): ?PropertyModel
     {
-        $name = $spelled[$wireName] ?? $this->propertyName($wireName, $schema, $diagnostics);
+        $name = $spelled[$wireName] ?? $this->propertyName($wireName, $schema, $required, $diagnostics);
         if ($name === null) {
             return null;
         }
@@ -301,6 +283,55 @@ final class ClassBuilder
             new DocModel($schema->description(), $schema->isDeprecated()),
             $schema->location(),
         );
+    }
+
+    /**
+     * A property whose PHP name another one of the class has first (letter case ignored, as accessors are) is numbered
+     * from 2 past every name a property has by itself, an explicit one included, alike for every view and every allOf
+     * member that declares it; an `x-php-name` that clashes stays an error, reported where the property is built.
+     *
+     * @param list<array{string, Schema}> $sources
+     * @param array<array-key, string> $skipped by wire name
+     * @param array<array-key, string> $spelled by wire name
+     *
+     * @return array<array-key, string> by wire name, a numeric one as an int
+     */
+    private function numberedNames(array $sources, array $skipped, array $spelled, Diagnostics $diagnostics): array
+    {
+        $names = [];
+        foreach ($sources as [$wireName, $schema]) {
+            $explicit = $schema->extensions()->has('x-php-name') ? $schema->extensions()->get('x-php-name') : null;
+            $name = is_string($explicit) ? $explicit : $spelled[$wireName] ?? $this->names->propertyName($wireName);
+            if (!isset($skipped[$wireName]) && !isset($names[$wireName]) && $name !== null) {
+                $names[$wireName] = [$name, is_string($explicit), $schema];
+            }
+        }
+
+        $natural = array_flip(array_map(static fn (array $entry): string => Identifier::asciiLower($entry[0]), $names));
+        $holders = [];
+        $numbered = [];
+        foreach ($names as $wireName => [$name, $explicit, $schema]) {
+            $key = Identifier::asciiLower($name);
+            if (!isset($holders[$key]) || $explicit) {
+                $holders[$key] ??= $wireName;
+
+                continue;
+            }
+
+            $number = 2;
+            while (isset($holders[$key . $number]) || isset($natural[$key . $number])) {
+                $number++;
+            }
+
+            $numbered[$wireName] = $name . $number;
+            $holders[$key . $number] = $wireName;
+            $diagnostics->warning(
+                sprintf('Property "%s" becomes $%s, which "%s" already uses, so it is $%s; set "x-php-name" to name it, in the document or "propertyNames" of the source.', $wireName, $name, $holders[$key], $name . $number),
+                $schema->location(),
+            );
+        }
+
+        return $numbered;
     }
 
     /**
@@ -327,7 +358,7 @@ final class ClassBuilder
         return $this->names->spelledGroups($groups, fn (string $wireName): ?string => $this->names->propertyName($wireName));
     }
 
-    private function propertyName(string $wireName, Schema $schema, Diagnostics $diagnostics): ?string
+    private function propertyName(string $wireName, Schema $schema, bool $required, Diagnostics $diagnostics): ?string
     {
         if ($schema->extensions()->has('x-php-name')) {
             $override = $schema->extensions()->get('x-php-name');
@@ -340,7 +371,10 @@ final class ClassBuilder
 
         $name = $this->names->propertyName($wireName);
         if ($name === null) {
-            $diagnostics->warning(sprintf('Property name "%s" has no usable characters, so the class leaves it out; set "x-php-name" to keep it, in the document or "propertyNames" of the source.', $wireName), $schema->location());
+            $diagnostics->warning(
+                sprintf('Property name "%s" has no usable characters, so the class leaves it out%s; set "x-php-name" to keep it, in the document or "propertyNames" of the source.', $wireName, $required ? ', though it is required' : ''),
+                $schema->location(),
+            );
         }
 
         return $name;
