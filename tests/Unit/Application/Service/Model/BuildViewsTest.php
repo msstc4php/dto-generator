@@ -281,6 +281,20 @@ final class BuildViewsTest extends TestCase
         self::assertSame([], ModelFixture::messages($inline), 'the views name the inline classes apart');
     }
 
+    public function testNumbersANameThatOnlyLetterCaseTellsApartInEveryView(): void
+    {
+        $output = ModelFixture::views([
+            'Notary' => ['type' => 'object', 'properties' => ['name' => ['type' => 'string']]],
+            'notary' => ['type' => 'object', 'properties' => ['code' => ['type' => 'string']]],
+        ]);
+
+        self::assertSame(['App\Dto\Notary', 'App\Dto\Notary2'], array_keys(ModelFixture::classes($output)));
+        self::assertSame(
+            ['warning /project/api/openapi.yaml#/components/schemas/notary: Class App\Dto\Notary is already generated from /project/api/openapi.yaml#/components/schemas/Notary, so this one becomes App\Dto\Notary2; set "x-php-class-name" to name it, in the document or "classNames" of the source.'],
+            ModelFixture::messages($output),
+        );
+    }
+
     public function testIgnoresTheDirectionOfASkippedProperty(): void
     {
         $output = ModelFixture::views([

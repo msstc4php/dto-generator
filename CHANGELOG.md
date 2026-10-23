@@ -10,9 +10,9 @@ All notable changes to this package are documented here. The format follows
 
 - Named schemas whose names differ only in letter case or separators (DocuSign's `notary` and `Notary`, SendGrid's
   `metadata` and `_metadata`), and places a `$ref` points into that end in the same name (Linode's
-  `…/properties/replication_type`), no longer stop the generation: one that says the same as the schema holding the
-  name shares its class or enum, another is numbered from 2 with a warning, as inline schemas are. An explicit
-  `x-php-class-name` and a read or write suffix still make a clash an error.
+  `…/properties/replication_type`), no longer stop the generation: the later one is numbered from 2 with a warning,
+  after every named schema holds its name. An explicit `x-php-class-name` and a read or write suffix still make a
+  clash an error.
 
 ## [1.13.0] - 2026-10-23
 
