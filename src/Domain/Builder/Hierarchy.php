@@ -560,11 +560,13 @@ final class Hierarchy
                 $this->superseded->add($property->type());
                 $this->diagnostics->warning(
                     sprintf(
-                        'Property "%s" of %s is %s, which PHP lets no subclass of %s declare, and the class is a variant, which keeps its parent; the class keeps %s%s.',
+                        'Property "%s" of %s is %s, which %s; the class is a variant, which keeps its parent, so it keeps %s%s.',
                         $property->wireName(),
                         $fqcn,
                         $property->type()->describe(),
-                        $byWireName,
+                        $meet instanceof TypeModel
+                            ? sprintf('PHP lets no subclass of %s declare', $byWireName)
+                            : sprintf('has no value in common with the type %s declares, unless the two are classes of different read or write models', $byWireName),
                         $inherited->type()->describe(),
                         $property->isRequired() && !$inherited->isRequired() ? ' and does not require it' : '',
                     ),

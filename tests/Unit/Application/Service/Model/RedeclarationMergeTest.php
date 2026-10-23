@@ -244,8 +244,22 @@ final class RedeclarationMergeTest extends TestCase
 
         $messages = ModelFixture::messages($output);
         self::assertSame([], array_values(array_filter($messages, static fn (string $message): bool => strncmp($message, 'error', 5) === 0)));
-        self::assertCount(1, array_filter($messages, static fn (string $message): bool => strpos($message, 'is a variant, which keeps its parent; the class keeps App\\Dto\\Links|null and does not require it.') !== false));
+        self::assertCount(1, array_filter($messages, static fn (string $message): bool => strpos($message, 'is a variant, which keeps its parent, so it keeps App\\Dto\\Links|null and does not require it.') !== false));
         self::assertSame(['kind: string|null', 'links: App\\Dto\\Links|null'], ModelFixture::classes($output)['App\\Dto\\Pet']);
+    }
+
+    public function testSaysWhenAVariantDeclaresATypeWithNoValueInCommon(): void
+    {
+        $output = ModelFixture::build([
+            'Pet' => ['type' => 'object', 'properties' => ['kind' => ['type' => 'string'], 'n' => ['type' => 'integer']]],
+            'Cat' => ['allOf' => [self::PET, ['properties' => ['n' => ['type' => 'string']]]]],
+            'Animal' => ['oneOf' => [['$ref' => '#/components/schemas/Cat']], 'discriminator' => ['propertyName' => 'kind']],
+        ]);
+
+        self::assertContains(
+            'warning ' . self::AT . 'Cat/allOf/1/properties/n: Property "n" of App\\Dto\\Cat is string|null, which has no value in common with the type App\\Dto\\Pet declares, unless the two are classes of different read or write models; the class is a variant, which keeps its parent, so it keeps int|null.',
+            ModelFixture::messages($output),
+        );
     }
 
     /**
@@ -261,7 +275,7 @@ final class RedeclarationMergeTest extends TestCase
         ]);
 
         self::assertSame(
-            ['warning ' . self::AT . $at . ': Property "p" of App\\Dto\\Cat is App\\Dto\\Meta|null, which PHP lets no subclass of App\\Dto\\Pet declare, and the class is a variant, which keeps its parent; the class keeps array<array-key, mixed>|null.'],
+            ['warning ' . self::AT . $at . ': Property "p" of App\\Dto\\Cat is App\\Dto\\Meta|null, which PHP lets no subclass of App\\Dto\\Pet declare; the class is a variant, which keeps its parent, so it keeps array<array-key, mixed>|null.'],
             array_values(array_filter(ModelFixture::messages($output), static fn (string $message): bool => strpos($message, 'is a variant') !== false)),
         );
         self::assertNotContains('p: App\\Dto\\Meta|null', ModelFixture::classes($output)['App\\Dto\\Cat']);
