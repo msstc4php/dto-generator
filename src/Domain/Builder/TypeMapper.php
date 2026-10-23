@@ -129,20 +129,26 @@ final class TypeMapper
             return new MixedType();
         }
 
-        $members = $this->typed($schema->allOf(), false);
-        $typed = $this->withoutPlainObjects($members);
-        if (count($typed) > 1) {
+        $typed = $this->typed($schema->allOf(), false);
+        // A member that only says "object" adds nothing to one that is an object (`allOf: [$ref, {type: object}]`).
+        $specific = array_values(array_filter($typed, static fn (Schema $member): bool => !SchemaShape::isPlainObject($member)));
+        $plain = $specific === [] ? [] : array_values(array_filter($typed, static fn (Schema $member): bool => SchemaShape::isPlainObject($member)));
+        $specific = $specific === [] ? $typed : $specific;
+        if (count($specific) > 1) {
             $diagnostics->error('"allOf" combines several typed schemas that are not objects, which no PHP type expresses; keep one of them.', $schema->location());
 
             return new MixedType();
         }
 
-        if ($typed !== []) {
-            $type = $this->mapWithin($typed[0], $diagnostics, $aliases);
-            // A dropped `{type: object}` still rules out null, as every member of an allOf applies.
-            $dropped = array_filter($members, static fn (Schema $member): bool => !in_array($member, $typed, true) && !$member->isNullable());
-            if ($type instanceof NullableType && $dropped !== []) {
-                $type = $type->inner();
+        if ($specific !== []) {
+            $type = $this->mapWithin($specific[0], $diagnostics, $aliases);
+            if ($plain !== []) {
+                $type = $this->asObject($type, $plain, $diagnostics, $aliases);
+                if (!$type instanceof TypeModel) {
+                    $diagnostics->error('"allOf" combines several typed schemas that are not objects, which no PHP type expresses; keep one of them.', $schema->location());
+
+                    return new MixedType();
+                }
             }
 
             return $this->consts->narrow($schema, $type, $diagnostics);
@@ -346,43 +352,34 @@ final class TypeMapper
     }
 
     /**
-     * A member that only says "object" adds nothing to members that are objects (`allOf: [$ref, {type: object}]`); beside
-     * one that is not, it is a contradiction.
+     * The object part of a member's type that `{type: object}` members restrict: classes and maps, `null` only when each
+     * of those admits it; an untyped member takes theirs. Null when the member can be no object.
      *
-     * @param list<Schema> $typed
-     *
-     * @return list<Schema>
+     * @param non-empty-list<Schema> $plain
+     * @param array<string, true> $aliases
      */
-    private function withoutPlainObjects(array $typed): array
+    private function asObject(TypeModel $type, array $plain, Diagnostics $diagnostics, array $aliases): ?TypeModel
     {
-        $specific = array_values(array_filter($typed, static fn (Schema $member): bool => !SchemaShape::isPlainObject($member)));
-        foreach ($specific as $member) {
-            $target = $this->target($member);
-            // A reference the loader could not follow is reported there; it is taken for an object here.
-            if ($target->ref() === null && !SchemaShape::mayBeObject($target)) {
-                return $typed;
-            }
+        if ($type instanceof MixedType) {
+            return $this->mapWithin($plain[0], $diagnostics, $aliases);
         }
 
-        return $specific === [] ? $typed : $specific;
-    }
-
-    /**
-     * The schema a chain of `$ref` leads to; the last one reached when the chain breaks or loops.
-     *
-     * @param list<string> $seen
-     */
-    private function target(Schema $schema, array $seen = []): Schema
-    {
-        $ref = $schema->ref();
-        $key = $schema->location()->toString();
-        if ($ref === null || in_array($key, $seen, true)) {
-            return $schema;
+        $nullable = $type instanceof NullableType;
+        $inner = $type instanceof NullableType ? $type->inner() : $type;
+        $members = array_filter(
+            $inner instanceof UnionType ? $inner->members() : [$inner],
+            static fn (TypeModel $member): bool => $member instanceof ClassType || $member instanceof MapType,
+        );
+        if ($members === []) {
+            return null;
         }
 
-        $target = $this->graph->resolve(new ReferenceUse($ref, $schema->location()));
+        $object = UnionType::of(...$members);
+        foreach ($plain as $member) {
+            $nullable = $nullable && $member->isNullable();
+        }
 
-        return $target instanceof ResolvedSchema ? $this->target($target->schema(), [...$seen, $key]) : $schema;
+        return $nullable ? NullableType::of($object) : $object;
     }
 
     private function mixedEnum(Schema $schema, Diagnostics $diagnostics): TypeModel

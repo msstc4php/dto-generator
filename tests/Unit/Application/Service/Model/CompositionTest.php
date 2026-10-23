@@ -78,23 +78,55 @@ final class CompositionTest extends TestCase
                 'broken' => ['allOf' => [['$ref' => '#/components/schemas/Gone'], ['type' => 'object']]],
                 'looped' => ['allOf' => [['$ref' => '#/components/schemas/Loop'], ['type' => 'object']]],
                 'chained' => ['allOf' => [['$ref' => '#/components/schemas/NameAlias'], ['type' => 'object']]],
+                'wrapped' => ['allOf' => [['$ref' => '#/components/schemas/Wrapper'], ['type' => 'object']]],
+                'scalars' => ['allOf' => [['oneOf' => [['type' => 'string'], ['type' => 'integer']]], ['type' => 'object']]],
+                'either' => ['allOf' => [['$ref' => '#/components/schemas/TagOrName'], ['type' => 'object']]],
+                'money' => ['allOf' => [['$ref' => '#/components/schemas/Money'], ['type' => 'object']]],
             ]],
+            'Wrapper' => ['allOf' => [['$ref' => '#/components/schemas/Name']]],
+            'TagOrName' => ['oneOf' => [['$ref' => '#/components/schemas/MaybeTag'], ['type' => 'string']]],
+            'Money' => ['type' => 'object', 'x-php-type' => 'App\\Money'],
             'Loop' => ['$ref' => '#/components/schemas/Loop2'],
             'Loop2' => ['$ref' => '#/components/schemas/Loop'],
             'NameAlias' => ['$ref' => '#/components/schemas/Name'],
         ], [], ['*'], AllOfStrategy::EXTENDS, false);
 
         self::assertSame(
-            ['strict: App\\Dto\\MaybeTag', 'lenient: App\\Dto\\MaybeTag|null', 'name: mixed', 'broken: mixed', 'looped: mixed', 'chained: mixed'],
+            ['strict: App\\Dto\\MaybeTag', 'lenient: App\\Dto\\MaybeTag|null', 'name: mixed', 'broken: array<array-key, mixed>|null', 'looped: array<array-key, mixed>|null', 'chained: mixed', 'wrapped: mixed', 'scalars: mixed', 'either: App\\Dto\\MaybeTag|null', 'money: App\\Money|null'],
             ModelFixture::classes($output)['App\\Dto\\Holder'],
         );
         self::assertSame(
             [
                 "error {$at}Holder/properties/name: \"allOf\" combines several typed schemas that are not objects, which no PHP type expresses; keep one of them.",
                 "error {$at}Holder/properties/chained: \"allOf\" combines several typed schemas that are not objects, which no PHP type expresses; keep one of them.",
+                "error {$at}Holder/properties/wrapped: \"allOf\" combines several typed schemas that are not objects, which no PHP type expresses; keep one of them.",
+                "error {$at}Holder/properties/scalars: \"allOf\" combines several typed schemas that are not objects, which no PHP type expresses; keep one of them.",
             ],
             array_values(array_filter(ModelFixture::messages($output), static fn (string $message): bool => strpos($message, 'combines') !== false)),
         );
+    }
+
+    public function testReadsTheNullOfAnObjectMemberInOpenApi30AndSwagger20(): void
+    {
+        $tag = ['type' => 'object', 'properties' => ['name' => ['type' => 'string']]];
+        $openApi = ModelFixture::document(['openapi' => '3.0.3', 'components' => ['schemas' => [
+            'Tag' => $tag,
+            'Holder' => ['type' => 'object', 'required' => ['outer', 'member', 'plain'], 'properties' => [
+                'outer' => ['nullable' => true, 'allOf' => [['$ref' => '#/components/schemas/Tag'], ['type' => 'object']]],
+                'member' => ['allOf' => [['$ref' => '#/components/schemas/Tag'], ['type' => 'object', 'nullable' => true]]],
+                'plain' => ['allOf' => [['$ref' => '#/components/schemas/Tag'], ['type' => 'object']]],
+            ]],
+        ]]]);
+        $swagger = ModelFixture::document(['swagger' => '2.0', 'definitions' => [
+            'Tag' => $tag + ['x-nullable' => true],
+            'Holder' => ['type' => 'object', 'required' => ['strict', 'lenient'], 'properties' => [
+                'strict' => ['allOf' => [['$ref' => '#/definitions/Tag'], ['type' => 'object']]],
+                'lenient' => ['allOf' => [['$ref' => '#/definitions/Tag'], ['type' => 'object', 'x-nullable' => true]]],
+            ]],
+        ]]);
+
+        self::assertSame(['outer: App\\Dto\\Tag|null', 'member: App\\Dto\\Tag', 'plain: App\\Dto\\Tag'], ModelFixture::classes($openApi)['App\\Dto\\Holder']);
+        self::assertSame(['strict: App\\Dto\\Tag', 'lenient: App\\Dto\\Tag|null'], ModelFixture::classes($swagger)['App\\Dto\\Holder']);
     }
 
     public function testCollectsPropertiesOfInlineMembersAndOwnProperties(): void

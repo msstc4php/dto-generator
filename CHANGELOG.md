@@ -16,9 +16,10 @@ All notable changes to this package are documented here. The format follows
 
 ### Fixed
 
-- An `allOf` member that only says `type: object` beside a `$ref` (Asana, Bitbucket, Plaid) no longer makes the
-  `allOf` an error that combines several typed schemas: it adds nothing, so `allOf: [$ref: Tag, {type: object}]` is
-  `Tag`.
+- An `allOf` member that only says `type: object` beside another typed member (Asana, Bitbucket, Plaid) no longer
+  makes the `allOf` an error that combines several typed schemas: it keeps the object part of that member, so
+  `allOf: [$ref: Tag, {type: object}]` is `Tag`, without `null` unless the object member admits it too; beside a member
+  that can be no object it stays an error.
 
 ## [1.13.0] - 2026-10-23
 
