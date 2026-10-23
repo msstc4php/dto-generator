@@ -201,6 +201,20 @@ final class BuildTest extends TestCase
         self::assertSame(['replication_type: App\Dto\ReplicationType2|null', 'hosts: App\Dto\Hosts2|null'], ModelFixture::classes($output)['App\Dto\Postgres']);
     }
 
+    public function testKeepsTheDiscriminatorValueAndTheParentOfANumberedSchema(): void
+    {
+        $object = ['type' => 'object', 'required' => ['kind'], 'properties' => ['kind' => ['type' => 'string']]];
+        $output = ModelFixture::build([
+            'Pet' => ['oneOf' => [['$ref' => '#/components/schemas/Notary'], ['$ref' => '#/components/schemas/notary']], 'discriminator' => ['propertyName' => 'kind']],
+            'Notary' => $object,
+            'notary' => $object + ['description' => 'Another.'],
+            'Child' => ['allOf' => [['$ref' => '#/components/schemas/notary'], ['properties' => ['age' => ['type' => 'integer']]]]],
+        ]);
+
+        self::assertSame('abstract by kind {Notary: App\\Dto\\Notary, notary: App\\Dto\\Notary2}', ModelFixture::hierarchy($output)['App\\Dto\\Pet']);
+        self::assertSame('final extends App\\Dto\\Notary2', ModelFixture::hierarchy($output)['App\\Dto\\Child']);
+    }
+
     public function testSkipsSchemasMarkedWithXPhpSkip(): void
     {
         $at = self::AT;

@@ -157,7 +157,8 @@ final class Registry
     }
 
     /**
-     * Whether the name carries a read or write suffix, or the schema holding it got it with one.
+     * Whether the name carries a read or write suffix, or the schema holding it got it with one. It reads the short
+     * name the last {@see ClassName()} call for this name gave, so ask right after it.
      */
     public function involvesAView(ClassName $name): bool
     {
