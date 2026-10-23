@@ -553,10 +553,24 @@ final class Hierarchy
                     ),
                     $property->source(),
                 );
+            } elseif ($meet instanceof TypeModel && $inherited instanceof PropertyModel && $this->isOrExtendsAVariant($model)) {
+                // A parent that selects a variant must stay, so the variant cannot merge its members instead.
+                array_pop($kept);
+                $this->superseded->add($property->type());
+                $this->diagnostics->warning(
+                    sprintf(
+                        'Property "%s" of %s is %s, which PHP lets no subclass of %s declare, and the class is a variant, which keeps its parent; the class keeps %s.',
+                        $property->wireName(),
+                        $fqcn,
+                        $meet->describe(),
+                        $byWireName,
+                        $inherited->type()->describe(),
+                    ),
+                    $property->source(),
+                );
             } elseif ($byWireName !== null) {
                 $this->diagnostics->error(sprintf('Property "%s" of %s is already declared by %s.', $property->wireName(), $fqcn, $byWireName), $property->source());
-                // A parent that selects a variant must stay.
-                if ($meet instanceof TypeModel && !$this->isOrExtendsAVariant($model)) {
+                if ($meet instanceof TypeModel) {
                     $this->merges->add($model->source(), $property->wireName(), $property->source());
                 }
             } elseif ($byName !== null) {
