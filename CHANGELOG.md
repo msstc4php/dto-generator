@@ -6,6 +6,8 @@ All notable changes to this package are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.14.0] - 2026-10-23
+
 ### Changed
 
 - Named schemas whose names differ only in letter case or separators (DocuSign's `notary` and `Notary`, SendGrid's
@@ -484,7 +486,8 @@ First release.
 - A manifest per output directory: stale classes are deleted, files without the `@generated` header are never
   overwritten.
 
-[Unreleased]: https://github.com/msstc4php/dto-generator/compare/v1.13.0...HEAD
+[Unreleased]: https://github.com/msstc4php/dto-generator/compare/v1.14.0...HEAD
+[1.14.0]: https://github.com/msstc4php/dto-generator/compare/v1.13.0...v1.14.0
 [1.13.0]: https://github.com/msstc4php/dto-generator/compare/v1.12.0...v1.13.0
 [1.12.0]: https://github.com/msstc4php/dto-generator/compare/v1.11.0...v1.12.0
 [1.11.0]: https://github.com/msstc4php/dto-generator/compare/v1.10.0...v1.11.0
