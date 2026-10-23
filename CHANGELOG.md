@@ -6,6 +6,12 @@ All notable changes to this package are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- An `allOf` member that only says `type: object` beside a `$ref` (Asana, Bitbucket, Plaid) no longer makes the
+  `allOf` an error that combines several typed schemas: it adds nothing, so `allOf: [$ref: Tag, {type: object}]` is
+  `Tag`.
+
 ## [1.13.0] - 2026-10-23
 
 ### Added

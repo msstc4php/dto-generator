@@ -33,6 +33,37 @@ final class CompositionTest extends TestCase
         self::assertSame([], $this->inherited($output, 'App\Dto\Pet'));
     }
 
+    public function testReadsAMemberThatOnlySaysObjectAsNoMember(): void
+    {
+        $at = self::AT;
+        $tag = ['$ref' => '#/components/schemas/Tag'];
+        $output = ModelFixture::build([
+            'Tag' => ['type' => 'object', 'properties' => ['name' => ['type' => 'string']]],
+            'TagAlias' => ['allOf' => [$tag, ['type' => 'object', 'additionalProperties' => true, 'properties' => [], 'title' => 'T']]],
+            'Holder' => ['type' => 'object', 'properties' => [
+                'tag' => ['allOf' => [$tag, ['type' => 'object', 'description' => 'The tag.']]],
+                'alias' => ['$ref' => '#/components/schemas/TagAlias'],
+                'objects' => ['allOf' => [['type' => 'object'], ['type' => 'object', 'minProperties' => 1]]],
+                'contradiction' => ['allOf' => [['type' => 'string'], ['type' => 'object']]],
+                'map' => ['allOf' => [$tag, ['type' => 'object', 'additionalProperties' => ['type' => 'string']]]],
+            ]],
+        ]);
+
+        self::assertSame(['App\Dto\Tag', 'App\Dto\Holder'], array_keys(ModelFixture::classes($output)));
+        self::assertSame(
+            ['tag: App\Dto\Tag|null', 'alias: App\Dto\Tag|null', 'objects: mixed', 'contradiction: mixed', 'map: mixed'],
+            ModelFixture::classes($output)['App\Dto\Holder'],
+        );
+        self::assertSame(
+            [
+                "error {$at}Holder/properties/objects: \"allOf\" combines several typed schemas that are not objects, which no PHP type expresses; keep one of them.",
+                "error {$at}Holder/properties/contradiction: \"allOf\" combines several typed schemas that are not objects, which no PHP type expresses; keep one of them.",
+                "error {$at}Holder/properties/map: \"allOf\" combines several typed schemas that are not objects, which no PHP type expresses; keep one of them.",
+            ],
+            ModelFixture::messages($output),
+        );
+    }
+
     public function testCollectsPropertiesOfInlineMembersAndOwnProperties(): void
     {
         $output = ModelFixture::build([

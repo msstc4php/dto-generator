@@ -98,6 +98,26 @@ final class SchemaShape
         return $schema->ref() === null && $schema->types() !== [] && $schema->nonNullTypes() === [] && !self::isComposed($schema);
     }
 
+    /**
+     * `type: object` and nothing that types or constrains its members: any object passes.
+     */
+    public static function isPlainObject(Schema $schema): bool
+    {
+        $additional = $schema->additionalProperties();
+
+        return $schema->ref() === null
+            && !$schema->extensions()->has('x-php-type')
+            && $schema->nonNullTypes() === [SchemaType::from(SchemaType::OBJECT)]
+            && $schema->propertyNames() === []
+            && $schema->required() === []
+            && !self::isComposed($schema)
+            && $schema->enum() === null
+            && !$schema->hasKeyword('const')
+            && !$schema->hasKeyword('patternProperties')
+            && !$schema->discriminator() instanceof Discriminator
+            && ($additional === null || $additional === true);
+    }
+
     public static function isComposed(Schema $schema): bool
     {
         return $schema->allOf() !== [] || self::hasUnion($schema);

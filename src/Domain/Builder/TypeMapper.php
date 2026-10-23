@@ -129,7 +129,7 @@ final class TypeMapper
             return new MixedType();
         }
 
-        $typed = $this->typed($schema->allOf(), false);
+        $typed = $this->withoutPlainObjects($this->typed($schema->allOf(), false));
         if (count($typed) > 1) {
             $diagnostics->error('"allOf" combines several typed schemas that are not objects, which no PHP type expresses; keep one of them.', $schema->location());
 
@@ -335,6 +335,25 @@ final class TypeMapper
                 || $member->propertyNames() !== []
                 || $member->extensions()->has('x-php-type'),
         ));
+    }
+
+    /**
+     * A member that only says "object" adds nothing to members that are objects (`allOf: [$ref, {type: object}]`).
+     *
+     * @param list<Schema> $typed
+     *
+     * @return list<Schema>
+     */
+    private function withoutPlainObjects(array $typed): array
+    {
+        $specific = array_values(array_filter($typed, static fn (Schema $member): bool => !SchemaShape::isPlainObject($member)));
+        foreach ($specific as $member) {
+            if ($member->ref() === null && !SchemaShape::mayBeObject($member)) {
+                return $typed;
+            }
+        }
+
+        return $specific === [] ? $typed : $specific;
     }
 
     private function mixedEnum(Schema $schema, Diagnostics $diagnostics): TypeModel
