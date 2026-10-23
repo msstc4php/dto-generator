@@ -20,6 +20,8 @@ All notable changes to this package are documented here. The format follows
 
 ### Fixed
 
+- A schema that holds itself in a list or a map through `$ref` (Vercel's `EdgeConfigItemValue`, a JSON value) is typed
+  with `mixed` inside, where it was an error that the `$ref` chain loops.
 - An `allOf` member that only says `type: object` beside another typed member (Asana, Bitbucket, Plaid) no longer
   makes the `allOf` an error that combines several typed schemas: it adds nothing, so
   `allOf: [$ref: Tag, {type: object}]` is `Tag`, without `null` unless the object member admits it too; beside a member

@@ -70,7 +70,8 @@ final class TypeMapper
     }
 
     /**
-     * @param array<string, true> $aliases alias schemas being inlined, to stop $ref loops
+     * @param array<string, bool> $aliases alias schemas being inlined, to stop $ref loops; false once a list or map holds
+     *                                     the place, where a loop is a recursive structure
      */
     private function mapWithin(Schema $schema, Diagnostics $diagnostics, array $aliases): TypeModel
     {
@@ -80,7 +81,7 @@ final class TypeMapper
     }
 
     /**
-     * @param array<string, true> $aliases
+     * @param array<string, bool> $aliases
      */
     private function bareType(Schema $schema, Diagnostics $diagnostics, array $aliases): TypeModel
     {
@@ -209,7 +210,7 @@ final class TypeMapper
     /**
      * Null members make the union nullable; one member of unknown type makes all of it mixed.
      *
-     * @param array<string, true> $aliases
+     * @param array<string, bool> $aliases
      */
     private function union(Schema $schema, Diagnostics $diagnostics, array $aliases): TypeModel
     {
@@ -478,7 +479,7 @@ final class TypeMapper
     }
 
     /**
-     * @param array<string, true> $aliases
+     * @param array<string, bool> $aliases
      */
     private function reference(Schema $schema, string $ref, Diagnostics $diagnostics, array $aliases): TypeModel
     {
@@ -507,7 +508,10 @@ final class TypeMapper
         }
 
         if (isset($aliases[$key])) {
-            $diagnostics->error('The $ref chain loops back to itself without reaching an object schema.', $target->location());
+            // A value that holds itself in a list or map (a JSON value) has no PHP type for the inner levels.
+            if ($aliases[$key]) {
+                $diagnostics->error('The $ref chain loops back to itself without reaching an object schema.', $target->location());
+            }
 
             return new MixedType();
         }
@@ -518,7 +522,7 @@ final class TypeMapper
     }
 
     /**
-     * @param array<string, true> $aliases
+     * @param array<string, bool> $aliases
      */
     private function single(SchemaType $type, Schema $schema, Diagnostics $diagnostics, array $aliases): TypeModel
     {
@@ -538,11 +542,11 @@ final class TypeMapper
             case SchemaType::ARRAY:
                 $items = $schema->items();
 
-                return new ListType($items instanceof Schema ? $this->mapWithin($items, $diagnostics, $aliases) : new MixedType());
+                return new ListType($items instanceof Schema ? $this->mapWithin($items, $diagnostics, array_fill_keys(array_keys($aliases), false)) : new MixedType());
             default:
                 $additional = $schema->additionalProperties();
 
-                return new MapType($additional instanceof Schema ? $this->mapWithin($additional, $diagnostics, $aliases) : new MixedType());
+                return new MapType($additional instanceof Schema ? $this->mapWithin($additional, $diagnostics, array_fill_keys(array_keys($aliases), false)) : new MixedType());
         }
     }
 
