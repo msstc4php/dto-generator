@@ -350,7 +350,7 @@ final class ClassBuilder
     {
         $groups = [];
         foreach ($sources as [$wireName, $schema]) {
-            if (!isset($skipped[$wireName]) && !$schema->extensions()->has('x-php-name')) {
+            if (!isset($skipped[$wireName]) && self::explicitName($schema) === null) {
                 $plain = $this->names->propertyName($wireName);
                 $groups[$plain === null ? '' : Identifier::asciiLower($plain)][$wireName] = $wireName;
             }

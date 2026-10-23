@@ -149,6 +149,11 @@ final class ClassBuilderTest extends TestCase
                     "error {$at}/properties/URL/x-php-name: \"x-php-name\" must be a PHP identifier other than \"this\" and the superglobals.",
                 ],
             ],
+            'an invalid explicit name beside a sign' => [
+                ['type' => 'object', 'properties' => ['+1' => ['type' => 'integer', 'x-php-name' => 'this'], '-1' => ['type' => 'integer']]],
+                ['plus1' => '+1: int|null = NULL', 'minus1' => '-1: int|null = NULL'],
+                ["error {$at}/properties/+1/x-php-name: \"x-php-name\" must be a PHP identifier other than \"this\" and the superglobals."],
+            ],
             'an explicit name another holds' => [
                 ['type' => 'object', 'properties' => ['url' => ['type' => 'string'], 'link' => ['type' => 'string', 'x-php-name' => 'URL']]],
                 ['url' => 'url: string|null = NULL'],
