@@ -63,12 +63,6 @@ All notable changes to this package are documented here. The format follows
 
 ### Fixed
 
-- `x-enum-descriptions` as a list gives the descriptions by position, as openapi-generator reads it (Zoom), unless
-  every position is also an enum value, at another position; it was an error for any enum but `0`, `1`, ….
-- A `type` that admits none of the enum values (Zoom's and Vimeo's `type: array` with the values of its items) ignores
-  the enum with a warning, where it was an error; the property keeps its type.
-- A `default` that does not fit the type (Xero's `default: "false"` of a boolean) is a warning, where it was an error;
-  the property defaults to `null`, as before.
 - The Docker image builds again: 1.10.0 was published without one, as `roave/security-advisories`, a development
   dependency, now conflicts with the PHP versions the generator supports. `composer audit` still checks the
   dependencies in CI.

@@ -183,12 +183,12 @@ final class EnumBuilderTest extends TestCase
             'only null' => [['enum' => [null]], false, ["error {$at}/enum: The enum has no value besides null."]],
             'float' => [['enum' => ['a', 1.5]], false, ["error {$at}/enum/1: Enum value 1.5 cannot back a PHP enum; use strings or integers."]],
             'boolean' => [['enum' => [true]], false, ["error {$at}/enum/0: Enum value true cannot back a PHP enum; use strings or integers."]],
-            'type mismatch' => [['type' => 'integer', 'enum' => ['a']], false, ["error {$at}/type: \"type\" does not match the enum values, which are strings."]],
+            'type mismatch' => [['type' => ['integer', 'string'], 'enum' => ['a']], false, ["error {$at}/type: \"type\" does not match the enum values, which are strings."]],
             'nullable type' => [['type' => ['string', 'null'], 'enum' => ['a']], true, []],
             'duplicate' => [['enum' => ["a/\u{00FC}", "a/\u{00FC}"]], true, ["warning {$at}/enum/1: Enum value \"a/\u{00FC}\" is listed twice."]],
             'string and integer one' => [['enum' => ['1', 1]], false, ["error {$at}/enum: The enum mixes strings and integers, which no PHP enum can back."]],
             'whole float' => [['enum' => [2.0]], false, ["error {$at}/enum/0: Enum value 2.0 cannot back a PHP enum; use strings or integers."]],
-            'integers declared as strings' => [['type' => 'string', 'enum' => [1]], false, ["error {$at}/type: \"type\" does not match the enum values, which are integers."]],
+            'integers declared as strings or arrays' => [['type' => ['string', 'array', 'integer'], 'enum' => [1]], false, ["error {$at}/type: \"type\" does not match the enum values, which are integers."]],
             'empty descriptions' => [['enum' => ['a'], 'x-enum-descriptions' => []], true, []],
             'descriptions as a list' => [['enum' => ['a'], 'x-enum-descriptions' => ['A']], true, []],
             'more descriptions than values' => [['enum' => ['a'], 'x-enum-descriptions' => ['A', 'B', 5]], true, [
@@ -307,6 +307,7 @@ final class EnumBuilderTest extends TestCase
             'strings by position' => [['enum' => ['master', 'sub'], 'x-enum-descriptions' => ['Master pays.', 'Sub pays.']], ['Master pays.', 'Sub pays.']],
             'integers by position' => [['enum' => [1, 2], 'x-enum-descriptions' => ['One.', 'Two.']], ['One.', 'Two.']],
             'numeric strings by position' => [['enum' => ['5', '0'], 'x-enum-descriptions' => ['Five.', 'Zero.']], ['Five.', 'Zero.']],
+            'numeric strings in order' => [['type' => 'string', 'enum' => ['0', '1'], 'x-enum-descriptions' => ['Zero.', 'One.']], ['Zero.', 'One.']],
         ];
     }
 }

@@ -232,7 +232,7 @@ final class EnumBuilder
         $known = array_map('strval', $values);
         $descriptions = [];
         // A list gives the description of the value at its position.
-        $positions = Json::isList($raw) ? $this->positions($schema) : null;
+        $positions = Json::isList($raw) ? SchemaShape::backableValues($schema) : null;
         foreach ($raw as $key => $description) {
             if ($positions !== null && !array_key_exists($key, $positions)) {
                 $diagnostics->error('"x-enum-descriptions" lists more descriptions than the enum has values.', $at->child((string) $key));
@@ -265,7 +265,7 @@ final class EnumBuilder
             return false;
         }
 
-        $positions = $this->positions($schema);
+        $positions = SchemaShape::backableValues($schema);
         $known = array_map('strval', $positions);
         $inOrder = true;
         foreach (array_keys($raw) as $position) {
@@ -273,21 +273,10 @@ final class EnumBuilder
                 return false;
             }
 
-            $inOrder = $inOrder && ($positions[$position] ?? null) === $position;
+            $inOrder = $inOrder && (string) ($positions[$position] ?? '') === (string) $position;
         }
 
         return !$inOrder;
-    }
-
-    /**
-     * The string and integer enum values in order, duplicates included, as openapi-generator counts the positions of its
-     * lists.
-     *
-     * @return list<int|string>
-     */
-    private function positions(Schema $schema): array
-    {
-        return array_values(array_filter($schema->enum() ?? [], static fn ($value): bool => is_int($value) || is_string($value)));
     }
 
     /**

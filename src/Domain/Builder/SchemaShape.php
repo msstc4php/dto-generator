@@ -20,9 +20,7 @@ final class SchemaShape
     public static function isEnum(Schema $schema): bool
     {
         // Booleans or numbers alone cannot back a PHP enum; an object with properties stays a class.
-        $values = array_filter($schema->enum() ?? [], static fn ($value): bool => is_int($value) || is_string($value));
-
-        return $values !== []
+        return self::backableValues($schema) !== []
             && !self::isClass($schema)
             && $schema->ref() === null
             && !$schema->extensions()->has('x-php-type')
@@ -32,13 +30,23 @@ final class SchemaShape
     }
 
     /**
+     * The string and integer values of the enum in order, duplicates included: what can back a PHP enum.
+     *
+     * @return list<int|string>
+     */
+    public static function backableValues(Schema $schema): array
+    {
+        return array_values(array_filter($schema->enum() ?? [], static fn ($value): bool => is_int($value) || is_string($value)));
+    }
+
+    /**
      * A `type` that admits none of the string or integer values of the enum (`type: array` with the values of its items):
      * the enum says nothing the type could hold, so it is ignored.
      */
     public static function contradictsItsEnum(Schema $schema): bool
     {
         $declared = array_map(static fn (SchemaType $type): string => $type->value(), $schema->nonNullTypes());
-        $values = array_filter($schema->enum() ?? [], static fn ($value): bool => is_int($value) || is_string($value));
+        $values = self::backableValues($schema);
         if ($declared === [] || $values === []) {
             return false;
         }
@@ -78,7 +86,7 @@ final class SchemaShape
         $strings = array_filter($values, 'is_string');
         $ints = array_filter($values, 'is_int');
 
-        return $strings !== [] && $ints !== [] && count($strings) + count($ints) === count($values);
+        return $strings !== [] && $ints !== [] && count($strings) + count($ints) === count($values) && !self::contradictsItsEnum($schema);
     }
 
     /**
