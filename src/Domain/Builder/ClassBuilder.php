@@ -87,8 +87,10 @@ final class ClassBuilder
         ReadWriteMode::check($schema, $diagnostics);
         $view = $this->view instanceof PropertyView && $this->view->appliesTo($schema) ? $this->view : null;
         // The other view's properties are left out quietly, unlike x-php-skip.
-        $skipped = self::skippedWireNames($sources) + ($view instanceof PropertyView ? $view->excluded(self::kept($sources)) : []);
-        $spelled = $this->spelledNames($sources, self::skippedWireNames($sources));
+        $unwanted = self::skippedWireNames($sources);
+        $skipped = $unwanted + ($view instanceof PropertyView ? $view->excluded(self::kept($sources)) : []);
+        $spelled = $this->spelledNames($sources, $unwanted);
+        $spelled = array_replace($spelled, $this->numberedNames($sources, $unwanted, $spelled, $diagnostics));
         foreach ($sources as [$wireName, $propertySchema]) {
             ExtensionVocabulary::checkProperty($propertySchema, $diagnostics, $this->aliases);
             if (self::isSkipped($propertySchema, $diagnostics) && $composition->isRequired($wireName)) {
@@ -260,7 +262,7 @@ final class ClassBuilder
      */
     private function property(string $wireName, Schema $schema, bool $required, array $spelled, Diagnostics $diagnostics): ?PropertyModel
     {
-        $name = $spelled[$wireName] ?? $this->propertyName($wireName, $schema, $diagnostics);
+        $name = $this->propertyName($wireName, $schema, $required, $spelled[$wireName] ?? null, $diagnostics);
         if ($name === null) {
             return null;
         }
@@ -285,6 +287,55 @@ final class ClassBuilder
     }
 
     /**
+     * A property whose PHP name another one of the class has first (letter case ignored, as accessors are) is numbered
+     * from 2 past every name a property has by itself, an explicit one included, alike for every view and every allOf
+     * member that declares it; an `x-php-name` that clashes stays an error, reported where the property is built.
+     *
+     * @param list<array{string, Schema}> $sources
+     * @param array<array-key, string> $skipped by wire name
+     * @param array<array-key, string> $spelled by wire name
+     *
+     * @return array<array-key, string> by wire name, a numeric one as an int
+     */
+    private function numberedNames(array $sources, array $skipped, array $spelled, Diagnostics $diagnostics): array
+    {
+        $names = [];
+        foreach ($sources as [$wireName, $schema]) {
+            $explicit = $this->explicitName($schema);
+            $name = $explicit ?? $spelled[$wireName] ?? $this->names->propertyName($wireName);
+            if (!isset($skipped[$wireName]) && !isset($names[$wireName]) && $name !== null) {
+                $names[$wireName] = [$name, $explicit !== null, $schema];
+            }
+        }
+
+        $natural = array_flip(array_map(static fn (array $entry): string => Identifier::asciiLower($entry[0]), $names));
+        $holders = [];
+        $numbered = [];
+        foreach ($names as $wireName => [$name, $explicit, $schema]) {
+            $key = Identifier::asciiLower($name);
+            if (!isset($holders[$key]) || $explicit) {
+                $holders[$key] ??= $wireName;
+
+                continue;
+            }
+
+            $number = 2;
+            while (isset($holders[$key . $number]) || isset($natural[$key . $number])) {
+                $number++;
+            }
+
+            $numbered[$wireName] = $name . $number;
+            $holders[$key . $number] = $wireName;
+            $diagnostics->warning(
+                sprintf('Property "%s" becomes $%s, which "%s" already uses, so it is $%s; set "x-php-name" to name it, in the document or "propertyNames" of the source.', $wireName, $name, $holders[$key], $name . $number),
+                $schema->location(),
+            );
+        }
+
+        return $numbered;
+    }
+
+    /**
      * Names that only their signs tell apart ("+1" and "-1", "utc+1" and "utc-1"), or that have no other characters
      * ("*"), get their signs as words ({@see NameResolver::spelledGroups()}), in every view alike; a name one no other
      * matches stays as it is. Spelled names that would meet another name leave every name as it is, and the collision
@@ -299,7 +350,7 @@ final class ClassBuilder
     {
         $groups = [];
         foreach ($sources as [$wireName, $schema]) {
-            if (!isset($skipped[$wireName]) && !$schema->extensions()->has('x-php-name')) {
+            if (!isset($skipped[$wireName]) && self::explicitName($schema) === null) {
                 $plain = $this->names->propertyName($wireName);
                 $groups[$plain === null ? '' : Identifier::asciiLower($plain)][$wireName] = $wireName;
             }
@@ -308,20 +359,37 @@ final class ClassBuilder
         return $this->names->spelledGroups($groups, fn (string $wireName): ?string => $this->names->propertyName($wireName));
     }
 
-    private function propertyName(string $wireName, Schema $schema, Diagnostics $diagnostics): ?string
+    /**
+     * The name `x-php-name` gives, when it is one PHP accepts.
+     */
+    private function explicitName(Schema $schema): ?string
     {
-        if ($schema->extensions()->has('x-php-name')) {
-            $override = $schema->extensions()->get('x-php-name');
-            if (is_string($override) && Identifier::isValid($override) && $override !== 'this' && !Identifier::isSuperglobal($override)) {
-                return $override;
-            }
+        $override = $schema->extensions()->has('x-php-name') ? $schema->extensions()->get('x-php-name') : null;
 
+        return is_string($override) && Identifier::isValid($override) && $override !== 'this' && !Identifier::isSuperglobal($override) ? $override : null;
+    }
+
+    /**
+     * A declaration with its own x-php-name takes it, whatever name another declaration of the property got; else the
+     * spelled or numbered name the class gave it.
+     */
+    private function propertyName(string $wireName, Schema $schema, bool $required, ?string $given, Diagnostics $diagnostics): ?string
+    {
+        $override = $this->explicitName($schema);
+        if ($override !== null) {
+            return $override;
+        }
+
+        if ($schema->extensions()->has('x-php-name')) {
             $diagnostics->error('"x-php-name" must be a PHP identifier other than "this" and the superglobals.', $schema->location()->child('x-php-name'));
         }
 
-        $name = $this->names->propertyName($wireName);
+        $name = $given ?? $this->names->propertyName($wireName);
         if ($name === null) {
-            $diagnostics->error(sprintf('Property name "%s" has no usable characters; set "x-php-name", in the document or "propertyNames" of the source.', $wireName), $schema->location());
+            $diagnostics->warning(
+                sprintf('Property name "%s" has no usable characters, so the class leaves it out%s; set "x-php-name" to keep it, in the document or "propertyNames" of the source.', $wireName, $required ? ', though it is required' : ''),
+                $schema->location(),
+            );
         }
 
         return $name;

@@ -154,6 +154,21 @@ final class PropertyModel
         );
     }
 
+    public function withName(string $name): self
+    {
+        return new self(
+            $name,
+            $this->wireName,
+            $this->type,
+            $this->required,
+            $this->default,
+            $this->doc,
+            $this->source,
+            $this->attributes,
+            $this->additionalProperties,
+        );
+    }
+
     public function withAddedAttributes(AttributeModel ...$attributes): self
     {
         return new self(

@@ -115,13 +115,59 @@ final class ClassBuilderTest extends TestCase
         return [
             'names colliding after camelCase' => [
                 ['type' => 'object', 'properties' => ['user_name' => ['type' => 'string'], 'userName' => ['type' => 'string'], 'id' => ['type' => 'string']]],
-                ['userName' => 'user_name: string|null = NULL', 'id' => 'id: string|null = NULL'],
-                ["error {$at}/properties/userName: Property \"userName\" becomes \$userName, which \"user_name\" already uses; set \"x-php-name\" on one of them, in the document or \"propertyNames\" of the source."],
+                ['userName' => 'user_name: string|null = NULL', 'userName2' => 'userName: string|null = NULL', 'id' => 'id: string|null = NULL'],
+                ["warning {$at}/properties/userName: Property \"userName\" becomes \$userName, which \"user_name\" already uses, so it is \$userName2; set \"x-php-name\" to name it, in the document or \"propertyNames\" of the source."],
+            ],
+            'a number another name holds' => [
+                ['type' => 'object', 'properties' => ['prefs/background' => ['type' => 'string'], 'prefs_background' => ['type' => 'string'], 'prefsBackground2' => ['type' => 'string']]],
+                ['prefsBackground' => 'prefs/background: string|null = NULL', 'prefsBackground3' => 'prefs_background: string|null = NULL', 'prefsBackground2' => 'prefsBackground2: string|null = NULL'],
+                ["warning {$at}/properties/prefs_background: Property \"prefs_background\" becomes \$prefsBackground, which \"prefs/background\" already uses, so it is \$prefsBackground3; set \"x-php-name\" to name it, in the document or \"propertyNames\" of the source."],
+            ],
+            'a number another number holds' => [
+                ['type' => 'object', 'properties' => ['ab' => ['type' => 'string'], 'a_b' => ['type' => 'string'], 'AB' => ['type' => 'string']]],
+                ['ab' => 'ab: string|null = NULL', 'aB2' => 'a_b: string|null = NULL', 'ab3' => 'AB: string|null = NULL'],
+                [
+                    "warning {$at}/properties/a_b: Property \"a_b\" becomes \$aB, which \"ab\" already uses, so it is \$aB2; set \"x-php-name\" to name it, in the document or \"propertyNames\" of the source.",
+                    "warning {$at}/properties/AB: Property \"AB\" becomes \$ab, which \"ab\" already uses, so it is \$ab3; set \"x-php-name\" to name it, in the document or \"propertyNames\" of the source.",
+                ],
+            ],
+            'a number an explicit name further down holds' => [
+                ['type' => 'object', 'properties' => ['url' => ['type' => 'string'], 'URL' => ['type' => 'string'], 'link' => ['type' => 'string', 'x-php-name' => 'url2']]],
+                ['url' => 'url: string|null = NULL', 'url3' => 'URL: string|null = NULL', 'url2' => 'link: string|null = NULL'],
+                ["warning {$at}/properties/URL: Property \"URL\" becomes \$url, which \"url\" already uses, so it is \$url3; set \"x-php-name\" to name it, in the document or \"propertyNames\" of the source."],
+            ],
+            'a required empty name' => [
+                ['type' => 'object', 'required' => [''], 'properties' => ['' => ['type' => 'string']]],
+                [],
+                ["warning {$at}/properties/: Property name \"\" has no usable characters, so the class leaves it out, though it is required; set \"x-php-name\" to keep it, in the document or \"propertyNames\" of the source."],
+            ],
+            'an invalid explicit name on a numbered property' => [
+                ['type' => 'object', 'properties' => ['url' => ['type' => 'string'], 'URL' => ['type' => 'string', 'x-php-name' => 5]]],
+                ['url' => 'url: string|null = NULL', 'url2' => 'URL: string|null = NULL'],
+                [
+                    "warning {$at}/properties/URL: Property \"URL\" becomes \$url, which \"url\" already uses, so it is \$url2; set \"x-php-name\" to name it, in the document or \"propertyNames\" of the source.",
+                    "error {$at}/properties/URL/x-php-name: \"x-php-name\" must be a PHP identifier other than \"this\" and the superglobals.",
+                ],
+            ],
+            'an invalid explicit name beside a sign' => [
+                ['type' => 'object', 'properties' => ['+1' => ['type' => 'integer', 'x-php-name' => 'this'], '-1' => ['type' => 'integer']]],
+                ['plus1' => '+1: int|null = NULL', 'minus1' => '-1: int|null = NULL'],
+                ["error {$at}/properties/+1/x-php-name: \"x-php-name\" must be a PHP identifier other than \"this\" and the superglobals."],
+            ],
+            'an explicit name another holds' => [
+                ['type' => 'object', 'properties' => ['url' => ['type' => 'string'], 'link' => ['type' => 'string', 'x-php-name' => 'URL']]],
+                ['url' => 'url: string|null = NULL'],
+                ["error {$at}/properties/link: Property \"link\" becomes \$URL, which \"url\" already uses; set \"x-php-name\" on one of them, in the document or \"propertyNames\" of the source."],
+            ],
+            'an empty name' => [
+                ['type' => 'object', 'properties' => ['' => ['type' => 'string'], 'id' => ['type' => 'string']]],
+                ['id' => 'id: string|null = NULL'],
+                ["warning {$at}/properties/: Property name \"\" has no usable characters, so the class leaves it out; set \"x-php-name\" to keep it, in the document or \"propertyNames\" of the source."],
             ],
             'names colliding by case' => [
                 ['type' => 'object', 'properties' => ['URL' => ['type' => 'string'], 'url' => ['type' => 'string']]],
-                ['url' => 'URL: string|null = NULL'],
-                ["error {$at}/properties/url: Property \"url\" becomes \$url, which \"URL\" already uses; set \"x-php-name\" on one of them, in the document or \"propertyNames\" of the source."],
+                ['url' => 'URL: string|null = NULL', 'url2' => 'url: string|null = NULL'],
+                ["warning {$at}/properties/url: Property \"url\" becomes \$url, which \"URL\" already uses, so it is \$url2; set \"x-php-name\" to name it, in the document or \"propertyNames\" of the source."],
             ],
             'x-php-name' => [
                 ['type' => 'object', 'properties' => ['user_name' => ['type' => 'string', 'x-php-name' => 'login']]],
@@ -141,7 +187,7 @@ final class ClassBuilderTest extends TestCase
             'no usable name' => [
                 ['type' => 'object', 'properties' => ['§§§' => ['type' => 'string'], 'id' => ['type' => 'string']]],
                 ['id' => 'id: string|null = NULL'],
-                ["error {$at}/properties/§§§: Property name \"§§§\" has no usable characters; set \"x-php-name\", in the document or \"propertyNames\" of the source."],
+                ["warning {$at}/properties/§§§: Property name \"§§§\" has no usable characters, so the class leaves it out; set \"x-php-name\" to keep it, in the document or \"propertyNames\" of the source."],
             ],
             'names only their signs tell apart' => [
                 ['type' => 'object', 'properties' => ['+1' => ['type' => 'integer'], '-1' => ['type' => 'integer'], '*' => ['type' => 'string'], '2' => ['type' => 'string']]],

@@ -72,7 +72,6 @@ final class NameOverridesTest extends TestCase
         self::assertSame(
             [
                 'error ' . $directory . '/openapi.yaml#/components/schemas/fields/x-php-class-name: "x-php-class-name" must be a PHP identifier that is not a reserved word.',
-                'error ' . $directory . '/openapi.yaml#/components/schemas/Fields/properties/issueType: Property "issueType" becomes $issueType, which "issuetype" already uses; set "x-php-name" on one of them, in the document or "propertyNames" of the source.',
             ],
             array_map(static fn (Diagnostic $d): string => $d->toString(), array_merge($diagnostics->errors(), $schemas->diagnostics()->errors(), $model->diagnostics()->errors())),
         );

@@ -295,6 +295,42 @@ final class BuildViewsTest extends TestCase
         );
     }
 
+    public function testNumbersAClashingPropertyAlikeInEveryViewAndMember(): void
+    {
+        $output = ModelFixture::views([
+            'User' => ['allOf' => [
+                ['type' => 'object', 'properties' => ['url' => ['type' => 'string', 'readOnly' => true], 'URL' => ['type' => 'string']]],
+                ['properties' => ['URL' => ['type' => 'string', 'minLength' => 1]]],
+            ]],
+        ]);
+
+        $names = [];
+        foreach ($output->classes() as $class) {
+            $names[$class->model()->name()->shortName()] = array_map(static fn (PropertyModel $property): string => $property->name() . ' <- ' . $property->wireName(), $class->model()->properties());
+        }
+
+        self::assertSame(['UserRead' => ['url <- url', 'url2 <- URL'], 'UserWrite' => ['url2 <- URL']], $names);
+        self::assertSame(
+            ['warning /project/api/openapi.yaml#/components/schemas/User/allOf/0/properties/URL: Property "URL" becomes $url, which "url" already uses, so it is $url2; set "x-php-name" to name it, in the document or "propertyNames" of the source.'],
+            ModelFixture::messages($output),
+        );
+    }
+
+    public function testGivesAnExplicitNameToItsDeclarationOfANumberedProperty(): void
+    {
+        $output = ModelFixture::build([
+            'User' => ['allOf' => [
+                ['type' => 'object', 'properties' => ['url' => ['type' => 'string'], 'URL' => ['type' => 'string']]],
+                ['properties' => ['URL' => ['type' => 'string', 'x-php-name' => 'link']]],
+            ]],
+        ]);
+
+        self::assertContains(
+            'error /project/api/openapi.yaml#/components/schemas/User/allOf/1/properties/URL: Property "URL" of App\\Dto\\User has another PHP name or default here than in an earlier allOf member.',
+            ModelFixture::messages($output),
+        );
+    }
+
     public function testIgnoresTheDirectionOfASkippedProperty(): void
     {
         $output = ModelFixture::views([

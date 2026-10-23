@@ -13,6 +13,10 @@ All notable changes to this package are documented here. The format follows
   `…/properties/replication_type`), no longer stop the generation: the later one is numbered from 2 with a warning,
   after every named schema holds its name. An explicit `x-php-class-name` and a read or write suffix still make a
   clash an error.
+- Properties of one class that become the same PHP name (Trello's `prefs/background` and `prefs_background`) no longer
+  stop the generation: the later one is numbered from 2 with a warning; an explicit `x-php-name` that clashes is still an
+  error. A property name with no usable characters (SendGrid's `""`) leaves the property out with a warning, where it
+  was an error.
 
 ### Fixed
 
