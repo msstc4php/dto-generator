@@ -10,6 +10,9 @@ use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaType;
 
 final class SchemaShape
 {
+    /** Keywords an `allOf` member may have without restricting what the others admit: a member cannot widen them. */
+    private const SAYS_NOTHING_IN_ALL_OF = [...ObjectShape::ANNOTATIONS, 'readOnly', 'writeOnly', 'nullable', 'deprecated', 'default'];
+
     private function __construct()
     {
     }
@@ -128,6 +131,26 @@ final class SchemaShape
     public static function isNull(Schema $schema): bool
     {
         return $schema->ref() === null && $schema->types() !== [] && $schema->nonNullTypes() === [] && !self::isComposed($schema);
+    }
+
+    /**
+     * An `allOf` member that only annotates, or only says "object": every value that passes the other members passes it.
+     */
+    public static function addsNothing(Schema $schema): bool
+    {
+        return self::isPlainObject($schema) || (
+            $schema->types() === []
+            && $schema->ref() === null
+            && !$schema->extensions()->has('x-php-type')
+            && $schema->propertyNames() === []
+            && $schema->required() === []
+            && !self::isComposed($schema)
+            && $schema->enum() === null
+            && array_diff($schema->keywordNames(), self::SAYS_NOTHING_IN_ALL_OF) === []
+            && $schema->additionalProperties() === null
+            && !$schema->items() instanceof Schema
+            && !$schema->discriminator() instanceof Discriminator
+        );
     }
 
     /**

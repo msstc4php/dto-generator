@@ -22,6 +22,9 @@ All notable changes to this package are documented here. The format follows
 
 - A schema that holds itself in a list or a map through `$ref` (Vercel's `EdgeConfigItemValue`, a JSON value) is typed
   with `mixed` inside, where it was an error that the `$ref` chain loops.
+- A named `allOf` of one `$ref` to a class with a `discriminator` (Twitter's problems, Bitbucket's states) is a
+  subclass that adds nothing, where it was another name of the class, so a `mapping` that names it failed. Without a
+  `mapping`, every such schema is a subclass, a described copy of the base too; with one, only those it names.
 - An `allOf` member that only says `type: object` beside another typed member (Asana, Bitbucket, Plaid) no longer
   makes the `allOf` an error that combines several typed schemas: it adds nothing, so
   `allOf: [$ref: Tag, {type: object}]` is `Tag`, without `null` unless the object member admits it too; beside a member

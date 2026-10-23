@@ -26,6 +26,7 @@ final class DiscriminatorTest extends TestCase
 
         self::assertSame(['1'], $discriminator->values());
         self::assertSame('#/components/schemas/V1', $discriminator->refFor('1'));
+        self::assertSame([['1', '#/components/schemas/V1']], $discriminator->entries());
     }
 
     public function testRejectsAnEmptyPropertyName(): void

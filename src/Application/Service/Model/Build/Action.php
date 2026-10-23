@@ -33,6 +33,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\EnumModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\Identifier;
 use MSSTC4PHP\DtoGenerator\Domain\Model\PropertyModel;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Discriminator;
+use MSSTC4PHP\DtoGenerator\Domain\Schema\ReferenceUse;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\ResolvedSchema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaGraph;
@@ -95,7 +96,7 @@ final class Action
                 continue;
             }
 
-            $isClass = SchemaShape::isClass($schema);
+            $isClass = SchemaShape::isClass($schema) || $this->isBareSubtype($schema, $input->graph());
             $isEnum = SchemaShape::isEnum($schema);
             if ($isClass) {
                 ExtensionVocabulary::checkClass($schema, $diagnostics, $input->aliases());
@@ -665,6 +666,36 @@ final class Action
     private function givesWay(ClassName $name, Schema $schema, Registry $registry): bool
     {
         return $registry->isTaken($name) && !$schema->extensions()->has('x-php-class-name') && !$registry->involvesAView($name);
+    }
+
+    /**
+     * `allOf: [$ref: Base]` alone (members that add nothing aside) reads as another name of Base, but for a base with a
+     * discriminator it is how a subtype that adds nothing is written (Twitter's problems): a class extending Base, when
+     * the base has no mapping or its mapping names the schema.
+     */
+    private function isBareSubtype(Schema $schema, SchemaGraph $graph): bool
+    {
+        $members = array_values(array_filter($schema->allOf(), static fn (Schema $member): bool => !SchemaShape::addsNothing($member)));
+        if (count($members) !== 1 || !SchemaShape::mayBeObject($schema) || SchemaShape::hasUnion($schema) || $schema->propertyNames() !== []) {
+            return false;
+        }
+
+        $chain = $graph->chain($members[0]);
+        $base = $chain[count($chain) - 1];
+        // A chain that breaks or loops ends in a reference; an inline member that is a class made the schema one already.
+        $discriminator = $base->ref() === null && SchemaShape::isClass($base) ? $base->discriminator() : null;
+        if (!$discriminator instanceof Discriminator) {
+            return false;
+        }
+
+        $at = $schema->location()->toString();
+        $named = $discriminator->entries() === [];
+        foreach ($discriminator->entries() as [$value, $ref]) {
+            $target = $graph->resolve(new ReferenceUse($ref, $base->location()->child('discriminator', 'mapping', $value)));
+            $named = $named || ($target instanceof ResolvedSchema && in_array($at, array_map(static fn (Schema $link): string => $link->location()->toString(), $graph->chain($target->schema())), true));
+        }
+
+        return $named;
     }
 
     /**
