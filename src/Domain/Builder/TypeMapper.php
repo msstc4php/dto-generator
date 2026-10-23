@@ -420,6 +420,16 @@ final class TypeMapper
         return $type;
     }
 
+    /**
+     * @param array<string, bool> $aliases
+     *
+     * @return array<string, bool>
+     */
+    private function contained(array $aliases): array
+    {
+        return array_fill_keys(array_keys($aliases), false);
+    }
+
     private function mixedEnum(Schema $schema, Diagnostics $diagnostics): TypeModel
     {
         $declared = array_map(static fn (SchemaType $type): string => $type->value(), $schema->nonNullTypes());
@@ -542,11 +552,11 @@ final class TypeMapper
             case SchemaType::ARRAY:
                 $items = $schema->items();
 
-                return new ListType($items instanceof Schema ? $this->mapWithin($items, $diagnostics, array_fill_keys(array_keys($aliases), false)) : new MixedType());
+                return new ListType($items instanceof Schema ? $this->mapWithin($items, $diagnostics, $this->contained($aliases)) : new MixedType());
             default:
                 $additional = $schema->additionalProperties();
 
-                return new MapType($additional instanceof Schema ? $this->mapWithin($additional, $diagnostics, array_fill_keys(array_keys($aliases), false)) : new MixedType());
+                return new MapType($additional instanceof Schema ? $this->mapWithin($additional, $diagnostics, $this->contained($aliases)) : new MixedType());
         }
     }
 

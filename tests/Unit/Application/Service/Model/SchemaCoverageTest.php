@@ -660,7 +660,9 @@ final class SchemaCoverageTest extends TestCase
         $output = ModelFixture::build([
             'Value' => ['type' => 'null', 'oneOf' => [
                 ['type' => 'string'],
+                ['type' => 'number'],
                 ['type' => 'boolean'],
+                ['type' => 'object'],
                 ['type' => 'array', 'items' => ['$ref' => '#/components/schemas/Value']],
             ]],
             'Tree' => ['type' => 'object', 'additionalProperties' => ['$ref' => '#/components/schemas/Tree']],
@@ -670,10 +672,11 @@ final class SchemaCoverageTest extends TestCase
                 'v' => ['$ref' => '#/components/schemas/Value'],
                 't' => ['$ref' => '#/components/schemas/Tree'],
                 'l' => ['$ref' => '#/components/schemas/Loop'],
+                'll' => ['type' => 'array', 'items' => ['$ref' => '#/components/schemas/Loop']],
             ]],
         ]);
 
-        self::assertSame(['v: string|bool|list<mixed>|null', 't: array<array-key, mixed>', 'l: mixed'], ModelFixture::classes($output)['App\\Dto\\C']);
+        self::assertSame(['v: string|float|bool|array<array-key, mixed>|list<mixed>|null', 't: array<array-key, mixed>', 'l: mixed', 'll: list<mixed>|null'], ModelFixture::classes($output)['App\\Dto\\C']);
         self::assertSame(['error /project/api/openapi.yaml#/components/schemas/Loop: The $ref chain loops back to itself without reaching an object schema.'], ModelFixture::messages($output));
     }
 
