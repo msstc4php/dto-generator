@@ -157,6 +157,15 @@ final class Registry
     }
 
     /**
+     * Whether the name carries a read or write suffix, or the schema holding it got it with one.
+     */
+    public function involvesAView(ClassName $name): bool
+    {
+        return ($this->unclaimed[$name->fqcn()] ?? $name->shortName()) !== $name->shortName()
+            || ($this->views[Identifier::asciiLower($name->fqcn())] ?? false);
+    }
+
+    /**
      * Claims a class or enum name; a second schema claiming it (letter case ignored) is an error.
      */
     public function claim(ClassName $name, Schema $schema, Diagnostics $diagnostics): bool
@@ -177,7 +186,7 @@ final class Registry
                     $name->fqcn(),
                     $taker,
                     VariantOrigin::isVariant($schema->location()) ? ' (on the schema this one is distributed from or on a referenced variant, or a "title" on an inline one)' : '',
-                    $suffixed || ($this->views[$lower] ?? false) ? ', or change dto.readWriteSuffixes' : '',
+                    $this->involvesAView($name) ? ', or change dto.readWriteSuffixes' : '',
                 ),
                 $schema->location(),
             );

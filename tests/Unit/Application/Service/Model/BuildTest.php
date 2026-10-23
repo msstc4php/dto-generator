@@ -119,18 +119,27 @@ final class BuildTest extends TestCase
     public static function namingProblems(): array
     {
         $object = ['type' => 'object', 'properties' => ['id' => []]];
+        $other = ['type' => 'object', 'properties' => ['code' => []]];
         $at = self::AT;
 
         return [
             'case-only collision' => [
-                ['User' => $object, 'user' => $object, 'Tag' => $object],
-                ['App\Dto\User', 'App\Dto\Tag'],
-                ["error {$at}user: Class App\\Dto\\User is already generated from {$at}User; set \"x-php-class-name\" on one of them, in the document or \"classNames\" of the source."],
+                ['User' => $object, 'user' => ['type' => 'object', 'properties' => ['name' => []]], 'USER' => $other, 'Tag' => $object],
+                ['App\Dto\User', 'App\Dto\User2', 'App\Dto\USER3', 'App\Dto\Tag'],
+                [
+                    "warning {$at}user: Class App\\Dto\\User is already generated from {$at}User, so this one becomes App\\Dto\\User2; set \"x-php-class-name\" to name it, in the document or \"classNames\" of the source.",
+                    "warning {$at}USER: Class App\\Dto\\USER is already generated from {$at}User, so this one becomes App\\Dto\\USER3; set \"x-php-class-name\" to name it, in the document or \"classNames\" of the source.",
+                ],
             ],
-            'separator collision' => [
-                ['user_profile' => $object, 'UserProfile' => $object],
-                ['App\Dto\UserProfile'],
-                ["error {$at}UserProfile: Class App\\Dto\\UserProfile is already generated from {$at}user_profile; set \"x-php-class-name\" on one of them, in the document or \"classNames\" of the source."],
+            'separator collision of the same schema' => [
+                ['user_profile' => $object, 'UserProfile' => $object, 'Holder' => ['type' => 'object', 'properties' => ['p' => ['$ref' => '#/components/schemas/UserProfile']]]],
+                ['App\Dto\UserProfile', 'App\Dto\Holder'],
+                [],
+            ],
+            'collision with an explicit name' => [
+                ['User' => $object, 'Person' => $other + ['x-php-class-name' => 'user']],
+                ['App\Dto\User'],
+                ["error {$at}Person: Class App\\Dto\\user is already generated from {$at}User; set \"x-php-class-name\" on one of them, in the document or \"classNames\" of the source."],
             ],
             'invalid override' => [
                 ['User' => $object + ['x-php-class-name' => 'List']],
@@ -148,6 +157,31 @@ final class BuildTest extends TestCase
                 ["error {$at}***: Schema name \"***\" has no usable characters; set \"x-php-class-name\", in the document or \"classNames\" of the source."],
             ],
         ];
+    }
+
+    public function testNamesReferencedPlacesThatTakeOneNameApart(): void
+    {
+        $at = self::AT;
+        $replication = ['type' => 'string', 'enum' => ['none', 'asynch']];
+        $output = ModelFixture::build([
+            'MySql' => ['type' => 'object', 'properties' => ['replication_type' => $replication, 'hosts' => ['type' => 'object', 'properties' => ['primary' => []]]]],
+            'Postgres' => ['type' => 'object', 'properties' => ['replication_type' => $replication, 'hosts' => ['type' => 'object', 'properties' => ['standby' => []]]]],
+            'MySqlRequest' => ['type' => 'object', 'properties' => [
+                'replication_type' => ['$ref' => '#/components/schemas/MySql/properties/replication_type'],
+                'hosts' => ['$ref' => '#/components/schemas/MySql/properties/hosts'],
+            ]],
+            'PostgresRequest' => ['type' => 'object', 'properties' => [
+                'replication_type' => ['$ref' => '#/components/schemas/Postgres/properties/replication_type'],
+                'hosts' => ['$ref' => '#/components/schemas/Postgres/properties/hosts'],
+            ]],
+        ]);
+
+        self::assertSame(
+            ["warning {$at}Postgres/properties/hosts: Class App\\Dto\\Hosts is already generated from {$at}MySql/properties/hosts, so this one becomes App\\Dto\\Hosts2; set \"x-php-class-name\" to name it, in the document or \"classNames\" of the source."],
+            ModelFixture::messages($output),
+        );
+        self::assertSame(['replication_type: App\Dto\ReplicationType|null', 'hosts: App\Dto\Hosts2|null'], ModelFixture::classes($output)['App\Dto\PostgresRequest']);
+        self::assertSame(['replication_type: App\Dto\ReplicationType|null', 'hosts: App\Dto\Hosts2|null'], ModelFixture::classes($output)['App\Dto\Postgres']);
     }
 
     public function testSkipsSchemasMarkedWithXPhpSkip(): void

@@ -136,7 +136,17 @@ final class Action
             }
 
             $short = $this->shortName($schema, $resolved->name(), $diagnostics);
-            $name = $short === null ? null : $registry->className($config->sources()[$source]->namespace(), $short, $schema);
+            $namespace = $config->sources()[$source]->namespace();
+            $name = $short === null ? null : $registry->className($namespace, $short, $schema);
+            // Names that differ only in letter case or separators (`User`, `user`) cannot both be PHP classes.
+            if ($name instanceof ClassName && $registry->isTaken($name) && !$schema->extensions()->has('x-php-class-name') && !$registry->involvesAView($name)) {
+                if ($this->reuses($name, $schema, $registry, $enums)) {
+                    continue;
+                }
+
+                $name = $this->numbered($schema, $name, $short, $namespace, $registry, $diagnostics);
+            }
+
             if ($name instanceof ClassName && $registry->claim($name, $schema, $diagnostics)) {
                 $this->declare($schema, $name, $source, $isEnum, $registry, $enums, $diagnostics);
             }
@@ -639,9 +649,17 @@ final class Action
             return null;
         }
 
+        return $this->numbered($candidate, $taken, $registry->baseOf($taken), $namespace, $registry, $diagnostics);
+    }
+
+    /**
+     * The first free name numbered from 2 after the base, with a warning.
+     */
+    private function numbered(Schema $candidate, ClassName $taken, string $base, string $namespace, Registry $registry, Diagnostics $diagnostics): ClassName
+    {
         $number = 2;
         do {
-            $name = $registry->className($namespace, $registry->baseOf($taken) . $number++, $candidate);
+            $name = $registry->className($namespace, $base . $number++, $candidate);
         } while ($registry->isTaken($name));
 
         $diagnostics->warning(
