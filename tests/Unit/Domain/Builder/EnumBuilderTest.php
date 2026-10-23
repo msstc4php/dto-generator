@@ -307,6 +307,7 @@ final class EnumBuilderTest extends TestCase
             'strings by position' => [['enum' => ['master', 'sub'], 'x-enum-descriptions' => ['Master pays.', 'Sub pays.']], ['Master pays.', 'Sub pays.']],
             'integers by position' => [['enum' => [1, 2], 'x-enum-descriptions' => ['One.', 'Two.']], ['One.', 'Two.']],
             'numeric strings by position' => [['enum' => ['5', '0'], 'x-enum-descriptions' => ['Five.', 'Zero.']], ['Five.', 'Zero.']],
+            'a value listed twice' => [['enum' => ['a', 'a', 'b'], 'x-enum-descriptions' => ['First.', 'Second.', 'B.']], ['First.', 'B.']],
             'numeric strings in order' => [['type' => 'string', 'enum' => ['0', '1'], 'x-enum-descriptions' => ['Zero.', 'One.']], ['Zero.', 'One.']],
         ];
     }

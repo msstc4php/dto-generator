@@ -245,7 +245,8 @@ final class EnumBuilder
                 $diagnostics->error(sprintf('There is no enum value "%s".', $value), $at->child((string) $key));
             } elseif (!is_string($description)) {
                 $diagnostics->error('An enum description must be a string.', $at->child((string) $key));
-            } else {
+            } elseif (!isset($descriptions[$value])) {
+                // A value listed twice keeps the description of its first position, as the enum keeps that one.
                 $descriptions[$value] = $description;
             }
         }
@@ -255,7 +256,8 @@ final class EnumBuilder
 
     /**
      * JSON decodes a map keyed 0..n-1 as a list, and openapi-generator lists descriptions by position, so a list is read
-     * only where both readings agree. Positions count every non-null value, duplicates included, as openapi-generator does.
+     * only where both readings agree. Positions count the string and integer values ({@see SchemaShape::backableValues()}),
+     * duplicates included, as openapi-generator does.
      *
      * @param array<array-key, mixed> $raw
      */
