@@ -96,6 +96,11 @@ state:
 Each description becomes the PHPDoc of its enum case, or of its constant before PHP 8.1. A key that is not an enum
 value is an error.
 
+A list gives the descriptions by position, as openapi-generator reads it (`x-enum-descriptions: [Just created., Payment
+received.]`); positions count the string and integer values, `null` left out. JSON decodes a map keyed `"0"`, `"1"`, …
+as a list too, so a list whose every position is also an enum value, at another position (`enum: [1, 0]`), is an error:
+write a map then.
+
 ## `x-enum-varnames`
 
 ```yaml

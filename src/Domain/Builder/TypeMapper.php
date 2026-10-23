@@ -157,7 +157,9 @@ final class TypeMapper
             );
         }
 
-        if ($schema->enum() !== null && !SchemaShape::isEnum($schema) && $booleans === null) {
+        if (SchemaShape::contradictsItsEnum($schema)) {
+            $diagnostics->warning('"type" admits none of the enum values, so the enum is ignored and the property keeps its type.', $schema->location()->child('type'));
+        } elseif ($schema->enum() !== null && !SchemaShape::isEnum($schema) && $booleans === null) {
             $diagnostics->warning(
                 'This enum has no string or integer value, so it is not generated and the property keeps its plain type.',
                 $schema->location(),
