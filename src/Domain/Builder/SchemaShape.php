@@ -27,7 +27,31 @@ final class SchemaShape
             && $schema->ref() === null
             && !$schema->extensions()->has('x-php-type')
             && !self::isComposed($schema)
-            && !self::isMixedEnum($schema);
+            && !self::isMixedEnum($schema)
+            && !self::contradictsItsEnum($schema);
+    }
+
+    /**
+     * A `type` that admits none of the string or integer values of the enum (`type: array` with the values of its items):
+     * the enum says nothing the type could hold, so it is ignored.
+     */
+    public static function contradictsItsEnum(Schema $schema): bool
+    {
+        $declared = array_map(static fn (SchemaType $type): string => $type->value(), $schema->nonNullTypes());
+        $values = array_filter($schema->enum() ?? [], static fn ($value): bool => is_int($value) || is_string($value));
+        if ($declared === [] || $values === []) {
+            return false;
+        }
+
+        $strings = in_array(SchemaType::STRING, $declared, true);
+        $numbers = in_array(SchemaType::INTEGER, $declared, true) || in_array(SchemaType::NUMBER, $declared, true);
+        foreach ($values as $value) {
+            if (is_string($value) ? $strings : $numbers) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**

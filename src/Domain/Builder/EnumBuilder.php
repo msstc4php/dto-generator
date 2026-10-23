@@ -222,7 +222,7 @@ final class EnumBuilder
 
         if ($this->isAmbiguousList($raw, $schema)) {
             $diagnostics->error(
-                '"x-enum-descriptions" reads as a list (as does a map keyed "0", "1", … in order), which is ambiguous unless each position N holds enum value N; map each enum value to its description.',
+                '"x-enum-descriptions" reads as a list of descriptions by position or as a map keyed by the values "0", "1", …, which tell different values apart; map each enum value to its description.',
                 $at,
             );
 
@@ -231,12 +231,20 @@ final class EnumBuilder
 
         $known = array_map('strval', $values);
         $descriptions = [];
-        foreach ($raw as $value => $description) {
-            $value = (string) $value;
+        // A list gives the description of the value at its position.
+        $positions = Json::isList($raw) ? $this->positions($schema) : null;
+        foreach ($raw as $key => $description) {
+            if ($positions !== null && !array_key_exists($key, $positions)) {
+                $diagnostics->error('"x-enum-descriptions" lists more descriptions than the enum has values.', $at->child((string) $key));
+
+                continue;
+            }
+
+            $value = (string) ($positions === null ? $key : $positions[$key]);
             if (!in_array($value, $known, true)) {
-                $diagnostics->error(sprintf('There is no enum value "%s".', $value), $at->child($value));
+                $diagnostics->error(sprintf('There is no enum value "%s".', $value), $at->child((string) $key));
             } elseif (!is_string($description)) {
-                $diagnostics->error('An enum description must be a string.', $at->child($value));
+                $diagnostics->error('An enum description must be a string.', $at->child((string) $key));
             } else {
                 $descriptions[$value] = $description;
             }
@@ -257,14 +265,29 @@ final class EnumBuilder
             return false;
         }
 
-        $positions = array_values(array_filter($schema->enum() ?? [], static fn ($value): bool => $value !== null));
+        $positions = $this->positions($schema);
+        $known = array_map('strval', $positions);
+        $inOrder = true;
         foreach (array_keys($raw) as $position) {
-            if (($positions[$position] ?? null) !== $position) {
-                return true;
+            if (!in_array((string) $position, $known, true)) {
+                return false;
             }
+
+            $inOrder = $inOrder && ($positions[$position] ?? null) === $position;
         }
 
-        return false;
+        return !$inOrder;
+    }
+
+    /**
+     * The string and integer enum values in order, duplicates included, as openapi-generator counts the positions of its
+     * lists.
+     *
+     * @return list<int|string>
+     */
+    private function positions(Schema $schema): array
+    {
+        return array_values(array_filter($schema->enum() ?? [], static fn ($value): bool => is_int($value) || is_string($value)));
     }
 
     /**

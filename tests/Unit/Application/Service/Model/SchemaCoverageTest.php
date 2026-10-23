@@ -637,12 +637,30 @@ final class SchemaCoverageTest extends TestCase
         self::assertSame(["a: 'x'|null"], ModelFixture::classes($output)['App\\Dto\\C']);
     }
 
-    public function testRejectsAFloatDefaultOfAnIntegerConst(): void
+    public function testIgnoresANamedEnumItsTypeAdmitsNoneOf(): void
+    {
+        $output = ModelFixture::build([
+            'Regions' => ['type' => 'array', 'items' => ['type' => 'string'], 'enum' => ['EU', 'HK']],
+            'Level' => ['type' => ['integer', 'string'], 'enum' => [1, 'a']],
+            'C' => ['type' => 'object', 'properties' => ['r' => ['$ref' => '#/components/schemas/Regions'], 'l' => ['$ref' => '#/components/schemas/Level']]],
+        ]);
+
+        self::assertSame(['r: list<string>|null', "l: 'a'|1|null"], ModelFixture::classes($output)['App\\Dto\\C']);
+        self::assertSame(
+            [
+                'warning /project/api/openapi.yaml#/components/schemas/Regions/type: "type" admits none of the enum values, so the enum is ignored and the property keeps its type.',
+                'warning /project/api/openapi.yaml#/components/schemas/Level/enum: The enum mixes strings and integers, which no PHP enum can back; the property takes either.',
+            ],
+            ModelFixture::messages($output),
+        );
+    }
+
+    public function testDropsAFloatDefaultOfAnIntegerConst(): void
     {
         $output = ModelFixture::build(['C' => ['type' => 'object', 'properties' => ['i' => ['type' => 'integer', 'const' => 2, 'default' => 2.0]]]]);
 
         // JSON-equal, but `int $i = 2.0` does not compile.
-        self::assertSame([self::AT . 'C/properties/i/default: Default 2.0 does not match 2; null is used instead.'], ModelFixture::messages($output));
+        self::assertSame(['warning /project/api/openapi.yaml#/components/schemas/C/properties/i/default: Default 2.0 does not match 2; null is used instead.'], ModelFixture::messages($output));
     }
 
     public function testComparesNestedDefaultsAsJsonValues(): void
