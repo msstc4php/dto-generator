@@ -655,6 +655,31 @@ final class SchemaCoverageTest extends TestCase
         );
     }
 
+    public function testTypesAValueThatHoldsItselfInAListOrAMap(): void
+    {
+        $output = ModelFixture::build([
+            'Value' => ['type' => 'null', 'oneOf' => [
+                ['type' => 'string'],
+                ['type' => 'number'],
+                ['type' => 'boolean'],
+                ['type' => 'object'],
+                ['type' => 'array', 'items' => ['$ref' => '#/components/schemas/Value']],
+            ]],
+            'Tree' => ['type' => 'object', 'additionalProperties' => ['$ref' => '#/components/schemas/Tree']],
+            'Loop' => ['$ref' => '#/components/schemas/Loop2'],
+            'Loop2' => ['allOf' => [['$ref' => '#/components/schemas/Loop']]],
+            'C' => ['type' => 'object', 'required' => ['v', 't'], 'properties' => [
+                'v' => ['$ref' => '#/components/schemas/Value'],
+                't' => ['$ref' => '#/components/schemas/Tree'],
+                'l' => ['$ref' => '#/components/schemas/Loop'],
+                'll' => ['type' => 'array', 'items' => ['$ref' => '#/components/schemas/Loop']],
+            ]],
+        ]);
+
+        self::assertSame(['v: string|float|bool|array<array-key, mixed>|list<mixed>|null', 't: array<array-key, mixed>', 'l: mixed', 'll: list<mixed>|null'], ModelFixture::classes($output)['App\\Dto\\C']);
+        self::assertSame(['error /project/api/openapi.yaml#/components/schemas/Loop: The $ref chain loops back to itself without reaching an object schema.'], ModelFixture::messages($output));
+    }
+
     public function testDropsAFloatDefaultOfAnIntegerConst(): void
     {
         $output = ModelFixture::build(['C' => ['type' => 'object', 'properties' => ['i' => ['type' => 'integer', 'const' => 2, 'default' => 2.0]]]]);
