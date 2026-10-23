@@ -141,14 +141,15 @@ final class TypeMapper
         }
 
         if ($specific !== []) {
+            if ($plain !== [] && !$this->canBeObject($specific[0])) {
+                $diagnostics->error('"allOf" combines several typed schemas that are not objects, which no PHP type expresses; keep one of them.', $schema->location());
+
+                return new MixedType();
+            }
+
             $type = $this->mapWithin($specific[0], $diagnostics, $aliases);
             if ($plain !== []) {
-                $type = $this->asObject($type, $plain, $diagnostics, $aliases);
-                if (!$type instanceof TypeModel) {
-                    $diagnostics->error('"allOf" combines several typed schemas that are not objects, which no PHP type expresses; keep one of them.', $schema->location());
-
-                    return new MixedType();
-                }
+                $type = $this->asObject($type, $plain);
             }
 
             return $this->consts->narrow($schema, $type, $diagnostics);
@@ -352,29 +353,64 @@ final class TypeMapper
     }
 
     /**
-     * The object part of a member's type that `{type: object}` members restrict: classes and maps, `null` only when each
-     * of those admits it; an untyped member takes theirs. Null when the member can be no object.
+     * Whether a JSON object may pass the schema, as its `type`, values, `$ref`, `allOf` and `oneOf`/`anyOf` tell; the PHP
+     * type cannot, as a date or an `x-php-type` makes a string a class. A reference that loops or that the loader could
+     * not follow is taken for one.
+     *
+     * @param list<string> $seen
+     */
+    private function canBeObject(Schema $schema, array $seen = []): bool
+    {
+        $key = $schema->location()->toString();
+        if (in_array($key, $seen, true)) {
+            return true;
+        }
+
+        $seen[] = $key;
+        $ref = $schema->ref();
+        if ($ref !== null) {
+            $target = $this->graph->resolve(new ReferenceUse($ref, $schema->location()));
+
+            return !$target instanceof ResolvedSchema || $this->canBeObject($target->schema(), $seen);
+        }
+
+        $types = $schema->nonNullTypes();
+        $values = $schema->enum();
+        if (($types !== [] && !in_array(SchemaType::from(SchemaType::OBJECT), $types, true)) || ($values !== null && array_filter($values, 'is_array') === [])) {
+            return false;
+        }
+
+        foreach ($schema->allOf() as $member) {
+            if (!$this->canBeObject($member, $seen)) {
+                return false;
+            }
+        }
+
+        $union = array_merge($schema->oneOf(), $schema->anyOf());
+        foreach ($union as $member) {
+            if ($this->canBeObject($member, $seen)) {
+                return true;
+            }
+        }
+
+        return $union === [];
+    }
+
+    /**
+     * The class and map parts of a type that `{type: object}` members restrict, `null` only when each of those admits it;
+     * any other type stays as it is (`mixed`, a union without such parts).
      *
      * @param non-empty-list<Schema> $plain
-     * @param array<string, true> $aliases
      */
-    private function asObject(TypeModel $type, array $plain, Diagnostics $diagnostics, array $aliases): ?TypeModel
+    private function asObject(TypeModel $type, array $plain): TypeModel
     {
-        if ($type instanceof MixedType) {
-            return $this->mapWithin($plain[0], $diagnostics, $aliases);
-        }
-
         $nullable = $type instanceof NullableType;
-        $inner = $type instanceof NullableType ? $type->inner() : $type;
-        $members = array_filter(
-            $inner instanceof UnionType ? $inner->members() : [$inner],
-            static fn (TypeModel $member): bool => $member instanceof ClassType || $member instanceof MapType,
-        );
-        if ($members === []) {
-            return null;
+        $object = $type instanceof NullableType ? $type->inner() : $type;
+        if ($object instanceof UnionType) {
+            $members = array_filter($object->members(), static fn (TypeModel $member): bool => $member instanceof ClassType || $member instanceof MapType);
+            $object = $members === [] ? $object : UnionType::of(...$members);
         }
 
-        $object = UnionType::of(...$members);
         foreach ($plain as $member) {
             $nullable = $nullable && $member->isNullable();
         }

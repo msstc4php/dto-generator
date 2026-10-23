@@ -80,9 +80,22 @@ final class CompositionTest extends TestCase
                 'chained' => ['allOf' => [['$ref' => '#/components/schemas/NameAlias'], ['type' => 'object']]],
                 'wrapped' => ['allOf' => [['$ref' => '#/components/schemas/Wrapper'], ['type' => 'object']]],
                 'scalars' => ['allOf' => [['oneOf' => [['type' => 'string'], ['type' => 'integer']]], ['type' => 'object']]],
+                'anyScalars' => ['allOf' => [['anyOf' => [['type' => 'string'], ['type' => 'integer']]], ['type' => 'object']]],
                 'either' => ['allOf' => [['$ref' => '#/components/schemas/TagOrName'], ['type' => 'object']]],
                 'money' => ['allOf' => [['$ref' => '#/components/schemas/Money'], ['type' => 'object']]],
+                'date' => ['allOf' => [['type' => 'string', 'format' => 'date-time'], ['type' => 'object']]],
+                'stamp' => ['allOf' => [['$ref' => '#/components/schemas/Stamp'], ['type' => 'object']]],
+                'email' => ['allOf' => [['$ref' => '#/components/schemas/Email'], ['type' => 'object']]],
+                'level' => ['allOf' => [['$ref' => '#/components/schemas/Level'], ['type' => 'object']]],
+                'tags' => ['allOf' => [['type' => 'array', 'items' => ['type' => 'string']], ['type' => 'object']]],
+                'flag' => ['allOf' => [['type' => 'boolean'], ['type' => 'object']]],
+                'counts' => ['allOf' => [['type' => 'object', 'additionalProperties' => ['type' => 'integer']], ['type' => 'object']]],
+                'anything' => ['allOf' => [['$ref' => '#/components/schemas/Any'], ['type' => ['object', 'null']], ['type' => 'object']]],
             ]],
+            'Stamp' => ['type' => 'string', 'format' => 'date-time'],
+            'Email' => ['type' => 'string', 'x-php-type' => 'App\\Email'],
+            'Level' => ['enum' => ['low', 'high']],
+            'Any' => ['description' => 'Anything.'],
             'Wrapper' => ['allOf' => [['$ref' => '#/components/schemas/Name']]],
             'TagOrName' => ['oneOf' => [['$ref' => '#/components/schemas/MaybeTag'], ['type' => 'string']]],
             'Money' => ['type' => 'object', 'x-php-type' => 'App\\Money'],
@@ -92,7 +105,10 @@ final class CompositionTest extends TestCase
         ], [], ['*'], AllOfStrategy::EXTENDS, false);
 
         self::assertSame(
-            ['strict: App\\Dto\\MaybeTag', 'lenient: App\\Dto\\MaybeTag|null', 'name: mixed', 'broken: array<array-key, mixed>|null', 'looped: array<array-key, mixed>|null', 'chained: mixed', 'wrapped: mixed', 'scalars: mixed', 'either: App\\Dto\\MaybeTag|null', 'money: App\\Money|null'],
+            [
+                'strict: App\\Dto\\MaybeTag', 'lenient: App\\Dto\\MaybeTag|null', 'name: mixed', 'broken: mixed', 'looped: mixed', 'chained: mixed', 'wrapped: mixed', 'scalars: mixed', 'anyScalars: mixed', 'either: App\\Dto\\MaybeTag|null', 'money: App\\Money|null',
+                'date: mixed', 'stamp: mixed', 'email: mixed', 'level: mixed', 'tags: mixed', 'flag: mixed', 'counts: array<array-key, int>|null', 'anything: mixed',
+            ],
             ModelFixture::classes($output)['App\\Dto\\Holder'],
         );
         self::assertSame(
@@ -101,6 +117,13 @@ final class CompositionTest extends TestCase
                 "error {$at}Holder/properties/chained: \"allOf\" combines several typed schemas that are not objects, which no PHP type expresses; keep one of them.",
                 "error {$at}Holder/properties/wrapped: \"allOf\" combines several typed schemas that are not objects, which no PHP type expresses; keep one of them.",
                 "error {$at}Holder/properties/scalars: \"allOf\" combines several typed schemas that are not objects, which no PHP type expresses; keep one of them.",
+                "error {$at}Holder/properties/anyScalars: \"allOf\" combines several typed schemas that are not objects, which no PHP type expresses; keep one of them.",
+                "error {$at}Holder/properties/date: \"allOf\" combines several typed schemas that are not objects, which no PHP type expresses; keep one of them.",
+                "error {$at}Holder/properties/stamp: \"allOf\" combines several typed schemas that are not objects, which no PHP type expresses; keep one of them.",
+                "error {$at}Holder/properties/email: \"allOf\" combines several typed schemas that are not objects, which no PHP type expresses; keep one of them.",
+                "error {$at}Holder/properties/level: \"allOf\" combines several typed schemas that are not objects, which no PHP type expresses; keep one of them.",
+                "error {$at}Holder/properties/tags: \"allOf\" combines several typed schemas that are not objects, which no PHP type expresses; keep one of them.",
+                "error {$at}Holder/properties/flag: \"allOf\" combines several typed schemas that are not objects, which no PHP type expresses; keep one of them.",
             ],
             array_values(array_filter(ModelFixture::messages($output), static fn (string $message): bool => strpos($message, 'combines') !== false)),
         );
