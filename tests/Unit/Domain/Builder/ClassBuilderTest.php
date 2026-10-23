@@ -141,6 +141,14 @@ final class ClassBuilderTest extends TestCase
                 [],
                 ["warning {$at}/properties/: Property name \"\" has no usable characters, so the class leaves it out, though it is required; set \"x-php-name\" to keep it, in the document or \"propertyNames\" of the source."],
             ],
+            'an invalid explicit name on a numbered property' => [
+                ['type' => 'object', 'properties' => ['url' => ['type' => 'string'], 'URL' => ['type' => 'string', 'x-php-name' => 5]]],
+                ['url' => 'url: string|null = NULL', 'url2' => 'URL: string|null = NULL'],
+                [
+                    "warning {$at}/properties/URL: Property \"URL\" becomes \$url, which \"url\" already uses, so it is \$url2; set \"x-php-name\" to name it, in the document or \"propertyNames\" of the source.",
+                    "error {$at}/properties/URL/x-php-name: \"x-php-name\" must be a PHP identifier other than \"this\" and the superglobals.",
+                ],
+            ],
             'an explicit name another holds' => [
                 ['type' => 'object', 'properties' => ['url' => ['type' => 'string'], 'link' => ['type' => 'string', 'x-php-name' => 'URL']]],
                 ['url' => 'url: string|null = NULL'],

@@ -316,6 +316,21 @@ final class BuildViewsTest extends TestCase
         );
     }
 
+    public function testGivesAnExplicitNameToItsDeclarationOfANumberedProperty(): void
+    {
+        $output = ModelFixture::build([
+            'User' => ['allOf' => [
+                ['type' => 'object', 'properties' => ['url' => ['type' => 'string'], 'URL' => ['type' => 'string']]],
+                ['properties' => ['URL' => ['type' => 'string', 'x-php-name' => 'link']]],
+            ]],
+        ]);
+
+        self::assertContains(
+            'error /project/api/openapi.yaml#/components/schemas/User/allOf/1/properties/URL: Property "URL" of App\\Dto\\User has another PHP name or default here than in an earlier allOf member.',
+            ModelFixture::messages($output),
+        );
+    }
+
     public function testIgnoresTheDirectionOfASkippedProperty(): void
     {
         $output = ModelFixture::views([
