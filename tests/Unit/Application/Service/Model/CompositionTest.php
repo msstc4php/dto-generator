@@ -33,6 +33,128 @@ final class CompositionTest extends TestCase
         self::assertSame([], $this->inherited($output, 'App\Dto\Pet'));
     }
 
+    public function testReadsAMemberThatOnlySaysObjectAsNoMember(): void
+    {
+        $at = self::AT;
+        $tag = ['$ref' => '#/components/schemas/Tag'];
+        $output = ModelFixture::build([
+            'Tag' => ['type' => 'object', 'properties' => ['name' => ['type' => 'string']]],
+            'TagAlias' => ['allOf' => [$tag, ['type' => 'object', 'additionalProperties' => true, 'properties' => [], 'title' => 'T']]],
+            'Holder' => ['type' => 'object', 'properties' => [
+                'tag' => ['allOf' => [$tag, ['type' => 'object', 'description' => 'The tag.']]],
+                'alias' => ['$ref' => '#/components/schemas/TagAlias'],
+                'objects' => ['allOf' => [['type' => 'object'], ['type' => 'object', 'minProperties' => 1]]],
+                'contradiction' => ['allOf' => [['type' => 'string'], ['type' => 'object']]],
+                'map' => ['allOf' => [$tag, ['type' => 'object', 'additionalProperties' => ['type' => 'string']]]],
+            ]],
+        ]);
+
+        self::assertSame(['App\Dto\Tag', 'App\Dto\Holder'], array_keys(ModelFixture::classes($output)));
+        self::assertSame(
+            ['tag: App\Dto\Tag|null', 'alias: App\Dto\Tag|null', 'objects: mixed', 'contradiction: mixed', 'map: mixed'],
+            ModelFixture::classes($output)['App\Dto\Holder'],
+        );
+        self::assertSame(
+            [
+                "error {$at}Holder/properties/objects: \"allOf\" combines several typed schemas that are not objects, which no PHP type expresses; keep one of them.",
+                "error {$at}Holder/properties/contradiction: An \"allOf\" member requires an object beside one that can be no object, so no value passes; drop one of them.",
+                "error {$at}Holder/properties/map: \"allOf\" combines several typed schemas that are not objects, which no PHP type expresses; keep one of them.",
+            ],
+            ModelFixture::messages($output),
+        );
+    }
+
+    public function testKeepsWhatADroppedObjectMemberSays(): void
+    {
+        $at = self::AT;
+        $nullable = ['$ref' => '#/components/schemas/MaybeTag'];
+        $output = ModelFixture::build([
+            'MaybeTag' => ['type' => ['object', 'null'], 'properties' => ['name' => ['type' => 'string']]],
+            'Name' => ['type' => 'string'],
+            'Holder' => ['type' => 'object', 'required' => ['strict', 'lenient', 'either'], 'properties' => [
+                'strict' => ['allOf' => [$nullable, ['type' => 'object']]],
+                'lenient' => ['allOf' => [$nullable, ['type' => ['object', 'null']]]],
+                'name' => ['allOf' => [['$ref' => '#/components/schemas/Name'], ['type' => 'object']]],
+                'broken' => ['allOf' => [['$ref' => '#/components/schemas/Gone'], ['type' => 'object']]],
+                'looped' => ['allOf' => [['$ref' => '#/components/schemas/Loop'], ['type' => 'object']]],
+                'chained' => ['allOf' => [['$ref' => '#/components/schemas/NameAlias'], ['type' => 'object']]],
+                'wrapped' => ['allOf' => [['$ref' => '#/components/schemas/Wrapper'], ['type' => 'object']]],
+                'scalars' => ['allOf' => [['oneOf' => [['type' => 'string'], ['type' => 'integer']]], ['type' => 'object']]],
+                'anyScalars' => ['allOf' => [['anyOf' => [['type' => 'string'], ['type' => 'integer']]], ['type' => 'object']]],
+                'either' => ['allOf' => [['$ref' => '#/components/schemas/TagOrName'], ['type' => 'object']]],
+                'money' => ['allOf' => [['$ref' => '#/components/schemas/Money'], ['type' => 'object']]],
+                'date' => ['allOf' => [['type' => 'string', 'format' => 'date-time'], ['type' => 'object']]],
+                'stamp' => ['allOf' => [['$ref' => '#/components/schemas/Stamp'], ['type' => 'object']]],
+                'email' => ['allOf' => [['$ref' => '#/components/schemas/Email'], ['type' => 'object']]],
+                'level' => ['allOf' => [['$ref' => '#/components/schemas/Level'], ['type' => 'object']]],
+                'tags' => ['allOf' => [['type' => 'array', 'items' => ['type' => 'string']], ['type' => 'object']]],
+                'flag' => ['allOf' => [['type' => 'boolean'], ['type' => 'object']]],
+                'counts' => ['allOf' => [['type' => 'object', 'additionalProperties' => ['type' => 'integer']], ['type' => 'object']]],
+                'anything' => ['allOf' => [['$ref' => '#/components/schemas/Any'], ['type' => ['object', 'null']], ['type' => 'object']]],
+                'dateOrTag' => ['allOf' => [['oneOf' => [['type' => 'string', 'format' => 'date-time'], ['$ref' => '#/components/schemas/MaybeTag']]], ['type' => 'object']]],
+                'nullDate' => ['allOf' => [['type' => ['string', 'null'], 'format' => 'date-time'], ['type' => ['object', 'null']]]],
+            ]],
+            'Stamp' => ['type' => 'string', 'format' => 'date-time'],
+            'Email' => ['type' => 'string', 'x-php-type' => 'App\\Email'],
+            'Level' => ['enum' => ['low', 'high']],
+            'Any' => ['description' => 'Anything.'],
+            'Wrapper' => ['allOf' => [['$ref' => '#/components/schemas/Name']]],
+            'TagOrName' => ['oneOf' => [['$ref' => '#/components/schemas/MaybeTag'], ['type' => 'string']]],
+            'Money' => ['type' => 'object', 'x-php-type' => 'App\\Money'],
+            'Loop' => ['$ref' => '#/components/schemas/Loop2'],
+            'Loop2' => ['$ref' => '#/components/schemas/Loop'],
+            'NameAlias' => ['$ref' => '#/components/schemas/Name'],
+        ], [], ['*'], AllOfStrategy::EXTENDS, false);
+
+        self::assertSame(
+            [
+                'strict: App\\Dto\\MaybeTag', 'lenient: App\\Dto\\MaybeTag|null', 'name: mixed', 'broken: mixed', 'looped: mixed', 'chained: mixed', 'wrapped: mixed', 'scalars: mixed', 'anyScalars: mixed', 'either: App\\Dto\\MaybeTag|string', 'money: App\\Money|null',
+                'date: mixed', 'stamp: mixed', 'email: mixed', 'level: mixed', 'tags: mixed', 'flag: mixed', 'counts: array<array-key, int>|null', 'anything: mixed', 'dateOrTag: DateTimeImmutable|App\\Dto\\MaybeTag|null', 'nullDate: mixed',
+            ],
+            ModelFixture::classes($output)['App\\Dto\\Holder'],
+        );
+        self::assertSame(
+            [
+                "error {$at}Holder/properties/name: An \"allOf\" member requires an object beside one that can be no object, so no value passes; drop one of them.",
+                "error {$at}Holder/properties/chained: An \"allOf\" member requires an object beside one that can be no object, so no value passes; drop one of them.",
+                "error {$at}Holder/properties/wrapped: An \"allOf\" member requires an object beside one that can be no object, so no value passes; drop one of them.",
+                "error {$at}Holder/properties/scalars: An \"allOf\" member requires an object beside one that can be no object, so no value passes; drop one of them.",
+                "error {$at}Holder/properties/anyScalars: An \"allOf\" member requires an object beside one that can be no object, so no value passes; drop one of them.",
+                "error {$at}Holder/properties/date: An \"allOf\" member requires an object beside one that can be no object, so no value passes; drop one of them.",
+                "error {$at}Holder/properties/stamp: An \"allOf\" member requires an object beside one that can be no object, so no value passes; drop one of them.",
+                "error {$at}Holder/properties/email: An \"allOf\" member requires an object beside one that can be no object, so no value passes; drop one of them.",
+                "error {$at}Holder/properties/level: An \"allOf\" member requires an object beside one that can be no object, so no value passes; drop one of them.",
+                "error {$at}Holder/properties/tags: An \"allOf\" member requires an object beside one that can be no object, so no value passes; drop one of them.",
+                "error {$at}Holder/properties/flag: An \"allOf\" member requires an object beside one that can be no object, so no value passes; drop one of them.",
+                "error {$at}Holder/properties/nullDate: An \"allOf\" member requires an object beside one that can be no object, so no value passes; drop one of them.",
+            ],
+            array_values(array_filter(ModelFixture::messages($output), static fn (string $message): bool => strpos($message, 'no value passes') !== false)),
+        );
+    }
+
+    public function testReadsTheNullOfAnObjectMemberInOpenApi30AndSwagger20(): void
+    {
+        $tag = ['type' => 'object', 'properties' => ['name' => ['type' => 'string']]];
+        $openApi = ModelFixture::document(['openapi' => '3.0.3', 'components' => ['schemas' => [
+            'Tag' => $tag,
+            'Holder' => ['type' => 'object', 'required' => ['outer', 'member', 'plain'], 'properties' => [
+                'outer' => ['nullable' => true, 'allOf' => [['$ref' => '#/components/schemas/Tag'], ['type' => 'object']]],
+                'member' => ['allOf' => [['$ref' => '#/components/schemas/Tag'], ['type' => 'object', 'nullable' => true]]],
+                'plain' => ['allOf' => [['$ref' => '#/components/schemas/Tag'], ['type' => 'object']]],
+            ]],
+        ]]]);
+        $swagger = ModelFixture::document(['swagger' => '2.0', 'definitions' => [
+            'Tag' => $tag + ['x-nullable' => true],
+            'Holder' => ['type' => 'object', 'required' => ['strict', 'lenient'], 'properties' => [
+                'strict' => ['allOf' => [['$ref' => '#/definitions/Tag'], ['type' => 'object']]],
+                'lenient' => ['allOf' => [['$ref' => '#/definitions/Tag'], ['type' => 'object', 'x-nullable' => true]]],
+            ]],
+        ]]);
+
+        self::assertSame(['outer: App\\Dto\\Tag|null', 'member: App\\Dto\\Tag', 'plain: App\\Dto\\Tag'], ModelFixture::classes($openApi)['App\\Dto\\Holder']);
+        self::assertSame(['strict: App\\Dto\\Tag', 'lenient: App\\Dto\\Tag|null'], ModelFixture::classes($swagger)['App\\Dto\\Holder']);
+    }
+
     public function testCollectsPropertiesOfInlineMembersAndOwnProperties(): void
     {
         $output = ModelFixture::build([

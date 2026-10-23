@@ -130,14 +130,29 @@ final class TypeMapper
         }
 
         $typed = $this->typed($schema->allOf(), false);
-        if (count($typed) > 1) {
+        // A member that only says "object" adds nothing to one that is an object (`allOf: [$ref, {type: object}]`).
+        $specific = array_values(array_filter($typed, static fn (Schema $member): bool => !SchemaShape::isPlainObject($member)));
+        $plain = $specific === [] ? [] : array_values(array_filter($typed, static fn (Schema $member): bool => SchemaShape::isPlainObject($member)));
+        $specific = $specific === [] ? $typed : $specific;
+        if (count($specific) > 1) {
             $diagnostics->error('"allOf" combines several typed schemas that are not objects, which no PHP type expresses; keep one of them.', $schema->location());
 
             return new MixedType();
         }
 
-        if ($typed !== []) {
-            return $this->consts->narrow($schema, $this->mapWithin($typed[0], $diagnostics, $aliases), $diagnostics);
+        if ($specific !== []) {
+            if ($plain !== [] && !$this->canBeObject($specific[0])) {
+                $diagnostics->error('An "allOf" member requires an object beside one that can be no object, so no value passes; drop one of them.', $schema->location());
+
+                return new MixedType();
+            }
+
+            $type = $this->mapWithin($specific[0], $diagnostics, $aliases);
+            if ($plain !== []) {
+                $type = $this->withNullOf($type, $plain);
+            }
+
+            return $this->consts->narrow($schema, $type, $diagnostics);
         }
 
         if (SchemaShape::isMixedEnum($schema)) {
@@ -337,6 +352,71 @@ final class TypeMapper
                 || $member->propertyNames() !== []
                 || $member->extensions()->has('x-php-type'),
         ));
+    }
+
+    /**
+     * Whether a JSON object may pass the schema, as its `type`, values, `$ref`, `allOf` and `oneOf`/`anyOf` tell; the PHP
+     * type cannot, as a date or an `x-php-type` makes a string a class. A reference that loops or that the loader could
+     * not follow is taken for one.
+     *
+     * @param list<string> $seen the schemas on the path to this one, so two references to one schema are no loop
+     */
+    private function canBeObject(Schema $schema, array $seen = []): bool
+    {
+        $key = $schema->location()->toString();
+        if (in_array($key, $seen, true)) {
+            return true;
+        }
+
+        $seen[] = $key;
+        $ref = $schema->ref();
+        if ($ref !== null) {
+            $target = $this->graph->resolve(new ReferenceUse($ref, $schema->location()));
+
+            return !$target instanceof ResolvedSchema || $this->canBeObject($target->schema(), $seen);
+        }
+
+        $types = $schema->nonNullTypes();
+        $values = $schema->enum();
+        if (($types !== [] && !in_array(SchemaType::from(SchemaType::OBJECT), $types, true)) || ($values !== null && array_filter($values, 'is_array') === [])) {
+            return false;
+        }
+
+        foreach ($schema->allOf() as $member) {
+            if (!$this->canBeObject($member, $seen)) {
+                return false;
+            }
+        }
+
+        $union = array_merge($schema->oneOf(), $schema->anyOf());
+        foreach ($union as $member) {
+            if ($this->canBeObject($member, $seen)) {
+                return true;
+            }
+        }
+
+        return $union === [];
+    }
+
+    /**
+     * Every member of an allOf applies: the type keeps `null` only when each `{type: object}` member admits it too. A
+     * union keeps its other members, which a date format or `x-php-type` may make classes as well.
+     *
+     * @param non-empty-list<Schema> $plain
+     */
+    private function withNullOf(TypeModel $type, array $plain): TypeModel
+    {
+        if (!$type instanceof NullableType) {
+            return $type;
+        }
+
+        foreach ($plain as $member) {
+            if (!$member->isNullable()) {
+                return $type->inner();
+            }
+        }
+
+        return $type;
     }
 
     private function mixedEnum(Schema $schema, Diagnostics $diagnostics): TypeModel
