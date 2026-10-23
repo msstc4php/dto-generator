@@ -117,7 +117,7 @@ final class RedeclarationMergeTest extends TestCase
         }
     }
 
-    public function testReportsAPropertyThatTakesTheNameOfAnInheritedOne(): void
+    public function testNumbersAPropertyThatTakesTheNameOfAnInheritedOne(): void
     {
         $output = ModelFixture::build([
             'Pet' => ['type' => 'object', 'properties' => ['p' => ['type' => 'object'], 'user_id' => ['type' => 'string']]],
@@ -126,7 +126,7 @@ final class RedeclarationMergeTest extends TestCase
         ]);
 
         self::assertSame(
-            [self::MERGED, 'error ' . self::AT . 'Cat/allOf/1/properties/userId: Property "userId" becomes $userId, which "user_id" already uses; set "x-php-name" on one of them, in the document or "propertyNames" of the source.'],
+            [self::MERGED, 'warning ' . self::AT . 'Cat/allOf/1/properties/userId: Property "userId" becomes $userId, which "user_id" already uses, so it is $userId2; set "x-php-name" to name it, in the document or "propertyNames" of the source.'],
             ModelFixture::messages($output),
         );
     }

@@ -593,7 +593,7 @@ final class BuildTest extends TestCase
         self::assertSame(
             [
                 "error {$at}User/properties/§§§: Property name \"§§§\" gives no class name for its inline schema; set \"x-php-class-name\", in the document or \"classNames\" of the source.",
-                "error {$at}User/properties/§§§: Property name \"§§§\" has no usable characters; set \"x-php-name\", in the document or \"propertyNames\" of the source.",
+                "warning {$at}User/properties/§§§: Property name \"§§§\" has no usable characters, so the class leaves it out; set \"x-php-name\" to keep it, in the document or \"propertyNames\" of the source.",
             ],
             ModelFixture::messages($output),
         );

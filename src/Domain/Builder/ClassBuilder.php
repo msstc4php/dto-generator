@@ -89,6 +89,11 @@ final class ClassBuilder
         // The other view's properties are left out quietly, unlike x-php-skip.
         $skipped = self::skippedWireNames($sources) + ($view instanceof PropertyView ? $view->excluded(self::kept($sources)) : []);
         $spelled = $this->spelledNames($sources, self::skippedWireNames($sources));
+        // A number never takes the name another property has by itself.
+        $natural = [];
+        foreach ($sources as [$wireName]) {
+            $natural[Identifier::asciiLower($spelled[$wireName] ?? $this->names->propertyName($wireName) ?? '')] = true;
+        }
         foreach ($sources as [$wireName, $propertySchema]) {
             ExtensionVocabulary::checkProperty($propertySchema, $diagnostics, $this->aliases);
             if (self::isSkipped($propertySchema, $diagnostics) && $composition->isRequired($wireName)) {
@@ -142,13 +147,27 @@ final class ClassBuilder
 
             // Accessors are case-insensitive in PHP, so $url and $URL would both declare getUrl().
             $key = Identifier::asciiLower($property->name());
-            if (isset($taken[$key])) {
+            if (isset($taken[$key]) && $propertySchema->extensions()->has('x-php-name')) {
                 $diagnostics->error(
                     sprintf('Property "%s" becomes $%s, which "%s" already uses; set "x-php-name" on one of them, in the document or "propertyNames" of the source.', $wireName, $property->name(), $taken[$key]),
                     $propertySchema->location(),
                 );
 
                 continue;
+            }
+
+            if (isset($taken[$key])) {
+                $number = 2;
+                while (isset($taken[$key . $number]) || isset($natural[$key . $number])) {
+                    $number++;
+                }
+
+                $diagnostics->warning(
+                    sprintf('Property "%s" becomes $%s, which "%s" already uses, so it is $%s; set "x-php-name" to name it, in the document or "propertyNames" of the source.', $wireName, $property->name(), $taken[$key], $property->name() . $number),
+                    $propertySchema->location(),
+                );
+                $property = $property->withName($property->name() . $number);
+                $key .= $number;
             }
 
             $taken[$key] = $wireName;
@@ -321,7 +340,7 @@ final class ClassBuilder
 
         $name = $this->names->propertyName($wireName);
         if ($name === null) {
-            $diagnostics->error(sprintf('Property name "%s" has no usable characters; set "x-php-name", in the document or "propertyNames" of the source.', $wireName), $schema->location());
+            $diagnostics->warning(sprintf('Property name "%s" has no usable characters, so the class leaves it out; set "x-php-name" to keep it, in the document or "propertyNames" of the source.', $wireName), $schema->location());
         }
 
         return $name;
