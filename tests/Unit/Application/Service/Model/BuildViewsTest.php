@@ -255,7 +255,7 @@ final class BuildViewsTest extends TestCase
         ], ModelFixture::classes($output));
     }
 
-    public function testReportsANameTakenFromASchemaWhoseTakerDoesNotDependOnTheDirection(): void
+    public function testSplitsASchemaNamedLikeOneWhoseClassDoesNotDependOnTheDirection(): void
     {
         $named = ModelFixture::views([
             'Pet' => ['type' => 'object', 'properties' => ['name' => ['type' => 'string']]],
@@ -271,12 +271,28 @@ final class BuildViewsTest extends TestCase
             'Pet' => ['type' => 'object', 'properties' => ['owner' => ['type' => 'object', 'properties' => ['since' => ['type' => 'string', 'readOnly' => true]]]]],
         ]);
 
-        self::assertSame(['App\Dto\Pet', 'App\Dto\Holder', 'App\Dto\OtherRead', 'App\Dto\OtherWrite'], array_keys(ModelFixture::classes($named)));
+        self::assertSame(
+            ['App\Dto\Pet', 'App\Dto\PetRead', 'App\Dto\HolderRead', 'App\Dto\OtherRead', 'App\Dto\PetWrite', 'App\Dto\HolderWrite', 'App\Dto\OtherWrite'],
+            array_keys(ModelFixture::classes($named)),
+        );
         self::assertSame([
-            'error /project/api/openapi.yaml#/components/schemas/pet: Class App\Dto\Pet is already generated from /project/api/openapi.yaml#/components/schemas/Pet; set "x-php-class-name" on one of them, in the document or "classNames" of the source.',
             'warning /project/api/openapi.yaml#/components/schemas/pet/properties/flag/writeOnly: "writeOnly" must be true or false; it is ignored.',
         ], ModelFixture::messages($named));
         self::assertSame([], ModelFixture::messages($inline), 'the views name the inline classes apart');
+    }
+
+    public function testNumbersANameThatOnlyLetterCaseTellsApartInEveryView(): void
+    {
+        $output = ModelFixture::views([
+            'Notary' => ['type' => 'object', 'properties' => ['name' => ['type' => 'string']]],
+            'notary' => ['type' => 'object', 'properties' => ['code' => ['type' => 'string']]],
+        ]);
+
+        self::assertSame(['App\Dto\Notary', 'App\Dto\Notary2'], array_keys(ModelFixture::classes($output)));
+        self::assertSame(
+            ['warning /project/api/openapi.yaml#/components/schemas/notary: Class App\Dto\Notary is already generated from /project/api/openapi.yaml#/components/schemas/Notary, so this one becomes App\Dto\Notary2; set "x-php-class-name" to name it, in the document or "classNames" of the source.'],
+            ModelFixture::messages($output),
+        );
     }
 
     public function testIgnoresTheDirectionOfASkippedProperty(): void
