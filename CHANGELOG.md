@@ -21,9 +21,9 @@ All notable changes to this package are documented here. The format follows
 ### Fixed
 
 - An `allOf` member that only says `type: object` beside another typed member (Asana, Bitbucket, Plaid) no longer
-  makes the `allOf` an error that combines several typed schemas: it adds nothing, so `allOf: [$ref: Tag, {type: object}]` is
-  `Tag`, without `null` unless the object member admits it too; beside a member that can be no object it stays an
-  error.
+  makes the `allOf` an error that combines several typed schemas: it adds nothing, so
+  `allOf: [$ref: Tag, {type: object}]` is `Tag`, without `null` unless the object member admits it too; beside a member
+  that can be no object it stays an error.
 - A variant of a discriminated union that declares a property of its parent again with a type PHP lets no subclass
   declare (Bitbucket's `team.links`), or one with no value in common, keeps the parent's property with a warning, where
   it was an error, in the read and the write model alike: unlike other classes, a variant cannot merge its members
