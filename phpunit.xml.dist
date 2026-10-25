@@ -27,6 +27,9 @@
         <server name="no_proxy" value="" force="true"/>
         <env name="NO_PROXY" value="" force="true"/>
         <server name="NO_PROXY" value="" force="true"/>
+        <!-- The tests keep no YAML in the user's cache directory; YamlCacheTest gives it its own. -->
+        <env name="DTO_GENERATOR_YAML_CACHE" value="0" force="true"/>
+        <server name="DTO_GENERATOR_YAML_CACHE" value="0" force="true"/>
     </php>
 
     <testsuites>
