@@ -311,30 +311,22 @@ final class Hierarchy
             return;
         }
 
-        // A property the base's `required` names is required of a variant that extends the base through allOf, not of
-        // one only listed: it goes to the base as an optional one, and the variants that require it go on doing so.
         $common = [];
         $taken = [];
         $requirements = [];
         foreach ($this->models[$members[0]]->properties() as $candidate) {
-            $relaxed = in_array($candidate->wireName(), $variants->required(), true);
-            $found = [];
-            foreach ($members as $member) {
-                $match = $this->counterpart($candidate, $this->models[$member]->properties(), $relaxed);
-                if (!$match instanceof PropertyModel) {
-                    continue 2;
-                }
-
-                $found[$member] = $match;
+            $shared = $this->shared($candidate, $members, in_array($candidate->wireName(), $variants->required(), true));
+            if ($shared === null) {
+                continue;
             }
 
-            $required = array_filter($found, static fn (PropertyModel $match): bool => $match->isRequired());
-            $common[] = count($required) === count($found) ? $candidate : $this->optional($candidate);
+            [$common[], $found, $requiring] = $shared;
             foreach ($found as $member => $match) {
                 $taken[$member][] = $match;
-                if (isset($required[$member]) && count($required) !== count($found)) {
-                    $requirements[$member][] = $match->wireName();
-                }
+            }
+
+            foreach ($requiring as $member) {
+                $requirements[$member][] = $candidate->wireName();
             }
         }
 
@@ -347,27 +339,53 @@ final class Hierarchy
     }
 
     /**
-     * The property as an optional one: null stands for a missing value.
-     */
-    private function optional(PropertyModel $property): PropertyModel
-    {
-        return $property->isRequired() ? $property->withType(NullableType::of($property->type())) : $property;
-    }
-
-    /**
-     * The property of another variant declared alike; with $relaxed, one that differs only in being required counts.
+     * The property every variant declares alike, for the base, with each variant's declaration and the variants that
+     * go on requiring it. A property the base's `required` names ($required) is required of a variant that extends the
+     * base through allOf, not of one only listed: the variants may differ in requiring it, so the base takes the
+     * optional declaration, which they then must share, and those requiring it keep doing so.
      *
-     * @param list<PropertyModel> $others
+     * @param non-empty-list<string> $members
+     *
+     * @return array{PropertyModel, array<string, PropertyModel>, list<string>}|null
      */
-    private function counterpart(PropertyModel $property, array $others, bool $relaxed): ?PropertyModel
+    private function shared(PropertyModel $candidate, array $members, bool $required): ?array
     {
-        foreach ($others as $other) {
-            if ($relaxed ? $this->declaredAlike($this->optional($property), [$this->optional($other)]) : $this->declaredAlike($property, [$other])) {
-                return $other;
+        $found = [];
+        foreach ($members as $member) {
+            foreach ($this->models[$member]->properties() as $other) {
+                if ($required ? $this->alikeButForRequirement($candidate, $other) : $this->declaredAlike($candidate, [$other])) {
+                    $found[$member] = $other;
+
+                    continue 2;
+                }
+            }
+
+            return null;
+        }
+
+        $optional = array_filter($found, static fn (PropertyModel $match): bool => !$match->isRequired());
+        if ($optional === []) {
+            return [$candidate, $found, []];
+        }
+
+        $base = reset($optional);
+        foreach ($optional as $match) {
+            if (!$this->declaredAlike($base, [$match])) {
+                return null;
             }
         }
 
-        return null;
+        return [$base, $found, array_keys(array_diff_key($found, $optional))];
+    }
+
+    /**
+     * The same names and type but for null, which an optional property admits as a missing value.
+     */
+    private function alikeButForRequirement(PropertyModel $property, PropertyModel $other): bool
+    {
+        return $other->name() === $property->name()
+            && $other->wireName() === $property->wireName()
+            && NullableType::of($other->type())->describe() === NullableType::of($property->type())->describe();
     }
 
     /**

@@ -2568,6 +2568,68 @@ final class CompositionTest extends TestCase
         self::assertSame(['App\\Dto\\Cat' => ['tag', 'name']], ModelFixture::requiredInherited($output));
     }
 
+    /**
+     * @dataProvider sharedDeclarations
+     *
+     * @param array<string, mixed> $name
+     */
+    public function testSharesAPropertyTheUnionRequiresWhateverItDeclares(array $name, string $shared): void
+    {
+        $output = ModelFixture::build([
+            'Pet' => ['oneOf' => [['$ref' => '#/components/schemas/Cat'], ['$ref' => '#/components/schemas/Dog']], 'discriminator' => ['propertyName' => 'kind'], 'required' => ['name']],
+            'Cat' => ['allOf' => [['$ref' => '#/components/schemas/Pet'], ['type' => 'object', 'properties' => ['kind' => ['type' => 'string'], 'name' => $name]]]],
+            'Dog' => ['type' => 'object', 'properties' => ['kind' => ['type' => 'string'], 'name' => $name]],
+        ]);
+
+        self::assertSame(['kind: string|null', 'name: ' . $shared], ModelFixture::classes($output)['App\\Dto\\Pet']);
+        self::assertSame(['App\\Dto\\Cat' => ['name']], ModelFixture::requiredInherited($output));
+    }
+
+    /**
+     * @return iterable<string, array{array<string, mixed>, string}>
+     */
+    public static function sharedDeclarations(): iterable
+    {
+        yield 'no type' => [[], 'mixed'];
+        yield 'a default' => [['type' => 'string', 'default' => 'x'], 'string|null'];
+        yield 'null allowed in one' => [['type' => 'string'], 'string|null'];
+    }
+
+    public function testSharesARequiredDiscriminatorAndWhatEveryVariantRequires(): void
+    {
+        $output = ModelFixture::build([
+            'Pet' => ['oneOf' => [['$ref' => '#/components/schemas/Cat'], ['$ref' => '#/components/schemas/Dog']], 'discriminator' => ['propertyName' => 'kind'], 'required' => ['kind', 'name']],
+            'Cat' => ['allOf' => [['$ref' => '#/components/schemas/Pet'], ['type' => 'object', 'properties' => ['kind' => ['type' => 'string'], 'name' => ['type' => 'string']]]]],
+            'Dog' => ['type' => 'object', 'required' => ['name'], 'properties' => ['kind' => ['type' => 'string'], 'name' => ['type' => 'string']]],
+        ]);
+
+        self::assertSame(['kind: string|null', 'name: string'], ModelFixture::classes($output)['App\\Dto\\Pet']);
+        self::assertSame(['App\\Dto\\Cat' => ['kind']], ModelFixture::requiredInherited($output));
+    }
+
+    public function testSharesNoPropertyTheVariantsMapToOtherWireNames(): void
+    {
+        $output = ModelFixture::build([
+            'Pet' => ['oneOf' => [['$ref' => '#/components/schemas/Cat'], ['$ref' => '#/components/schemas/Dog']], 'discriminator' => ['propertyName' => 'kind'], 'required' => ['name']],
+            'Cat' => ['allOf' => [['$ref' => '#/components/schemas/Pet'], ['type' => 'object', 'properties' => ['kind' => ['type' => 'string'], 'name' => ['type' => 'string']]]]],
+            'Dog' => ['type' => 'object', 'properties' => ['kind' => ['type' => 'string'], 'nm' => ['type' => 'string', 'x-php-name' => 'name']]],
+        ]);
+
+        self::assertSame(['kind: string|null'], ModelFixture::classes($output)['App\\Dto\\Pet']);
+    }
+
+    public function testSharesNoPropertyItsOptionalDeclarationsDisagreeOn(): void
+    {
+        $output = ModelFixture::build([
+            'Pet' => ['oneOf' => [['$ref' => '#/components/schemas/Cat'], ['$ref' => '#/components/schemas/Dog'], ['$ref' => '#/components/schemas/Fox']], 'discriminator' => ['propertyName' => 'kind'], 'required' => ['name']],
+            'Cat' => ['allOf' => [['$ref' => '#/components/schemas/Pet'], ['type' => 'object', 'properties' => ['kind' => ['type' => 'string'], 'name' => ['type' => 'string']]]]],
+            'Dog' => ['type' => 'object', 'properties' => ['kind' => ['type' => 'string'], 'name' => ['type' => 'string', 'default' => 'a']]],
+            'Fox' => ['type' => 'object', 'properties' => ['kind' => ['type' => 'string'], 'name' => ['type' => 'string', 'default' => 'b']]],
+        ]);
+
+        self::assertSame(['kind: string|null'], ModelFixture::classes($output)['App\\Dto\\Pet']);
+    }
+
     public function testSharesOnlyAlikePropertiesTheBaseDoesNotRequire(): void
     {
         $output = ModelFixture::build([
@@ -2587,20 +2649,24 @@ final class CompositionTest extends TestCase
         $variant = ['type' => 'object', 'properties' => ['kind' => ['type' => 'string'], 'sub' => ['type' => 'string'], 'a' => ['type' => 'string']]];
         $schemas = [
             'A' => ['oneOf' => [['$ref' => '#/components/schemas/B'], ['$ref' => '#/components/schemas/X']], 'discriminator' => ['propertyName' => 'kind'], 'required' => ['a']],
-            'B' => ['oneOf' => [['$ref' => '#/components/schemas/C'], ['$ref' => '#/components/schemas/D']], 'discriminator' => ['propertyName' => 'sub']],
-            'C' => $variant,
+            'B' => ['oneOf' => [['$ref' => '#/components/schemas/C'], ['$ref' => '#/components/schemas/D']], 'discriminator' => ['propertyName' => 'sub'], 'required' => ['a']],
+            'C' => ['allOf' => [['$ref' => '#/components/schemas/B'], $variant]],
             'D' => $variant,
             'X' => ['type' => 'object', 'properties' => ['kind' => ['type' => 'string'], 'a' => ['type' => 'string']]],
         ];
         $reordered = ['B' => $schemas['B'], 'A' => $schemas['A']] + $schemas;
 
-        $written = ModelFixture::classes(ModelFixture::build($schemas));
-        $other = ModelFixture::classes(ModelFixture::build($reordered));
-        ksort($written);
-        ksort($other);
+        $written = ModelFixture::build($schemas);
+        $other = ModelFixture::build($reordered);
+        $classes = ModelFixture::classes($written);
+        $otherClasses = ModelFixture::classes($other);
+        ksort($classes);
+        ksort($otherClasses);
 
-        self::assertSame($written, $other);
-        self::assertSame(['kind: string|null', 'a: string|null'], $written['App\\Dto\\A']);
+        self::assertSame($classes, $otherClasses);
+        self::assertSame(['App\\Dto\\C' => ['a']], ModelFixture::requiredInherited($written));
+        self::assertSame(ModelFixture::requiredInherited($written), ModelFixture::requiredInherited($other));
+        self::assertSame(['kind: string|null', 'a: string|null'], $classes['App\\Dto\\A']);
     }
 
     public function testRefusesAnObjectDefaultTheRequiredInheritedPropertyLacks(): void

@@ -27,7 +27,7 @@ final class Variants
      * @param bool $listed whether a `oneOf`/`anyOf` lists the variants, rather than they extend the base through `allOf`
      * @param list<string> $required what the `required` of a base that lists its variants names
      */
-    public function __construct(array $classes, ?DiscriminatorModel $discriminator, bool $listed, array $required = [])
+    public function __construct(array $classes, ?DiscriminatorModel $discriminator, bool $listed, array $required)
     {
         $this->classes = $classes;
         $this->discriminator = $discriminator;

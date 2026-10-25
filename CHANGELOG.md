@@ -19,7 +19,8 @@ All notable changes to this package are documented here. The format follows
   {y}}]`) is required, as every instance of `B` is one of `A`; it was optional.
 - A property the variants of a discriminated union share, which the union's `required` names, still moves to the base
   when only the variants that extend it through `allOf` require it (`Pet {oneOf: [Cat, Dog], required: [name]}`,
-  `Cat: allOf [Pet, …]`, a plain `Dog`): the base takes it optional, as before, and `Cat` requires it.
+  `Cat: allOf [Pet, …]`, a plain `Dog`): the base takes it optional, as before, and `Cat` requires it, without the
+  default the declaration may give. A property with no type moves as `mixed`, which `Cat` must be given.
 - Such a parameter moves among the required ones, so the positional order of that constructor changes (Shipengine's
   `UpdateWarehouseRequestBody(name, originAddress, …)`); call it with named arguments, or check positional calls.
 - `ClassModel::requiredInherited()` lists, for extensions, the wire names of the inherited properties the class
