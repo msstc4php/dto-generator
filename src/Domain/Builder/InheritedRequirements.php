@@ -29,17 +29,10 @@ final class InheritedRequirements
     {
         $settled = [];
         foreach ($models as $fqcn => $model) {
-            $ancestors = [];
-            $seen = [$fqcn => $model->name()];
-            for ($parent = $model->parent(); $parent instanceof ClassName && isset($models[$parent->fqcn()]) && !isset($seen[$parent->fqcn()]); $parent = $models[$parent->fqcn()]->parent()) {
-                $seen[$parent->fqcn()] = $parent;
-                $ancestors[] = $models[$parent->fqcn()];
-            }
-
-            // Root first, as the constructor takes them.
             $optional = [];
             $listed = $model->requiredInherited();
-            foreach (array_reverse($ancestors) as $ancestor) {
+            // Root first, as the constructor takes them.
+            foreach (self::ancestorsOf($fqcn, $models) as $ancestor) {
                 array_push($listed, ...$ancestor->requiredInherited());
                 foreach ($ancestor->properties() as $property) {
                     if (!$property->isRequired()) {
@@ -56,5 +49,24 @@ final class InheritedRequirements
         }
 
         return $settled;
+    }
+
+    /**
+     * @param array<string, ClassModel> $models
+     *
+     * @return list<ClassModel> root first; a loop, which the build breaks, stops the chain
+     */
+    private static function ancestorsOf(string $fqcn, array $models): array
+    {
+        $ancestors = [];
+        $seen = [$fqcn => $fqcn];
+        $parent = $models[$fqcn]->parent();
+        while ($parent instanceof ClassName && isset($models[$parent->fqcn()]) && !isset($seen[$parent->fqcn()])) {
+            $seen[$parent->fqcn()] = $parent->fqcn();
+            $ancestors[] = $models[$parent->fqcn()];
+            $parent = $models[$parent->fqcn()]->parent();
+        }
+
+        return array_reverse($ancestors);
     }
 }

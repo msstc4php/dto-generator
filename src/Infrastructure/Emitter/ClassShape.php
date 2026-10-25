@@ -89,7 +89,10 @@ final class ClassShape
      */
     public function nullChecks(): array
     {
-        return array_values(array_filter($this->inherited, fn (PropertyModel $property): bool => $property->type() instanceof NullableType && $this->class->requires($property)));
+        return array_values(array_filter(
+            $this->inherited,
+            fn (PropertyModel $property): bool => $property->type() instanceof NullableType && $this->class->requires($property),
+        ));
     }
 
     /**

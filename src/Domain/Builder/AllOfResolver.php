@@ -39,13 +39,7 @@ final class AllOfResolver
     {
         [$composition, $parent] = $this->resolve($schema, $diagnostics);
 
-        if (!$parent instanceof NamedClass) {
-            return $composition;
-        }
-
-        [$inherited, $required] = $this->requirements($composition, $parent);
-
-        return $composition->withInheritedRequirements($inherited)->withRequired($required);
+        return $parent instanceof NamedClass ? $this->withRequirements($composition, $parent) : $composition;
     }
 
     /**
@@ -136,15 +130,11 @@ final class AllOfResolver
     }
 
     /**
-     * What the ancestors' `required` asks of the class: the properties an ancestor declares optional that the class, or
-     * an ancestor between, requires (Hierarchy keeps those the class inherits), and every name the chain requires, own
-     * properties an ancestor names without declaring them among them.
-     *
-     * @return array{array<array-key, non-empty-list<Schema>>, array<array-key, string>} the declarations of the nearest
-     *                                                                                   ancestor by wire name, and the
-     *                                                                                   required wire names
+     * The ancestors' `required` binds the class too: its own properties it names become required. A property an
+     * ancestor declares optional that the class, or an ancestor between, requires becomes an inherited requirement,
+     * which Hierarchy keeps if the class inherits it.
      */
-    private function requirements(Composition $composition, NamedClass $parent): array
+    private function withRequirements(Composition $composition, NamedClass $parent): Composition
     {
         $own = $this->propertyNames($composition);
         $required = $composition->required();
@@ -167,7 +157,10 @@ final class AllOfResolver
             }
         }
 
-        return [array_diff_key(array_intersect_key($declarations, $required), $own, $alreadyRequired), $required];
+        return $composition
+            ->withInheritedRequirements(array_diff_key(array_intersect_key($declarations, $required), $own, $alreadyRequired))
+            ->withRequired($required)
+        ;
     }
 
     /**

@@ -210,10 +210,10 @@ final class Action
             $registry->properties(),
             $superseded,
         );
-        $models = [];
         $children = [];
+        $indexes = [];
         foreach ($registry->planned() as $index => [$schema, $name]) {
-            $models[] = $builder->build($name, $schema, $diagnostics, $compositions[$index]);
+            $indexes[$name->fqcn()] = $index;
             $parent = $compositions[$index]->parent();
             $resolved = $input->graph()->get($schema->location());
             if ($parent instanceof ClassName && $resolved instanceof ResolvedSchema) {
@@ -227,6 +227,19 @@ final class Action
         }
 
         $unions = $this->unions($input, $registry, $children, $subclasses, $diagnostics);
+        // A value of the union is one of its variants and satisfies the union's own `required` too; variants and unions
+        // are planned classes.
+        foreach ($unions as $base => $variants) {
+            foreach ($variants->classes() as $variant) {
+                $at = $indexes[$variant->fqcn()];
+                $compositions[$at] = $compositions[$at]->withRequired($compositions[$indexes[$base]]->required());
+            }
+        }
+
+        $models = [];
+        foreach ($registry->planned() as $index => [$schema, $name]) {
+            $models[] = $builder->build($name, $schema, $diagnostics, $compositions[$index]);
+        }
         $built = [];
         $found = new Merges();
         foreach (Hierarchy::link($models, $unions, $diagnostics, $types->meet(), $superseded, $found) as $index => $model) {

@@ -17,6 +17,8 @@ All notable changes to this package are documented here. The format follows
   declares still accepts `null`.
 - A class's own property that an ancestor's `required` names (`A {required: [y]}` without `y`, `B: allOf [A, {properties:
   {y}}]`) is required, as every instance of `B` is one of `A`; it was optional.
+- The `required` of a discriminated union (`Pet {oneOf: [Cat, Dog], required: [name]}`) binds every variant, also one
+  that does not extend it through `allOf`: the property they share moves to the base as a required one.
 - Such a parameter moves among the required ones, so the positional order of that constructor changes (Shipengine's
   `UpdateWarehouseRequestBody(name, originAddress, …)`); call it with named arguments, or check positional calls.
 - `ClassModel::requiredInherited()` lists, for extensions, the wire names of the inherited properties the class

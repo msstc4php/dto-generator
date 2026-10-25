@@ -2542,6 +2542,20 @@ final class CompositionTest extends TestCase
         self::assertSame(['1: string'], ModelFixture::classes($output)['App\\Dto\\B']);
     }
 
+    public function testBindsEveryVariantByTheRequirementsOfTheUnion(): void
+    {
+        $output = ModelFixture::build([
+            'Pet' => ['oneOf' => [['$ref' => '#/components/schemas/Cat'], ['$ref' => '#/components/schemas/Dog']], 'discriminator' => ['propertyName' => 'kind'], 'required' => ['name']],
+            'Cat' => ['allOf' => [['$ref' => '#/components/schemas/Pet'], ['type' => 'object', 'properties' => ['kind' => ['type' => 'string'], 'name' => ['type' => 'string'], 'lives' => ['type' => 'integer']]]]],
+            'Dog' => ['type' => 'object', 'properties' => ['kind' => ['type' => 'string'], 'name' => ['type' => 'string'], 'good' => ['type' => 'boolean']]],
+        ]);
+
+        $classes = ModelFixture::classes($output);
+        self::assertSame(['kind: string|null', 'name: string'], $classes['App\\Dto\\Pet']);
+        self::assertSame(['lives: int|null'], $classes['App\\Dto\\Cat']);
+        self::assertSame(['good: bool|null'], $classes['App\\Dto\\Dog']);
+    }
+
     public function testRefusesAnObjectDefaultTheRequiredInheritedPropertyLacks(): void
     {
         $output = ModelFixture::build([
