@@ -87,7 +87,7 @@ final class Hierarchy
 
         $hierarchy->settle($unions);
         $hierarchy->check();
-        $hierarchy->requireInherited();
+        $hierarchy->models = InheritedRequirements::settle($hierarchy->models);
         $hierarchy->checkDiscriminators($unions);
         $hierarchy->selectVariants();
 
@@ -593,30 +593,6 @@ final class Hierarchy
 
         // The class's own requirement of a property it keeps from the parent stays, as one written beside the parent's $ref.
         return count($kept) === count($model->properties()) ? $model : $model->withProperties(...$kept)->withRequiredInherited(...$required);
-    }
-
-    /**
-     * A class requires what its ancestors require of theirs, or its constructor would pass them null; of what it lists,
-     * only the inherited properties an ancestor leaves optional: one it skips or a view leaves out is not there.
-     */
-    private function requireInherited(): void
-    {
-        $models = $this->models;
-        foreach (array_keys($models) as $fqcn) {
-            $chain = $this->chain($fqcn);
-            $optional = [];
-            $listed = [];
-            foreach ($chain as $member) {
-                array_push($listed, ...$models[$member]->requiredInherited());
-                foreach ($member === $fqcn ? [] : $models[$member]->properties() as $property) {
-                    if (!$property->isRequired()) {
-                        $optional[$property->wireName()] = $property->wireName();
-                    }
-                }
-            }
-
-            $this->models[$fqcn] = $models[$fqcn]->withRequiredInherited(...array_values(array_intersect($optional, $listed)));
-        }
     }
 
     /**

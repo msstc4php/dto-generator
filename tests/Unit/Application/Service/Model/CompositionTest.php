@@ -2490,6 +2490,72 @@ final class CompositionTest extends TestCase
         );
     }
 
+    public function testLeavesToAClassThePropertyItDeclaresAgainAfterAnAncestorRequiredIt(): void
+    {
+        $schemas = [
+            'A' => ['type' => 'object', 'properties' => ['x' => ['type' => 'string'], 'a' => ['type' => 'string']]],
+            'B' => ['allOf' => [['$ref' => '#/components/schemas/A'], ['required' => ['x'], 'properties' => ['b' => ['type' => 'string']]]]],
+        ];
+        $merged = ModelFixture::build($schemas + ['C' => ['allOf' => [['$ref' => '#/components/schemas/B'], ['properties' => ['x' => ['type' => 'string', 'format' => 'date-time']]]]]]);
+        $refused = ModelFixture::build($schemas + ['C' => ['allOf' => [['$ref' => '#/components/schemas/B'], ['properties' => ['x' => ['type' => 'integer']]]]]]);
+
+        self::assertSame(['App\\Dto\\B' => ['x']], ModelFixture::requiredInherited($merged));
+        // Merged, C takes B's requirement as its own.
+        self::assertSame(['x: DateTimeImmutable', 'a: string|null', 'b: string|null'], ModelFixture::classes($merged)['App\\Dto\\C']);
+        self::assertSame(['App\\Dto\\B' => ['x']], ModelFixture::requiredInherited($refused));
+        self::assertContains(
+            'error /project/api/openapi.yaml#/components/schemas/C/allOf/1/properties/x: Property "x" of App\\Dto\\C is already declared by App\\Dto\\A.',
+            ModelFixture::messages($refused),
+        );
+    }
+
+    public function testRequiresAnOwnPropertyAnAncestorRequires(): void
+    {
+        $output = ModelFixture::build([
+            'A' => ['type' => 'object', 'required' => ['y'], 'properties' => ['a' => ['type' => 'string']]],
+            'B' => ['allOf' => [['$ref' => '#/components/schemas/A'], ['properties' => ['y' => ['type' => 'string']]]]],
+            'C' => ['allOf' => [['$ref' => '#/components/schemas/B'], ['properties' => ['c' => ['type' => 'string']]]]],
+        ]);
+
+        self::assertSame(['y: string'], ModelFixture::classes($output)['App\\Dto\\B']);
+        self::assertSame([], ModelFixture::requiredInherited($output));
+    }
+
+    public function testPassesOnTheRequirementOfAPropertyAnAncestorDeclaresAgain(): void
+    {
+        $output = ModelFixture::build([
+            'A' => ['type' => 'object', 'properties' => ['x' => ['type' => 'string']]],
+            'B' => ['allOf' => [['$ref' => '#/components/schemas/A'], ['required' => ['x'], 'properties' => ['x' => ['type' => 'string', 'minLength' => 1], 'b' => ['type' => 'string']]]]],
+            'C' => ['allOf' => [['$ref' => '#/components/schemas/B'], ['properties' => ['c' => ['type' => 'string']]]]],
+        ]);
+
+        self::assertSame(['App\\Dto\\B' => ['x'], 'App\\Dto\\C' => ['x']], ModelFixture::requiredInherited($output));
+    }
+
+    public function testRequiresAnOwnPropertyWithANumericNameAnAncestorRequires(): void
+    {
+        $output = ModelFixture::build([
+            'A' => ['type' => 'object', 'required' => ['1'], 'properties' => ['a' => ['type' => 'string']]],
+            'B' => ['allOf' => [['$ref' => '#/components/schemas/A'], ['properties' => ['1' => ['type' => 'string', 'x-php-name' => 'first']]]]],
+        ]);
+
+        self::assertSame(['1: string'], ModelFixture::classes($output)['App\\Dto\\B']);
+    }
+
+    public function testRefusesAnObjectDefaultTheRequiredInheritedPropertyLacks(): void
+    {
+        $output = ModelFixture::build([
+            'Pet' => ['type' => 'object', 'properties' => ['name' => ['type' => 'string']]],
+            'Cat' => ['allOf' => [['$ref' => '#/components/schemas/Pet'], ['required' => ['name'], 'properties' => ['lives' => ['type' => 'integer']]]]],
+            'Owner' => ['type' => 'object', 'properties' => ['cat' => ['$ref' => '#/components/schemas/Cat', 'default' => []]]],
+        ]);
+
+        self::assertContains(
+            'warning /project/api/openapi.yaml#/components/schemas/Owner/properties/cat/default: The default {} cannot be `new App\\Dto\\Cat()`: it lacks "name", which the constructor requires; null is used instead.',
+            ModelFixture::messages($output),
+        );
+    }
+
     public function testRequiresNothingInheritedOfAClassThatMerges(): void
     {
         $output = ModelFixture::build([

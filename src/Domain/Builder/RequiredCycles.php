@@ -81,7 +81,7 @@ final class RequiredCycles
     {
         $type = $property->type();
         if (!$property->isRequired()) {
-            if (!$type instanceof NullableType || !in_array($property->wireName(), $class->requiredInherited(), true)) {
+            if (!$type instanceof NullableType || !$class->requires($property)) {
                 return null;
             }
 

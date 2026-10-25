@@ -15,6 +15,8 @@ All notable changes to this package are documented here. The format follows
   keeps", which no longer adds "and does not require it"). A property whose schema admits `null` stays optional, as it
   does for a class's own properties. The guarantee is the constructor's: a setter or a `clone` wither the parent
   declares still accepts `null`.
+- A class's own property that an ancestor's `required` names (`A {required: [y]}` without `y`, `B: allOf [A, {properties:
+  {y}}]`) is required, as every instance of `B` is one of `A`; it was optional.
 - Such a parameter moves among the required ones, so the positional order of that constructor changes (Shipengine's
   `UpdateWarehouseRequestBody(name, originAddress, …)`); call it with named arguments, or check positional calls.
 - `ClassModel::requiredInherited()` lists, for extensions, the wire names of the inherited properties the class

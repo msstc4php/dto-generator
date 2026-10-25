@@ -255,14 +255,15 @@ final class ClassModel
 
     /**
      * The default the constructor gives a property of the class or an ancestor: a discriminator selecting the class by
-     * one value defaults to it; selected by several, it keeps its own default only when that is one of them.
+     * one value defaults to it; selected by several, it keeps its own default only when that is one of them. An
+     * inherited property the class requires has none.
      */
     public function constructorDefaultOf(PropertyModel $property): ?DefaultValue
     {
         $selection = $this->discriminatorValuesOf($property->name());
         $default = $property->default();
         if (!$selection instanceof DiscriminatorValues) {
-            return $default;
+            return $this->requires($property) ? null : $default;
         }
 
         $values = $selection->values();
@@ -320,6 +321,16 @@ final class ClassModel
     public function interfaces(): array
     {
         return $this->interfaces;
+    }
+
+    /**
+     * Whether the constructor requires an inherited property its ancestor leaves optional; a discriminator selecting the
+     * class keeps the default its check allows.
+     */
+    public function requires(PropertyModel $property): bool
+    {
+        return in_array($property->wireName(), $this->requiredInherited, true)
+            && !$this->discriminatorValuesOf($property->name()) instanceof DiscriminatorValues;
     }
 
     /**

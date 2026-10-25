@@ -39,7 +39,13 @@ final class AllOfResolver
     {
         [$composition, $parent] = $this->resolve($schema, $diagnostics);
 
-        return $parent instanceof NamedClass ? $composition->withInheritedRequirements($this->inheritedRequirements($composition, $parent)) : $composition;
+        if (!$parent instanceof NamedClass) {
+            return $composition;
+        }
+
+        [$inherited, $required] = $this->requirements($composition, $parent);
+
+        return $composition->withInheritedRequirements($inherited)->withRequired($required);
     }
 
     /**
@@ -130,12 +136,15 @@ final class AllOfResolver
     }
 
     /**
-     * The properties an ancestor declares optional that the class, or an ancestor between, requires; Hierarchy keeps
-     * those the class inherits.
+     * What the ancestors' `required` asks of the class: the properties an ancestor declares optional that the class, or
+     * an ancestor between, requires (Hierarchy keeps those the class inherits), and every name the chain requires, own
+     * properties an ancestor names without declaring them among them.
      *
-     * @return array<array-key, non-empty-list<Schema>> by wire name, the declarations of the nearest ancestor
+     * @return array{array<array-key, non-empty-list<Schema>>, array<array-key, string>} the declarations of the nearest
+     *                                                                                   ancestor by wire name, and the
+     *                                                                                   required wire names
      */
-    private function inheritedRequirements(Composition $composition, NamedClass $parent): array
+    private function requirements(Composition $composition, NamedClass $parent): array
     {
         $own = $this->propertyNames($composition);
         $required = $composition->required();
@@ -158,7 +167,7 @@ final class AllOfResolver
             }
         }
 
-        return array_diff_key(array_intersect_key($declarations, $required), $own, $alreadyRequired);
+        return [array_diff_key(array_intersect_key($declarations, $required), $own, $alreadyRequired), $required];
     }
 
     /**

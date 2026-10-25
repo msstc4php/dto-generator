@@ -21,4 +21,16 @@ final class CompositionTest extends TestCase
         self::assertSame([], $composition->inheritedRequirements());
         self::assertSame(['name' => [$name]], $required->inheritedRequirements());
     }
+
+    public function testRequiresMoreInACopy(): void
+    {
+        $schema = GraphFixture::load(['Pet' => ['type' => 'object', 'properties' => ['name' => ['type' => 'string']]]])->all()[0]->schema();
+        $composition = Composition::of($schema);
+
+        $required = $composition->withRequired(['name' => 'name', 1 => '1']);
+
+        self::assertFalse($composition->isRequired('name'));
+        self::assertTrue($required->isRequired('name'));
+        self::assertSame(['name' => 'name', '1' => '1'], $required->required());
+    }
 }

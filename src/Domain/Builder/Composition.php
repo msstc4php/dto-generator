@@ -117,6 +117,22 @@ final class Composition
     }
 
     /**
+     * The composition with more wire names required: those its ancestors' `required` lists, which the instances of a
+     * subclass are bound by too.
+     *
+     * @param array<array-key, string> $wireNames
+     */
+    public function withRequired(array $wireNames): self
+    {
+        $composition = clone $this;
+        foreach ($wireNames as $wireName) {
+            $composition->required[$wireName] = $wireName;
+        }
+
+        return $composition;
+    }
+
+    /**
      * @return array<array-key, non-empty-list<Schema>>
      */
     public function inheritedRequirements(): array
