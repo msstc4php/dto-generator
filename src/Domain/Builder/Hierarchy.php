@@ -316,16 +316,16 @@ final class Hierarchy
         $requirements = [];
         foreach ($this->models[$members[0]]->properties() as $candidate) {
             $shared = $this->shared($candidate, $members, in_array($candidate->wireName(), $variants->required(), true));
-            if ($shared === null) {
+            if (!$shared instanceof SharedProperty) {
                 continue;
             }
 
-            [$common[], $found, $requiring] = $shared;
-            foreach ($found as $member => $match) {
+            $common[] = $shared->base();
+            foreach ($shared->declarations() as $member => $match) {
                 $taken[$member][] = $match;
             }
 
-            foreach ($requiring as $member) {
+            foreach ($shared->requiring() as $member) {
                 $requirements[$member][] = $candidate->wireName();
             }
         }
@@ -345,10 +345,8 @@ final class Hierarchy
      * optional declaration, which they then must share, and those requiring it keep doing so.
      *
      * @param non-empty-list<string> $members
-     *
-     * @return array{PropertyModel, array<string, PropertyModel>, list<string>}|null
      */
-    private function shared(PropertyModel $candidate, array $members, bool $required): ?array
+    private function shared(PropertyModel $candidate, array $members, bool $required): ?SharedProperty
     {
         $found = [];
         foreach ($members as $member) {
@@ -365,17 +363,31 @@ final class Hierarchy
 
         $optional = array_filter($found, static fn (PropertyModel $match): bool => !$match->isRequired());
         if ($optional === []) {
-            return [$candidate, $found, []];
+            return new SharedProperty($candidate, $found, []);
         }
 
-        $base = reset($optional);
+        $declaration = reset($optional);
         foreach ($optional as $match) {
-            if (!$this->declaredAlike($base, [$match])) {
+            if (!$this->declaredAlike($declaration, [$match])) {
                 return null;
             }
         }
 
-        return [$base, $found, array_keys(array_diff_key($found, $optional))];
+        // The type and default of the optional declarations; where it was written, as for any other shared property,
+        // that of the first variant.
+        $base = new PropertyModel(
+            $candidate->name(),
+            $candidate->wireName(),
+            $declaration->type(),
+            false,
+            $declaration->default(),
+            $candidate->doc(),
+            $candidate->source(),
+            $candidate->attributes(),
+            $candidate->isAdditionalProperties(),
+        );
+
+        return new SharedProperty($base, $found, array_keys(array_diff_key($found, $optional)));
     }
 
     /**

@@ -8,6 +8,7 @@ use LogicException;
 use MSSTC4PHP\DtoGenerator\Application\Service\Model\Build\BuiltEnum;
 use MSSTC4PHP\DtoGenerator\Application\Service\Model\Build\Output;
 use MSSTC4PHP\DtoGenerator\Domain\Model\PropertyModel;
+use MSSTC4PHP\DtoGenerator\Domain\Shared\DefaultValue;
 use MSSTC4PHP\DtoGenerator\Domain\Target\AllOfStrategy;
 use MSSTC4PHP\DtoGenerator\Tests\Support\GraphFixture;
 use MSSTC4PHP\DtoGenerator\Tests\Support\ModelFixture;
@@ -2593,6 +2594,41 @@ final class CompositionTest extends TestCase
         yield 'no type' => [[], 'mixed'];
         yield 'a default' => [['type' => 'string', 'default' => 'x'], 'string|null'];
         yield 'null allowed in one' => [['type' => 'string'], 'string|null'];
+    }
+
+    public function testSharesAPropertyALaterVariantRequiresWithTheDefaultOfTheOthers(): void
+    {
+        $output = ModelFixture::build([
+            'Pet' => ['oneOf' => [['$ref' => '#/components/schemas/Dog'], ['$ref' => '#/components/schemas/Cat']], 'discriminator' => ['propertyName' => 'kind'], 'required' => ['name']],
+            'Cat' => ['allOf' => [['$ref' => '#/components/schemas/Pet'], ['type' => 'object', 'properties' => ['kind' => ['type' => 'string'], 'name' => ['type' => 'string', 'default' => 'x']]]]],
+            'Dog' => ['type' => 'object', 'properties' => ['kind' => ['type' => 'string'], 'name' => ['type' => 'string', 'default' => 'x']]],
+        ]);
+
+        $pet = null;
+        foreach ($output->classes() as $class) {
+            $pet = $class->model()->name()->fqcn() === 'App\\Dto\\Pet' ? $class->model() : $pet;
+        }
+
+        self::assertNotNull($pet);
+        $name = $pet->property('name');
+        self::assertNotNull($name);
+        self::assertSame('"x"', $name->default() instanceof DefaultValue ? $name->default()->toJson() : null);
+        self::assertSame('/project/api/openapi.yaml#/components/schemas/Dog/properties/name', $name->source()->toString());
+        self::assertSame(['App\\Dto\\Cat' => ['name']], ModelFixture::requiredInherited($output));
+    }
+
+    public function testPlacesTheSharedPropertyWhereTheFirstVariantDeclaresIt(): void
+    {
+        $output = ModelFixture::build([
+            'Pet' => ['oneOf' => [['$ref' => '#/components/schemas/Cat'], ['$ref' => '#/components/schemas/Dog']], 'discriminator' => ['propertyName' => 'kind'], 'required' => ['friend']],
+            'Cat' => ['allOf' => [['$ref' => '#/components/schemas/Pet'], ['type' => 'object', 'properties' => ['kind' => ['type' => 'string'], 'friend' => ['$ref' => '#/components/schemas/Cat']]]]],
+            'Dog' => ['type' => 'object', 'properties' => ['kind' => ['type' => 'string'], 'friend' => ['$ref' => '#/components/schemas/Cat']]],
+        ]);
+
+        self::assertContains(
+            'warning /project/api/openapi.yaml#/components/schemas/Cat/allOf/1/properties/friend: Required property "friend" of App\\Dto\\Cat leads back to it through required properties, so no instance can ever be constructed.',
+            ModelFixture::messages($output),
+        );
     }
 
     public function testSharesARequiredDiscriminatorAndWhatEveryVariantRequires(): void
