@@ -163,7 +163,7 @@ final class ClassBuilder
             $properties[] = $additional;
         }
 
-        return new ClassModel(
+        $model = new ClassModel(
             $name,
             ClassKind::from(ClassKind::FINAL),
             $composition->parent(),
@@ -171,27 +171,32 @@ final class ClassBuilder
             $this->mutability($schema, $diagnostics),
             new DocModel($schema->description(), $schema->isDeprecated()),
             $schema->location(),
-            [],
-            null,
-            [],
-            [],
-            [],
-            [],
-            $this->requiredInherited($composition),
         );
+
+        return $model->withRequiredInherited(...$this->requiredInherited($composition));
     }
 
     /**
-     * A required property whose schema admits null is optional, here as for a class's own.
+     * A required property whose schema admits null is optional, here as for a class's own; every declaration of the
+     * ancestor applies.
      *
      * @return list<string>
      */
     private function requiredInherited(Composition $composition): array
     {
         $wireNames = [];
-        foreach ($composition->inheritedRequirements() as $wireName => $declaration) {
-            // The ancestor's own build reports what its declaration holds.
-            if (!$this->types->map($declaration, new Diagnostics()) instanceof NullableType) {
+        foreach ($composition->inheritedRequirements() as $wireName => $declarations) {
+            // The ancestor's own build reports what its declarations hold.
+            $type = null;
+            foreach ($declarations as $declaration) {
+                $mapped = $this->types->map($declaration, new Diagnostics());
+                $type = $type instanceof TypeModel ? $this->types->meet()->of($type, $mapped) : $mapped;
+                if (!$type instanceof TypeModel) {
+                    break;
+                }
+            }
+
+            if ($type instanceof TypeModel && !$type instanceof NullableType) {
                 $wireNames[] = (string) $wireName;
             }
         }

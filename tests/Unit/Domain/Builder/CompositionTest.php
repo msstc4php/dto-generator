@@ -16,9 +16,9 @@ final class CompositionTest extends TestCase
         $name = $schema->requireProperty('name');
         $composition = Composition::of($schema);
 
-        $required = $composition->withInheritedRequirements(['name' => $name]);
+        $required = $composition->withInheritedRequirements(['name' => [$name]]);
 
         self::assertSame([], $composition->inheritedRequirements());
-        self::assertSame(['name' => $name], $required->inheritedRequirements());
+        self::assertSame(['name' => [$name]], $required->inheritedRequirements());
     }
 }

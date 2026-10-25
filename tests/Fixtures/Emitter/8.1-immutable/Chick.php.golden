@@ -8,7 +8,7 @@ namespace App\Dto;
 
 final class Chick extends Hen
 {
-    public function __construct(?string $name = null, ?string $kind = 'chick', ?int $eggs = null)
+    public function __construct(?string $name, ?int $eggs, ?string $kind = 'chick')
     {
         if ($kind !== 'chick') {
             throw new \InvalidArgumentException(
@@ -19,16 +19,24 @@ final class Chick extends Hen
             );
         }
 
-        parent::__construct($kind, $name, $eggs);
+        if ($name === null) {
+            throw new \InvalidArgumentException('Chick requires "name".');
+        }
+
+        if ($eggs === null) {
+            throw new \InvalidArgumentException('Chick requires "eggs".');
+        }
+
+        parent::__construct($name, $kind, $eggs);
     }
 
     public function withName(?string $name): self
     {
-        return new self($name, $this->kind, $this->eggs);
+        return new self($name, $this->eggs, $this->kind);
     }
 
     public function withEggs(?int $eggs): self
     {
-        return new self($this->name, $this->kind, $eggs);
+        return new self($this->name, $eggs, $this->kind);
     }
 }

@@ -24,7 +24,7 @@ final class Composition
     /** @var array<string, string> */
     private array $required;
 
-    /** @var array<string, Schema> */
+    /** @var array<array-key, non-empty-list<Schema>> */
     private array $inheritedRequirements = [];
 
     /**
@@ -104,8 +104,9 @@ final class Composition
     }
 
     /**
-     * @param array<string, Schema> $requirements by wire name, the declaration of each inherited property the class or
-     *                                            an ancestor requires but the ancestor declaring it does not
+     * @param array<array-key, non-empty-list<Schema>> $requirements by wire name (a numeric one as an int key), the
+     *                                                               declarations of each inherited property the class or an
+     *                                                               ancestor requires but the ancestor declaring it does not
      */
     public function withInheritedRequirements(array $requirements): self
     {
@@ -116,7 +117,7 @@ final class Composition
     }
 
     /**
-     * @return array<string, Schema>
+     * @return array<array-key, non-empty-list<Schema>>
      */
     public function inheritedRequirements(): array
     {

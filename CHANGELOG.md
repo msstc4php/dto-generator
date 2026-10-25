@@ -10,9 +10,15 @@ All notable changes to this package are documented here. The format follows
 
 - A subclass whose schema requires a property its parent leaves optional now requires it: the subclass constructor
   takes the parameter without a default and throws `InvalidArgumentException` on `null`, and so does every class
-  extending it. This replaces the warning "Required property … belongs to the parent …" (Shipengine 153×, Plaid 16×).
-  A property whose schema admits `null` stays optional, as it does for a class's own properties.
-- `ClassModel::requiredInherited()` lists the wire names of those properties for extensions.
+  extending it. This replaces the warning "Required property … belongs to the parent …" (Shipengine 153×, Plaid 16×),
+  and holds as well for a property the subclass declares again but keeps from the parent ("… whose type … the class
+  keeps", which no longer adds "and does not require it"). A property whose schema admits `null` stays optional, as it
+  does for a class's own properties. The guarantee is the constructor's: a setter or a `clone` wither the parent
+  declares still accepts `null`.
+- Such a parameter moves among the required ones, so the positional order of that constructor changes (Shipengine's
+  `UpdateWarehouseRequestBody(name, originAddress, …)`); call it with named arguments, or check positional calls.
+- `ClassModel::requiredInherited()` lists, for extensions, the wire names of the inherited properties the class
+  requires so.
 
 ## [1.15.0] - 2026-10-25
 

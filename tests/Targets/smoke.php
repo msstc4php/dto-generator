@@ -225,13 +225,17 @@ if (strpos(basename($profile), '-mutable-getters') !== false) {
 }
 
 // A subclass calls its parent with the parent's own parameter order, which defaults may make differ from its own.
-$chick = new Chick();
-check($chick instanceof Hen && read($chick, 'kind') === 'chick' && read($chick, 'name') === null, 'subclass of an open class with defaults');
-$named = new Chick('Tweety', 'chick', 3);
+$chick = new Chick('Tweety', 0);
+check($chick instanceof Hen && read($chick, 'kind') === 'chick' && read($chick, 'eggs') === 0, 'subclass of an open class with defaults');
+$named = new Chick('Tweety', 3, 'chick');
 check(read($named, 'name') === 'Tweety' && read($named, 'eggs') === 3, 'subclass of an open class with arguments');
-check(read(new Hen('hen', 'Ginger', 2), 'name') === 'Ginger', 'open class with an optional discriminator');
-rejects(static fn (): Hen => new Hen('chick'), '"chick" does not select Hen by "kind".');
-rejects(static fn (): Hen => new Hen(null), 'null does not select Hen by "kind".');
+check(read(new Hen('Ginger', 'hen', 2), 'name') === 'Ginger', 'open class with an optional discriminator');
+rejects(static fn (): Hen => new Hen('Ginger', 'chick'), '"chick" does not select Hen by "kind".');
+rejects(static fn (): Hen => new Hen('Ginger', null), 'null does not select Hen by "kind".');
+// An inherited property the class requires though its ancestor does not.
+rejects(static fn (): Hen => new Hen(null, 'hen'), 'Hen requires "name".');
+rejects(static fn (): Chick => new Chick('Tweety', null), 'Chick requires "eggs".');
+rejects(static fn (): Chick => new Chick(null, 1), 'Chick requires "name".');
 check(read(new SubSide(), 'kind') === 'sub', 'subclass of an open variant with defaults');
 $sub = new SubSide('left', 'sub', 'more');
 check(read($sub, 'label') === 'left' && read($sub, 'extra') === 'more', 'subclass of an open variant with arguments');

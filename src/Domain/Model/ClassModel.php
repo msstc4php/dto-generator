@@ -136,6 +136,9 @@ final class ClassModel
         }
 
         $this->requiredInherited = $this->wireNames($requiredInherited, $name, 'required inherited property');
+        foreach (array_intersect($this->requiredInherited, array_keys($wireNames)) as $wireName) {
+            throw new InvalidModel(sprintf('Class %s requires "%s" as inherited, but declares it itself.', $name->fqcn(), $wireName));
+        }
         $this->interfaces = [];
         foreach ($interfaces as $interface) {
             if ($interface->equals($name)) {
@@ -325,6 +328,26 @@ final class ClassModel
     public function requiredInherited(): array
     {
         return $this->requiredInherited;
+    }
+
+    public function withRequiredInherited(string ...$wireNames): self
+    {
+        return new self(
+            $this->name,
+            $this->kind,
+            $this->parent,
+            $this->properties,
+            $this->mutability,
+            $this->doc,
+            $this->source,
+            $this->attributes,
+            $this->discriminator,
+            $this->discriminatorValues,
+            $this->discriminatedProperties,
+            $this->restoredMutators,
+            $this->interfaces,
+            $wireNames,
+        );
     }
 
     public function withInterfaces(ClassName ...$interfaces): self

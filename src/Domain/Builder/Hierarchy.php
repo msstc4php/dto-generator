@@ -87,6 +87,7 @@ final class Hierarchy
 
         $hierarchy->settle($unions);
         $hierarchy->check();
+        $hierarchy->requireInherited();
         $hierarchy->checkDiscriminators($unions);
         $hierarchy->selectVariants();
 
@@ -529,6 +530,7 @@ final class Hierarchy
 
         $fqcn = $model->name()->fqcn();
         $kept = [];
+        $required = $model->requiredInherited();
         foreach ($model->properties() as $property) {
             [$byWireName, $inherited] = $wireNames[$property->wireName()] ?? [null, null];
             $byName = $names[Identifier::asciiLower($property->name())] ?? null;
@@ -541,15 +543,17 @@ final class Hierarchy
             if ($inherited instanceof PropertyModel && $this->keepsTheParents($inherited, $property, $meet)) {
                 array_pop($kept);
                 $this->superseded->add($property->type());
+                if ($property->isRequired()) {
+                    $required[] = $property->wireName();
+                }
                 $this->diagnostics->warning(
                     sprintf(
-                        'Property "%s" of %s %s the one %s declares, whose type %s the class keeps%s.',
+                        'Property "%s" of %s %s the one %s declares, whose type %s the class keeps.',
                         $property->wireName(),
                         $fqcn,
                         $this->meet->admits($inherited->type(), $property->type()) ? 'narrows' : 'shares values with',
                         $byWireName,
                         $inherited->type()->describe(),
-                        $property->isRequired() && !$inherited->isRequired() ? ' and does not require it' : '',
                     ),
                     $property->source(),
                 );
@@ -558,9 +562,12 @@ final class Hierarchy
                 // types meet is not asked, as a read or write model of the narrower class no longer extends the parent's.
                 array_pop($kept);
                 $this->superseded->add($property->type());
+                if ($property->isRequired()) {
+                    $required[] = $property->wireName();
+                }
                 $this->diagnostics->warning(
                     sprintf(
-                        'Property "%s" of %s is %s, which %s; the class is a variant, which keeps its parent, so it keeps %s%s.',
+                        'Property "%s" of %s is %s, which %s; the class is a variant, which keeps its parent, so it keeps %s.',
                         $property->wireName(),
                         $fqcn,
                         $property->type()->describe(),
@@ -568,7 +575,6 @@ final class Hierarchy
                             ? sprintf('PHP lets no subclass of %s declare', $byWireName)
                             : sprintf('has no value in common with the type %s declares, unless the two are classes of different read or write models', $byWireName),
                         $inherited->type()->describe(),
-                        $property->isRequired() && !$inherited->isRequired() ? ' and does not require it' : '',
                     ),
                     $property->source(),
                 );
@@ -585,7 +591,32 @@ final class Hierarchy
             }
         }
 
-        return count($kept) === count($model->properties()) ? $model : $model->withProperties(...$kept);
+        // The class's own requirement of a property it keeps from the parent stays, as one written beside the parent's $ref.
+        return count($kept) === count($model->properties()) ? $model : $model->withProperties(...$kept)->withRequiredInherited(...$required);
+    }
+
+    /**
+     * A class requires what its ancestors require of theirs, or its constructor would pass them null; of what it lists,
+     * only the inherited properties an ancestor leaves optional: one it skips or a view leaves out is not there.
+     */
+    private function requireInherited(): void
+    {
+        $models = $this->models;
+        foreach (array_keys($models) as $fqcn) {
+            $chain = $this->chain($fqcn);
+            $optional = [];
+            $listed = [];
+            foreach ($chain as $member) {
+                array_push($listed, ...$models[$member]->requiredInherited());
+                foreach ($member === $fqcn ? [] : $models[$member]->properties() as $property) {
+                    if (!$property->isRequired()) {
+                        $optional[$property->wireName()] = $property->wireName();
+                    }
+                }
+            }
+
+            $this->models[$fqcn] = $models[$fqcn]->withRequiredInherited(...array_values(array_intersect($optional, $listed)));
+        }
     }
 
     /**

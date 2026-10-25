@@ -130,10 +130,10 @@ final class AllOfResolver
     }
 
     /**
-     * The properties an ancestor declares optional that the class, or an ancestor between, requires: the constructor of
-     * the class requires them in turn.
+     * The properties an ancestor declares optional that the class, or an ancestor between, requires; Hierarchy keeps
+     * those the class inherits.
      *
-     * @return array<string, Schema> by wire name, the declaration of the nearest ancestor
+     * @return array<array-key, non-empty-list<Schema>> by wire name, the declarations of the nearest ancestor
      */
     private function inheritedRequirements(Composition $composition, NamedClass $parent): array
     {
@@ -146,9 +146,10 @@ final class AllOfResolver
             $seen[$ancestor->name()->fqcn()] = $ancestor;
             [$ancestry, $next] = $this->ancestor($ancestor->schema());
             $required += $ancestry->required();
+            $nearer = $declarations;
             foreach ($ancestry->propertySources() as [$wireName, $declaration]) {
-                if (!isset($declarations[$wireName])) {
-                    $declarations[$wireName] = $declaration;
+                if (!isset($nearer[$wireName])) {
+                    $declarations[$wireName][] = $declaration;
                     // Only an ancestor's own properties can be required there; extending drops the rest, as it does here.
                     if ($ancestry->isRequired($wireName)) {
                         $alreadyRequired[$wireName] = $wireName;

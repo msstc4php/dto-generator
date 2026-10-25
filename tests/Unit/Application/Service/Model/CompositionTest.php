@@ -489,10 +489,11 @@ final class CompositionTest extends TestCase
 
         $narrows = static fn (string $name, string $type): string => "warning {$at}Cat/allOf/1/properties/{$name}: Property \"{$name}\" of App\\Dto\\Cat narrows the one App\\Dto\\Pet declares, whose type {$type} the class keeps.";
         self::assertSame(
-            [str_replace(' keeps.', ' keeps and does not require it.', $narrows('at', 'DateTimeImmutable|null')), $narrows('n', 'string|null'), $narrows('kind', 'string|null'), $narrows('size', 'App\\Dto\\PetSize|null'), str_replace('narrows', 'shares values with', $narrows('state', 'App\\Dto\\PetState|null')), str_replace('narrows', 'shares values with', $narrows('mode', 'App\\Dto\\PetMode|null'))],
+            [$narrows('at', 'DateTimeImmutable|null'), $narrows('n', 'string|null'), $narrows('kind', 'string|null'), $narrows('size', 'App\\Dto\\PetSize|null'), str_replace('narrows', 'shares values with', $narrows('state', 'App\\Dto\\PetState|null')), str_replace('narrows', 'shares values with', $narrows('mode', 'App\\Dto\\PetMode|null'))],
             array_values(array_filter(ModelFixture::messages($output), static fn (string $message): bool => strpos($message, ' the class keeps') !== false)),
         );
         self::assertSame(['meow: string|null'], ModelFixture::classes($output)['App\\Dto\\Cat']);
+        self::assertSame(['App\\Dto\\Cat' => ['at']], ModelFixture::requiredInherited($output));
     }
 
     public function testLeavesOutTheInlineTypesItSetsAside(): void
@@ -2411,7 +2412,7 @@ final class CompositionTest extends TestCase
         ]);
 
         self::assertSame([], ModelFixture::messages($output));
-        self::assertSame(['App\Dto\Pet' => ['name'], 'App\Dto\Kitten' => ['owner', 'name', 'tag']], ModelFixture::requiredInherited($output));
+        self::assertSame(['App\Dto\Pet' => ['name'], 'App\Dto\Kitten' => ['name', 'tag', 'owner']], ModelFixture::requiredInherited($output));
     }
 
     public function testRequiresNoInheritedPropertyThatAdmitsNullOrIsUnknown(): void
@@ -2433,6 +2434,60 @@ final class CompositionTest extends TestCase
         ]);
 
         self::assertSame(['App\Dto\Cat' => ['1']], ModelFixture::requiredInherited($output));
+    }
+
+    public function testRequiresOnlyThePropertiesTheClassInherits(): void
+    {
+        $output = ModelFixture::build([
+            'Pet' => ['type' => 'object', 'properties' => ['name' => ['type' => 'string'], 'secret' => ['type' => 'string', 'x-php-skip' => true]]],
+            'Cat' => ['allOf' => [['$ref' => '#/components/schemas/Pet'], ['required' => ['name', 'secret'], 'properties' => ['lives' => ['type' => 'integer']]]]],
+        ]);
+
+        self::assertSame(['App\\Dto\\Cat' => ['name']], ModelFixture::requiredInherited($output));
+    }
+
+    public function testRequiresInEachViewTheInheritedPropertiesItHas(): void
+    {
+        $output = ModelFixture::views([
+            'Pet' => ['type' => 'object', 'properties' => [
+                'id' => ['type' => 'string', 'readOnly' => true],
+                'pw' => ['type' => 'string', 'writeOnly' => true],
+                'name' => ['type' => 'string'],
+            ]],
+            'Cat' => ['allOf' => [['$ref' => '#/components/schemas/Pet'], ['required' => ['id', 'pw', 'name'], 'properties' => ['lives' => ['type' => 'integer']]]]],
+        ]);
+
+        $required = ModelFixture::requiredInherited($output);
+        self::assertSame(['id', 'name'], $required['App\\Dto\\CatRead']);
+        self::assertSame(['pw', 'name'], $required['App\\Dto\\CatWrite']);
+    }
+
+    public function testJudgesNullByEveryDeclarationOfTheAncestor(): void
+    {
+        $output = ModelFixture::build([
+            'Pet' => ['allOf' => [
+                ['type' => 'object', 'properties' => ['n' => ['type' => ['string', 'null']], 'm' => ['type' => ['string', 'null']]]],
+                ['type' => 'object', 'properties' => ['n' => ['type' => 'string'], 'm' => ['type' => 'integer']]],
+                ['type' => 'object', 'properties' => ['m' => ['type' => 'string']]],
+            ]],
+            'Cat' => ['allOf' => [['$ref' => '#/components/schemas/Pet'], ['required' => ['n', 'm'], 'properties' => ['lives' => ['type' => 'integer']]]]],
+        ]);
+
+        self::assertSame(['App\\Dto\\Cat' => ['n']], ModelFixture::requiredInherited($output));
+    }
+
+    public function testWarnsAboutACycleThroughAnInheritedRequirement(): void
+    {
+        $output = ModelFixture::build([
+            'Pet' => ['type' => 'object', 'properties' => ['owner' => ['$ref' => '#/components/schemas/Owner']]],
+            'Cat' => ['allOf' => [['$ref' => '#/components/schemas/Pet'], ['required' => ['owner'], 'properties' => ['lives' => ['type' => 'integer']]]]],
+            'Owner' => ['type' => 'object', 'required' => ['cat'], 'properties' => ['cat' => ['$ref' => '#/components/schemas/Cat']]],
+        ]);
+
+        self::assertContains(
+            'warning /project/api/openapi.yaml#/components/schemas/Pet/properties/owner: Required property "owner" of App\\Dto\\Cat leads back to it through required properties, so no instance can ever be constructed.',
+            ModelFixture::messages($output),
+        );
     }
 
     public function testRequiresNothingInheritedOfAClassThatMerges(): void
