@@ -228,7 +228,7 @@ final class YamlCacheTest extends TestCase
 
     public function testUsesNoDirectoryOfAnotherUser(): void
     {
-        $user = function_exists('posix_geteuid') ? posix_geteuid() : 1000;
+        $user = (int) fileowner($this->base);
         $mine = new YamlCache($this->directory, 'v1', $user);
         $mine->put($this->large(), ['a' => 1]);
         self::assertSame(['a' => 1], $mine->get($this->large()));
@@ -247,7 +247,7 @@ final class YamlCacheTest extends TestCase
 
     public function testCreatesNoDirectoryUnderOneOfAnotherUser(): void
     {
-        $user = function_exists('posix_geteuid') ? posix_geteuid() : 1000;
+        $user = (int) fileowner($this->base);
         (new YamlCache($this->directory, 'v1', $user + 1))->put($this->large(), ['a' => 1]);
         self::assertDirectoryDoesNotExist(dirname($this->directory));
 
