@@ -311,15 +311,63 @@ final class Hierarchy
             return;
         }
 
-        $common = $this->models[$members[0]]->properties();
-        foreach ($members as $member) {
-            $common = $this->shared($common, $this->models[$member]->properties());
+        // A property the base's `required` names is required of a variant that extends the base through allOf, not of
+        // one only listed: it goes to the base as an optional one, and the variants that require it go on doing so.
+        $common = [];
+        $taken = [];
+        $requirements = [];
+        foreach ($this->models[$members[0]]->properties() as $candidate) {
+            $relaxed = in_array($candidate->wireName(), $variants->required(), true);
+            $found = [];
+            foreach ($members as $member) {
+                $match = $this->counterpart($candidate, $this->models[$member]->properties(), $relaxed);
+                if (!$match instanceof PropertyModel) {
+                    continue 2;
+                }
+
+                $found[$member] = $match;
+            }
+
+            $required = array_filter($found, static fn (PropertyModel $match): bool => $match->isRequired());
+            $common[] = count($required) === count($found) ? $candidate : $this->optional($candidate);
+            foreach ($found as $member => $match) {
+                $taken[$member][] = $match;
+                if (isset($required[$member]) && count($required) !== count($found)) {
+                    $requirements[$member][] = $match->wireName();
+                }
+            }
         }
 
         $this->models[$base] = $this->models[$base]->withProperties(...array_merge($own, $common));
         foreach ($members as $member) {
-            $this->models[$member] = $this->models[$member]->withProperties(...$this->unshared($this->models[$member]->properties(), $common));
+            $model = $this->models[$member];
+            $kept = array_filter($model->properties(), static fn (PropertyModel $property): bool => !in_array($property, $taken[$member] ?? [], true));
+            $this->models[$member] = $model->withProperties(...$kept)->withRequiredInherited(...array_merge($model->requiredInherited(), $requirements[$member] ?? []));
         }
+    }
+
+    /**
+     * The property as an optional one: null stands for a missing value.
+     */
+    private function optional(PropertyModel $property): PropertyModel
+    {
+        return $property->isRequired() ? $property->withType(NullableType::of($property->type())) : $property;
+    }
+
+    /**
+     * The property of another variant declared alike; with $relaxed, one that differs only in being required counts.
+     *
+     * @param list<PropertyModel> $others
+     */
+    private function counterpart(PropertyModel $property, array $others, bool $relaxed): ?PropertyModel
+    {
+        foreach ($others as $other) {
+            if ($relaxed ? $this->declaredAlike($this->optional($property), [$this->optional($other)]) : $this->declaredAlike($property, [$other])) {
+                return $other;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -593,24 +641,6 @@ final class Hierarchy
 
         // The class's own requirement of a property it keeps from the parent stays, as one written beside the parent's $ref.
         return count($kept) === count($model->properties()) ? $model : $model->withProperties(...$kept)->withRequiredInherited(...$required);
-    }
-
-    /**
-     * @param list<PropertyModel> $properties
-     * @param list<PropertyModel> $others
-     *
-     * @return list<PropertyModel> the properties the others declare alike
-     */
-    private function shared(array $properties, array $others): array
-    {
-        $result = [];
-        foreach ($properties as $property) {
-            if ($this->declaredAlike($property, $others)) {
-                $result[] = $property;
-            }
-        }
-
-        return $result;
     }
 
     /**

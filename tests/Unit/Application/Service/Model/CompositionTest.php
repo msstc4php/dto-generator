@@ -2542,7 +2542,7 @@ final class CompositionTest extends TestCase
         self::assertSame(['1: string'], ModelFixture::classes($output)['App\\Dto\\B']);
     }
 
-    public function testBindsEveryVariantByTheRequirementsOfTheUnion(): void
+    public function testSharesAPropertyOnlyTheAllOfVariantsOfAUnionRequire(): void
     {
         $output = ModelFixture::build([
             'Pet' => ['oneOf' => [['$ref' => '#/components/schemas/Cat'], ['$ref' => '#/components/schemas/Dog']], 'discriminator' => ['propertyName' => 'kind'], 'required' => ['name']],
@@ -2551,9 +2551,56 @@ final class CompositionTest extends TestCase
         ]);
 
         $classes = ModelFixture::classes($output);
-        self::assertSame(['kind: string|null', 'name: string'], $classes['App\\Dto\\Pet']);
+        self::assertSame(['kind: string|null', 'name: string|null'], $classes['App\\Dto\\Pet']);
         self::assertSame(['lives: int|null'], $classes['App\\Dto\\Cat']);
         self::assertSame(['good: bool|null'], $classes['App\\Dto\\Dog']);
+        self::assertSame(['App\\Dto\\Cat' => ['name']], ModelFixture::requiredInherited($output));
+    }
+
+    public function testAddsTheSharedRequirementToWhatAVariantRequiresOfTheBase(): void
+    {
+        $output = ModelFixture::build([
+            'Pet' => ['type' => 'object', 'properties' => ['tag' => ['type' => 'string']], 'oneOf' => [['$ref' => '#/components/schemas/Cat'], ['$ref' => '#/components/schemas/Dog']], 'discriminator' => ['propertyName' => 'kind'], 'required' => ['name']],
+            'Cat' => ['allOf' => [['$ref' => '#/components/schemas/Pet'], ['type' => 'object', 'required' => ['tag'], 'properties' => ['kind' => ['type' => 'string'], 'name' => ['type' => 'string']]]]],
+            'Dog' => ['type' => 'object', 'properties' => ['kind' => ['type' => 'string'], 'name' => ['type' => 'string']]],
+        ]);
+
+        self::assertSame(['App\\Dto\\Cat' => ['tag', 'name']], ModelFixture::requiredInherited($output));
+    }
+
+    public function testSharesOnlyAlikePropertiesTheBaseDoesNotRequire(): void
+    {
+        $output = ModelFixture::build([
+            'Pet' => ['oneOf' => [['$ref' => '#/components/schemas/Cat'], ['$ref' => '#/components/schemas/Dog']], 'discriminator' => ['propertyName' => 'kind']],
+            'Cat' => ['type' => 'object', 'required' => ['name'], 'properties' => ['kind' => ['type' => 'string'], 'name' => ['type' => 'string']]],
+            'Dog' => ['type' => 'object', 'properties' => ['kind' => ['type' => 'string'], 'name' => ['type' => 'string']]],
+        ]);
+
+        $classes = ModelFixture::classes($output);
+        self::assertSame(['kind: string|null'], $classes['App\\Dto\\Pet']);
+        self::assertSame(['name: string'], $classes['App\\Dto\\Cat']);
+        self::assertSame([], ModelFixture::requiredInherited($output));
+    }
+
+    public function testSharesNestedUnionsAlikeInAnyOrder(): void
+    {
+        $variant = ['type' => 'object', 'properties' => ['kind' => ['type' => 'string'], 'sub' => ['type' => 'string'], 'a' => ['type' => 'string']]];
+        $schemas = [
+            'A' => ['oneOf' => [['$ref' => '#/components/schemas/B'], ['$ref' => '#/components/schemas/X']], 'discriminator' => ['propertyName' => 'kind'], 'required' => ['a']],
+            'B' => ['oneOf' => [['$ref' => '#/components/schemas/C'], ['$ref' => '#/components/schemas/D']], 'discriminator' => ['propertyName' => 'sub']],
+            'C' => $variant,
+            'D' => $variant,
+            'X' => ['type' => 'object', 'properties' => ['kind' => ['type' => 'string'], 'a' => ['type' => 'string']]],
+        ];
+        $reordered = ['B' => $schemas['B'], 'A' => $schemas['A']] + $schemas;
+
+        $written = ModelFixture::classes(ModelFixture::build($schemas));
+        $other = ModelFixture::classes(ModelFixture::build($reordered));
+        ksort($written);
+        ksort($other);
+
+        self::assertSame($written, $other);
+        self::assertSame(['kind: string|null', 'a: string|null'], $written['App\\Dto\\A']);
     }
 
     public function testRefusesAnObjectDefaultTheRequiredInheritedPropertyLacks(): void
