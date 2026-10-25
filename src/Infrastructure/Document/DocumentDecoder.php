@@ -43,7 +43,8 @@ final class DocumentDecoder
             $content = (string) substr($content, 3);
         }
 
-        $cached = $json || !$this->cache instanceof YamlCache ? null : $this->cache->get($content);
+        $cache = $json ? null : $this->cache;
+        $cached = $cache instanceof YamlCache ? $cache->get($content) : null;
         if ($cached !== null) {
             return $cached;
         }
@@ -58,8 +59,8 @@ final class DocumentDecoder
             throw UndecodableDocument::notAnObject();
         }
 
-        if (!$json && $this->cache instanceof YamlCache) {
-            $this->cache->put($content, $decoded);
+        if ($cache instanceof YamlCache) {
+            $cache->put($content, $decoded);
         }
 
         return $decoded;
