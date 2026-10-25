@@ -5,11 +5,9 @@ declare(strict_types=1);
 namespace MSSTC4PHP\DtoGenerator\Infrastructure\Document;
 
 use Closure;
+use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Remote\Environment;
 use ReflectionClass;
-use Symfony\Component\Yaml\Inline;
-use Symfony\Component\Yaml\Parser;
-use Symfony\Component\Yaml\Unescaper;
 use Symfony\Component\Yaml\Yaml;
 
 /**
@@ -36,17 +34,14 @@ final class YamlCache
 
     private const DISABLE_ENV = 'DTO_GENERATOR_YAML_CACHE';
 
-    // The code a reading depends on: the decoder, this cache and symfony/yaml's parser. A file changed by a checkout
-    // or an update changes the version, whatever Composer last recorded.
+    // The generator's code a reading depends on; all of symfony/yaml counts too. A file changed by a checkout or an
+    // update changes the version, whatever Composer last recorded.
     private const READERS = [
         DocumentDecoder::class,
         ExplicitYamlKeys::class,
         RewrittenYaml::class,
+        Json::class,
         self::class,
-        Yaml::class,
-        Parser::class,
-        Inline::class,
-        Unescaper::class,
     ];
 
     private string $directory;
@@ -75,22 +70,24 @@ final class YamlCache
     }
 
     /**
-     * The cache in the user's cache directory ($XDG_CACHE_HOME, else ~/.cache), or null when DTO_GENERATOR_YAML_CACHE is
-     * 0 or neither is set. Nothing is created before the first entry.
+     * The cache in the user's cache directory ($XDG_CACHE_HOME, else ~/.cache, each only as an absolute path), or null
+     * when DTO_GENERATOR_YAML_CACHE is 0, neither is set, or on Windows, whose modes cannot tell a private directory.
+     * Nothing is created before the first entry.
      *
      * @param (Closure(string): ?string)|null $environment the value of an environment variable, null when it is not set
+     * @param string $family PHP_OS_FAMILY
      */
-    public static function forUser(?Closure $environment = null): ?self
+    public static function forUser(?Closure $environment = null, string $family = PHP_OS_FAMILY): ?self
     {
         $environment ??= static fn (string $name): ?string => Environment::variable($name);
-        if ($environment(self::DISABLE_ENV) === '0') {
+        if ($family === 'Windows' || $environment(self::DISABLE_ENV) === '0') {
             return null;
         }
 
-        $base = $environment('XDG_CACHE_HOME');
-        if ($base === null || $base === '') {
-            $home = $environment('HOME');
-            $base = $home === null || $home === '' ? null : $home . '/.cache';
+        $base = self::absolute($environment('XDG_CACHE_HOME'));
+        if ($base === null) {
+            $home = self::absolute($environment('HOME'));
+            $base = $home === null ? null : $home . '/.cache';
         }
 
         $user = function_exists('posix_geteuid') ? posix_geteuid() : null;
@@ -108,7 +105,11 @@ final class YamlCache
             $files[] = (string) (new ReflectionClass($class))->getFileName();
         }
 
-        return $files;
+        // Which classes symfony/yaml has differs between its versions, and a security fix may change any of them.
+        $yaml = self::phpFiles(dirname((string) (new ReflectionClass(Yaml::class))->getFileName()));
+        sort($yaml);
+
+        return array_merge($files, $yaml);
     }
 
     /**
@@ -134,7 +135,8 @@ final class YamlCache
         }
 
         $path = $this->path($content);
-        // A missing entry warns, and so does one cut short; a concurrent prune may take the entry before it is touched.
+        // A missing entry warns, and so does one cut short. A concurrent prune may take the entry before it is touched,
+        // which leaves an empty file the next read drops.
         set_error_handler(static fn (): bool => true);
         $serialized = file_get_contents($path);
         $decoded = is_string($serialized) ? unserialize($serialized, ['allowed_classes' => false]) : null;
@@ -160,7 +162,7 @@ final class YamlCache
         }
 
         set_error_handler(static fn (): bool => true);
-        if (!is_dir($this->directory)) {
+        if (!is_dir($this->directory) && $this->ownsTheNearestAncestor()) {
             mkdir($this->directory, 0700, true);
         }
 
@@ -179,6 +181,43 @@ final class YamlCache
         }
 
         restore_error_handler();
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function phpFiles(string $directory): array
+    {
+        $files = [];
+        $names = scandir($directory);
+        foreach (array_diff(is_array($names) ? $names : [], ['.', '..']) as $name) {
+            $path = $directory . '/' . $name;
+            if (is_dir($path)) {
+                $files = array_merge($files, self::phpFiles($path));
+            } elseif (substr($path, -4) === '.php') {
+                $files[] = $path;
+            }
+        }
+
+        return $files;
+    }
+
+    private static function absolute(?string $path): ?string
+    {
+        return $path !== null && strncmp($path, '/', 1) === 0 ? $path : null;
+    }
+
+    /**
+     * Root run with the user's HOME would create directories the user could neither use nor remove.
+     */
+    private function ownsTheNearestAncestor(): bool
+    {
+        $ancestor = dirname($this->directory);
+        while (!file_exists($ancestor) && dirname($ancestor) !== $ancestor) {
+            $ancestor = dirname($ancestor);
+        }
+
+        return $this->user === null || fileowner($ancestor) === $this->user;
     }
 
     /**

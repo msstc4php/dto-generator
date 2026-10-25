@@ -6,6 +6,7 @@ namespace MSSTC4PHP\DtoGenerator\Tests\Unit\Infrastructure\Document;
 
 use __PHP_Incomplete_Class;
 use Closure;
+use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Document\DocumentDecoder;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Document\ExplicitYamlKeys;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Document\RewrittenYaml;
@@ -13,9 +14,6 @@ use MSSTC4PHP\DtoGenerator\Infrastructure\Document\UndecodableDocument;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Document\YamlCache;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
-use Symfony\Component\Yaml\Inline;
-use Symfony\Component\Yaml\Parser;
-use Symfony\Component\Yaml\Unescaper;
 use Symfony\Component\Yaml\Yaml;
 
 final class YamlCacheTest extends TestCase
@@ -238,6 +236,25 @@ final class YamlCacheTest extends TestCase
         self::assertNull((new YamlCache($this->directory, 'v1', $user + 1))->get($this->large()));
     }
 
+    public function testTakesARelativeCacheHomeForNone(): void
+    {
+        $cache = YamlCache::forUser(fn (string $name): ?string => ['XDG_CACHE_HOME' => 'cache', 'HOME' => $this->base . '/home'][$name] ?? null);
+        self::assertInstanceOf(YamlCache::class, $cache);
+        $cache->put($this->large(), ['a' => 1]);
+
+        self::assertDirectoryExists($this->base . '/home/.cache/dto-generator/yaml');
+    }
+
+    public function testCreatesNoDirectoryUnderOneOfAnotherUser(): void
+    {
+        $user = function_exists('posix_geteuid') ? posix_geteuid() : 1000;
+        (new YamlCache($this->directory, 'v1', $user + 1))->put($this->large(), ['a' => 1]);
+        self::assertDirectoryDoesNotExist(dirname($this->directory));
+
+        (new YamlCache($this->directory, 'v1', $user))->put($this->large(), ['a' => 1]);
+        self::assertDirectoryExists($this->directory);
+    }
+
     public function testWritesNothingWhereAFileStandsForTheDirectory(): void
     {
         mkdir(dirname($this->directory), 0700);
@@ -318,12 +335,22 @@ final class YamlCacheTest extends TestCase
         self::assertNotSame(YamlCache::version([$one]), YamlCache::version([$one, $two]));
         self::assertNotSame(YamlCache::version([]), hash('sha256', ''));
 
-        $files = [];
-        foreach ([DocumentDecoder::class, ExplicitYamlKeys::class, RewrittenYaml::class, YamlCache::class, Yaml::class, Parser::class, Inline::class, Unescaper::class] as $class) {
-            $files[] = (string) (new ReflectionClass($class))->getFileName();
+        $files = YamlCache::readerFiles();
+        foreach ([DocumentDecoder::class, ExplicitYamlKeys::class, RewrittenYaml::class, Json::class, YamlCache::class] as $class) {
+            self::assertContains((string) (new ReflectionClass($class))->getFileName(), $files);
         }
 
-        self::assertSame($files, YamlCache::readerFiles());
+        $package = dirname((string) (new ReflectionClass(Yaml::class))->getFileName());
+        self::assertContains($package . '/Parser.php', $files);
+        self::assertContains($package . '/Exception/ParseException.php', $files);
+        $yaml = array_values(array_filter($files, static fn (string $file): bool => strpos($file, $package . '/') === 0));
+        $sorted = $yaml;
+        sort($sorted);
+        self::assertSame($sorted, $yaml);
+        self::assertCount(5 + count($yaml), $files);
+        foreach ($yaml as $file) {
+            self::assertStringEndsWith('.php', $file);
+        }
     }
 
     public function testIsTheUsersCacheDirectory(): void
@@ -344,6 +371,10 @@ final class YamlCacheTest extends TestCase
 
     public function testIsNoneWhenSwitchedOffOrWithoutADirectory(): void
     {
+        self::assertNull(YamlCache::forUser(fn (string $name): ?string => ['XDG_CACHE_HOME' => $this->base][$name] ?? null, 'Windows'));
+        self::assertInstanceOf(YamlCache::class, YamlCache::forUser(fn (string $name): ?string => ['XDG_CACHE_HOME' => $this->base][$name] ?? null, 'Linux'));
+        self::assertNull(YamlCache::forUser(static fn (string $name): ?string => ['XDG_CACHE_HOME' => 'cache', 'HOME' => 'home'][$name] ?? null));
+
         self::assertNull(YamlCache::forUser(fn (string $name): ?string => ['DTO_GENERATOR_YAML_CACHE' => '0', 'XDG_CACHE_HOME' => $this->base][$name] ?? null));
         self::assertNull(YamlCache::forUser(static fn (string $name): ?string => null));
         self::assertNull(YamlCache::forUser(static fn (string $name): ?string => ['XDG_CACHE_HOME' => '', 'HOME' => ''][$name] ?? null));

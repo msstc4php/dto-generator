@@ -336,9 +336,10 @@ project.
 | `DTO_GENERATOR_YAML_CACHE` | `0` turns the cache of decoded YAML off |
 
 **Cache of decoded YAML.** symfony/yaml takes seconds on a large spec (GitHub's 10 MB one: about 2.3 s). A YAML
-document of 16 KB or more is kept decoded in `$XDG_CACHE_HOME/dto-generator/yaml`, else `~/.cache/dto-generator/yaml`,
-by the SHA-256 of its text and of the code that reads it (the generator's decoder and symfony/yaml's parser, and the PHP
-version), so a later run reads an unchanged document in a hundredth of the time and a changed reader never sees an old
-entry. The directories are created with mode 0700 on the first entry and used only while they are the user's own, no
-links, and closed to the group and others (so not on Windows, where modes say nothing of that). An entry unread for 30
+document of 16 KB or more is kept decoded in `$XDG_CACHE_HOME/dto-generator/yaml`, else `~/.cache/dto-generator/yaml`
+(each only as an absolute path), by the SHA-256 of its text and of the code that reads it (the generator's decoder, all
+of symfony/yaml, and the PHP version), so a later run reads an unchanged document in a hundredth of the time and a changed reader never sees an old
+entry. The directories are created with mode 0700 on the first entry, under a directory of the user's own, and used
+only while they are the user's own, no links, and closed to the group and others. There is no cache on Windows, where
+modes say nothing of that. An entry unread for 30
 days is deleted, and so are the least recently read beyond 256 MB. Nothing is written into the project.
