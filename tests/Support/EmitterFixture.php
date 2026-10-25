@@ -382,7 +382,8 @@ final class EmitterFixture
     }
 
     /**
-     * Selected by two values, its null default selects nothing: `kind` becomes its first, required parameter.
+     * Selected by two values, its null default selects nothing: `kind` becomes its first, required parameter. It
+     * requires `name`, which Being leaves optional.
      */
     public static function hen(string $mutability = Mutability::IMMUTABLE): ClassModel
     {
@@ -390,11 +391,12 @@ final class EmitterFixture
             ->withHierarchy(ClassKind::from(ClassKind::OPEN), ClassName::fromFqcn('App\Dto\Being'), null)
             ->withDiscriminatorValues(new DiscriminatorValues('kind', ['hen', 'chick'], true, ['chick']))
             ->withDiscriminatedProperties('kind')
+            ->withRequiredInherited('name')
         ;
     }
 
     /**
-     * Defaults `kind`, so its parameters are in another order than Hen's.
+     * Defaults `kind`, so its parameters are in another order than Hen's; requires `name` as Hen does, and `eggs`.
      */
     public static function chick(string $mutability = Mutability::IMMUTABLE): ClassModel
     {
@@ -402,6 +404,7 @@ final class EmitterFixture
             ->withHierarchy(ClassKind::from(ClassKind::FINAL), ClassName::fromFqcn('App\Dto\Hen'), null)
             ->withDiscriminatorValues(new DiscriminatorValues('kind', ['chick']))
             ->withDiscriminatedProperties('kind')
+            ->withRequiredInherited('name', 'eggs')
         ;
     }
 

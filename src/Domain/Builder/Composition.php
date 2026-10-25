@@ -24,6 +24,9 @@ final class Composition
     /** @var array<string, string> */
     private array $required;
 
+    /** @var array<array-key, non-empty-list<Schema>> */
+    private array $inheritedRequirements = [];
+
     /**
      * @param list<Schema> $members the merged `allOf` members, in order
      * @param list<Schema> $ownMembers the members written inside the class schema, not reached through a $ref
@@ -98,6 +101,43 @@ final class Composition
         }
 
         return $composition;
+    }
+
+    /**
+     * @param array<array-key, non-empty-list<Schema>> $requirements by wire name (a numeric one as an int key), the
+     *                                                               declarations of each inherited property the class or an
+     *                                                               ancestor requires but the ancestor declaring it does not
+     */
+    public function withInheritedRequirements(array $requirements): self
+    {
+        $composition = clone $this;
+        $composition->inheritedRequirements = $requirements;
+
+        return $composition;
+    }
+
+    /**
+     * The composition with more wire names required: those its ancestors' `required` lists, which the instances of a
+     * subclass are bound by too.
+     *
+     * @param array<array-key, string> $wireNames
+     */
+    public function withRequired(array $wireNames): self
+    {
+        $composition = clone $this;
+        foreach ($wireNames as $wireName) {
+            $composition->required[$wireName] = $wireName;
+        }
+
+        return $composition;
+    }
+
+    /**
+     * @return array<array-key, non-empty-list<Schema>>
+     */
+    public function inheritedRequirements(): array
+    {
+        return $this->inheritedRequirements;
     }
 
     public function isRequired(string $wireName): bool

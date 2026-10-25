@@ -7,6 +7,7 @@ namespace MSSTC4PHP\DtoGenerator\Domain\Builder;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassType;
+use MSSTC4PHP\DtoGenerator\Domain\Model\NullableType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\PropertyModel;
 
 /**
@@ -30,8 +31,8 @@ final class RequiredCycles
         foreach ($classes as $class) {
             $owner = $class->name()->fqcn();
             foreach (array_merge($inherited[$owner] ?? [], $class->properties()) as $property) {
-                $type = $property->type();
-                if (!$property->isRequired() || !$type instanceof ClassType) {
+                $type = self::requiredClass($class, $property);
+                if (!$type instanceof ClassType) {
                     continue;
                 }
 
@@ -61,8 +62,8 @@ final class RequiredCycles
         foreach ($classes as $class) {
             $targets = [];
             foreach (array_merge($inherited[$class->name()->fqcn()] ?? [], $class->properties()) as $property) {
-                $type = $property->type();
-                if ($property->isRequired() && $type instanceof ClassType) {
+                $type = self::requiredClass($class, $property);
+                if ($type instanceof ClassType) {
                     $targets[] = $type->className()->fqcn();
                 }
             }
@@ -71,6 +72,23 @@ final class RequiredCycles
         }
 
         return $edges;
+    }
+
+    /**
+     * The class a required property holds; the constructor of a class rejects null for an inherited one it requires.
+     */
+    private static function requiredClass(ClassModel $class, PropertyModel $property): ?ClassType
+    {
+        $type = $property->type();
+        if (!$property->isRequired()) {
+            if (!$type instanceof NullableType || !$class->requires($property)) {
+                return null;
+            }
+
+            $type = $type->inner();
+        }
+
+        return $type instanceof ClassType ? $type : null;
     }
 
     /**

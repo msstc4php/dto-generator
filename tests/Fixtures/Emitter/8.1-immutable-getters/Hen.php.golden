@@ -8,12 +8,16 @@ namespace App\Dto;
 
 class Hen extends Being
 {
-    public function __construct(?string $kind, ?string $name = null, protected readonly ?int $eggs = null)
+    public function __construct(?string $name, ?string $kind, protected readonly ?int $eggs = null)
     {
         if ($kind !== 'hen' && (static::class === self::class || $kind !== 'chick')) {
             throw new \InvalidArgumentException(
                 sprintf('%s does not select Hen by "kind".', $kind === null ? 'null' : '"' . $kind . '"'),
             );
+        }
+
+        if ($name === null) {
+            throw new \InvalidArgumentException('Hen requires "name".');
         }
 
         parent::__construct($name, $kind);

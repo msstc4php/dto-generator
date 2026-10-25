@@ -87,6 +87,7 @@ final class Hierarchy
 
         $hierarchy->settle($unions);
         $hierarchy->check();
+        $hierarchy->models = InheritedRequirements::settle($hierarchy->models);
         $hierarchy->checkDiscriminators($unions);
         $hierarchy->selectVariants();
 
@@ -310,15 +311,93 @@ final class Hierarchy
             return;
         }
 
-        $common = $this->models[$members[0]]->properties();
-        foreach ($members as $member) {
-            $common = $this->shared($common, $this->models[$member]->properties());
+        $common = [];
+        $taken = [];
+        $requirements = [];
+        foreach ($this->models[$members[0]]->properties() as $candidate) {
+            $shared = $this->shared($candidate, $members, in_array($candidate->wireName(), $variants->required(), true));
+            if (!$shared instanceof SharedProperty) {
+                continue;
+            }
+
+            $common[] = $shared->base();
+            foreach ($shared->declarations() as $member => $match) {
+                $taken[$member][] = $match;
+            }
+
+            foreach ($shared->requiring() as $member) {
+                $requirements[$member][] = $candidate->wireName();
+            }
         }
 
         $this->models[$base] = $this->models[$base]->withProperties(...array_merge($own, $common));
         foreach ($members as $member) {
-            $this->models[$member] = $this->models[$member]->withProperties(...$this->unshared($this->models[$member]->properties(), $common));
+            $model = $this->models[$member];
+            $kept = array_filter($model->properties(), static fn (PropertyModel $property): bool => !in_array($property, $taken[$member] ?? [], true));
+            $this->models[$member] = $model->withProperties(...$kept)->withRequiredInherited(...array_merge($model->requiredInherited(), $requirements[$member] ?? []));
         }
+    }
+
+    /**
+     * The property every variant declares alike, for the base, with each variant's declaration and the variants that
+     * go on requiring it. A property the base's `required` names ($required) is required of a variant that extends the
+     * base through allOf, not of one only listed: the variants may differ in requiring it, so the base takes the
+     * optional declaration, which they then must share, and those requiring it keep doing so.
+     *
+     * @param non-empty-list<string> $members
+     */
+    private function shared(PropertyModel $candidate, array $members, bool $required): ?SharedProperty
+    {
+        $found = [];
+        foreach ($members as $member) {
+            foreach ($this->models[$member]->properties() as $other) {
+                if ($required ? $this->alikeButForRequirement($candidate, $other) : $this->declaredAlike($candidate, [$other])) {
+                    $found[$member] = $other;
+
+                    continue 2;
+                }
+            }
+
+            return null;
+        }
+
+        $optional = array_filter($found, static fn (PropertyModel $match): bool => !$match->isRequired());
+        if ($optional === []) {
+            return new SharedProperty($candidate, $found, []);
+        }
+
+        $declaration = reset($optional);
+        foreach ($optional as $match) {
+            if (!$this->declaredAlike($declaration, [$match])) {
+                return null;
+            }
+        }
+
+        // The type and default of the optional declarations; where it was written, as for any other shared property,
+        // that of the first variant.
+        $base = new PropertyModel(
+            $candidate->name(),
+            $candidate->wireName(),
+            $declaration->type(),
+            false,
+            $declaration->default(),
+            $candidate->doc(),
+            $candidate->source(),
+            $candidate->attributes(),
+            $candidate->isAdditionalProperties(),
+        );
+
+        return new SharedProperty($base, $found, array_keys(array_diff_key($found, $optional)));
+    }
+
+    /**
+     * The same names and type but for null, which an optional property admits as a missing value.
+     */
+    private function alikeButForRequirement(PropertyModel $property, PropertyModel $other): bool
+    {
+        return $other->name() === $property->name()
+            && $other->wireName() === $property->wireName()
+            && NullableType::of($other->type())->describe() === NullableType::of($property->type())->describe();
     }
 
     /**
@@ -529,6 +608,7 @@ final class Hierarchy
 
         $fqcn = $model->name()->fqcn();
         $kept = [];
+        $required = $model->requiredInherited();
         foreach ($model->properties() as $property) {
             [$byWireName, $inherited] = $wireNames[$property->wireName()] ?? [null, null];
             $byName = $names[Identifier::asciiLower($property->name())] ?? null;
@@ -541,15 +621,17 @@ final class Hierarchy
             if ($inherited instanceof PropertyModel && $this->keepsTheParents($inherited, $property, $meet)) {
                 array_pop($kept);
                 $this->superseded->add($property->type());
+                if ($property->isRequired()) {
+                    $required[] = $property->wireName();
+                }
                 $this->diagnostics->warning(
                     sprintf(
-                        'Property "%s" of %s %s the one %s declares, whose type %s the class keeps%s.',
+                        'Property "%s" of %s %s the one %s declares, whose type %s the class keeps.',
                         $property->wireName(),
                         $fqcn,
                         $this->meet->admits($inherited->type(), $property->type()) ? 'narrows' : 'shares values with',
                         $byWireName,
                         $inherited->type()->describe(),
-                        $property->isRequired() && !$inherited->isRequired() ? ' and does not require it' : '',
                     ),
                     $property->source(),
                 );
@@ -558,9 +640,12 @@ final class Hierarchy
                 // types meet is not asked, as a read or write model of the narrower class no longer extends the parent's.
                 array_pop($kept);
                 $this->superseded->add($property->type());
+                if ($property->isRequired()) {
+                    $required[] = $property->wireName();
+                }
                 $this->diagnostics->warning(
                     sprintf(
-                        'Property "%s" of %s is %s, which %s; the class is a variant, which keeps its parent, so it keeps %s%s.',
+                        'Property "%s" of %s is %s, which %s; the class is a variant, which keeps its parent, so it keeps %s.',
                         $property->wireName(),
                         $fqcn,
                         $property->type()->describe(),
@@ -568,7 +653,6 @@ final class Hierarchy
                             ? sprintf('PHP lets no subclass of %s declare', $byWireName)
                             : sprintf('has no value in common with the type %s declares, unless the two are classes of different read or write models', $byWireName),
                         $inherited->type()->describe(),
-                        $property->isRequired() && !$inherited->isRequired() ? ' and does not require it' : '',
                     ),
                     $property->source(),
                 );
@@ -585,25 +669,8 @@ final class Hierarchy
             }
         }
 
-        return count($kept) === count($model->properties()) ? $model : $model->withProperties(...$kept);
-    }
-
-    /**
-     * @param list<PropertyModel> $properties
-     * @param list<PropertyModel> $others
-     *
-     * @return list<PropertyModel> the properties the others declare alike
-     */
-    private function shared(array $properties, array $others): array
-    {
-        $result = [];
-        foreach ($properties as $property) {
-            if ($this->declaredAlike($property, $others)) {
-                $result[] = $property;
-            }
-        }
-
-        return $result;
+        // The class's own requirement of a property it keeps from the parent stays, as one written beside the parent's $ref.
+        return count($kept) === count($model->properties()) ? $model : $model->withProperties(...$kept)->withRequiredInherited(...$required);
     }
 
     /**

@@ -216,6 +216,42 @@ final class ClassModelTest extends TestCase
         self::assertSame(['sub'], $class->withRestoredMutators('sub')->withDiscriminatedProperties('kind')->restoredMutators());
     }
 
+    public function testKeepsTheInheritedPropertiesItRequiresThroughEveryCopy(): void
+    {
+        $class = $this->classWith([])->withRequiredInherited('name', 'name', '1');
+        $copies = [
+            $class->withProperties($this->property('id')),
+            $class->withAddedAttributes(new AttributeModel(ClassName::fromFqcn('App\Marker'))),
+            $class->withHierarchy(ClassKind::from(ClassKind::FINAL), ClassName::fromFqcn('App\Pet'), null),
+            $class->withDiscriminatorValues(),
+            $class->withDiscriminatedProperties('kind'),
+            $class->withRestoredMutators('sub'),
+            $class->withInterfaces(ClassName::fromFqcn('App\Animal')),
+        ];
+
+        self::assertSame([], $this->classWith([])->requiredInherited());
+        self::assertSame(['name', '1'], $class->requiredInherited());
+        foreach ($copies as $copy) {
+            self::assertSame(['name', '1'], $copy->requiredInherited());
+        }
+    }
+
+    public function testRejectsRequiringItsOwnPropertyAsInherited(): void
+    {
+        $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('Class App\User requires "id" as inherited, but declares it itself.');
+
+        $this->classWith([$this->property('id')])->withRequiredInherited('name', 'id');
+    }
+
+    public function testRejectsAnEmptyRequiredInheritedProperty(): void
+    {
+        $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('Class App\User lists an empty required inherited property.');
+
+        $this->classWith([])->withRequiredInherited('');
+    }
+
     public function testRejectsAMutatorBothRestoredAndDiscriminated(): void
     {
         $this->expectException(InvalidModel::class);

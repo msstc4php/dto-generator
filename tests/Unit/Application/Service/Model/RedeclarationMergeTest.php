@@ -232,7 +232,7 @@ final class RedeclarationMergeTest extends TestCase
         self::assertContains('error ' . self::AT . 'Cat/allOf/1/properties/q: Property "q" of App\\Dto\\Cat is already declared by App\\Dto\\Pet.', ModelFixture::messages($output));
     }
 
-    public function testKeepsTheParentOfAVariantInEveryViewAndSaysWhatItDoesNotRequire(): void
+    public function testKeepsTheParentOfAVariantInEveryViewAndRequiresIt(): void
     {
         $output = ModelFixture::views([
             'Pet' => ['type' => 'object', 'properties' => ['kind' => ['type' => 'string'], 'links' => ['$ref' => '#/components/schemas/Links']]],
@@ -244,7 +244,8 @@ final class RedeclarationMergeTest extends TestCase
 
         $messages = ModelFixture::messages($output);
         self::assertSame([], array_values(array_filter($messages, static fn (string $message): bool => strncmp($message, 'error', 5) === 0)));
-        self::assertCount(1, array_filter($messages, static fn (string $message): bool => strpos($message, 'is a variant, which keeps its parent, so it keeps App\\Dto\\Links|null and does not require it.') !== false));
+        self::assertCount(1, array_filter($messages, static fn (string $message): bool => strpos($message, 'is a variant, which keeps its parent, so it keeps App\\Dto\\Links|null.') !== false));
+        self::assertSame(['links'], ModelFixture::requiredInherited($output)['App\\Dto\\Cat']);
         self::assertSame(['kind: string|null', 'links: App\\Dto\\Links|null'], ModelFixture::classes($output)['App\\Dto\\Pet']);
     }
 

@@ -356,5 +356,7 @@ components:
       allOf:
         - $ref: '#/components/schemas/Hen'
         - type: object
+          description: Requires what its ancestors leave optional; the discriminator keeps the value selecting it.
+          required: [name, kind, eggs]
           properties:
             fluff: {type: boolean}

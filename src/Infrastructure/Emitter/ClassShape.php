@@ -83,6 +83,19 @@ final class ClassShape
     }
 
     /**
+     * The inherited properties the constructor rejects null for: the ancestor's type admits it only as a missing value.
+     *
+     * @return list<PropertyModel>
+     */
+    public function nullChecks(): array
+    {
+        return array_values(array_filter(
+            $this->inherited,
+            fn (PropertyModel $property): bool => $property->type() instanceof NullableType && $this->class->requires($property),
+        ));
+    }
+
+    /**
      * The constructor's check rejects null before a checked discriminator is assigned, and PHPStan reports a
      * declared property that never holds a value its type admits; a promoted one shares the parameter's type.
      */
