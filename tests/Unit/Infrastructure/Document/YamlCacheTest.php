@@ -210,6 +210,30 @@ final class YamlCacheTest extends TestCase
         self::assertNull(YamlCache::forUser(fn (string $name): ?string => ['XDG_CACHE_HOME' => $this->directory . '/base'][$name] ?? null));
     }
 
+    public function testKeepsNoEntryOfMoreThanFourTimesTheBytesOfItsText(): void
+    {
+        $cache = new YamlCache($this->directory, 'v1');
+        $content = str_repeat('a', 16384);
+        // 16 bytes an entry, besides the text of a string key and value.
+        $cache->put($content, ['a' => str_repeat('x', 4 * 16384 - 17 + 1)]);
+        self::assertNull($cache->get($content));
+
+        // An integer key and an array value count only their 16 bytes.
+        $cache->put($content, [7 => ['b' => str_repeat('x', 4 * 16384 - 16 - 17 + 1)]]);
+        self::assertNull($cache->get($content));
+
+        $cache->put($content, [7 => ['b' => str_repeat('x', 4 * 16384 - 16 - 17)]]);
+        self::assertSame([7 => ['b' => str_repeat('x', 4 * 16384 - 16 - 17)]], $cache->get($content));
+    }
+
+    public function testTheDecoderKeepsNoAliasesExpandedFarBeyondTheirText(): void
+    {
+        $yaml = 's: &s ' . str_repeat('x', 16384) . "\nl: [" . implode(', ', array_fill(0, 100, '*s')) . "]\n";
+        (new DocumentDecoder(new YamlCache($this->directory, 'v1')))->decode($yaml, false);
+
+        self::assertSame([], $this->entries());
+    }
+
     public function testLeavesTheErrorHandlerAsItFoundIt(): void
     {
         $cache = new YamlCache($this->directory, 'v1');

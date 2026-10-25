@@ -21,6 +21,13 @@ final class YamlCache
 
     private const MAX_AGE = 2592000;
 
+    // An entry may take this many times the bytes of its text: aliases the decoder allows expand into copies that
+    // serialize() writes out in full, so 17 KB repeating a 16 KB string a hundred times would take 1.6 MB.
+    private const MAX_EXPANSION = 4;
+
+    // What serialize() spends on an entry besides the text of a string key and value, about.
+    private const ENTRY_BYTES = 16;
+
     private const SWITCH = 'DTO_GENERATOR_YAML_CACHE';
 
     // How DocumentDecoder reads a text depends on its own code and on symfony/yaml.
@@ -100,7 +107,8 @@ final class YamlCache
      */
     public function put(string $content, array $decoded): void
     {
-        if (strlen($content) < self::MIN_BYTES) {
+        $budget = self::MAX_EXPANSION * strlen($content);
+        if (strlen($content) < self::MIN_BYTES || !self::fits($decoded, $budget)) {
             return;
         }
 
@@ -112,6 +120,24 @@ final class YamlCache
         }
 
         restore_error_handler();
+    }
+
+    /**
+     * Counts the size of the entry down from the budget and stops as soon as it runs out, so that no expansion costs
+     * more than the budget.
+     *
+     * @param array<array-key, mixed> $values
+     */
+    private static function fits(array $values, int &$budget): bool
+    {
+        foreach ($values as $key => $value) {
+            $budget -= self::ENTRY_BYTES + (is_string($key) ? strlen($key) : 0) + (is_string($value) ? strlen($value) : 0);
+            if ($budget < 0 || (is_array($value) && !self::fits($value, $budget))) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private function path(string $content): string
