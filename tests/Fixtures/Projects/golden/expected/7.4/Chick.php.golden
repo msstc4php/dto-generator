@@ -10,12 +10,8 @@ final class Chick extends Hen
 {
     private ?bool $fluff;
 
-    public function __construct(
-        ?string $name = null,
-        ?string $kind = 'chick',
-        ?int $eggs = null,
-        ?bool $fluff = null
-    ) {
+    public function __construct(?string $name, ?int $eggs, ?string $kind = 'chick', ?bool $fluff = null)
+    {
         if ($kind !== 'chick') {
             throw new \InvalidArgumentException(
                 sprintf(
@@ -23,6 +19,14 @@ final class Chick extends Hen
                     $kind === null ? 'null' : '"' . $kind . '"',
                 ),
             );
+        }
+
+        if ($name === null) {
+            throw new \InvalidArgumentException('Chick requires "name".');
+        }
+
+        if ($eggs === null) {
+            throw new \InvalidArgumentException('Chick requires "eggs".');
         }
 
         parent::__construct($kind, $name, $eggs);

@@ -171,7 +171,32 @@ final class ClassBuilder
             $this->mutability($schema, $diagnostics),
             new DocModel($schema->description(), $schema->isDeprecated()),
             $schema->location(),
+            [],
+            null,
+            [],
+            [],
+            [],
+            [],
+            $this->requiredInherited($composition),
         );
+    }
+
+    /**
+     * A required property whose schema admits null is optional, here as for a class's own.
+     *
+     * @return list<string>
+     */
+    private function requiredInherited(Composition $composition): array
+    {
+        $wireNames = [];
+        foreach ($composition->inheritedRequirements() as $wireName => $declaration) {
+            // The ancestor's own build reports what its declaration holds.
+            if (!$this->types->map($declaration, new Diagnostics()) instanceof NullableType) {
+                $wireNames[] = (string) $wireName;
+            }
+        }
+
+        return $wireNames;
     }
 
     /**

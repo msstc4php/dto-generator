@@ -46,6 +46,9 @@ final class ClassModel
     /** @var list<ClassName> */
     private array $interfaces;
 
+    /** @var list<string> */
+    private array $requiredInherited;
+
     /**
      * @param list<PropertyModel> $properties own properties only, in schema order
      * @param list<AttributeModel> $attributes
@@ -55,6 +58,8 @@ final class ClassModel
      *                                       no discriminator of this class's chain reads
      * @param list<ClassName> $interfaces the interfaces of the discriminated unions that list it, in their order; those an
      *                                    interface extends
+     * @param list<string> $requiredInherited wire names of inherited properties the class requires though the ancestor
+     *                                        declaring them does not: its constructor takes them without a default
      */
     public function __construct(
         ClassName $name,
@@ -69,7 +74,8 @@ final class ClassModel
         array $discriminatorValues = [],
         array $discriminatedProperties = [],
         array $restoredMutators = [],
-        array $interfaces = []
+        array $interfaces = [],
+        array $requiredInherited = []
     ) {
         if ($parent instanceof ClassName && $parent->equals($name)) {
             throw new InvalidModel(sprintf('Class %s cannot extend itself.', $name->fqcn()));
@@ -129,6 +135,7 @@ final class ClassModel
             throw new InvalidModel(sprintf('Class %s restores the mutators of "%s", which a discriminator of its chain reads.', $name->fqcn(), $wireName));
         }
 
+        $this->requiredInherited = $this->wireNames($requiredInherited, $name, 'required inherited property');
         $this->interfaces = [];
         foreach ($interfaces as $interface) {
             if ($interface->equals($name)) {
@@ -292,6 +299,7 @@ final class ClassModel
             $wireNames,
             $this->restoredMutators,
             $this->interfaces,
+            $this->requiredInherited,
         );
     }
 
@@ -311,6 +319,14 @@ final class ClassModel
         return $this->interfaces;
     }
 
+    /**
+     * @return list<string>
+     */
+    public function requiredInherited(): array
+    {
+        return $this->requiredInherited;
+    }
+
     public function withInterfaces(ClassName ...$interfaces): self
     {
         return new self(
@@ -327,6 +343,7 @@ final class ClassModel
             $this->discriminatedProperties,
             $this->restoredMutators,
             $interfaces,
+            $this->requiredInherited,
         );
     }
 
@@ -346,6 +363,7 @@ final class ClassModel
             $this->discriminatedProperties,
             $wireNames,
             $this->interfaces,
+            $this->requiredInherited,
         );
     }
 
@@ -365,6 +383,7 @@ final class ClassModel
             $this->discriminatedProperties,
             $this->restoredMutators,
             $this->interfaces,
+            $this->requiredInherited,
         );
     }
 
@@ -384,6 +403,7 @@ final class ClassModel
             $this->discriminatedProperties,
             $this->restoredMutators,
             $this->interfaces,
+            $this->requiredInherited,
         );
     }
 
@@ -403,6 +423,7 @@ final class ClassModel
             $this->discriminatedProperties,
             $this->restoredMutators,
             $this->interfaces,
+            $this->requiredInherited,
         );
     }
 
@@ -422,6 +443,7 @@ final class ClassModel
             $this->discriminatedProperties,
             $this->restoredMutators,
             $this->interfaces,
+            $this->requiredInherited,
         );
     }
 }

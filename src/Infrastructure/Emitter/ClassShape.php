@@ -79,7 +79,28 @@ final class ClassShape
 
     public function defaultOf(PropertyModel $property): ?DefaultValue
     {
-        return $this->class->constructorDefaultOf($property);
+        return $this->requires($property) ? null : $this->class->constructorDefaultOf($property);
+    }
+
+    /**
+     * An inherited property the class requires though its ancestor does not; a discriminator selecting the class keeps
+     * the default its check allows.
+     */
+    private function requires(PropertyModel $property): bool
+    {
+        return !$this->owns($property)
+            && in_array($property->wireName(), $this->class->requiredInherited(), true)
+            && !$this->selection($property) instanceof DiscriminatorValues;
+    }
+
+    /**
+     * The inherited properties the constructor rejects null for: the ancestor's type admits it only as a missing value.
+     *
+     * @return list<PropertyModel>
+     */
+    public function nullChecks(): array
+    {
+        return array_values(array_filter($this->inherited, fn (PropertyModel $property): bool => $property->type() instanceof NullableType && $this->requires($property)));
     }
 
     /**

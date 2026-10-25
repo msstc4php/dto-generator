@@ -6,6 +6,14 @@ All notable changes to this package are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- A subclass whose schema requires a property its parent leaves optional now requires it: the subclass constructor
+  takes the parameter without a default and throws `InvalidArgumentException` on `null`, and so does every class
+  extending it. This replaces the warning "Required property … belongs to the parent …" (Shipengine 153×, Plaid 16×).
+  A property whose schema admits `null` stays optional, as it does for a class's own properties.
+- `ClassModel::requiredInherited()` lists the wire names of those properties for extensions.
+
 ## [1.15.0] - 2026-10-25
 
 ### Added

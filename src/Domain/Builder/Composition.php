@@ -24,6 +24,9 @@ final class Composition
     /** @var array<string, string> */
     private array $required;
 
+    /** @var array<string, Schema> */
+    private array $inheritedRequirements = [];
+
     /**
      * @param list<Schema> $members the merged `allOf` members, in order
      * @param list<Schema> $ownMembers the members written inside the class schema, not reached through a $ref
@@ -98,6 +101,26 @@ final class Composition
         }
 
         return $composition;
+    }
+
+    /**
+     * @param array<string, Schema> $requirements by wire name, the declaration of each inherited property the class or
+     *                                            an ancestor requires but the ancestor declaring it does not
+     */
+    public function withInheritedRequirements(array $requirements): self
+    {
+        $composition = clone $this;
+        $composition->inheritedRequirements = $requirements;
+
+        return $composition;
+    }
+
+    /**
+     * @return array<string, Schema>
+     */
+    public function inheritedRequirements(): array
+    {
+        return $this->inheritedRequirements;
     }
 
     public function isRequired(string $wireName): bool

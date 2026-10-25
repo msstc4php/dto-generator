@@ -115,6 +115,21 @@ final class ModelFixture
     }
 
     /**
+     * @return array<string, list<string>> class → wire names of the inherited properties it requires, for those that do
+     */
+    public static function requiredInherited(Output $output): array
+    {
+        $classes = [];
+        foreach ($output->classes() as $class) {
+            if ($class->model()->requiredInherited() !== []) {
+                $classes[$class->model()->name()->fqcn()] = $class->model()->requiredInherited();
+            }
+        }
+
+        return $classes;
+    }
+
+    /**
      * @return list<string>
      */
     public static function messages(Output $output): array

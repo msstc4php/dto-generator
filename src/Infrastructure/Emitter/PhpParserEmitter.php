@@ -303,6 +303,10 @@ final class PhpParserEmitter implements CodeEmitter
             $body[] = $this->check($shape, $property, $values, $types);
         }
 
+        foreach ($shape->nullChecks() as $property) {
+            $body[] = $this->nullCheck($shape, $property);
+        }
+
         $parent = $shape->parentShape();
         if ($shape->inherited() !== [] && $parent instanceof ClassShape) {
             $args = array_map(static fn (PropertyModel $property): Arg => new Arg(new Variable($property->name())), $this->parameters($parent));
@@ -504,6 +508,14 @@ final class PhpParserEmitter implements CodeEmitter
         }
 
         return array_merge($required, $optional);
+    }
+
+    private function nullCheck(ClassShape $shape, PropertyModel $property): If_
+    {
+        $message = sprintf('%s requires "%s".', $shape->className()->shortName(), $property->wireName());
+        $throw = new Expression(new Throw_(new New_(new FullyQualified('InvalidArgumentException'), [new Arg(new String_($message))])));
+
+        return new If_(new Identical(new Variable($property->name()), new ConstFetch(new Name('null'))), ['stmts' => [$throw]]);
     }
 
     /**

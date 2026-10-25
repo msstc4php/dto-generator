@@ -1234,7 +1234,7 @@ final class CompositionTest extends TestCase
             ],
             'required property of the parent' => [
                 ['Pet' => $pet, 'Cat' => ['allOf' => [self::PET, ['required' => ['name', 'lives'], 'properties' => ['lives' => ['type' => 'integer']]]]]],
-                ["warning {$at}Cat: Required property \"name\" belongs to the parent App\\Dto\\Pet, where extending cannot make it required; use \"x-php-all-of: merge\" to require it."],
+                [],
             ],
             'allOf with oneOf on a named schema' => [
                 [
@@ -1287,11 +1287,7 @@ final class CompositionTest extends TestCase
                     'Pet' => ['allOf' => [['$ref' => '#/components/schemas/Animal'], ['properties' => ['name' => []]]]],
                     'Cat' => ['allOf' => [self::PET, ['required' => ['lives', 'id', 'name', 'tag'], 'properties' => ['age' => [], 'lives' => []]]]],
                 ],
-                [
-                    "warning {$at}Cat: Required property \"id\" belongs to the parent App\\Dto\\Animal, where extending cannot make it required; use \"x-php-all-of: merge\" to require it.",
-                    "warning {$at}Cat: Required property \"name\" belongs to the parent App\\Dto\\Pet, where extending cannot make it required; use \"x-php-all-of: merge\" to require it.",
-                    "warning {$at}Cat: Required property \"tag\" belongs to the parent App\\Dto\\Animal, where extending cannot make it required; use \"x-php-all-of: merge\" to require it.",
-                ],
+                [],
             ],
             'discriminated parent in an inheritance loop' => [
                 [
@@ -2299,8 +2295,9 @@ final class CompositionTest extends TestCase
             'Cat' => ['allOf' => [self::PET, ['required' => ['name']]]],
         ]);
 
-        self::assertCount(1, ModelFixture::messages($output));
+        self::assertSame([], ModelFixture::messages($output));
         self::assertSame('final extends App\Dto\Pet', ModelFixture::hierarchy($output)['App\Dto\Cat']);
+        self::assertSame(['App\Dto\Cat' => ['name']], ModelFixture::requiredInherited($output));
     }
 
     public function testDropsAPropertySkippedInAnyMergedMember(): void
@@ -2378,9 +2375,8 @@ final class CompositionTest extends TestCase
         self::assertSame(['name: string', 'lives: int|null'], ModelFixture::classes($output)['App\Dto\Cat']);
     }
 
-    public function testWarnsThatTheParentKeepsTheRequirementsBesideItsReference(): void
+    public function testRequiresTheParentsPropertyNamedBesideItsReference(): void
     {
-        $warning = 'warning /project/api/openapi.yaml#/components/schemas/Cat: Required property "name" belongs to the parent App\\Dto\\Pet, where extending cannot make it required; use "x-php-all-of: merge" to require it.';
         $pet = ['type' => 'object', 'properties' => ['name' => ['type' => 'string']]];
         $lives = ['properties' => ['lives' => ['type' => 'integer']]];
 
@@ -2397,27 +2393,57 @@ final class CompositionTest extends TestCase
             'Cat' => ['allOf' => [['$ref' => '#/components/schemas/Wrapper'], $lives]],
         ]);
 
-        self::assertSame([$warning], ModelFixture::messages($inline));
-        self::assertSame([$warning], ModelFixture::messages($aliased));
-        self::assertSame([$warning], ModelFixture::messages($wrapped));
+        foreach ([$inline, $aliased, $wrapped] as $output) {
+            self::assertSame([], ModelFixture::messages($output));
+            self::assertSame(['App\Dto\Cat' => ['name']], ModelFixture::requiredInherited($output));
+        }
+
         self::assertSame('final extends App\Dto\Pet', ModelFixture::hierarchy($aliased)['App\Dto\Cat']);
+        self::assertSame(['name: string|null'], ModelFixture::classes($aliased)['App\Dto\Pet']);
     }
 
-    public function testWarnsAboutEachSubclassWhoseRequirementTheParentCannotEnforce(): void
+    public function testPassesARequirementDownTheChain(): void
     {
         $output = ModelFixture::build([
-            'Animal' => ['type' => 'object', 'properties' => ['name' => ['type' => 'string']]],
+            'Animal' => ['type' => 'object', 'properties' => ['name' => ['type' => 'string'], 'tag' => ['type' => 'string']]],
             'Pet' => ['allOf' => [['$ref' => '#/components/schemas/Animal', 'required' => ['name']], ['properties' => ['owner' => ['type' => 'string']]]]],
-            'Kitten' => ['allOf' => [['$ref' => '#/components/schemas/Pet'], ['required' => ['name', 'owner'], 'properties' => ['age' => ['type' => 'integer']]]]],
+            'Kitten' => ['allOf' => [['$ref' => '#/components/schemas/Pet'], ['required' => ['owner', 'tag'], 'properties' => ['age' => ['type' => 'integer']]]]],
         ]);
-        $at = '/project/api/openapi.yaml#/components/schemas/';
-        $tail = ', where extending cannot make it required; use "x-php-all-of: merge" to require it.';
 
-        self::assertSame([
-            "warning {$at}Pet: Required property \"name\" belongs to the parent App\\Dto\\Animal{$tail}",
-            "warning {$at}Kitten: Required property \"name\" belongs to the parent App\\Dto\\Animal{$tail}",
-            "warning {$at}Kitten: Required property \"owner\" belongs to the parent App\\Dto\\Pet{$tail}",
-        ], ModelFixture::messages($output));
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(['App\Dto\Pet' => ['name'], 'App\Dto\Kitten' => ['owner', 'name', 'tag']], ModelFixture::requiredInherited($output));
+    }
+
+    public function testRequiresNoInheritedPropertyThatAdmitsNullOrIsUnknown(): void
+    {
+        $output = ModelFixture::build([
+            'Animal' => ['type' => 'object', 'required' => ['id'], 'properties' => ['id' => ['type' => 'string'], 'note' => ['type' => ['string', 'null']], 'any' => []]],
+            'Pet' => ['allOf' => [['$ref' => '#/components/schemas/Animal'], ['required' => ['id', 'note', 'any', 'unknown', 'lives'], 'properties' => ['lives' => ['type' => 'integer']]]]],
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(['App\Dto\Pet' => ['any']], ModelFixture::requiredInherited($output));
+    }
+
+    public function testKeepsANumericWireNameOfARequiredInheritedPropertyAString(): void
+    {
+        $output = ModelFixture::build([
+            'Pet' => ['type' => 'object', 'properties' => ['1' => ['type' => 'string', 'x-php-name' => 'first']]],
+            'Cat' => ['allOf' => [['$ref' => '#/components/schemas/Pet'], ['required' => ['1'], 'properties' => ['lives' => ['type' => 'integer']]]]],
+        ]);
+
+        self::assertSame(['App\Dto\Cat' => ['1']], ModelFixture::requiredInherited($output));
+    }
+
+    public function testRequiresNothingInheritedOfAClassThatMerges(): void
+    {
+        $output = ModelFixture::build([
+            'Pet' => ['type' => 'object', 'properties' => ['name' => ['type' => 'string']]],
+            'Cat' => ['allOf' => [['$ref' => '#/components/schemas/Pet'], ['required' => ['name'], 'properties' => ['lives' => ['type' => 'integer']]]]],
+        ], [], ['*'], AllOfStrategy::MERGE);
+
+        self::assertSame([], ModelFixture::requiredInherited($output));
+        self::assertSame(['name: string', 'lives: int|null'], ModelFixture::classes($output)['App\Dto\Cat']);
     }
 
     public function testReportsANonObjectBehindAnAliasAtTheMemberThatUsesIt(): void

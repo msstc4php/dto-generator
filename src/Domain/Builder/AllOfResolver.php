@@ -20,7 +20,7 @@ final class AllOfResolver
 
     private AllOfStrategy $strategy;
 
-    /** @var array<string, array{Composition, NamedClass|null}> ancestors resolved while checking requirements */
+    /** @var array<string, array{Composition, NamedClass|null}> ancestors resolved while collecting requirements */
     private array $ancestors = [];
 
     private Merges $merges;
@@ -38,11 +38,8 @@ final class AllOfResolver
     public function compose(Schema $schema, Diagnostics $diagnostics): Composition
     {
         [$composition, $parent] = $this->resolve($schema, $diagnostics);
-        if ($parent instanceof NamedClass) {
-            $this->warnAboutInheritedRequirements($schema, $composition, $parent, $diagnostics);
-        }
 
-        return $composition;
+        return $parent instanceof NamedClass ? $composition->withInheritedRequirements($this->inheritedRequirements($composition, $parent)) : $composition;
     }
 
     /**
@@ -77,7 +74,7 @@ final class AllOfResolver
         $key = $schema->location()->toString();
         $parts = new CompositionParts();
         // Requirements beside the parent's $ref, or beside the $refs of the aliases and wrappers before it, name inherited
-        // properties: warnAboutInheritedRequirements() reports them.
+        // properties: inheritedRequirements() collects them.
         if ($index !== null) {
             $parts->requireFrom($members[$index]);
             foreach ($parents[$index]->via() as $passed) {
@@ -133,35 +130,34 @@ final class AllOfResolver
     }
 
     /**
-     * A subclass cannot make an inherited property required, so a requirement on one is lost under extends.
+     * The properties an ancestor declares optional that the class, or an ancestor between, requires: the constructor of
+     * the class requires them in turn.
+     *
+     * @return array<string, Schema> by wire name, the declaration of the nearest ancestor
      */
-    private function warnAboutInheritedRequirements(Schema $schema, Composition $composition, NamedClass $parent, Diagnostics $diagnostics): void
+    private function inheritedRequirements(Composition $composition, NamedClass $parent): array
     {
         $own = $this->propertyNames($composition);
-        $inherited = [];
+        $required = $composition->required();
+        $declarations = [];
         $alreadyRequired = [];
         $seen = [];
         for ($ancestor = $parent; $ancestor instanceof NamedClass && !isset($seen[$ancestor->name()->fqcn()]); $ancestor = $next) {
             $seen[$ancestor->name()->fqcn()] = $ancestor;
             [$ancestry, $next] = $this->ancestor($ancestor->schema());
-            $declared = $this->propertyNames($ancestry);
-            $inherited += array_fill_keys($declared, $ancestor->name()->fqcn());
-            // Only an ancestor's own properties can be required there; extending drops the rest, as it does here.
-            $alreadyRequired += array_intersect_key($ancestry->required(), $declared);
-        }
-
-        foreach ($composition->required() as $wireName) {
-            if (!isset($own[$wireName]) && !isset($alreadyRequired[$wireName]) && isset($inherited[$wireName])) {
-                $diagnostics->warning(
-                    sprintf(
-                        'Required property "%s" belongs to the parent %s, where extending cannot make it required; use "x-php-all-of: merge" to require it.',
-                        $wireName,
-                        $inherited[$wireName],
-                    ),
-                    $schema->location(),
-                );
+            $required += $ancestry->required();
+            foreach ($ancestry->propertySources() as [$wireName, $declaration]) {
+                if (!isset($declarations[$wireName])) {
+                    $declarations[$wireName] = $declaration;
+                    // Only an ancestor's own properties can be required there; extending drops the rest, as it does here.
+                    if ($ancestry->isRequired($wireName)) {
+                        $alreadyRequired[$wireName] = $wireName;
+                    }
+                }
             }
         }
+
+        return array_diff_key(array_intersect_key($declarations, $required), $own, $alreadyRequired);
     }
 
     /**
