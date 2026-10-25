@@ -17,7 +17,9 @@ use MSSTC4PHP\DtoGenerator\Application\Service\Schemas\Load\Action as LoadSchema
 use MSSTC4PHP\DtoGenerator\Domain\Builder\NameResolver;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\SchemaParser;
 use MSSTC4PHP\DtoGenerator\Extension\CustomAttributes\CustomAttributes;
+use MSSTC4PHP\DtoGenerator\Infrastructure\Document\DocumentDecoder;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Document\FileDocumentLoader;
+use MSSTC4PHP\DtoGenerator\Infrastructure\Document\YamlCache;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Emitter\PhpParserEmitter;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Environment\AutoloadClassVerifierLocator;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Environment\ComposerJsonPhpConstraint;
@@ -59,14 +61,15 @@ final class DtoGenerator
 
     public static function generator(): Generate
     {
-        $loader = new FileDocumentLoader();
+        $decoder = new DocumentDecoder(YamlCache::forUser());
+        $loader = new FileDocumentLoader($decoder);
 
         return new Generate(
             new LoadConfig($loader, new ConfigFactory(), new TargetResolver(new ComposerJsonPhpConstraint())),
             new AutoloadClassVerifierLocator(),
             new ComposerLockPackages(),
             new LoadExtensions(new ClassExtensionLoader(), static fn (array $aliases): array => [new CustomAttributes($aliases)], new InstalledJsonExtensionDiscovery()),
-            new LoadSchemas($loader, new SchemaParser(), new CachedRemoteDocuments(new StreamFetcher())),
+            new LoadSchemas($loader, new SchemaParser(), new CachedRemoteDocuments(new StreamFetcher(), $decoder)),
             new BuildModel(new NameResolver()),
             new EnrichModel(),
             new PhpParserEmitter(),

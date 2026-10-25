@@ -333,3 +333,11 @@ project.
 |---|---|
 | `DTO_GENERATOR_MEMORY_LIMIT` | `memory_limit` for the CLI, such as `512M`; by default a limit below 1G is raised to 1G |
 | `DTO_GENERATOR_VERIFY_CLASSES` | `0` turns `verifyClasses: auto` off |
+| `DTO_GENERATOR_YAML_CACHE` | `0` turns the cache of decoded YAML off |
+
+**Cache of decoded YAML.** symfony/yaml takes seconds on a large spec (GitHub's 10 MB one: about 2.5 s). A YAML
+document of 16 KB or more is kept decoded in `$XDG_CACHE_HOME/dto-generator/yaml`, else `~/.cache/dto-generator/yaml`,
+else `%LOCALAPPDATA%\dto-generator\yaml`, by the SHA-256 of its text and the versions of the generator and of
+symfony/yaml; a later run reads an unchanged document in a hundredth of the time. The directory is created with mode
+0700 and is not used when its group or others may write to it (nor on Windows, where modes say nothing of that). An
+entry unread for 30 days is deleted. Nothing is written into the project.

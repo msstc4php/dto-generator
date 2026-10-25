@@ -22,6 +22,13 @@ final class DocumentDecoder
 
     private const REWRITTEN = ' Keys written after "?" were rewritten first, so the text quoted is the rewritten one.';
 
+    private ?YamlCache $cache;
+
+    public function __construct(?YamlCache $cache = null)
+    {
+        $this->cache = $cache;
+    }
+
     /**
      * @param bool $json JSON, else YAML
      *
@@ -36,6 +43,11 @@ final class DocumentDecoder
             $content = (string) substr($content, 3);
         }
 
+        $cached = $json || !$this->cache instanceof YamlCache ? null : $this->cache->get($content);
+        if ($cached !== null) {
+            return $cached;
+        }
+
         try {
             $decoded = $json ? json_decode($content, true, 512, JSON_THROW_ON_ERROR) : $this->yaml($content);
         } catch (JsonException|ParseException $exception) {
@@ -44,6 +56,10 @@ final class DocumentDecoder
 
         if (!is_array($decoded) || ($decoded !== [] && Json::isList($decoded))) {
             throw UndecodableDocument::notAnObject();
+        }
+
+        if (!$json && $this->cache instanceof YamlCache) {
+            $this->cache->put($content, $decoded);
         }
 
         return $decoded;

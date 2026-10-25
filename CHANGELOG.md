@@ -6,6 +6,13 @@ All notable changes to this package are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- A YAML document of 16 KB or more is kept decoded in the user's cache directory (`$XDG_CACHE_HOME`, `~/.cache` or
+  `%LOCALAPPDATA%`, under `dto-generator/yaml`), so a later run reads it unchanged in a hundredth of the time (GitHub's
+  10 MB spec in 0.03 s instead of 2.5 s). `DTO_GENERATOR_YAML_CACHE=0` turns it off; a directory others may write to is
+  not used. See [Environment variables](docs/configuration.md#environment-variables).
+
 ## [1.14.0] - 2026-10-23
 
 ### Changed
