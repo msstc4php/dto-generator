@@ -133,17 +133,18 @@ final class RegistryTest extends TestCase
         self::assertSame($configured, $formats['dateTime']);
     }
 
-    public function testTheConfigWinsOverAnExtensionOfAnotherSpelling(): void
+    public function testAScalarOfTheConfigWinsOverAnExtensionOfAnotherSpelling(): void
     {
-        $registry = $this->registry($diagnostics);
-        $registry->register($this->extension('uid', static function (ExtensionRegistry $registry): void {
-            $registry->addFormat('GUID', new FormatMapping(new ClassType(ClassName::fromFqcn('App\\Extended'))));
-            $registry->addFormat('ssh_key', new FormatMapping(new ClassType(ClassName::fromFqcn('App\\Key'))));
-        }), []);
-        $configured = new ClassType(ClassName::fromFqcn('App\\Configured'));
+        $registry = $this->registryWithGuidAndKey();
 
         self::assertSame([], array_keys($registry->formats([], ['SSH key', 'Uuid'])));
-        self::assertSame(['ssh_key', 'uuid'], array_keys($registry->formats(['uuid' => $configured], [])));
+    }
+
+    public function testAClassOfTheConfigWinsOverAnExtensionOfAnotherSpelling(): void
+    {
+        $registry = $this->registryWithGuidAndKey();
+
+        self::assertSame(['ssh_key', 'uuid'], array_keys($registry->formats(['uuid' => new ClassType(ClassName::fromFqcn('App\\Configured'))], [])));
     }
 
     public function testReportsOneExtensionRegisteringTwoSpellingsOfAFormat(): void
@@ -154,7 +155,18 @@ final class RegistryTest extends TestCase
             $registry->addFormat('dateTime', new FormatMapping(ScalarType::string()));
         }), []);
 
-        self::assertSame(['error ' . self::CONFIG . '#: Extension "one" registers format "dateTime" twice, in two spellings.'], $this->messages($diagnostics));
+        self::assertSame(['error ' . self::CONFIG . '#: Extension "one" registers format "dateTime" twice, also as "date-time".'], $this->messages($diagnostics));
+    }
+
+    public function testReportsOneExtensionRegisteringAFormatTwice(): void
+    {
+        $registry = $this->registry($diagnostics);
+        $registry->register($this->extension('one', static function (ExtensionRegistry $registry): void {
+            $registry->addFormat('money', new FormatMapping(ScalarType::string()));
+            $registry->addFormat('money', new FormatMapping(ScalarType::string()));
+        }), []);
+
+        self::assertSame(['error ' . self::CONFIG . '#: Extension "one" registers format "money" twice.'], $this->messages($diagnostics));
     }
 
     public function testReportsTwoExtensionsRegisteringOneFormat(): void
@@ -424,5 +436,16 @@ final class RegistryTest extends TestCase
         $registry->register(new NamelessExtension(), []);
 
         self::assertSame(['error ' . self::CONFIG . '#: Extension MSSTC4PHP\\DtoGenerator\\Tests\\Support\\Extensions\\NamelessExtension failed to register: no name yet'], $this->messages($diagnostics));
+    }
+
+    private function registryWithGuidAndKey(): Registry
+    {
+        $registry = $this->registry($diagnostics);
+        $registry->register($this->extension('uid', static function (ExtensionRegistry $registry): void {
+            $registry->addFormat('GUID', new FormatMapping(new ClassType(ClassName::fromFqcn('App\\Extended'))));
+            $registry->addFormat('ssh_key', new FormatMapping(new ClassType(ClassName::fromFqcn('App\\Key'))));
+        }), []);
+
+        return $registry;
     }
 }

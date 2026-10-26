@@ -20,6 +20,8 @@ use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
  */
 final class DefaultFit
 {
+    private const NUMERIC_STRING = '/^-?[0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?$/D';
+
     private function __construct()
     {
     }
@@ -110,7 +112,7 @@ final class DefaultFit
      */
     private static function isNumericString(string $value): bool
     {
-        return preg_match('/^-?[0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?$/D', $value) === 1;
+        return preg_match(self::NUMERIC_STRING, $value) === 1;
     }
 
     private static function inRange(int $value, ?string $refinement): bool

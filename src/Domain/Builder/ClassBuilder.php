@@ -41,9 +41,6 @@ final class ClassBuilder
     /** The numbers JSON writes, which every PHP version reads alike. */
     private const JSON_NUMBER = '/^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?$/D';
 
-    /** 2^53: the largest integer below which every integer is a float too. */
-    private const MAX_EXACT_INTEGER = 9007199254740992;
-
     private NameResolver $names;
 
     private Superseded $superseded;
@@ -443,12 +440,15 @@ final class ClassBuilder
      * type carries them as a PHPDoc literal. A JSON-equal value can still not fit the PHP type (2.0 for an int); the
      * type check after this one reports that.
      *
-     * @param JsonValue $value
+     * The default matches as written or as read: `"5"` matches the `const: "5"` of an integer, as which it reads 5.
+     *
+     * @param JsonValue $written
+     * @param JsonValue $read
      */
-    private function forbiddenBySchema(Schema $schema, $value): ?string
+    private function forbiddenBySchema(Schema $schema, $written, $read): ?string
     {
         foreach ($this->types->valueSources($schema) as $source) {
-            $forbidden = $this->forbiddenBy($source, $value);
+            $forbidden = $this->forbiddenBy($source, $written, $read);
             if ($forbidden !== null) {
                 return $forbidden;
             }
@@ -458,23 +458,22 @@ final class ClassBuilder
     }
 
     /**
-     * @param JsonValue $value
+     * @param JsonValue $written
+     * @param JsonValue $read
      */
-    private function forbiddenBy(Schema $source, $value): ?string
+    private function forbiddenBy(Schema $source, $written, $read): ?string
     {
-        if ($source->hasKeyword('const')) {
-            $const = Json::value($source->keyword('const'));
-
-            return $this->sameJson($value, $const) ? null : sprintf('Default %s is not the "const" value %s; null is used instead.', $this->json($value), $this->json($const));
-        }
-
-        foreach ($source->enum() ?? [] as $allowed) {
-            if ($this->sameJson($value, $allowed)) {
+        $const = $source->hasKeyword('const');
+        $allowed = $const ? [Json::value($source->keyword('const'))] : $source->enum() ?? [];
+        foreach ($allowed as $value) {
+            if ($this->sameJson($written, $value) || $this->sameJson($read, $value)) {
                 return null;
             }
         }
 
-        return sprintf('Default %s is not one of the "enum" values; null is used instead.', $this->json($value));
+        return $const
+            ? sprintf('Default %s is not the "const" value %s; null is used instead.', $this->json($written), $this->json($allowed[0]))
+            : sprintf('Default %s is not one of the "enum" values; null is used instead.', $this->json($written));
     }
 
     /**
@@ -525,7 +524,7 @@ final class ClassBuilder
         $inner = $type instanceof NullableType ? $type->inner() : $type;
         // Read first: `default: "5"` beside `const: 5` is the constant.
         $read = $this->read($default, $inner, $schema);
-        $forbidden = $this->forbiddenBySchema($schema, $read->value());
+        $forbidden = $this->forbiddenBySchema($schema, $default->value(), $read->value());
         if ($forbidden !== null) {
             $diagnostics->error($forbidden, $at);
 
@@ -584,8 +583,9 @@ final class ClassBuilder
     {
         $value = $default->value();
         $kind = $this->kindOf($type);
-        if ($kind === 'int' && is_float($value) && $this->isExactInteger($value) && $this->declaresNumber($schema)) {
-            return new DefaultValue((int) $value);
+        $whole = is_float($value) ? WholeNumber::of($value) : null;
+        if ($kind === 'int' && $whole !== null && $this->declaresNumber($schema)) {
+            return new DefaultValue($whole);
         }
 
         if (!is_string($value)) {
@@ -596,9 +596,9 @@ final class ClassBuilder
             return new DefaultValue($value === 'true');
         }
 
-        $int = filter_var($value, FILTER_VALIDATE_INT);
-        if ($kind === 'int' && is_int($int) && preg_match(self::JSON_INTEGER, $value) === 1) {
-            return new DefaultValue($int);
+        $integer = filter_var($value, FILTER_VALIDATE_INT);
+        if ($kind === 'int' && is_int($integer) && preg_match(self::JSON_INTEGER, $value) === 1) {
+            return new DefaultValue($integer);
         }
 
         return $kind === 'float' && preg_match(self::JSON_NUMBER, $value) === 1 && is_finite((float) $value) ? new DefaultValue((float) $value) : $default;
@@ -616,15 +616,6 @@ final class ClassBuilder
         }
 
         return $type instanceof ScalarType ? $type->kind() : null;
-    }
-
-    /**
-     * Beyond 2^53 a float holds no exact integer of JSON's; the range comes first, as PHP 8.5 warns about casting a
-     * float int cannot hold.
-     */
-    private function isExactInteger(float $value): bool
-    {
-        return abs($value) <= self::MAX_EXACT_INTEGER && (float) (int) $value === $value;
     }
 
     private function declaresNumber(Schema $schema): bool

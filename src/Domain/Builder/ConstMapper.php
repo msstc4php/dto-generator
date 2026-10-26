@@ -124,20 +124,7 @@ final class ConstMapper
      */
     private function whole($value)
     {
-        return is_float($value) ? $this->wholeFloat($value) : $value;
-    }
-
-    /**
-     * @return int|float
-     */
-    private function wholeFloat(float $value)
-    {
-        // Range first: PHP 8.5 warns about casting a float int cannot hold. PHP_INT_MAX compares as 2^63, outside.
-        if ($value < PHP_INT_MIN || $value >= PHP_INT_MAX || $value !== floor($value)) {
-            return $value;
-        }
-
-        return (int) $value;
+        return is_float($value) ? WholeNumber::of($value) ?? $value : $value;
     }
 
     /**

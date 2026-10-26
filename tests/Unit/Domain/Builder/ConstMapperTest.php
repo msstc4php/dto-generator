@@ -45,6 +45,16 @@ final class ConstMapperTest extends TestCase
         self::assertSame('float', $this->describe($mapper->type($this->schema(['const' => 2.0 ** 63]), new Diagnostics())));
     }
 
+    public function testReadsANumberOfAWholeNumberFormatAsAnInteger(): void
+    {
+        $mapper = new ConstMapper(new FormatMap([]));
+
+        self::assertSame('5', $this->describe($mapper->type($this->schema(['type' => 'number', 'format' => 'int32', 'const' => 5.0]), new Diagnostics())));
+        self::assertSame('10000000000000000', $this->describe($mapper->type($this->schema(['type' => 'number', 'format' => 'int64', 'const' => 1.0e16]), new Diagnostics())));
+        self::assertSame('float', $this->describe($mapper->type($this->schema(['type' => 'number', 'format' => 'int32', 'const' => 5.5]), new Diagnostics())));
+        self::assertSame('float', $this->describe($mapper->type($this->schema(['type' => 'number', 'const' => 5.0]), new Diagnostics())));
+    }
+
     public function testLeavesAConfiguredFormatItsClass(): void
     {
         $mapper = new ConstMapper(new FormatMap(['money' => new ClassType(ClassName::fromFqcn('App\Money'))]));

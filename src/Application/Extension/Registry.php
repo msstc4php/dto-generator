@@ -50,6 +50,9 @@ final class Registry implements ExtensionRegistry
     /** @var array<int|string, string> format → extension name */
     private array $formatOwners = [];
 
+    /** @var array<string, string> the name of a format → its spelling the first extension registered */
+    private array $formatSpellings = [];
+
     /** @var list<non-empty-string> */
     private array $claims = [];
 
@@ -98,9 +101,10 @@ final class Registry implements ExtensionRegistry
         $name = Formats::normalize($format);
         $owner = $this->formatOwners[$name] ?? null;
         if ($owner !== null) {
+            $spelling = $this->formatSpellings[$name] ?? $format;
             $this->diagnostics->error(
                 $owner === $this->current
-                    ? sprintf('Extension "%s" registers format "%s" twice, in two spellings.', $owner, $format)
+                    ? sprintf('Extension "%s" registers format "%s" twice%s.', $owner, $format, $spelling === $format ? '' : sprintf(', also as "%s"', $spelling))
                     : sprintf('Extensions "%s" and "%s" both register format "%s".', $owner, $this->current, $format),
                 $this->location,
             );
@@ -110,6 +114,7 @@ final class Registry implements ExtensionRegistry
 
         $this->formats[$format] = $mapping->type();
         $this->formatOwners[$name] = $this->current;
+        $this->formatSpellings[$name] = $format;
     }
 
     public function claimExtensionKeys(string ...$globs): void
@@ -163,8 +168,8 @@ final class Registry implements ExtensionRegistry
      */
     public function formats(array $configured, array $known = []): array
     {
-        $configuredNames = array_flip(array_map(static fn ($key): string => self::nameOf($key), array_merge(array_keys($configured), $known)));
-        $registered = array_filter($this->formats, static fn ($key): bool => !isset($configuredNames[self::nameOf($key)]), ARRAY_FILTER_USE_KEY);
+        $configuredNames = array_flip(array_map(static fn ($key): string => self::normalizedName($key), array_merge(array_keys($configured), $known)));
+        $registered = array_filter($this->formats, static fn ($key): bool => !isset($configuredNames[self::normalizedName($key)]), ARRAY_FILTER_USE_KEY);
 
         return array_replace($registered, $configured);
     }
@@ -172,7 +177,7 @@ final class Registry implements ExtensionRegistry
     /**
      * @param int|string $key a format as a key, which PHP turns into an int when it is numeric
      */
-    private static function nameOf($key): string
+    private static function normalizedName($key): string
     {
         return Formats::normalize((string) $key);
     }

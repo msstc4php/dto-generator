@@ -610,12 +610,9 @@ final class TypeMapper
     private function intKeyword(Schema $schema, string $keyword): ?int
     {
         $value = $schema->hasKeyword($keyword) ? $schema->keyword($keyword) : null;
-        // A whole float (`maximum: 1000.0`) bounds integers as well; beyond 2^53 no float is an exact integer.
-        if (is_float($value) && abs($value) <= 2 ** 53 && (float) (int) $value === $value) {
-            return (int) $value;
-        }
 
-        return is_int($value) ? $value : null;
+        // A whole float (`maximum: 1000.0`) bounds integers as well.
+        return is_float($value) ? WholeNumber::of($value) : (is_int($value) ? $value : null);
     }
 
     /**

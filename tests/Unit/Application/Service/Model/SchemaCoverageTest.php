@@ -618,18 +618,40 @@ final class SchemaCoverageTest extends TestCase
         );
     }
 
+    public function testMatchesAConstAsTheDefaultIsWrittenOrRead(): void
+    {
+        $output = ModelFixture::build(['C' => ['type' => 'object', 'properties' => [
+            'written' => ['type' => 'integer', 'const' => '5', 'default' => '5'],
+            'other' => ['type' => 'integer', 'const' => 5, 'default' => '6'],
+        ]]]);
+
+        self::assertSame(
+            [
+                'warning /project/api/openapi.yaml#/components/schemas/C/properties/written/const: "const" is not of the declared type; the property keeps its declared type.',
+                self::AT . 'C/properties/other/default: Default "6" is not the "const" value 5; null is used instead.',
+            ],
+            ModelFixture::messages($output),
+        );
+    }
+
     public function testReadsAStringDefaultOfAnEnumOfIntegers(): void
     {
         $output = ModelFixture::build([
             'Level' => ['type' => 'integer', 'enum' => [1, 2]],
             'C' => ['type' => 'object', 'properties' => [
                 'level' => ['allOf' => [['$ref' => '#/components/schemas/Level']], 'default' => '2'],
-                'count' => ['type' => 'number', 'format' => 'int32', 'const' => 5],
             ]],
         ]);
 
         self::assertSame([], ModelFixture::messages($output));
-        self::assertSame(['level: App\\Dto\\Level|null', 'count: 5|null'], ModelFixture::classes($output)['App\\Dto\\C']);
+        self::assertSame(['level: App\\Dto\\Level|null'], ModelFixture::classes($output)['App\\Dto\\C']);
+    }
+
+    public function testTakesTheConstOfANumberOfAWholeNumberFormatAsAnInteger(): void
+    {
+        $output = ModelFixture::build(['C' => ['type' => 'object', 'properties' => ['count' => ['type' => 'number', 'format' => 'int32', 'const' => 5]]]]);
+
+        self::assertSame(['count: 5|null'], ModelFixture::classes($output)['App\\Dto\\C']);
     }
 
     public function testKeepsTheDeclaredTypeAgainstAConstOfAnotherKind(): void

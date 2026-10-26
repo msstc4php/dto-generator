@@ -314,7 +314,15 @@ final class ConfigFactory
         $float = ScalarType::float();
         $boolean = ScalarType::bool();
 
-        return ['string' => ScalarType::string(), 'int' => $integer, 'integer' => $integer, 'float' => $float, 'number' => $float, 'bool' => $boolean, 'boolean' => $boolean];
+        return [
+            'string' => ScalarType::string(),
+            'int' => $integer,
+            'integer' => $integer,
+            'float' => $float,
+            'number' => $float,
+            'bool' => $boolean,
+            'boolean' => $boolean,
+        ];
     }
 
     private function extensions(RawSection $root): ExtensionSettings

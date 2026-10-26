@@ -38,6 +38,29 @@ final class DefaultFitTest extends TestCase
         ];
     }
 
+    /**
+     * @dataProvider numericStrings
+     */
+    public function testTakesForANumericStringOnlyDigitsWithAFractionAndAnExponent(string $value, bool $fits): void
+    {
+        self::assertSame($fits, DefaultFit::fits($value, ScalarType::string('numeric-string')));
+    }
+
+    /**
+     * @return array<string, array{string, bool}>
+     */
+    public static function numericStrings(): array
+    {
+        return [
+            'leading zeros' => ['-0012', true],
+            'exponent' => ['1E5', true],
+            'signed exponent' => ['1.5e+3', true],
+            'exponent without digits' => ['1e', false],
+            'sign alone' => ['-', false],
+            'word' => ['abc', false],
+        ];
+    }
+
     public function testNoJsonValueIsAClassInstance(): void
     {
         self::assertFalse(DefaultFit::fits(1, new ClassType(ClassName::fromFqcn('App\Money'))));

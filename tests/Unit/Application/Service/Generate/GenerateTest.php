@@ -19,9 +19,14 @@ use MSSTC4PHP\DtoGenerator\Application\Service\Generate\WritePlan;
 use MSSTC4PHP\DtoGenerator\Application\Service\Model\Build\Action as BuildModel;
 use MSSTC4PHP\DtoGenerator\Application\Service\Model\Enrich\Action as EnrichModel;
 use MSSTC4PHP\DtoGenerator\Application\Service\Schemas\Load\Action as LoadSchemas;
+use MSSTC4PHP\DtoGenerator\Contract\Extension;
+use MSSTC4PHP\DtoGenerator\Contract\ExtensionRegistry;
+use MSSTC4PHP\DtoGenerator\Contract\FormatMapping;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\NameResolver;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\SchemaParser;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostic;
+use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
+use MSSTC4PHP\DtoGenerator\Domain\Model\ClassType;
 use MSSTC4PHP\DtoGenerator\Extension\CustomAttributes\CustomAttributes;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Emitter\PhpParserEmitter;
 use MSSTC4PHP\DtoGenerator\Infrastructure\Extension\ClassExtensionLoader;
@@ -58,6 +63,37 @@ final class GenerateTest extends TestCase
         self::assertTrue($writer->applied);
         self::assertTrue($writer->released);
         self::assertNotNull($output->plan());
+    }
+
+    public function testAFormatTheConfigKnowsDisplacesTheTypeAnExtensionGivesIt(): void
+    {
+        $guid = new class implements Extension {
+            public function name(): string
+            {
+                return 'guid';
+            }
+
+            public function register(ExtensionRegistry $registry, array $config): void
+            {
+                $registry->addFormat('GUID', new FormatMapping(new ClassType(ClassName::fromFqcn('App\\Guid'))));
+            }
+        };
+        $loader = new InMemoryDocumentLoader([
+            self::CONFIG => [
+                'version' => 1,
+                'target' => ['php' => '8.2'],
+                'formats' => ['uuid' => ['type' => 'string']],
+                'sources' => [['spec' => 'api/openapi.yaml', 'namespace' => 'App\\Dto', 'outputDir' => 'src/Dto']],
+            ],
+            '/project/api/openapi.yaml' => ['openapi' => '3.1.0', 'components' => ['schemas' => [
+                'Free' => ['type' => 'object', 'properties' => ['id' => ['type' => 'string', 'format' => 'guid']]],
+            ]]],
+        ]);
+
+        $output = $this->action($loader, new RecordingWriter(new WritePlan([], [], [])), null, null, [$guid])(new Input(self::CONFIG, Mode::from(Mode::WRITE)));
+
+        self::assertSame([], $this->messages($output));
+        self::assertStringContainsString('public ?string $id = null', $output->files()[0]->contents());
     }
 
     public function testKeepsWarningsOnSuccess(): void
@@ -463,13 +499,16 @@ final class GenerateTest extends TestCase
         return $this->action($loader, $writer, $verifiers ?? new FixedClassVerifierLocator(), $packages)($outputRoot === null ? $input : $input->withOutputRoot($outputRoot));
     }
 
-    private function action(InMemoryDocumentLoader $loader, RecordingWriter $writer, ?FixedClassVerifierLocator $verifiers = null, ?FixedProjectPackages $packages = null): Action
+    /**
+     * @param list<Extension> $extensions built-in extensions besides the custom attributes
+     */
+    private function action(InMemoryDocumentLoader $loader, RecordingWriter $writer, ?FixedClassVerifierLocator $verifiers = null, ?FixedProjectPackages $packages = null, array $extensions = []): Action
     {
         return new Action(
             new LoadConfig($loader, new ConfigFactory(), new TargetResolver(new FixedPhpConstraint(null))),
             $verifiers ?? new FixedClassVerifierLocator(),
             $packages ?? new FixedProjectPackages(),
-            new LoadExtensions(new ClassExtensionLoader(), static fn (array $aliases): array => [new CustomAttributes($aliases)], new FixedExtensionDiscovery()),
+            new LoadExtensions(new ClassExtensionLoader(), static fn (array $aliases): array => array_merge([new CustomAttributes($aliases)], $extensions), new FixedExtensionDiscovery()),
             new LoadSchemas($loader, new SchemaParser()),
             new BuildModel(new NameResolver()),
             new EnrichModel(),
