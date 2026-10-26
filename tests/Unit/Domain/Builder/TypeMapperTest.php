@@ -135,6 +135,32 @@ final class TypeMapperTest extends TestCase
         ];
     }
 
+    /**
+     * @dataProvider knownFormats
+     *
+     * @param array<array-key, mixed> $property
+     */
+    public function testKeepsTheTypeOfAFormatTheConfigKnows(array $property, string $expected, int $warnings): void
+    {
+        [$type, $messages] = $this->map($property, [], '8.2', DateTimeClass::IMMUTABLE, ['ssh-key' => 'string']);
+
+        self::assertSame($expected, $type);
+        self::assertCount($warnings, $messages);
+    }
+
+    /**
+     * @return array<string, array{array<array-key, mixed>, string, int}>
+     */
+    public static function knownFormats(): array
+    {
+        return [
+            'refined string' => [['type' => 'string', 'format' => 'SSH_key', 'minLength' => 1], 'non-empty-string', 0],
+            'constant' => [['type' => 'string', 'format' => 'ssh-key', 'const' => 'a'], "'a'", 0],
+            'another type' => [['type' => 'integer', 'format' => 'ssh-key', 'minimum' => 0], 'non-negative-int', 1],
+            'boolean' => [['type' => 'boolean', 'format' => 'ssh-key'], 'bool', 0],
+        ];
+    }
+
     public function testUsesTheConfiguredDateTimeClass(): void
     {
         [$type] = $this->map(['type' => 'string', 'format' => 'date-time'], [], '8.2', DateTimeClass::MUTABLE);
@@ -292,10 +318,11 @@ final class TypeMapperTest extends TestCase
     /**
      * @param array<array-key, mixed> $property
      * @param array<int|string, TypeModel> $formats
+     * @param array<int|string, 'string'|'int'|'float'|'bool'> $known
      *
      * @return array{string, list<string>}
      */
-    private function map(array $property, array $formats = [], string $php = '8.2', string $dateTimeClass = DateTimeClass::IMMUTABLE): array
+    private function map(array $property, array $formats = [], string $php = '8.2', string $dateTimeClass = DateTimeClass::IMMUTABLE, array $known = []): array
     {
         $graph = $this->graph($property);
         $mapper = new TypeMapper(
@@ -310,6 +337,7 @@ final class TypeMapperTest extends TestCase
                 true,
             ),
             $formats,
+            $known,
         );
         $holder = $graph->all()[0]->schema()->property('value');
         self::assertNotNull($holder);

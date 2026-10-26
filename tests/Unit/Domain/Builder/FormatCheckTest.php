@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MSSTC4PHP\DtoGenerator\Tests\Unit\Domain\Builder;
 
 use MSSTC4PHP\DtoGenerator\Domain\Builder\FormatCheck;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\FormatMap;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\SchemaParser;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostic;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
@@ -42,7 +43,7 @@ final class FormatCheckTest extends TestCase
         $diagnostics = new Diagnostics();
         $schema = (new SchemaParser())->parse(['format' => $format], new SchemaLocation('s.yaml', '/S'), new Diagnostics());
 
-        FormatCheck::check($schema, $kind, $diagnostics);
+        FormatCheck::check($schema, $kind, new FormatMap([]), $diagnostics);
 
         self::assertSame($expected, array_map(static fn (Diagnostic $d): string => $d->toString(), $diagnostics->all()));
     }
@@ -50,8 +51,22 @@ final class FormatCheckTest extends TestCase
     public function testLeavesASchemaWithoutFormatAlone(): void
     {
         $diagnostics = new Diagnostics();
-        FormatCheck::check((new SchemaParser())->parse([], new SchemaLocation('s.yaml', '/S'), new Diagnostics()), 'string', $diagnostics);
+        FormatCheck::check((new SchemaParser())->parse([], new SchemaLocation('s.yaml', '/S'), new Diagnostics()), 'string', new FormatMap([]), $diagnostics);
 
         self::assertSame([], $diagnostics->all());
+    }
+
+    public function testKnowsTheFormatsOfTheProjectForTheirScalar(): void
+    {
+        $schema = (new SchemaParser())->parse(['format' => 'SSH_key'], new SchemaLocation('s.yaml', '/S'), new Diagnostics());
+        $project = new FormatMap([], ['ssh-key' => 'string']);
+        $asString = new Diagnostics();
+        $asInt = new Diagnostics();
+
+        FormatCheck::check($schema, 'string', $project, $asString);
+        FormatCheck::check($schema, 'int', $project, $asInt);
+
+        self::assertSame([], $asString->all());
+        self::assertCount(1, $asInt->all());
     }
 }

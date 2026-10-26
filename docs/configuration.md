@@ -119,7 +119,8 @@ Required; must be `1`.
 
 ## `formats`
 
-Maps a `format` value to a PHP class, or to `string`, `int`, `float` or `bool`:
+Maps a `format` value to a PHP class, or names a format of your API known for `string`, `int`, `float` or `bool`
+(`integer`, `number`, `boolean` as well, in any letter case):
 
 ```yaml
 formats:
@@ -128,9 +129,11 @@ formats:
   ssh-key: { type: string }                      # a format of your API: no warning
 ```
 
-A property with `format: money` gets the type `App\Money\Money`. Constructing that object from the wire value is the
+A property with `format: money` gets the type `App\Money\Money`. A scalar changes no type: a string with
+`format: ssh-key` keeps its `const`, `minLength` and the rest, only without the warning; the format on an integer still
+warns. Constructing that object from the wire value is the
 job of your serializer. A format is looked up as the document writes it, then by the name the generator reads it as
-(see [formats](openapi-support.md#formats)): `uuid` covers `guid` and `UUID` too. A format the generator does not know
+(see [formats](openapi-support.md#formats)): `uuid` covers `guid` and `UUID` too, `ssh-key` covers `SSH_key`. A format the generator does not know
 gives the base type (`string`, `int`…) and a warning. Extensions can register formats too; two extensions registering
 the same format is an error.
 

@@ -31,6 +31,14 @@ final class EnumOfItemsTest extends TestCase
             ['type' => 'array', 'enum' => [true], 'items' => ['type' => ['boolean', 'null']]],
             ['type' => 'array', 'items' => ['type' => ['boolean', 'null'], 'enum' => [true]]],
         ];
+        yield 'of an OpenAPI 3.0 nullable array, without null' => [
+            ['type' => 'array', 'nullable' => true, 'enum' => ['x', null], 'items' => ['type' => 'string']],
+            ['type' => 'array', 'nullable' => true, 'items' => ['type' => 'string', 'enum' => ['x']]],
+        ];
+        yield 'with the names and descriptions of the cases' => [
+            ['type' => 'array', 'enum' => ['a'], 'x-enum-varnames' => ['A'], 'x-enum-descriptions' => ['The a.'], 'x-other' => 1],
+            ['type' => 'array', 'x-other' => 1, 'items' => ['enum' => ['a'], 'x-enum-varnames' => ['A'], 'x-enum-descriptions' => ['The a.']]],
+        ];
         yield 'of a nullable array, without null' => [
             ['type' => ['array', 'null'], 'enum' => [null, 'a']],
             ['type' => ['array', 'null'], 'items' => ['enum' => ['a']]],
@@ -60,6 +68,7 @@ final class EnumOfItemsTest extends TestCase
         yield 'enum of arrays and scalars' => [['type' => 'array', 'enum' => ['a', ['a']]]];
         yield 'only null' => [['type' => ['array', 'null'], 'enum' => [null]]];
         yield 'null the type rejects' => [['type' => 'array', 'enum' => ['a', null]]];
+        yield 'null beside nullable false' => [['type' => 'array', 'nullable' => false, 'enum' => ['a', null]]];
         yield 'items of a reference' => [['type' => 'array', 'enum' => ['a'], 'items' => ['$ref' => '#/S']]];
         yield 'items with an enum' => [['type' => 'array', 'enum' => ['a'], 'items' => ['enum' => ['b']]]];
         yield 'items with a const' => [['type' => 'array', 'enum' => ['a'], 'items' => ['const' => 'b']]];

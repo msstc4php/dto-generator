@@ -26,12 +26,13 @@ final class FormatCheck
 
     /**
      * @param 'string'|'int'|'float'|'bool' $kind the scalar the property becomes; a bool takes no format
+     * @param FormatMap $project the formats the config knows
      */
-    public static function check(Schema $schema, string $kind, Diagnostics $diagnostics): void
+    public static function check(Schema $schema, string $kind, FormatMap $project, Diagnostics $diagnostics): void
     {
         $format = $schema->normalizedFormat();
         $known = self::KINDS[$kind] ?? null;
-        if ($format === null || $known === null || Formats::isKnown($format, $known['type'])) {
+        if ($format === null || $known === null || Formats::isKnown($format, $known['type']) || $project->knows($schema, $kind)) {
             return;
         }
 

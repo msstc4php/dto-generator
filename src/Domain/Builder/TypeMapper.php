@@ -41,19 +41,19 @@ final class TypeMapper
 
     private TypeMeet $meet;
 
-    /** @var array<int|string, TypeModel> */
-    private array $formats;
+    private FormatMap $formats;
 
     /**
      * @param array<int|string, TypeModel> $formats custom formats of the config and the extensions
+     * @param array<int|string, 'string'|'int'|'float'|'bool'> $known formats of the config known for a scalar
      */
-    public function __construct(SchemaGraph $graph, Declarations $declarations, TargetProfile $target, array $formats)
+    public function __construct(SchemaGraph $graph, Declarations $declarations, TargetProfile $target, array $formats, array $known = [])
     {
         $this->graph = $graph;
         $this->declarations = $declarations;
         $this->target = $target;
-        $this->formats = $formats;
-        $this->consts = new ConstMapper($formats);
+        $this->formats = new FormatMap($formats, $known);
+        $this->consts = new ConstMapper($this->formats);
         $this->meet = new TypeMeet(ClassName::fromFqcn($target->dateTimeClass()->className()), $declarations);
     }
 
@@ -190,7 +190,7 @@ final class TypeMapper
             }
         }
 
-        $mapped = self::mappedFormat($schema, $this->formats);
+        $mapped = $this->formats->typeOf($schema);
         if ($mapped instanceof TypeModel) {
             return $mapped;
         }
@@ -541,7 +541,7 @@ final class TypeMapper
             case SchemaType::STRING:
                 return $this->stringType($schema, $diagnostics);
             case SchemaType::INTEGER:
-                FormatCheck::check($schema, 'int', $diagnostics);
+                FormatCheck::check($schema, 'int', $this->formats, $diagnostics);
 
                 return ScalarType::int($this->integerRange($schema, $diagnostics));
             case SchemaType::NUMBER:
@@ -550,7 +550,7 @@ final class TypeMapper
                     return ScalarType::int($this->integerRange($schema, $diagnostics));
                 }
 
-                FormatCheck::check($schema, 'float', $diagnostics);
+                FormatCheck::check($schema, 'float', $this->formats, $diagnostics);
 
                 return ScalarType::float();
             case SchemaType::BOOLEAN:
@@ -566,29 +566,13 @@ final class TypeMapper
         }
     }
 
-    /**
-     * The type the config or an extension gives the format, by the name the document writes or the one it stands for.
-     *
-     * @param array<int|string, TypeModel> $formats
-     */
-    public static function mappedFormat(Schema $schema, array $formats): ?TypeModel
-    {
-        $format = $schema->format();
-        $normalized = $schema->normalizedFormat();
-        if ($format === null || $normalized === null) {
-            return null;
-        }
-
-        return $formats[$format] ?? $formats[$normalized] ?? null;
-    }
-
     private function stringType(Schema $schema, Diagnostics $diagnostics): TypeModel
     {
         if (in_array($schema->normalizedFormat(), Formats::DATES, true)) {
             return new ClassType(ClassName::fromFqcn($this->target->dateTimeClass()->className()));
         }
 
-        FormatCheck::check($schema, 'string', $diagnostics);
+        FormatCheck::check($schema, 'string', $this->formats, $diagnostics);
         if (in_array($schema->normalizedFormat(), Formats::NUMERIC_STRINGS, true)) {
             return ScalarType::string('numeric-string');
         }

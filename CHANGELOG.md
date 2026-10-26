@@ -31,19 +31,22 @@ All notable changes to this package are documented here. The format follows
   `json` and others (docs/openapi-support.md#formats). A property with `format: dateTime` is a date now, as is one
   with Twilio's `date-time-rfc-2822`; `url` reads as `uri-reference`. `Schema::normalizedFormat()` gives the name,
   `Formats` the list; `format()` stays as written.
-- `type: number` with a format of whole numbers (Xero's `format: integer`) is an `int`.
+- `type: number` with a format of whole numbers (Xero's `format: integer`, also `int32`, `int64`) is an `int`; it was
+  a `float`. A payload that sends such a number as `1.0` no longer fits the type: map the format to `float` through an
+  extension, or fix the spec.
 - A string with an integer or decimal format (Youtube's `uint64`) is a `numeric-string`.
-- A string default of a boolean or a number is the value it spells (Xero's `default: "false"`); it was replaced by
-  `null` with a warning.
+- A string default of a boolean or a number is the value it spells, as JSON writes it (Xero's `default: "false"`); it
+  was replaced by `null` with a warning.
 - An array whose `enum` lists values of its items (Zoom, Vimeo) gets the enum on its items: `list<Enum>`; it was
   ignored with a warning.
-- Two places a `$ref` points into that end alike and hold the same enum (Linode's `replication_type`) share it instead
-  of numbering the second (`ReplicationType2`).
+- Two named enums whose names clash and whose cases are the same (Linode's `replication_type` of two schemas a `$ref`
+  points into, `Status` and `status`) share one instead of numbering the second (`ReplicationType2`).
+- Extensions registering two spellings of one format (`date-time`, `dateTime`) is an error, as one format twice was.
 
 ### Added
 
-- `formats` in the config maps a format to `string`, `int`, `float` or `bool` as well, which silences the warning
-  about a format of your own; it is looked up as written, then by the format's name.
+- `formats` in the config names a format of your API known for `string`, `int`, `float` or `bool`, which silences the
+  warning about it and changes no type; a format is looked up as written, then by its name.
 
 ## [1.15.0] - 2026-10-25
 

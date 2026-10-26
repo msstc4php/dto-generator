@@ -6,7 +6,8 @@ namespace MSSTC4PHP\DtoGenerator\Domain\Builder;
 
 /**
  * An array whose `enum` lists scalars (Zoom, Vimeo) can hold none of them: the values are meant for its items, and go
- * there. Items given by a `$ref`, or with values of their own, keep the schema as it is.
+ * there, with the `x-enum-*` keys that name and describe them. Items given by a `$ref`, or with values of their own,
+ * keep the schema as it is.
  */
 final class EnumOfItems
 {
@@ -32,13 +33,24 @@ final class EnumOfItems
         $values = array_values(array_filter($enum, static fn ($value): bool => $value !== null));
         $itemTypes = (array) ($items['type'] ?? []);
         $admitted = array_filter($values, static fn ($value): bool => self::admits($itemTypes, $value));
-        // A null the type does not admit is a contradiction the parser reports as it is.
-        if ($values === [] || count($admitted) !== count($values) || (count($values) !== count($enum) && !in_array('null', $types, true))) {
+        // A null the type does not admit is a contradiction the parser reports as it is; OpenAPI 3.0 admits it with
+        // `nullable`, which is read after this.
+        $nullable = in_array('null', $types, true) || ($node['nullable'] ?? null) === true;
+        if ($values === [] || count($admitted) !== count($values) || (count($values) !== count($enum) && !$nullable)) {
             return $node;
         }
 
         unset($node['enum']);
-        $node['items'] = $items + ['enum' => $values];
+        $items += ['enum' => $values];
+        // The names and descriptions of the cases go with them.
+        foreach ($node as $key => $value) {
+            if (is_string($key) && strncmp($key, 'x-enum-', 7) === 0) {
+                $items += [$key => $value];
+                unset($node[$key]);
+            }
+        }
+
+        $node['items'] = $items;
 
         return $node;
     }

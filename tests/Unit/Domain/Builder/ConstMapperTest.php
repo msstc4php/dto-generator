@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MSSTC4PHP\DtoGenerator\Tests\Unit\Domain\Builder;
 
 use MSSTC4PHP\DtoGenerator\Domain\Builder\ConstMapper;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\FormatMap;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\SchemaParser;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
@@ -20,7 +21,7 @@ final class ConstMapperTest extends TestCase
 {
     public function testGivesTheLiteralOfTheConstant(): void
     {
-        $mapper = new ConstMapper([]);
+        $mapper = new ConstMapper(new FormatMap([]));
 
         self::assertSame("'a'", $this->describe($mapper->type($this->schema(['const' => 'a']), new Diagnostics())));
         self::assertSame('5', $this->describe($mapper->type($this->schema(['type' => 'integer', 'const' => 5.0]), new Diagnostics())));
@@ -29,7 +30,7 @@ final class ConstMapperTest extends TestCase
 
     public function testCastsOnlyWholeFloatsWithinTheRangeOfInt(): void
     {
-        $mapper = new ConstMapper([]);
+        $mapper = new ConstMapper(new FormatMap([]));
         $diagnostics = new Diagnostics();
 
         // -2^63 is PHP_INT_MIN; 2^63 is one past PHP_INT_MAX, and PHP 8.5 warns about casting it.
@@ -46,14 +47,14 @@ final class ConstMapperTest extends TestCase
 
     public function testLeavesAConfiguredFormatItsClass(): void
     {
-        $mapper = new ConstMapper(['money' => new ClassType(ClassName::fromFqcn('App\Money'))]);
+        $mapper = new ConstMapper(new FormatMap(['money' => new ClassType(ClassName::fromFqcn('App\Money'))]));
 
         self::assertNull($mapper->type($this->schema(['type' => 'string', 'format' => 'money', 'const' => '1 EUR']), new Diagnostics()));
     }
 
     public function testNarrowsOnlyByBareConstMembers(): void
     {
-        $mapper = new ConstMapper([]);
+        $mapper = new ConstMapper(new FormatMap([]));
         $diagnostics = new Diagnostics();
         $schema = $this->schema(['allOf' => [['type' => 'string', 'const' => 'typed'], ['const' => 'x']]]);
 

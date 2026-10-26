@@ -16,6 +16,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Builder\UnsupportedKeywords;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
 use MSSTC4PHP\DtoGenerator\Domain\Model\AttributeModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\TypeModel;
+use MSSTC4PHP\DtoGenerator\Domain\Schema\Formats;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
 use Throwable;
@@ -93,7 +94,9 @@ final class Registry implements ExtensionRegistry
 
     public function addFormat(string $format, FormatMapping $mapping): void
     {
-        $owner = $this->formatOwners[$format] ?? null;
+        // `date-time` and `datetime` name one format.
+        $name = Formats::normalize($format);
+        $owner = $this->formatOwners[$name] ?? null;
         if ($owner !== null) {
             $this->diagnostics->error(sprintf('Extensions "%s" and "%s" both register format "%s".', $owner, $this->current, $format), $this->location);
 
@@ -101,7 +104,7 @@ final class Registry implements ExtensionRegistry
         }
 
         $this->formats[$format] = $mapping->type();
-        $this->formatOwners[$format] = $this->current;
+        $this->formatOwners[$name] = $this->current;
     }
 
     public function claimExtensionKeys(string ...$globs): void

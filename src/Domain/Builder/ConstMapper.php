@@ -21,13 +21,9 @@ use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
  */
 final class ConstMapper
 {
-    /** @var array<int|string, TypeModel> */
-    private array $formats;
+    private FormatMap $formats;
 
-    /**
-     * @param array<int|string, TypeModel> $formats custom formats of the config and the extensions
-     */
-    public function __construct(array $formats)
+    public function __construct(FormatMap $formats)
     {
         $this->formats = $formats;
     }
@@ -41,7 +37,7 @@ final class ConstMapper
         $declared = array_map(static fn (SchemaType $type): string => $type->value(), $schema->nonNullTypes());
         // A date applies only to a declared string; a configured format applies to any type.
         $dated = in_array($schema->normalizedFormat(), Formats::DATES, true) && in_array(SchemaType::STRING, $declared, true);
-        if (TypeMapper::mappedFormat($schema, $this->formats) instanceof TypeModel || $dated) {
+        if ($this->formats->typeOf($schema) instanceof TypeModel || $dated) {
             return null;
         }
 
@@ -76,7 +72,7 @@ final class ConstMapper
             return null;
         }
 
-        FormatCheck::check($schema, $type->kind(), $diagnostics);
+        FormatCheck::check($schema, $type->kind(), $this->formats, $diagnostics);
 
         return $type;
     }

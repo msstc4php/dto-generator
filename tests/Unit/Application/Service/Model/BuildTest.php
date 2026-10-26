@@ -217,6 +217,18 @@ final class BuildTest extends TestCase
         self::assertSame(['replication_type: App\Dto\ReplicationType2|null'], ModelFixture::classes($output)['App\Dto\PostgresRequest']);
     }
 
+    public function testSharesNamedEnumsOfOneNameAndTheSameCases(): void
+    {
+        $output = ModelFixture::build([
+            'Status' => ['type' => 'string', 'enum' => ['on', 'off'], 'description' => 'One.'],
+            'status' => ['type' => 'string', 'enum' => ['off', 'on'], 'description' => 'Two.'],
+            'C' => ['type' => 'object', 'properties' => ['a' => ['$ref' => '#/components/schemas/Status'], 'b' => ['$ref' => '#/components/schemas/status']]],
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(['a: App\Dto\Status|null', 'b: App\Dto\Status|null'], ModelFixture::classes($output)['App\Dto\C']);
+    }
+
     public function testKeepsTheDiscriminatorValueAndTheParentOfANumberedSchema(): void
     {
         $object = ['type' => 'object', 'required' => ['kind'], 'properties' => ['kind' => ['type' => 'string']]];

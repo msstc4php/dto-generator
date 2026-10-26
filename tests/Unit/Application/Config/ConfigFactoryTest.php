@@ -460,12 +460,18 @@ final class ConfigFactoryTest extends TestCase
     {
         $config = $this->valid([
             'version' => 1,
-            'formats' => ['a' => ['type' => 'string'], 'b' => ['type' => 'int'], 'c' => ['type' => 'float'], 'd' => ['type' => 'bool']],
+            'formats' => [
+                'a' => ['type' => 'string'], 'b' => ['type' => 'int'], 'c' => ['type' => 'float'], 'd' => ['type' => 'bool'],
+                'e' => ['type' => 'Integer'], 'f' => ['type' => 'number'], 'g' => ['type' => 'BOOLEAN'], 'h' => ['type' => 'String'],
+            ],
             'sources' => [['spec' => 'a.yaml', 'namespace' => 'App\A', 'outputDir' => 'a']],
         ]);
 
         self::assertEquals(
-            ['a' => ScalarType::string(), 'b' => ScalarType::int(), 'c' => ScalarType::float(), 'd' => ScalarType::bool()],
+            [
+                'a' => ScalarType::string(), 'b' => ScalarType::int(), 'c' => ScalarType::float(), 'd' => ScalarType::bool(),
+                'e' => ScalarType::int(), 'f' => ScalarType::float(), 'g' => ScalarType::bool(), 'h' => ScalarType::string(),
+            ],
             $config->formats(),
         );
     }

@@ -19,23 +19,24 @@ final class Formats
     public const INTEGERS = ['int8', 'int16', 'int32', 'int64', 'uint8', 'uint16', 'uint32', 'uint64', 'integer'];
 
     /** @var list<non-empty-string> the formats of a string that holds a number */
-    public const NUMERIC_STRINGS = ['int8', 'int16', 'int32', 'int64', 'uint8', 'uint16', 'uint32', 'uint64', 'integer', 'decimal', 'digits'];
+    public const NUMERIC_STRINGS = [...self::INTEGERS, 'decimal', 'digits'];
 
     /** @var list<non-empty-string> */
     private const STRINGS = [
+        ...self::NUMERIC_STRINGS,
         'date-time', 'date', 'time', 'partial-time', 'duration', 'date-time-rfc-2822', 'email', 'idn-email', 'hostname',
         'idn-hostname', 'ipv4', 'ipv6', 'ip', 'cidr', 'ipv4-cidr', 'ipv6-cidr', 'mac-address', 'uri', 'uri-reference',
         'iri', 'iri-reference', 'uri-template', 'uuid', 'ulid', 'byte', 'base64url', 'binary', 'password', 'regex',
         'json-pointer', 'relative-json-pointer', 'json', 'phone', 'currency', 'country', 'language', 'locale',
-        'timezone', 'color', 'iban', 'bic', 'isbn', 'issn', 'isin', 'decimal', 'digits', 'http-method', 'mm/yyyy',
-        'int8', 'int16', 'int32', 'int64', 'uint8', 'uint16', 'uint32', 'uint64', 'integer', 'string',
+        'timezone', 'color', 'iban', 'bic', 'isbn', 'issn', 'isin', 'http-method', 'mm/yyyy', 'string',
     ];
 
     /** @var array{string: list<non-empty-string>, integer: list<non-empty-string>, number: list<non-empty-string>} */
     private const BY_TYPE = [
         'string' => self::STRINGS,
-        'integer' => ['int8', 'int16', 'int32', 'int64', 'uint8', 'uint16', 'uint32', 'uint64', 'integer', 'unix-time'],
-        'number' => ['float', 'double', 'decimal', 'number', 'unix-time'],
+        'integer' => [...self::INTEGERS, 'unix-time'],
+        // A number of whole numbers is an int (TypeMapper).
+        'number' => [...self::INTEGERS, 'float', 'double', 'decimal', 'number', 'unix-time'],
     ];
 
     /**
@@ -131,13 +132,14 @@ final class Formats
     }
 
     /**
-     * The name the generator knows the format by; a format it does not know stays as written.
+     * The name the generator knows the format by: lower case, spaces and underscores as hyphens, another spelling as
+     * the name it stands for.
      */
     public static function normalize(string $format): string
     {
         $key = strtolower((string) preg_replace('/[\s_]+/', '-', trim($format)));
 
-        return self::ALIASES[$key] ?? (in_array($key, self::STRINGS, true) || in_array($key, self::BY_TYPE['integer'], true) || in_array($key, self::BY_TYPE['number'], true) ? $key : $format);
+        return self::ALIASES[$key] ?? $key;
     }
 
     /**
@@ -145,7 +147,6 @@ final class Formats
      */
     public static function isKnown(string $normalized, string $type): bool
     {
-        return in_array($normalized, self::BY_TYPE[$type], true)
-            || ($type === 'number' && in_array($normalized, self::INTEGERS, true));
+        return in_array($normalized, self::BY_TYPE[$type], true);
     }
 }

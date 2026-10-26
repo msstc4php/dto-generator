@@ -26,7 +26,7 @@ final class FormatsTest extends TestCase
         yield 'netmask' => ['ip/netmask', 'cidr'];
         yield 'prefix length' => ['ipv4/prefix_length', 'ipv4-cidr'];
         yield 'month and year' => ['MM/YYYY', 'mm/yyyy'];
-        yield 'unknown stays as written' => ['Ssh_Key', 'Ssh_Key'];
+        yield 'unknown in lower case and hyphens' => ['Ssh_Key', 'ssh-key'];
     }
 
     /**

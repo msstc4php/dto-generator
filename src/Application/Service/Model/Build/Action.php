@@ -205,7 +205,7 @@ final class Action
         }
 
         $declarations = $registry->declarationsWithHierarchy($input->graph(), $parents);
-        $types = new TypeMapper($input->graph(), $declarations, $input->target(), $input->formats());
+        $types = new TypeMapper($input->graph(), $declarations, $input->target(), $input->formats(), $input->knownFormats());
         $superseded = new Superseded();
         $builder = new ClassBuilder(
             $this->names,

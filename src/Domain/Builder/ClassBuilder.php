@@ -568,22 +568,24 @@ final class ClassBuilder
     private function fromString(DefaultValue $default, TypeModel $type): DefaultValue
     {
         $value = $default->value();
-        $kind = $type instanceof ScalarType ? $type->kind() : null;
-        if (!is_string($value)) {
+        if (!is_string($value) || !$type instanceof ScalarType) {
             return $default;
         }
 
-        $lower = strtolower($value);
-        if ($kind === 'bool' && in_array($lower, ['true', 'false'], true)) {
-            return new DefaultValue($lower === 'true');
+        // Only what JSON would have written without the quotes: no spaces, no leading zeros, no `+`.
+        $kind = $type->kind();
+        if ($kind === 'bool' && in_array($value, ['true', 'false'], true)) {
+            return new DefaultValue($value === 'true');
         }
 
-        $int = filter_var($value, FILTER_VALIDATE_INT);
+        $int = preg_match('/^-?(?:0|[1-9][0-9]*)$/D', $value) === 1 ? filter_var($value, FILTER_VALIDATE_INT) : false;
         if ($kind === 'int' && is_int($int)) {
             return new DefaultValue($int);
         }
 
-        return $kind === 'float' && is_numeric($value) && is_finite((float) $value) ? new DefaultValue((float) $value) : $default;
+        $number = preg_match('/^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?$/D', $value) === 1;
+
+        return $kind === 'float' && $number && is_finite((float) $value) ? new DefaultValue((float) $value) : $default;
     }
 
     /**

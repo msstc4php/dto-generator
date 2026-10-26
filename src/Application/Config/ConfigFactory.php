@@ -260,13 +260,17 @@ final class ConfigFactory
     }
 
     /**
-     * A class, or a scalar that only says the format is known.
+     * A class, or a scalar the format is known for: the property keeps the type its schema gives.
      *
      * @return array<int|string, ClassName|ScalarType>
      */
     private function formats(RawSection $section): array
     {
-        $scalars = ['string' => ScalarType::string(), 'int' => ScalarType::int(), 'float' => ScalarType::float(), 'bool' => ScalarType::bool()];
+        $int = ScalarType::int();
+        $float = ScalarType::float();
+        $bool = ScalarType::bool();
+        // PHP's names and JSON Schema's; neither is a class anyone means.
+        $scalars = ['string' => ScalarType::string(), 'int' => $int, 'integer' => $int, 'float' => $float, 'number' => $float, 'bool' => $bool, 'boolean' => $bool];
         $formats = [];
         foreach ($section->keys() as $name) {
             $entry = $section->section($name);
@@ -276,8 +280,9 @@ final class ConfigFactory
                 continue;
             }
 
-            if (isset($scalars[$type])) {
-                $formats[$name] = $scalars[$type];
+            $scalar = $scalars[strtolower($type)] ?? null;
+            if ($scalar instanceof ScalarType) {
+                $formats[$name] = $scalar;
 
                 continue;
             }

@@ -132,6 +132,20 @@ final class RegistryTest extends TestCase
         self::assertSame('string', $registry->formats([])['money']->describe());
     }
 
+    public function testReportsTwoExtensionsRegisteringTwoSpellingsOfOneFormat(): void
+    {
+        $registry = $this->registry($diagnostics);
+        $registry->register($this->extension('one', static function (ExtensionRegistry $registry): void {
+            $registry->addFormat('date-time', new FormatMapping(ScalarType::string()));
+        }), []);
+        $registry->register($this->extension('two', static function (ExtensionRegistry $registry): void {
+            $registry->addFormat('dateTime', new FormatMapping(ScalarType::int()));
+        }), []);
+
+        self::assertSame(['error ' . self::CONFIG . '#: Extensions "one" and "two" both register format "dateTime".'], $this->messages($diagnostics));
+        self::assertSame(['date-time'], array_keys($registry->formats([])));
+    }
+
     public function testClaimsExtensionKeysByGlob(): void
     {
         $registry = $this->registry($diagnostics);
