@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Domain\Builder;
 
+use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
+
 /**
  * An array whose `enum` lists scalars (Zoom, Vimeo) can hold none of them: the values are meant for its items, and go
  * there, with the `x-enum-*` keys that name and describe them. Items given by a `$ref`, or with values of their own,
@@ -17,15 +19,16 @@ final class EnumOfItems
 
     /**
      * @param array<array-key, mixed> $node
+     * @param bool $nullableKeyword whether `nullable: true` admits null (OpenAPI 3.0, Swagger 2.0 as rewritten)
      *
      * @return array<array-key, mixed>
      */
-    public static function moved(array $node): array
+    public static function moved(array $node, bool $nullableKeyword = false): array
     {
         $types = array_filter((array) ($node['type'] ?? []), 'is_string');
         $enum = $node['enum'] ?? null;
         $items = $node['items'] ?? [];
-        if (array_values(array_diff($types, ['null'])) !== ['array'] || !is_array($enum) || !is_array($items)
+        if (array_values(array_diff($types, ['null'])) !== ['array'] || !is_array($enum) || !is_array($items) || ($items !== [] && Json::isList($items))
             || array_intersect_key($items, array_flip(['$ref', 'enum', 'const'])) !== []) {
             return $node;
         }
@@ -34,8 +37,8 @@ final class EnumOfItems
         $itemTypes = (array) ($items['type'] ?? []);
         $admitted = array_filter($values, static fn ($value): bool => self::admits($itemTypes, $value));
         // A null the type does not admit is a contradiction the parser reports as it is; OpenAPI 3.0 admits it with
-        // `nullable`, which is read after this.
-        $nullable = in_array('null', $types, true) || ($node['nullable'] ?? null) === true;
+        // `nullable`, which is read after this. Tuple items (a list) are left to the parser.
+        $nullable = in_array('null', $types, true) || ($nullableKeyword && ($node['nullable'] ?? null) === true);
         if ($values === [] || count($admitted) !== count($values) || (count($values) !== count($enum) && !$nullable)) {
             return $node;
         }

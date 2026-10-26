@@ -19,6 +19,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\PropertyModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ScalarType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\TypeModel;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
+use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaType;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\DefaultValue;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
 use MSSTC4PHP\DtoGenerator\Domain\Target\Capability;
@@ -545,7 +546,7 @@ final class ClassBuilder
             return null;
         }
 
-        $read = $this->fromString($default, $inner);
+        $read = $this->read($default, $inner, $schema);
         if (!DefaultFit::fits($read->value(), $inner)) {
             $diagnostics->warning(
                 sprintf(
@@ -563,17 +564,24 @@ final class ClassBuilder
     }
 
     /**
-     * A default written as a string for a boolean or a number (`default: "true"`, Xero) is the value it spells.
+     * A default written as a string for a boolean or a number (`default: "true"`, Xero) is the value it spells; a whole
+     * float is the int of a number its format made one (`type: number, format: int32, default: 1.0`). An `integer`
+     * keeps refusing `2.0`.
      */
-    private function fromString(DefaultValue $default, TypeModel $type): DefaultValue
+    private function read(DefaultValue $default, TypeModel $type, Schema $schema): DefaultValue
     {
         $value = $default->value();
-        if (!is_string($value) || !$type instanceof ScalarType) {
+        $kind = $type instanceof ScalarType ? $type->kind() : null;
+        $number = in_array(SchemaType::NUMBER, array_map(static fn (SchemaType $declared): string => $declared->value(), $schema->nonNullTypes()), true);
+        if ($kind === 'int' && $number && is_float($value) && $value === floor($value) && abs($value) < 2 ** 53) {
+            return new DefaultValue((int) $value);
+        }
+
+        if (!is_string($value)) {
             return $default;
         }
 
         // Only what JSON would have written without the quotes: no spaces, no leading zeros, no `+`.
-        $kind = $type->kind();
         if ($kind === 'bool' && in_array($value, ['true', 'false'], true)) {
             return new DefaultValue($value === 'true');
         }
@@ -583,9 +591,7 @@ final class ClassBuilder
             return new DefaultValue($int);
         }
 
-        $number = preg_match('/^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?$/D', $value) === 1;
-
-        return $kind === 'float' && $number && is_finite((float) $value) ? new DefaultValue((float) $value) : $default;
+        return $kind === 'float' && preg_match(DefaultFit::JSON_NUMBER, $value) === 1 && is_finite((float) $value) ? new DefaultValue((float) $value) : $default;
     }
 
     /**

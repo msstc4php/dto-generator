@@ -130,12 +130,13 @@ formats:
 ```
 
 A property with `format: money` gets the type `App\Money\Money`. A scalar changes no type: a string with
-`format: ssh-key` keeps its `const`, `minLength` and the rest, only without the warning; the format on an integer still
-warns. Constructing that object from the wire value is the
-job of your serializer. A format is looked up as the document writes it, then by the name the generator reads it as
-(see [formats](openapi-support.md#formats)): `uuid` covers `guid` and `UUID` too, `ssh-key` covers `SSH_key`. A format the generator does not know
-gives the base type (`string`, `int`…) and a warning. Extensions can register formats too; two extensions registering
-the same format is an error.
+`format: ssh-key` keeps its `const`, `minLength` and the rest, only without the warning; the format on an integer
+still warns.
+Constructing an object from the wire value is the job of your serializer. A format is looked up as the document writes
+it, then by the name the generator reads it as (see [formats](openapi-support.md#formats)): `uuid` covers `guid` and
+`UUID` too, `ssh-key` covers `SSH_key`. A format the generator does not know gives the base type (`string`, `int`…)
+and a warning. Extensions can register formats too; two extensions registering one format (in any spelling) is an
+error, as are two spellings of one format here. A format here wins over an extension's in any spelling.
 
 ## `attributeAliases`
 

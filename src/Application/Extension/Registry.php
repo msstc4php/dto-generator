@@ -151,13 +151,20 @@ final class Registry implements ExtensionRegistry
     }
 
     /**
-     * @param array<int|string, TypeModel> $configured formats from the config, which win
+     * @param array<int|string, TypeModel> $configured formats from the config, which win over any spelling of theirs
      *
      * @return array<int|string, TypeModel>
      */
     public function formats(array $configured): array
     {
-        return array_replace($this->formats, $configured);
+        $names = [];
+        foreach (array_keys($configured) as $format) {
+            $names[Formats::normalize((string) $format)] = true;
+        }
+
+        $registered = array_filter($this->formats, static fn ($format): bool => !isset($names[Formats::normalize((string) $format)]), ARRAY_FILTER_USE_KEY);
+
+        return array_replace($registered, $configured);
     }
 
     /**

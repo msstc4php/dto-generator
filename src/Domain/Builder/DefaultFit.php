@@ -20,6 +20,9 @@ use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
  */
 final class DefaultFit
 {
+    /** A number as JSON writes it, which every PHP version reads as numeric. */
+    public const JSON_NUMBER = '/^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?$/D';
+
     private function __construct()
     {
     }
@@ -99,7 +102,8 @@ final class DefaultFit
             case 'bool':
                 return is_bool($value);
             default:
-                return is_string($value) && ($value !== '' || $type->phpDoc() !== 'non-empty-string');
+                return is_string($value) && ($value !== '' || $type->phpDoc() !== 'non-empty-string')
+                    && ($type->phpDoc() !== 'numeric-string' || preg_match(self::JSON_NUMBER, $value) === 1);
         }
     }
 

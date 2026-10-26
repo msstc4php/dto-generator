@@ -53,7 +53,7 @@ final class EnumOfItemsTest extends TestCase
      */
     public function testMovesTheScalarEnumOfAnArrayToItsItems(array $node, array $expected): void
     {
-        self::assertSame($expected, EnumOfItems::moved($node));
+        self::assertSame($expected, EnumOfItems::moved($node, true));
     }
 
     /**
@@ -76,6 +76,7 @@ final class EnumOfItemsTest extends TestCase
         yield 'fraction for integer items' => [['type' => 'array', 'enum' => [1.5], 'items' => ['type' => 'integer']]];
         yield 'items of no type the parser reads' => [['type' => 'array', 'enum' => ['a'], 'items' => ['type' => 5]]];
         yield 'enum no list' => [['type' => 'array', 'enum' => 'a']];
+        yield 'tuple items' => [['type' => 'array', 'enum' => ['a'], 'items' => [['type' => 'string']]]];
         yield 'items no object' => [['type' => 'array', 'enum' => ['a'], 'items' => true]];
     }
 
@@ -86,6 +87,13 @@ final class EnumOfItemsTest extends TestCase
      */
     public function testKeepsAnyOtherSchema(array $node): void
     {
+        self::assertSame($node, EnumOfItems::moved($node, true));
+    }
+
+    public function testReadsNullableOnlyWhereTheVersionHasIt(): void
+    {
+        $node = ['type' => 'array', 'nullable' => true, 'enum' => ['a', null]];
+
         self::assertSame($node, EnumOfItems::moved($node));
     }
 }

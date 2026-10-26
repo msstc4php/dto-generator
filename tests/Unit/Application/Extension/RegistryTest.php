@@ -113,9 +113,24 @@ final class RegistryTest extends TestCase
 
         $formats = $registry->formats(['uuid' => $configured]);
 
-        self::assertSame(['uuid', 'ulid'], array_keys($formats));
+        self::assertSame(['ulid', 'uuid'], array_keys($formats));
         self::assertSame($configured, $formats['uuid']);
         self::assertSame('Symfony\Component\Uid\Ulid', $formats['ulid']->describe());
+    }
+
+    public function testTheConfigWinsOverAnyOtherSpellingOfItsFormat(): void
+    {
+        $registry = $this->registry($diagnostics);
+        $registry->register($this->extension('uid', static function (ExtensionRegistry $registry): void {
+            $registry->addFormat('date-time', new FormatMapping(new ClassType(ClassName::fromFqcn('App\Extended'))));
+            $registry->addFormat('200', new FormatMapping(ScalarType::int()));
+        }), []);
+        $configured = new ClassType(ClassName::fromFqcn('App\Configured'));
+
+        $formats = $registry->formats(['dateTime' => $configured]);
+
+        self::assertSame([200, 'dateTime'], array_keys($formats));
+        self::assertSame($configured, $formats['dateTime']);
     }
 
     public function testReportsTwoExtensionsRegisteringOneFormat(): void

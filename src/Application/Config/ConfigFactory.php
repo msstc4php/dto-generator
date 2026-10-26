@@ -13,6 +13,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\Identifier;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ScalarType;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Extensions;
+use MSSTC4PHP\DtoGenerator\Domain\Schema\Formats;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Reference;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\AbstractEnum;
@@ -272,7 +273,16 @@ final class ConfigFactory
         // PHP's names and JSON Schema's; neither is a class anyone means.
         $scalars = ['string' => ScalarType::string(), 'int' => $int, 'integer' => $int, 'float' => $float, 'number' => $float, 'bool' => $bool, 'boolean' => $bool];
         $formats = [];
+        $names = [];
         foreach ($section->keys() as $name) {
+            $normalized = Formats::normalize((string) $name);
+            if (isset($names[$normalized])) {
+                $section->report(sprintf('"%s" and "%s" name one format; keep one of them.', $names[$normalized], $name), (string) $name);
+
+                continue;
+            }
+
+            $names[$normalized] = (string) $name;
             $entry = $section->section($name);
             $entry->rejectUnknownKeys(['type']);
             $type = $entry->requiredString('type');

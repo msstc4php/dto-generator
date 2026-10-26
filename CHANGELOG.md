@@ -32,16 +32,18 @@ All notable changes to this package are documented here. The format follows
   with Twilio's `date-time-rfc-2822`; `url` reads as `uri-reference`. `Schema::normalizedFormat()` gives the name,
   `Formats` the list; `format()` stays as written.
 - `type: number` with a format of whole numbers (Xero's `format: integer`, also `int32`, `int64`) is an `int`; it was
-  a `float`. A payload that sends such a number as `1.0` no longer fits the type: map the format to `float` through an
-  extension, or fix the spec.
-- A string with an integer or decimal format (Youtube's `uint64`) is a `numeric-string`.
+  a `float`. Its whole float default (`1.0`) is the int; a payload that sends such a number as `1.0` no longer fits
+  the type: map the format to `float` through an extension, or fix the spec.
+- A string with an integer or decimal format (Youtube's `uint64`) is a `numeric-string`; a default that is no number
+  gives the warning and `null`.
 - A string default of a boolean or a number is the value it spells, as JSON writes it (Xero's `default: "false"`); it
   was replaced by `null` with a warning.
 - An array whose `enum` lists values of its items (Zoom, Vimeo) gets the enum on its items: `list<Enum>`; it was
   ignored with a warning.
 - Two named enums whose names clash and whose cases are the same (Linode's `replication_type` of two schemas a `$ref`
   points into, `Status` and `status`) share one instead of numbering the second (`ReplicationType2`).
-- Extensions registering two spellings of one format (`date-time`, `dateTime`) is an error, as one format twice was.
+- Extensions registering two spellings of one format (`date-time`, `dateTime`) is an error, as one format twice was;
+  so are two spellings in `formats` of the config, which wins over an extension's format in any spelling.
 
 ### Added
 
