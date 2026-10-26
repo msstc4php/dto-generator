@@ -90,6 +90,18 @@ components:
         theme:
           type: string
           default: dark
+        retries:
+          type: number
+          format: integer
+          default: "3"
+        quota:
+          type: string
+          format: uint64
+        regions:
+          type: array
+          items:
+            type: string
+          enum: [eu, us]
       additionalProperties:
         type: integer
     Role:

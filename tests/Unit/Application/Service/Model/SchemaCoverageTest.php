@@ -640,12 +640,12 @@ final class SchemaCoverageTest extends TestCase
     public function testIgnoresANamedEnumItsTypeAdmitsNoneOf(): void
     {
         $output = ModelFixture::build([
-            'Regions' => ['type' => 'array', 'items' => ['type' => 'string'], 'enum' => ['EU', 'HK']],
+            'Regions' => ['type' => 'array', 'items' => ['type' => 'integer'], 'enum' => ['EU', 'HK']],
             'Level' => ['type' => ['integer', 'string'], 'enum' => [1, 'a']],
             'C' => ['type' => 'object', 'properties' => ['r' => ['$ref' => '#/components/schemas/Regions'], 'l' => ['$ref' => '#/components/schemas/Level']]],
         ]);
 
-        self::assertSame(['r: list<string>|null', "l: 'a'|1|null"], ModelFixture::classes($output)['App\\Dto\\C']);
+        self::assertSame(['r: list<int>|null', "l: 'a'|1|null"], ModelFixture::classes($output)['App\\Dto\\C']);
         self::assertSame(
             [
                 'warning /project/api/openapi.yaml#/components/schemas/Regions/type: "type" admits none of the enum values, so the enum is ignored and the property keeps its type.',
@@ -867,7 +867,7 @@ final class SchemaCoverageTest extends TestCase
         $output = ModelFixture::build(['C' => ['type' => 'object', 'properties' => ['n' => ['type' => 'integer', 'const' => 5, 'format' => 'date']]]]);
 
         self::assertSame(
-            ['warning /project/api/openapi.yaml#/components/schemas/C/properties/n/format: Unknown integer format "date"; the property stays an int.'],
+            ['warning /project/api/openapi.yaml#/components/schemas/C/properties/n/format: Unknown integer format "date"; the property stays an int. "formats" in the config can map it to a type.'],
             ModelFixture::messages($output),
         );
         self::assertSame(['n: 5|null'], ModelFixture::classes($output)['App\\Dto\\C']);
@@ -892,8 +892,8 @@ final class SchemaCoverageTest extends TestCase
 
         self::assertSame(
             [
-                'warning /project/api/openapi.yaml#/components/schemas/C/properties/s/format: Unknown string format "odd"; the property stays a string.',
-                'warning /project/api/openapi.yaml#/components/schemas/C/properties/f/format: Unknown number format "odd"; the property stays a float.',
+                'warning /project/api/openapi.yaml#/components/schemas/C/properties/s/format: Unknown string format "odd"; the property stays a string. "formats" in the config can map it to a type.',
+                'warning /project/api/openapi.yaml#/components/schemas/C/properties/f/format: Unknown number format "odd"; the property stays a float. "formats" in the config can map it to a type.',
             ],
             ModelFixture::messages($output),
         );

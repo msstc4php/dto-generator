@@ -88,7 +88,7 @@ final class ObjectShape
         return serialize([
             $types,
             $schema->ref(),
-            $schema->format(),
+            $schema->normalizedFormat(),
             self::normalized($schema->enum()),
             $default instanceof DefaultValue ? self::normalized($default->value()) : null,
             self::normalized(array_diff_key($schema->keywords(), array_flip(self::ANNOTATIONS))),

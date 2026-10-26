@@ -240,7 +240,7 @@ final class Action
         $keywordChecks = new KeywordChecks($registry->claimedKeywords());
         $schemas = ($this->loadSchemas)(new SchemasInput($config, $remotePolicy, $keywordChecks));
         $diagnostics->merge($schemas->diagnostics());
-        $formats = $registry->formats(array_map(static fn (ClassName $class): TypeModel => new ClassType($class), $config->formats()));
+        $formats = $registry->formats(array_map(static fn ($type): TypeModel => $type instanceof ClassName ? new ClassType($type) : $type, $config->formats()));
         $aliases = array_keys($config->extensions()->aliases());
         $model = ($this->buildModel)(new BuildInput($config, $target, $schemas->graph(), $formats, $aliases));
         $diagnostics->merge($model->diagnostics());

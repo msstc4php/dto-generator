@@ -6,6 +6,7 @@ namespace MSSTC4PHP\DtoGenerator\Application\Config;
 
 use InvalidArgumentException;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
+use MSSTC4PHP\DtoGenerator\Domain\Model\ScalarType;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\Path;
 
@@ -17,7 +18,7 @@ final class GeneratorConfig
 
     private DtoSettings $dto;
 
-    /** @var array<int|string, ClassName> */
+    /** @var array<int|string, ClassName|ScalarType> */
     private array $formats;
 
     private ExtensionSettings $extensions;
@@ -29,7 +30,7 @@ final class GeneratorConfig
 
     /**
      * @param string $path absolute path of the config file; relative paths inside it were resolved against its directory
-     * @param array<int|string, ClassName> $formats custom format → PHP type
+     * @param array<int|string, ClassName|ScalarType> $formats custom format → PHP type
      * @param non-empty-list<SourceConfig> $sources
      */
     public function __construct(string $path, TargetSettings $target, DtoSettings $dto, array $formats, ExtensionSettings $extensions, array $sources, ?RemoteRefsSettings $remoteRefs = null)
@@ -92,7 +93,7 @@ final class GeneratorConfig
     }
 
     /**
-     * @return array<int|string, ClassName>
+     * @return array<int|string, ClassName|ScalarType>
      */
     public function formats(): array
     {

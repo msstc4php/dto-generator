@@ -16,6 +16,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\ListType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\MapType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\NullableType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\PropertyModel;
+use MSSTC4PHP\DtoGenerator\Domain\Model\ScalarType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\TypeModel;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\DefaultValue;
@@ -544,7 +545,8 @@ final class ClassBuilder
             return null;
         }
 
-        if (!DefaultFit::fits($default->value(), $inner)) {
+        $read = $this->fromString($default, $inner);
+        if (!DefaultFit::fits($read->value(), $inner)) {
             $diagnostics->warning(
                 sprintf(
                     'Default %s does not match %s; null is used instead.',
@@ -557,7 +559,31 @@ final class ClassBuilder
             return null;
         }
 
-        return $default;
+        return $read;
+    }
+
+    /**
+     * A default written as a string for a boolean or a number (`default: "true"`, Xero) is the value it spells.
+     */
+    private function fromString(DefaultValue $default, TypeModel $type): DefaultValue
+    {
+        $value = $default->value();
+        $kind = $type instanceof ScalarType ? $type->kind() : null;
+        if (!is_string($value) || $kind === null || $kind === 'string') {
+            return $default;
+        }
+
+        $lower = strtolower($value);
+        if ($kind === 'bool' && in_array($lower, ['true', 'false'], true)) {
+            return new DefaultValue($lower === 'true');
+        }
+
+        $int = filter_var($value, FILTER_VALIDATE_INT);
+        if ($kind === 'int' && is_int($int)) {
+            return new DefaultValue($int);
+        }
+
+        return $kind === 'float' && is_numeric($value) && is_finite((float) $value) ? new DefaultValue((float) $value) : $default;
     }
 
     /**

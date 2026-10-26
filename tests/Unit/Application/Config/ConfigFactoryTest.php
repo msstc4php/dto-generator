@@ -13,6 +13,7 @@ use MSSTC4PHP\DtoGenerator\Application\Config\OperationFilter;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostic;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
+use MSSTC4PHP\DtoGenerator\Domain\Model\ScalarType;
 use MSSTC4PHP\DtoGenerator\Domain\Target\PhpVersion;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Yaml\Yaml;
@@ -82,7 +83,9 @@ final class ConfigFactoryTest extends TestCase
         self::assertSame('mutable', $config->dto()->mutability()->value());
         self::assertSame('merge', $config->dto()->allOfStrategy()->value());
         self::assertTrue($config->dto()->hasWithers());
-        self::assertSame('Symfony\Component\Uid\Uuid', $config->formats()['uuid']->fqcn());
+        $uuid = $config->formats()['uuid'];
+        self::assertInstanceOf(ClassName::class, $uuid);
+        self::assertSame('Symfony\Component\Uid\Uuid', $uuid->fqcn());
         self::assertSame(['x-audit' => ['class' => 'App\Attr\Audited']], $config->extensions()->aliases());
         self::assertFalse($config->extensions()->verifyClasses());
         self::assertFalse($config->extensions()->discover());
@@ -451,6 +454,20 @@ final class ConfigFactoryTest extends TestCase
             'non-string includes' => [['version' => 1, 'sources' => [$source + ['include' => [1, 2]]]], 'Expected a non-empty string', 2],
             'non-object sources' => [['version' => 1, 'sources' => ['a', 'b']], 'Expected an object', 2],
         ];
+    }
+
+    public function testMapsAFormatToAScalar(): void
+    {
+        $config = $this->valid([
+            'version' => 1,
+            'formats' => ['a' => ['type' => 'string'], 'b' => ['type' => 'int'], 'c' => ['type' => 'float'], 'd' => ['type' => 'bool']],
+            'sources' => [['spec' => 'a.yaml', 'namespace' => 'App\A', 'outputDir' => 'a']],
+        ]);
+
+        self::assertEquals(
+            ['a' => ScalarType::string(), 'b' => ScalarType::int(), 'c' => ScalarType::float(), 'd' => ScalarType::bool()],
+            $config->formats(),
+        );
     }
 
     public function testKeepsEveryEntryOfMultiValuedSettings(): void

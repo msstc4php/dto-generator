@@ -20,7 +20,7 @@ dto:
   readWriteModels: single        # single | split — read and write models for readOnly/writeOnly
   readWriteSuffixes: { read: Read, write: Write }
 
-formats:                         # your own string formats → PHP classes
+formats:                         # your own formats → PHP classes or scalars
   money: { type: App\Money\Money }
 
 attributeAliases:                # x- keys that expand into attributes
@@ -119,17 +119,20 @@ Required; must be `1`.
 
 ## `formats`
 
-Maps a `format` value to a PHP class:
+Maps a `format` value to a PHP class, or to `string`, `int`, `float` or `bool`:
 
 ```yaml
 formats:
   money: { type: App\Money\Money }
   uuid: { type: Symfony\Component\Uid\Uuid }   # replaces the built-in string mapping
+  ssh-key: { type: string }                      # a format of your API: no warning
 ```
 
 A property with `format: money` gets the type `App\Money\Money`. Constructing that object from the wire value is the
-job of your serializer. An unknown format gives the base type (`string`, `int`…) and a warning. Extensions can register
-formats too; two extensions registering the same format is an error.
+job of your serializer. A format is looked up as the document writes it, then by the name the generator reads it as
+(see [formats](openapi-support.md#formats)): `uuid` covers `guid` and `UUID` too. A format the generator does not know
+gives the base type (`string`, `int`…) and a warning. Extensions can register formats too; two extensions registering
+the same format is an error.
 
 ## `attributeAliases`
 

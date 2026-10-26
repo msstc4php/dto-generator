@@ -13,6 +13,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumBacking;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumType;
+use MSSTC4PHP\DtoGenerator\Domain\Model\ScalarType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\TypeModel;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaGraph;
 use MSSTC4PHP\DtoGenerator\Domain\Target\AccessorStyle;
@@ -62,7 +63,19 @@ final class TypeMapperTest extends TestCase
             'date-time' => [['type' => 'string', 'format' => 'date-time'], 'DateTimeImmutable'],
             'date' => [['type' => 'string', 'format' => 'date'], 'DateTimeImmutable'],
             'custom format' => [['type' => 'string', 'format' => 'uuid'], 'App\Uuid', ['uuid' => new ClassType(ClassName::fromFqcn('App\Uuid'))]],
+            'date-time spelled otherwise' => [['type' => 'string', 'format' => 'ISO 8601 date_time'], 'DateTimeImmutable'],
+            'RFC 2822 date-time' => [['type' => 'string', 'format' => 'date-time-rfc-2822'], 'DateTimeImmutable'],
+            'format mapped by its spelling' => [['type' => 'string', 'format' => 'dateTime'], 'App\Moment', ['dateTime' => new ClassType(ClassName::fromFqcn('App\Moment')), 'date-time' => new ClassType(ClassName::fromFqcn('App\Other'))]],
+            'format mapped by its name' => [['type' => 'string', 'format' => 'GUID'], 'App\Uuid', ['uuid' => new ClassType(ClassName::fromFqcn('App\Uuid'))]],
+            'format mapped to a scalar' => [['type' => 'string', 'format' => 'ssh-key'], 'string', ['ssh-key' => ScalarType::string()]],
+            'integer in a string' => [['type' => 'string', 'format' => 'uint64'], 'numeric-string'],
+            'decimal in a string' => [['type' => 'string', 'format' => 'decimal', 'minLength' => 1], 'numeric-string'],
+            'phone' => [['type' => 'string', 'format' => 'phone_number'], 'string'],
             'integer' => [['type' => 'integer', 'format' => 'int64'], 'int'],
+            'unix time' => [['type' => 'integer', 'format' => 'unixtime'], 'int'],
+            'number of integer format' => [['type' => 'number', 'format' => 'integer'], 'int'],
+            'number of int32 format in a range' => [['type' => 'number', 'format' => 'int32', 'minimum' => 0], 'non-negative-int'],
+            'nullable number of integer format' => [['type' => ['number', 'null'], 'format' => 'int64'], 'int|null'],
             'positive' => [['type' => 'integer', 'minimum' => 1], 'positive-int'],
             'non-negative' => [['type' => 'integer', 'minimum' => 0], 'non-negative-int'],
             'exclusive minimum' => [['type' => 'integer', 'exclusiveMinimum' => 0], 'positive-int'],
@@ -151,14 +164,14 @@ final class TypeMapperTest extends TestCase
         $at = '/project/api/openapi.yaml#/components/schemas/Holder/properties/value';
 
         return [
-            'unknown string format' => [['type' => 'string', 'format' => 'color'], 'string', ["warning {$at}/format: Unknown string format \"color\"; the property stays a string."]],
-            'unknown integer format' => [['type' => 'integer', 'format' => 'int128'], 'int', ["warning {$at}/format: Unknown integer format \"int128\"; the property stays an int."]],
-            'unknown number format' => [['type' => 'number', 'format' => 'decimal'], 'float', ["warning {$at}/format: Unknown number format \"decimal\"; the property stays a float."]],
+            'unknown string format' => [['type' => 'string', 'format' => 'odd'], 'string', ["warning {$at}/format: Unknown string format \"odd\"; the property stays a string. \"formats\" in the config can map it to a type."]],
+            'unknown integer format' => [['type' => 'integer', 'format' => 'int128'], 'int', ["warning {$at}/format: Unknown integer format \"int128\"; the property stays an int. \"formats\" in the config can map it to a type."]],
+            'unknown number format' => [['type' => 'number', 'format' => 'odd'], 'float', ["warning {$at}/format: Unknown number format \"odd\"; the property stays a float. \"formats\" in the config can map it to a type."]],
             'exclusive minimum at the top' => [['type' => 'integer', 'exclusiveMinimum' => PHP_INT_MAX], 'int', ["warning {$at}/exclusiveMinimum: \"exclusiveMinimum\" leaves no integer above it, so it is ignored."]],
             'exclusive maximum at the bottom' => [['type' => 'integer', 'exclusiveMaximum' => PHP_INT_MIN], 'int', ["warning {$at}/exclusiveMaximum: \"exclusiveMaximum\" leaves no integer below it, so it is ignored."]],
             'empty range' => [['type' => 'integer', 'minimum' => 10, 'maximum' => 5], 'int', ["warning {$at}: The minimum is greater than the maximum, so no range is applied."]],
             'undeclared inline enum' => [['type' => 'string', 'enum' => ['a']], 'string', ["warning {$at}: This inline enum is not generated (only properties of generated classes get one), so the property keeps its plain type."]],
-            'enum that the type admits none of' => [['type' => 'array', 'items' => ['type' => 'string'], 'enum' => ['EU', 'HK']], 'list<string>', ["warning {$at}/type: \"type\" admits none of the enum values, so the enum is ignored and the property keeps its type."]],
+            'enum that the type admits none of' => [['type' => 'array', 'items' => ['type' => 'integer'], 'enum' => ['EU', 'HK']], 'list<int>', ["warning {$at}/type: \"type\" admits none of the enum values, so the enum is ignored and the property keeps its type."]],
             'mixed enum that the type admits none of' => [['type' => 'array', 'items' => ['type' => 'string'], 'enum' => ['a', 1]], 'list<string>', ["warning {$at}/type: \"type\" admits none of the enum values, so the enum is ignored and the property keeps its type."]],
             'integers declared as strings' => [['type' => 'string', 'enum' => [1, 2]], 'string', ["warning {$at}/type: \"type\" admits none of the enum values, so the enum is ignored and the property keeps its type."]],
             'allOf of two typed schemas' => [['allOf' => [['type' => 'string'], ['type' => 'integer']]], 'mixed', ["error {$at}: \"allOf\" combines several typed schemas that are not objects, which no PHP type expresses; keep one of them."]],

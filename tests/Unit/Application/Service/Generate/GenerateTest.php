@@ -62,10 +62,10 @@ final class GenerateTest extends TestCase
 
     public function testKeepsWarningsOnSuccess(): void
     {
-        $output = $this->generate(new RecordingWriter(new WritePlan([], [], [])), Mode::WRITE, ['Free' => ['type' => 'object', 'properties' => ['c' => ['type' => 'string', 'format' => 'color']]]]);
+        $output = $this->generate(new RecordingWriter(new WritePlan([], [], [])), Mode::WRITE, ['Free' => ['type' => 'object', 'properties' => ['c' => ['type' => 'string', 'format' => 'odd']]]]);
 
         self::assertSame('ok', $output->status()->value());
-        self::assertSame(['warning /project/api/openapi.yaml#/components/schemas/Free/properties/c/format: Unknown string format "color"; the property stays a string.'], $this->messages($output));
+        self::assertSame(['warning /project/api/openapi.yaml#/components/schemas/Free/properties/c/format: Unknown string format "odd"; the property stays a string. "formats" in the config can map it to a type.'], $this->messages($output));
     }
 
     public function testHandsTheInheritedPropertiesToTheEmitter(): void

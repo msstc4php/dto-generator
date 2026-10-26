@@ -58,7 +58,7 @@ final class SchemaFingerprint
         return serialize([
             array_map(static fn (SchemaType $type): string => $type->value(), $schema->types()),
             $schema->ref(),
-            $schema->format(),
+            $schema->normalizedFormat(),
             $schema->description(),
             $schema->isDeprecated(),
             $default instanceof DefaultValue ? $default->toJson() : null,

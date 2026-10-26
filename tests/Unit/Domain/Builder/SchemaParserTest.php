@@ -102,6 +102,28 @@ final class SchemaParserTest extends TestCase
         self::assertSame([], $schema->types());
     }
 
+    public function testGivesTheScalarEnumOfAnArrayToItsItems(): void
+    {
+        $diagnostics = new Diagnostics();
+        $schema = (new SchemaParser())->forSwagger20()->parse(['type' => 'array', 'enum' => ['EU', 'US'], 'items' => ['type' => 'string']], $this->root(), $diagnostics);
+        $items = $schema->items();
+
+        self::assertSame([], $diagnostics->all());
+        self::assertNull($schema->enum());
+        self::assertNotNull($items);
+        self::assertSame(['EU', 'US'], $items->enum());
+    }
+
+    public function testKeepsTheFormatAsWrittenBesideItsName(): void
+    {
+        $schema = (new SchemaParser())->parse(['type' => 'string', 'format' => 'dateTime'], $this->root(), new Diagnostics());
+        $plain = (new SchemaParser())->parse(['type' => 'string'], $this->root(), new Diagnostics());
+
+        self::assertSame('dateTime', $schema->format());
+        self::assertSame('date-time', $schema->normalizedFormat());
+        self::assertNull($plain->normalizedFormat());
+    }
+
     public function testAnEmptyObjectIsTheEmptySchema(): void
     {
         $diagnostics = new Diagnostics();

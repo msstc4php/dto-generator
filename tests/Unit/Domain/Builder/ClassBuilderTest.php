@@ -517,6 +517,35 @@ final class ClassBuilderTest extends TestCase
     }
 
     /**
+     * @dataProvider defaultsWrittenAsStrings
+     *
+     * @param array<array-key, mixed> $property
+     * @param bool|int|float $expected
+     */
+    public function testReadsADefaultWrittenAsAString(array $property, $expected): void
+    {
+        [$class, $messages] = $this->build(['type' => 'object', 'properties' => ['v' => $property]]);
+
+        self::assertSame([], $messages);
+        self::assertEquals(new DefaultValue($expected), $this->property($class, 'v')->default());
+    }
+
+    /**
+     * @return array<string, array{array<array-key, mixed>, bool|int|float}>
+     */
+    public static function defaultsWrittenAsStrings(): array
+    {
+        return [
+            'true' => [['type' => 'boolean', 'default' => 'true'], true],
+            'false in capitals' => [['type' => 'boolean', 'default' => 'FALSE'], false],
+            'int' => [['type' => 'integer', 'default' => '-42'], -42],
+            'float' => [['type' => 'number', 'default' => '1.5'], 1.5],
+            'whole float' => [['type' => 'number', 'default' => '2'], 2.0],
+            'nullable bool' => [['type' => ['boolean', 'null'], 'default' => 'true'], true],
+        ];
+    }
+
+    /**
      * @return array<string, array{array<array-key, mixed>, string, string}>
      */
     public static function mismatchedDefaults(): array
@@ -525,8 +554,11 @@ final class ClassBuilderTest extends TestCase
             'string for int' => [['type' => 'integer', 'default' => 'abc'], '"abc"', 'int'],
             'fraction for int' => [['type' => 'integer', 'default' => 1.5], '1.5', 'int'],
             'int for string' => [['type' => 'string', 'default' => 5], '5', 'string'],
-            'string for bool' => [['type' => 'boolean', 'default' => 'true'], '"true"', 'bool'],
-            'string for float' => [['type' => 'number', 'default' => '1'], '"1"', 'float'],
+            'string for bool' => [['type' => 'boolean', 'default' => 'yes'], '"yes"', 'bool'],
+            'string for float' => [['type' => 'number', 'default' => 'one'], '"one"', 'float'],
+            'fraction string for int' => [['type' => 'integer', 'default' => '1.5'], '"1.5"', 'int'],
+            'string out of range' => [['type' => 'integer', 'minimum' => 0, 'default' => '-1'], '"-1"', 'non-negative-int'],
+            'infinite string for float' => [['type' => 'number', 'default' => '1e999'], '"1e999"', 'float'],
             'bool for union' => [['type' => ['integer', 'string'], 'default' => true], 'true', 'int|string'],
             'empty for non-empty' => [['type' => 'string', 'minLength' => 1, 'default' => ''], '""', 'non-empty-string'],
             'below the range' => [['type' => 'integer', 'minimum' => 5, 'default' => 4], '4', 'int<5, max>'],

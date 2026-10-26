@@ -8,6 +8,7 @@ use MSSTC4PHP\DtoGenerator\Application\Port\ProjectPhpConstraint;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
 use MSSTC4PHP\DtoGenerator\Domain\Exception\IncompatibleTarget;
 use MSSTC4PHP\DtoGenerator\Domain\Exception\UnsupportedPhpVersion;
+use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\Identifier;
 use MSSTC4PHP\DtoGenerator\Domain\Target\Capability;
 use MSSTC4PHP\DtoGenerator\Domain\Target\MetadataMode;
@@ -112,6 +113,10 @@ final class TargetResolver
         }
 
         foreach ($config->formats() as $format => $class) {
+            if (!$class instanceof ClassName) {
+                continue;
+            }
+
             foreach ($class->reservedNamespaceSegments() as $segment) {
                 $diagnostics->error(
                     $this->reservedSegment($class->namespace(), $segment, $profile),

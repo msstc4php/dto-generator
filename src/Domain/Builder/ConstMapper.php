@@ -9,6 +9,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\MixedType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\NullableType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ScalarType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\TypeModel;
+use MSSTC4PHP\DtoGenerator\Domain\Schema\Formats;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaType;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
@@ -37,11 +38,10 @@ final class ConstMapper
      */
     public function type(Schema $schema, Diagnostics $diagnostics): ?ScalarType
     {
-        $format = $schema->format();
         $declared = array_map(static fn (SchemaType $type): string => $type->value(), $schema->nonNullTypes());
         // A date applies only to a declared string; a configured format applies to any type.
-        $dated = in_array($format, FormatCheck::DATE, true) && in_array(SchemaType::STRING, $declared, true);
-        if ($format !== null && (isset($this->formats[$format]) || $dated)) {
+        $dated = in_array($schema->normalizedFormat(), Formats::DATES, true) && in_array(SchemaType::STRING, $declared, true);
+        if (TypeMapper::mappedFormat($schema, $this->formats) instanceof TypeModel || $dated) {
             return null;
         }
 

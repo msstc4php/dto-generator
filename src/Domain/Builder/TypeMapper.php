@@ -15,6 +15,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\NullableType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ScalarType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\TypeModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\UnionType;
+use MSSTC4PHP\DtoGenerator\Domain\Schema\Formats;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\ReferenceUse;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\ResolvedSchema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
@@ -189,9 +190,9 @@ final class TypeMapper
             }
         }
 
-        $format = $schema->format();
-        if ($format !== null && isset($this->formats[$format])) {
-            return $this->formats[$format];
+        $mapped = self::mappedFormat($schema, $this->formats);
+        if ($mapped instanceof TypeModel) {
+            return $mapped;
         }
 
         $members = [];
@@ -544,6 +545,11 @@ final class TypeMapper
 
                 return ScalarType::int($this->integerRange($schema, $diagnostics));
             case SchemaType::NUMBER:
+                // `type: number, format: integer` (Xero) holds whole numbers.
+                if (in_array($schema->normalizedFormat(), Formats::INTEGERS, true)) {
+                    return ScalarType::int($this->integerRange($schema, $diagnostics));
+                }
+
                 FormatCheck::check($schema, 'float', $diagnostics);
 
                 return ScalarType::float();
@@ -560,13 +566,33 @@ final class TypeMapper
         }
     }
 
+    /**
+     * The type the config or an extension gives the format, by the name the document writes or the one it stands for.
+     *
+     * @param array<int|string, TypeModel> $formats
+     */
+    public static function mappedFormat(Schema $schema, array $formats): ?TypeModel
+    {
+        $format = $schema->format();
+        $normalized = $schema->normalizedFormat();
+        if ($format === null || $normalized === null) {
+            return null;
+        }
+
+        return $formats[$format] ?? $formats[$normalized] ?? null;
+    }
+
     private function stringType(Schema $schema, Diagnostics $diagnostics): TypeModel
     {
-        if (in_array($schema->format(), FormatCheck::DATE, true)) {
+        if (in_array($schema->normalizedFormat(), Formats::DATES, true)) {
             return new ClassType(ClassName::fromFqcn($this->target->dateTimeClass()->className()));
         }
 
         FormatCheck::check($schema, 'string', $diagnostics);
+        if (in_array($schema->normalizedFormat(), Formats::NUMERIC_STRINGS, true)) {
+            return ScalarType::string('numeric-string');
+        }
+
         $minLength = $schema->hasKeyword('minLength') ? $schema->keyword('minLength') : null;
 
         return ScalarType::string(is_int($minLength) && $minLength >= 1 ? 'non-empty-string' : null);

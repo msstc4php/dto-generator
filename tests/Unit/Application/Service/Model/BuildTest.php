@@ -193,12 +193,28 @@ final class BuildTest extends TestCase
 
         self::assertSame(
             [
-                "warning {$at}Postgres/properties/replication_type: Class App\\Dto\\ReplicationType is already generated from {$at}MySql/properties/replication_type, so this one becomes App\\Dto\\ReplicationType2; set \"x-php-class-name\" to name it, in the document or \"classNames\" of the source.",
                 "warning {$at}Postgres/properties/hosts: Class App\\Dto\\Hosts is already generated from {$at}MySql/properties/hosts, so this one becomes App\\Dto\\Hosts2; set \"x-php-class-name\" to name it, in the document or \"classNames\" of the source."],
             ModelFixture::messages($output),
         );
-        self::assertSame(['replication_type: App\Dto\ReplicationType2|null', 'hosts: App\Dto\Hosts2|null'], ModelFixture::classes($output)['App\Dto\PostgresRequest']);
-        self::assertSame(['replication_type: App\Dto\ReplicationType2|null', 'hosts: App\Dto\Hosts2|null'], ModelFixture::classes($output)['App\Dto\Postgres']);
+        self::assertSame(['replication_type: App\Dto\ReplicationType|null', 'hosts: App\Dto\Hosts2|null'], ModelFixture::classes($output)['App\Dto\PostgresRequest']);
+        self::assertSame(['replication_type: App\Dto\ReplicationType|null', 'hosts: App\Dto\Hosts2|null'], ModelFixture::classes($output)['App\Dto\Postgres']);
+    }
+
+    public function testNumbersReferencedEnumsThatDiffer(): void
+    {
+        $at = self::AT;
+        $output = ModelFixture::build([
+            'MySql' => ['type' => 'object', 'properties' => ['replication_type' => ['type' => 'string', 'enum' => ['none', 'asynch']]]],
+            'Postgres' => ['type' => 'object', 'properties' => ['replication_type' => ['type' => 'string', 'enum' => ['none', 'semi_synch']]]],
+            'MySqlRequest' => ['type' => 'object', 'properties' => ['replication_type' => ['$ref' => '#/components/schemas/MySql/properties/replication_type']]],
+            'PostgresRequest' => ['type' => 'object', 'properties' => ['replication_type' => ['$ref' => '#/components/schemas/Postgres/properties/replication_type']]],
+        ]);
+
+        self::assertSame(
+            ["warning {$at}Postgres/properties/replication_type: Class App\\Dto\\ReplicationType is already generated from {$at}MySql/properties/replication_type, so this one becomes App\\Dto\\ReplicationType2; set \"x-php-class-name\" to name it, in the document or \"classNames\" of the source."],
+            ModelFixture::messages($output),
+        );
+        self::assertSame(['replication_type: App\Dto\ReplicationType2|null'], ModelFixture::classes($output)['App\Dto\PostgresRequest']);
     }
 
     public function testKeepsTheDiscriminatorValueAndTheParentOfANumberedSchema(): void

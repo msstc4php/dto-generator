@@ -10,6 +10,19 @@ final class Settings
 {
     private ?string $theme;
 
+    private ?int $retries;
+
+    /**
+     * @phpstan-var ?numeric-string
+     */
+    private ?string $quota;
+
+    /**
+     * @var ?list<string>
+     * @phpstan-var list<SettingsRegionsItem::*>|null
+     */
+    private ?array $regions;
+
     /**
      * Properties the schema does not declare.
      *
@@ -18,11 +31,22 @@ final class Settings
     private array $additionalProperties;
 
     /**
+     * @phpstan-param ?numeric-string $quota
+     * @param ?list<string> $regions
+     * @phpstan-param list<SettingsRegionsItem::*>|null $regions
      * @param array<array-key, int> $additionalProperties
      */
-    public function __construct(?string $theme = 'dark', array $additionalProperties = [])
-    {
+    public function __construct(
+        ?string $theme = 'dark',
+        ?int $retries = 3,
+        ?string $quota = null,
+        ?array $regions = null,
+        array $additionalProperties = []
+    ) {
         $this->theme = $theme;
+        $this->retries = $retries;
+        $this->quota = $quota;
+        $this->regions = $regions;
         $this->additionalProperties = $additionalProperties;
     }
 
@@ -34,6 +58,56 @@ final class Settings
     public function setTheme(?string $theme): self
     {
         $this->theme = $theme;
+
+        return $this;
+    }
+
+    public function getRetries(): ?int
+    {
+        return $this->retries;
+    }
+
+    public function setRetries(?int $retries): self
+    {
+        $this->retries = $retries;
+
+        return $this;
+    }
+
+    /**
+     * @phpstan-return ?numeric-string
+     */
+    public function getQuota(): ?string
+    {
+        return $this->quota;
+    }
+
+    /**
+     * @phpstan-param ?numeric-string $quota
+     */
+    public function setQuota(?string $quota): self
+    {
+        $this->quota = $quota;
+
+        return $this;
+    }
+
+    /**
+     * @return ?list<string>
+     * @phpstan-return list<SettingsRegionsItem::*>|null
+     */
+    public function getRegions(): ?array
+    {
+        return $this->regions;
+    }
+
+    /**
+     * @param ?list<string> $regions
+     * @phpstan-param list<SettingsRegionsItem::*>|null $regions
+     */
+    public function setRegions(?array $regions): self
+    {
+        $this->regions = $regions;
 
         return $this;
     }

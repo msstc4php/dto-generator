@@ -11,6 +11,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Exception\InvalidModel;
 use MSSTC4PHP\DtoGenerator\Domain\Exception\UnsupportedPhpVersion;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\Identifier;
+use MSSTC4PHP\DtoGenerator\Domain\Model\ScalarType;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Extensions;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Reference;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
@@ -259,16 +260,25 @@ final class ConfigFactory
     }
 
     /**
-     * @return array<int|string, ClassName>
+     * A class, or a scalar that only says the format is known.
+     *
+     * @return array<int|string, ClassName|ScalarType>
      */
     private function formats(RawSection $section): array
     {
+        $scalars = ['string' => ScalarType::string(), 'int' => ScalarType::int(), 'float' => ScalarType::float(), 'bool' => ScalarType::bool()];
         $formats = [];
         foreach ($section->keys() as $name) {
             $entry = $section->section($name);
             $entry->rejectUnknownKeys(['type']);
             $type = $entry->requiredString('type');
             if ($type === null) {
+                continue;
+            }
+
+            if (isset($scalars[$type])) {
+                $formats[$name] = $scalars[$type];
+
                 continue;
             }
 

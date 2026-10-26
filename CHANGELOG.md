@@ -25,6 +25,25 @@ All notable changes to this package are documented here. The format follows
   `UpdateWarehouseRequestBody(name, originAddress, …)`); call it with named arguments, or check positional calls.
 - `ClassModel::requiredInherited()` lists, for extensions, the wire names of the inherited properties the class
   requires so.
+- Formats are read by name whatever the spelling (`dateTime`, `ISO 8601 date-time` and `rfc3339` are `date-time`;
+  `phone_number` is `phone`; `UUID` is `uuid`), and many more are known: unsigned and small integers, `unix-time`,
+  `decimal`, `ip`, CIDR ranges, `phone`, `currency`, `country`, `language`, `locale`, `timezone`, `color`, `iban`,
+  `json` and others (docs/openapi-support.md#formats). A property with `format: dateTime` is a date now, as is one
+  with Twilio's `date-time-rfc-2822`; `url` reads as `uri-reference`. `Schema::normalizedFormat()` gives the name,
+  `Formats` the list; `format()` stays as written.
+- `type: number` with a format of whole numbers (Xero's `format: integer`) is an `int`.
+- A string with an integer or decimal format (Youtube's `uint64`) is a `numeric-string`.
+- A string default of a boolean or a number is the value it spells (Xero's `default: "false"`); it was replaced by
+  `null` with a warning.
+- An array whose `enum` lists values of its items (Zoom, Vimeo) gets the enum on its items: `list<Enum>`; it was
+  ignored with a warning.
+- Two places a `$ref` points into that end alike and hold the same enum (Linode's `replication_type`) share it instead
+  of numbering the second (`ReplicationType2`).
+
+### Added
+
+- `formats` in the config maps a format to `string`, `int`, `float` or `bool` as well, which silences the warning
+  about a format of your own; it is looked up as written, then by the format's name.
 
 ## [1.15.0] - 2026-10-25
 
