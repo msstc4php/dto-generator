@@ -573,6 +573,7 @@ final class ClassBuilderTest extends TestCase
             'inexact whole float for int' => [['type' => 'number', 'format' => 'int64', 'default' => 2.0 ** 54], '18014398509481984.0', 'int'],
             'word for a numeric string' => [['type' => 'string', 'format' => 'int64', 'default' => 'abc'], '"abc"', 'numeric-string'],
             'numeric string with a space' => [['type' => 'string', 'format' => 'decimal', 'default' => ' 1'], '" 1"', 'numeric-string'],
+            'numeric string with a newline' => [['type' => 'string', 'format' => 'decimal', 'default' => "1\n"], '"1\\n"', 'numeric-string'],
             'numeric string with a plus' => [['type' => 'string', 'format' => 'decimal', 'default' => '+1'], '"+1"', 'numeric-string'],
             'numeric string with a trailing point' => [['type' => 'string', 'format' => 'decimal', 'default' => '1.'], '"1."', 'numeric-string'],
             'numeric string without leading digits' => [['type' => 'string', 'format' => 'decimal', 'default' => '.5'], '".5"', 'numeric-string'],

@@ -108,7 +108,7 @@ final class DefaultFit
      * Digits (leading zeros of `digits` included), a fraction, an exponent: what every PHP version reads as numeric,
      * where is_numeric() differs about surrounding spaces.
      */
-    public static function isNumericString(string $value): bool
+    private static function isNumericString(string $value): bool
     {
         return preg_match('/^-?[0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?$/D', $value) === 1;
     }
