@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Application\Config;
 
+use MSSTC4PHP\DtoGenerator\Domain\Builder\Collections;
 use MSSTC4PHP\DtoGenerator\Domain\Target\AccessorStyle;
 use MSSTC4PHP\DtoGenerator\Domain\Target\AllOfStrategy;
 use MSSTC4PHP\DtoGenerator\Domain\Target\DateTimeClass;
@@ -26,6 +27,8 @@ final class DtoSettings
 
     private ViewSuffixes $viewSuffixes;
 
+    private ?Collections $collections;
+
     public function __construct(
         Mutability $mutability,
         AccessorStyle $accessors,
@@ -33,7 +36,8 @@ final class DtoSettings
         AllOfStrategy $allOfStrategy,
         bool $withers = true,
         ?ReadWriteModels $readWriteModels = null,
-        ?ViewSuffixes $viewSuffixes = null
+        ?ViewSuffixes $viewSuffixes = null,
+        ?Collections $collections = null
     ) {
         $this->mutability = $mutability;
         $this->accessors = $accessors;
@@ -42,6 +46,7 @@ final class DtoSettings
         $this->withers = $withers;
         $this->readWriteModels = $readWriteModels ?? ReadWriteModels::from(ReadWriteModels::SINGLE);
         $this->viewSuffixes = $viewSuffixes ?? new ViewSuffixes();
+        $this->collections = $collections;
     }
 
     public function mutability(): Mutability
@@ -77,5 +82,13 @@ final class DtoSettings
     public function viewSuffixes(): ViewSuffixes
     {
         return $this->viewSuffixes;
+    }
+
+    /**
+     * Null when lists stay arrays unless a schema says otherwise (`x-php-collection`).
+     */
+    public function collections(): ?Collections
+    {
+        return $this->collections;
     }
 }

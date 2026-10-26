@@ -214,6 +214,14 @@ final class ConfigFactoryTest extends TestCase
             'remoteRefs header over http' => [['version' => 1, 'remoteRefs' => ['headers' => [['prefix' => 'http://a.example/', 'name' => 'X', 'value' => 'v']]], 'sources' => [$source]], 'A header is sent only over https, not to "http://a.example/".', '/remoteRefs/headers/0/prefix'],
             'remoteRefs header name' => [['version' => 1, 'remoteRefs' => ['headers' => [['prefix' => 'https://a.example/', 'name' => 'Host', 'value' => 'v']]], 'sources' => [$source]], 'The header Host is written by the generator itself.', '/remoteRefs/headers/0'],
             'remoteRefs header value not a string' => [['version' => 1, 'remoteRefs' => ['headers' => [['prefix' => 'https://a.example/', 'name' => 'X', 'value' => 2]]], 'sources' => [$source]], '"value" must be a non-empty string', '/remoteRefs/headers/0/value'],
+            'collections without a class' => [['version' => 1, 'dto' => ['collections' => ['typeArguments' => []]], 'sources' => [$source]], '"class" is required.', '/dto/collections'],
+            'collections class not a string' => [['version' => 1, 'dto' => ['collections' => ['class' => 5]], 'sources' => [$source]], '"class" must be a non-empty string', '/dto/collections/class'],
+            'collections class pattern' => [['version' => 1, 'dto' => ['collections' => ['class' => 'App\\{type}List']], 'sources' => [$source]], '"App\\{type}List" must be a class name, optionally with {item}', '/dto/collections/class'],
+            'collections type arguments' => [['version' => 1, 'dto' => ['collections' => ['class' => 'App\\Bag', 'typeArguments' => ['int']]], 'sources' => [$source]], 'Collection type arguments must be [], [item] or [int, item]', '/dto/collections/typeArguments'],
+            'collections type arguments not a list' => [['version' => 1, 'dto' => ['collections' => ['class' => 'App\\Bag', 'typeArguments' => 'item']], 'sources' => [$source]], '"typeArguments" must be a list of strings', '/dto/collections/typeArguments'],
+            'collections typedCollection' => [['version' => 1, 'dto' => ['collections' => ['class' => 'App\\{item}List', 'typedCollection' => 'odm']], 'sources' => [$source]], '"typedCollection" must be one of: none, immutable, mutable', '/dto/collections/typedCollection'],
+            'collections typedCollection without item' => [['version' => 1, 'dto' => ['collections' => ['class' => 'App\\Bag', 'typedCollection' => 'immutable']], 'sources' => [$source]], '"typedCollection" needs {item} in "class": dto-collection-generator makes one class per item type.', '/dto/collections/typedCollection'],
+            'collections key' => [['version' => 1, 'dto' => ['collections' => ['class' => 'App\\Bag', 'variant' => 'x']], 'sources' => [$source]], 'Unknown key "variant"', '/dto/collections/variant'],
             'withers not bool' => [['version' => 1, 'dto' => ['withers' => 'no'], 'sources' => [$source]], '"withers" must be true or false', '/dto/withers'],
             'unknown dto key' => [['version' => 1, 'dto' => ['mutable' => true], 'sources' => [$source]], 'Unknown key "mutable"', '/dto/mutable'],
             'unknown format key' => [['version' => 1, 'formats' => ['uuid' => ['type' => 'App\Uuid', 'kind' => 1]], 'sources' => [$source]], 'Unknown key "kind"', '/formats/uuid/kind'],
@@ -385,6 +393,27 @@ final class ConfigFactoryTest extends TestCase
             'error ' . self::PATH . '#/remoteRefs/headers/9/prefix: URL "https://u@a.example/": credentials in a URL are not supported.',
             'error ' . self::PATH . '#/remoteRefs/headers/10: The value of the header X names HTTP_TOKEN, but a variable named HTTP_* can come from a request header.',
         ], array_map(static fn (Diagnostic $d): string => $d->toString(), $diagnostics->all()));
+    }
+
+    public function testReadsCollections(): void
+    {
+        $source = [['spec' => '/abs/openapi.yaml', 'namespace' => 'App\Dto', 'outputDir' => 'src/Dto']];
+        $collections = $this->valid(['version' => 1, 'dto' => ['collections' => ['class' => 'App\Collection\{item}List', 'typedCollection' => 'mutable']], 'sources' => $source])->dto()->collections();
+
+        self::assertNotNull($collections);
+        self::assertSame('App\Collection\TagList', $collections->collectionClass()->className('Tag')->fqcn());
+        self::assertSame([], $collections->collectionClass()->typeArguments());
+        self::assertSame('mutable', $collections->typedCollection());
+
+        $generic = $this->valid(['version' => 1, 'dto' => ['collections' => ['class' => 'Doctrine\Common\Collections\ArrayCollection', 'typeArguments' => ['int', 'item']]], 'sources' => $source])->dto()->collections();
+        self::assertNotNull($generic);
+        self::assertSame(['int', 'item'], $generic->collectionClass()->typeArguments());
+        self::assertNull($generic->typedCollection());
+
+        self::assertNull($this->valid(['version' => 1, 'sources' => $source])->dto()->collections());
+        $none = $this->valid(['version' => 1, 'dto' => ['collections' => ['class' => 'App\{item}List', 'typedCollection' => 'none']], 'sources' => $source])->dto()->collections();
+        self::assertNotNull($none);
+        self::assertNull($none->typedCollection());
     }
 
     public function testReadsWithersOff(): void
