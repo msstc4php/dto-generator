@@ -28,7 +28,7 @@ final class Formats
         'idn-hostname', 'ipv4', 'ipv6', 'ip', 'cidr', 'ipv4-cidr', 'ipv6-cidr', 'mac-address', 'uri', 'uri-reference',
         'iri', 'iri-reference', 'uri-template', 'uuid', 'ulid', 'byte', 'base64url', 'binary', 'password', 'regex',
         'json-pointer', 'relative-json-pointer', 'json', 'phone', 'currency', 'country', 'language', 'locale',
-        'timezone', 'color', 'iban', 'bic', 'isbn', 'issn', 'isin', 'http-method', 'mm/yyyy', 'string',
+        'timezone', 'color', 'hex-color', 'iban', 'bic', 'isbn', 'issn', 'isin', 'http-method', 'mm/yyyy', 'string',
     ];
 
     /** @var array{string: list<non-empty-string>, integer: list<non-empty-string>, number: list<non-empty-string>} */
@@ -116,7 +116,6 @@ final class Formats
         'tz' => 'timezone',
         'colour' => 'color',
         'css-color' => 'color',
-        'hex-color' => 'color',
         'swift' => 'bic',
         'swift-code' => 'bic',
         'numeric' => 'decimal',

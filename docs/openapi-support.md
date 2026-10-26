@@ -59,11 +59,11 @@ spaces and underscores as hyphens, and reads these spellings as that name; the S
 | `currency` | `currency-code`, `iso-4217` |
 | `country` | `iso-country-code` (Twilio), `country-code`, `iso-3166`, `iso-3166-1-alpha-2` |
 | `language` / `locale` / `timezone` | `language-code`, `iso-639-1` / `bcp47`, `language-tag` / `time-zone`, `iana-timezone`, `tz` |
-| `color` / `bic` / `decimal` | `colour`, `css-color`, `hex-color` / `swift`, `swift-code` / `numeric`, `decimal-string` |
+| `color` / `bic` / `decimal` | `colour`, `css-color` / `swift`, `swift-code` / `numeric`, `decimal-string` |
 | `http-method` / `integer` / `int64` / `int16` | `http-verb` / `int` / `long` / `short` |
 
 A format is read in lower case, with spaces and underscores as hyphens, whether the generator knows it or not
-(`SSH_key` is `ssh-key`). Known without another spelling: `partial-time`, `idn-email`, `idn-hostname`, `iri`, `iri-reference`, `uri-template`,
+(`SSH_key` is `ssh-key`). Known without another spelling: `partial-time`, `hex-color` (with or without `#`), `idn-email`, `idn-hostname`, `iri`, `iri-reference`, `uri-template`,
 `ulid`, `base64url`, `password`, `regex`, `json-pointer`, `relative-json-pointer`, `iban`, `isbn`, `issn`, `isin`,
 `digits`, `MM/YYYY` (Linode), a format named after its type (`format: string`). `formats` in the config maps a format
 by its spelling first, then by its name, so `formats: {date-time: …}` covers `dateTime` too.
