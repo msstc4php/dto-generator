@@ -282,7 +282,7 @@ final class ConfigFactory
                 continue;
             }
 
-            $names[$normalized] = (string) $name;
+            $names[$normalized] = $name;
             $entry = $section->section($name);
             $entry->rejectUnknownKeys(['type']);
             $type = $entry->requiredString('type');

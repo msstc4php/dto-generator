@@ -157,10 +157,7 @@ final class Registry implements ExtensionRegistry
      */
     public function formats(array $configured): array
     {
-        $names = [];
-        foreach (array_keys($configured) as $format) {
-            $names[Formats::normalize((string) $format)] = true;
-        }
+        $names = array_flip(array_map(static fn ($format): string => Formats::normalize((string) $format), array_keys($configured)));
 
         $registered = array_filter($this->formats, static fn ($format): bool => !isset($names[Formats::normalize((string) $format)]), ARRAY_FILTER_USE_KEY);
 

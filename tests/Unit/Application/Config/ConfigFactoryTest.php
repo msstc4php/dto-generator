@@ -457,6 +457,18 @@ final class ConfigFactoryTest extends TestCase
         ];
     }
 
+    public function testReadsTheFormatsAfterTwoSpellingsOfOne(): void
+    {
+        $diagnostics = new Diagnostics();
+        (new ConfigFactory())->create([
+            'version' => 1,
+            'formats' => ['uuid' => ['type' => 'App\Uuid'], 'GUID' => ['type' => 'App\Guid'], 'odd' => ['type' => 'Not A Class']],
+            'sources' => [['spec' => 'a.yaml', 'namespace' => 'App\A', 'outputDir' => 'a']],
+        ], self::PATH, $diagnostics);
+
+        self::assertSame(['/formats/GUID', '/formats/odd/type'], array_map(static fn (Diagnostic $error): string => $error->location()->pointer(), $diagnostics->errors()));
+    }
+
     public function testMapsAFormatToAScalar(): void
     {
         $config = $this->valid([
