@@ -10,6 +10,16 @@ final class Settings
 {
     public function __construct(
         private ?string $theme = 'dark',
+        private ?int $retries = 3,
+        /**
+         * @phpstan-var ?numeric-string
+         */
+        private ?string $quota = null,
+        /**
+         * @var ?list<string>
+         * @phpstan-var list<SettingsRegionsItem::*>|null
+         */
+        private ?array $regions = null,
         /**
          * Properties the schema does not declare.
          *
@@ -27,6 +37,56 @@ final class Settings
     public function setTheme(?string $theme): self
     {
         $this->theme = $theme;
+
+        return $this;
+    }
+
+    public function getRetries(): ?int
+    {
+        return $this->retries;
+    }
+
+    public function setRetries(?int $retries): self
+    {
+        $this->retries = $retries;
+
+        return $this;
+    }
+
+    /**
+     * @phpstan-return ?numeric-string
+     */
+    public function getQuota(): ?string
+    {
+        return $this->quota;
+    }
+
+    /**
+     * @phpstan-param ?numeric-string $quota
+     */
+    public function setQuota(?string $quota): self
+    {
+        $this->quota = $quota;
+
+        return $this;
+    }
+
+    /**
+     * @return ?list<string>
+     * @phpstan-return list<SettingsRegionsItem::*>|null
+     */
+    public function getRegions(): ?array
+    {
+        return $this->regions;
+    }
+
+    /**
+     * @param ?list<string> $regions
+     * @phpstan-param list<SettingsRegionsItem::*>|null $regions
+     */
+    public function setRegions(?array $regions): self
+    {
+        $this->regions = $regions;
 
         return $this;
     }

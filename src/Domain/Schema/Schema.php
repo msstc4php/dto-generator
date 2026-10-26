@@ -41,6 +41,8 @@ final class Schema
 
     private ?string $format;
 
+    private ?string $normalizedFormat;
+
     private ?string $description;
 
     private bool $deprecated;
@@ -125,6 +127,7 @@ final class Schema
         $this->types = $types;
         $this->ref = $ref;
         $this->format = $format;
+        $this->normalizedFormat = $format === null ? null : Formats::normalize($format);
         $this->description = $description;
         $this->deprecated = $deprecated;
         $this->default = $default;
@@ -183,9 +186,20 @@ final class Schema
         return $this->ref;
     }
 
+    /**
+     * The format as the document writes it.
+     */
     public function format(): ?string
     {
         return $this->format;
+    }
+
+    /**
+     * The format by the name the generator knows it ({@see Formats::normalize()}): `dateTime` is `date-time`.
+     */
+    public function normalizedFormat(): ?string
+    {
+        return $this->normalizedFormat;
     }
 
     public function description(): ?string

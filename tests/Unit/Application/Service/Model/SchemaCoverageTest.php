@@ -598,6 +598,7 @@ final class SchemaCoverageTest extends TestCase
             'a' => ['type' => 'number', 'const' => 2.0, 'default' => 2],
             'b' => ['type' => 'number', 'const' => 2, 'default' => 2.0],
             'c' => ['const' => 'x', 'default' => 'x'],
+            // A string default of a number is the number it spells, here the constant.
             'd' => ['const' => 1, 'default' => '1'],
             'e' => ['type' => 'string', 'const' => '1', 'default' => 1],
             'f' => ['const' => 'a/é', 'default' => 'b'],
@@ -608,7 +609,6 @@ final class SchemaCoverageTest extends TestCase
         $mixed = 'warning /project/api/openapi.yaml#/components/schemas/C/properties/g/enum: The enum mixes strings and integers, which no PHP enum can back; the property takes either.';
         self::assertSame(
             [
-                self::AT . 'C/properties/d/default: Default "1" is not the "const" value 1; null is used instead.',
                 self::AT . 'C/properties/e/default: Default 1 is not the "const" value "1"; null is used instead.',
                 self::AT . 'C/properties/f/default: Default "b" is not the "const" value "a/é"; null is used instead.',
                 $mixed,
@@ -616,6 +616,42 @@ final class SchemaCoverageTest extends TestCase
             ],
             ModelFixture::messages($output),
         );
+    }
+
+    public function testMatchesAConstAsTheDefaultIsWrittenOrRead(): void
+    {
+        $output = ModelFixture::build(['C' => ['type' => 'object', 'properties' => [
+            'written' => ['type' => 'integer', 'const' => '5', 'default' => '5'],
+            'other' => ['type' => 'integer', 'const' => 5, 'default' => '6'],
+        ]]]);
+
+        self::assertSame(
+            [
+                'warning /project/api/openapi.yaml#/components/schemas/C/properties/written/const: "const" is not of the declared type; the property keeps its declared type.',
+                self::AT . 'C/properties/other/default: Default "6" is not the "const" value 5; null is used instead.',
+            ],
+            ModelFixture::messages($output),
+        );
+    }
+
+    public function testReadsAStringDefaultOfAnEnumOfIntegers(): void
+    {
+        $output = ModelFixture::build([
+            'Level' => ['type' => 'integer', 'enum' => [1, 2]],
+            'C' => ['type' => 'object', 'properties' => [
+                'level' => ['allOf' => [['$ref' => '#/components/schemas/Level']], 'default' => '2'],
+            ]],
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(['level: App\\Dto\\Level|null'], ModelFixture::classes($output)['App\\Dto\\C']);
+    }
+
+    public function testTakesTheConstOfANumberOfAWholeNumberFormatAsAnInteger(): void
+    {
+        $output = ModelFixture::build(['C' => ['type' => 'object', 'properties' => ['count' => ['type' => 'number', 'format' => 'int32', 'const' => 5]]]]);
+
+        self::assertSame(['count: 5|null'], ModelFixture::classes($output)['App\\Dto\\C']);
     }
 
     public function testKeepsTheDeclaredTypeAgainstAConstOfAnotherKind(): void
@@ -640,12 +676,12 @@ final class SchemaCoverageTest extends TestCase
     public function testIgnoresANamedEnumItsTypeAdmitsNoneOf(): void
     {
         $output = ModelFixture::build([
-            'Regions' => ['type' => 'array', 'items' => ['type' => 'string'], 'enum' => ['EU', 'HK']],
+            'Regions' => ['type' => 'array', 'items' => ['type' => 'integer'], 'enum' => ['EU', 'HK']],
             'Level' => ['type' => ['integer', 'string'], 'enum' => [1, 'a']],
             'C' => ['type' => 'object', 'properties' => ['r' => ['$ref' => '#/components/schemas/Regions'], 'l' => ['$ref' => '#/components/schemas/Level']]],
         ]);
 
-        self::assertSame(['r: list<string>|null', "l: 'a'|1|null"], ModelFixture::classes($output)['App\\Dto\\C']);
+        self::assertSame(['r: list<int>|null', "l: 'a'|1|null"], ModelFixture::classes($output)['App\\Dto\\C']);
         self::assertSame(
             [
                 'warning /project/api/openapi.yaml#/components/schemas/Regions/type: "type" admits none of the enum values, so the enum is ignored and the property keeps its type.',
@@ -867,7 +903,7 @@ final class SchemaCoverageTest extends TestCase
         $output = ModelFixture::build(['C' => ['type' => 'object', 'properties' => ['n' => ['type' => 'integer', 'const' => 5, 'format' => 'date']]]]);
 
         self::assertSame(
-            ['warning /project/api/openapi.yaml#/components/schemas/C/properties/n/format: Unknown integer format "date"; the property stays an int.'],
+            ['warning /project/api/openapi.yaml#/components/schemas/C/properties/n/format: Unknown integer format "date"; the property stays an int. "formats" in the config can map it to a type.'],
             ModelFixture::messages($output),
         );
         self::assertSame(['n: 5|null'], ModelFixture::classes($output)['App\\Dto\\C']);
@@ -892,8 +928,8 @@ final class SchemaCoverageTest extends TestCase
 
         self::assertSame(
             [
-                'warning /project/api/openapi.yaml#/components/schemas/C/properties/s/format: Unknown string format "odd"; the property stays a string.',
-                'warning /project/api/openapi.yaml#/components/schemas/C/properties/f/format: Unknown number format "odd"; the property stays a float.',
+                'warning /project/api/openapi.yaml#/components/schemas/C/properties/s/format: Unknown string format "odd"; the property stays a string. "formats" in the config can map it to a type.',
+                'warning /project/api/openapi.yaml#/components/schemas/C/properties/f/format: Unknown number format "odd"; the property stays a float. "formats" in the config can map it to a type.',
             ],
             ModelFixture::messages($output),
         );

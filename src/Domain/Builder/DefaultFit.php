@@ -20,6 +20,8 @@ use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
  */
 final class DefaultFit
 {
+    private const NUMERIC_STRING = '/^-?[0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?$/D';
+
     private function __construct()
     {
     }
@@ -99,8 +101,18 @@ final class DefaultFit
             case 'bool':
                 return is_bool($value);
             default:
-                return is_string($value) && ($value !== '' || $type->phpDoc() !== 'non-empty-string');
+                return is_string($value) && ($value !== '' || $type->phpDoc() !== 'non-empty-string')
+                    && ($type->phpDoc() !== 'numeric-string' || self::isNumericString($value));
         }
+    }
+
+    /**
+     * Digits (leading zeros of `digits` included), a fraction, an exponent: what every PHP version reads as numeric,
+     * where is_numeric() differs about surrounding spaces.
+     */
+    private static function isNumericString(string $value): bool
+    {
+        return preg_match(self::NUMERIC_STRING, $value) === 1;
     }
 
     private static function inRange(int $value, ?string $refinement): bool

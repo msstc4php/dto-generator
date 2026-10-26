@@ -9,6 +9,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\MixedType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\NullableType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ScalarType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\TypeModel;
+use MSSTC4PHP\DtoGenerator\Domain\Schema\Formats;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaType;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
@@ -20,13 +21,9 @@ use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
  */
 final class ConstMapper
 {
-    /** @var array<int|string, TypeModel> */
-    private array $formats;
+    private FormatMap $formats;
 
-    /**
-     * @param array<int|string, TypeModel> $formats custom formats of the config and the extensions
-     */
-    public function __construct(array $formats)
+    public function __construct(FormatMap $formats)
     {
         $this->formats = $formats;
     }
@@ -37,11 +34,10 @@ final class ConstMapper
      */
     public function type(Schema $schema, Diagnostics $diagnostics): ?ScalarType
     {
-        $format = $schema->format();
         $declared = array_map(static fn (SchemaType $type): string => $type->value(), $schema->nonNullTypes());
         // A date applies only to a declared string; a configured format applies to any type.
-        $dated = in_array($format, FormatCheck::DATE, true) && in_array(SchemaType::STRING, $declared, true);
-        if ($format !== null && (isset($this->formats[$format]) || $dated)) {
+        $dated = in_array($schema->normalizedFormat(), Formats::DATES, true) && in_array(SchemaType::STRING, $declared, true);
+        if ($this->formats->typeOf($schema) instanceof TypeModel || $dated) {
             return null;
         }
 
@@ -50,8 +46,9 @@ final class ConstMapper
         // JSON Schema counts 2.0 as an integer and every integer as a number.
         $normalised = $this->whole($value);
         $whole = is_int($normalised) ? $normalised : null;
-        $integer = in_array(SchemaType::INTEGER, $declared, true);
         $number = in_array(SchemaType::NUMBER, $declared, true);
+        // A number of a format of whole numbers is an int (TypeMapper).
+        $integer = in_array(SchemaType::INTEGER, $declared, true) || ($number && in_array($schema->normalizedFormat(), Formats::INTEGERS, true));
         if ($whole !== null && $integer) {
             $type = ScalarType::int(LiteralType::of($whole));
         } elseif (is_float($value) && $value === floor($value) && $integer && !$number) {
@@ -76,7 +73,7 @@ final class ConstMapper
             return null;
         }
 
-        FormatCheck::check($schema, $type->kind(), $diagnostics);
+        FormatCheck::check($schema, $type->kind(), $this->formats, $diagnostics);
 
         return $type;
     }
@@ -127,20 +124,7 @@ final class ConstMapper
      */
     private function whole($value)
     {
-        return is_float($value) ? $this->wholeFloat($value) : $value;
-    }
-
-    /**
-     * @return int|float
-     */
-    private function wholeFloat(float $value)
-    {
-        // Range first: PHP 8.5 warns about casting a float int cannot hold. PHP_INT_MAX compares as 2^63, outside.
-        if ($value < PHP_INT_MIN || $value >= PHP_INT_MAX || $value !== floor($value)) {
-            return $value;
-        }
-
-        return (int) $value;
+        return is_float($value) ? WholeNumber::of($value) ?? $value : $value;
     }
 
     /**

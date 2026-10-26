@@ -102,6 +102,44 @@ final class SchemaParserTest extends TestCase
         self::assertSame([], $schema->types());
     }
 
+    public function testGivesTheScalarEnumOfAnArrayToItsItems(): void
+    {
+        $diagnostics = new Diagnostics();
+        $schema = (new SchemaParser())->forSwagger20()->parse(['type' => 'array', 'enum' => ['EU', 'US'], 'items' => ['type' => 'string']], $this->root(), $diagnostics);
+        $items = $schema->items();
+
+        self::assertSame([], $diagnostics->all());
+        self::assertNull($schema->enum());
+        self::assertNotNull($items);
+        self::assertSame(['EU', 'US'], $items->enum());
+    }
+
+    public function testReadsNullableBesideTheEnumOfAnArrayOnlyInOpenApi30(): void
+    {
+        $node = ['type' => 'array', 'nullable' => true, 'enum' => ['a', null], 'items' => ['type' => 'string']];
+        $openApi30 = (new SchemaParser())->forOpenApi30()->parse($node, $this->root(), new Diagnostics());
+        $openApi31 = (new SchemaParser())->parse($node, $this->root(), new Diagnostics());
+        $items30 = $openApi30->items();
+        $items31 = $openApi31->items();
+
+        self::assertNull($openApi30->enum());
+        self::assertNotNull($items30);
+        self::assertSame(['a'], $items30->enum());
+        self::assertSame(['a', null], $openApi31->enum());
+        self::assertNotNull($items31);
+        self::assertNull($items31->enum());
+    }
+
+    public function testKeepsTheFormatAsWrittenBesideItsName(): void
+    {
+        $schema = (new SchemaParser())->parse(['type' => 'string', 'format' => 'dateTime'], $this->root(), new Diagnostics());
+        $plain = (new SchemaParser())->parse(['type' => 'string'], $this->root(), new Diagnostics());
+
+        self::assertSame('dateTime', $schema->format());
+        self::assertSame('date-time', $schema->normalizedFormat());
+        self::assertNull($plain->normalizedFormat());
+    }
+
     public function testAnEmptyObjectIsTheEmptySchema(): void
     {
         $diagnostics = new Diagnostics();

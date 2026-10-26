@@ -517,6 +517,48 @@ final class ClassBuilderTest extends TestCase
     }
 
     /**
+     * @dataProvider defaultsWrittenAsStrings
+     *
+     * @param array<array-key, mixed> $property
+     * @param bool|int|float|string $expected
+     */
+    public function testReadsADefaultWrittenAsAString(array $property, $expected): void
+    {
+        [$class, $messages] = $this->build(['type' => 'object', 'properties' => ['v' => $property]]);
+
+        self::assertSame([], $messages);
+        $default = $this->property($class, 'v')->default();
+        self::assertNotNull($default);
+        self::assertSame($expected, $default->value());
+    }
+
+    /**
+     * @return array<string, array{array<array-key, mixed>, bool|int|float|string}>
+     */
+    public static function defaultsWrittenAsStrings(): array
+    {
+        return [
+            'true' => [['type' => 'boolean', 'default' => 'true'], true],
+            'false' => [['type' => 'boolean', 'default' => 'false'], false],
+            'zero' => [['type' => 'integer', 'default' => '0'], 0],
+            'whole float of a number of whole numbers' => [['type' => 'number', 'format' => 'int32', 'default' => 1.0], 1],
+            'negative whole float of 2^53' => [['type' => 'number', 'format' => 'int64', 'default' => -(2.0 ** 53)], -(2 ** 53)],
+            'numeric string' => [['type' => 'string', 'format' => 'decimal', 'default' => '-1.5e3'], '-1.5e3'],
+            'digits with leading zeros' => [['type' => 'string', 'format' => 'digits', 'default' => '0012'], '0012'],
+            'whole float of 2^53' => [['type' => 'number', 'format' => 'int64', 'default' => 2.0 ** 53], 2 ** 53],
+            'large whole float' => [['type' => 'number', 'format' => 'int64', 'default' => 2.0 ** 54], 2 ** 54],
+            'lowest whole float of int' => [['type' => 'number', 'format' => 'int64', 'default' => (float) PHP_INT_MIN], PHP_INT_MIN],
+            'negative zero' => [['type' => 'number', 'format' => 'int32', 'default' => -0.0], 0],
+            'exponent' => [['type' => 'number', 'default' => '1e3'], 1000.0],
+            'int' => [['type' => 'integer', 'default' => '-42'], -42],
+            'float' => [['type' => 'number', 'default' => '1.5'], 1.5],
+            'whole float' => [['type' => 'number', 'default' => '2'], 2.0],
+            'nullable bool' => [['type' => ['boolean', 'null'], 'default' => 'true'], true],
+            'string' => [['type' => 'string', 'default' => 'true'], 'true'],
+        ];
+    }
+
+    /**
      * @return array<string, array{array<array-key, mixed>, string, string}>
      */
     public static function mismatchedDefaults(): array
@@ -525,8 +567,33 @@ final class ClassBuilderTest extends TestCase
             'string for int' => [['type' => 'integer', 'default' => 'abc'], '"abc"', 'int'],
             'fraction for int' => [['type' => 'integer', 'default' => 1.5], '1.5', 'int'],
             'int for string' => [['type' => 'string', 'default' => 5], '5', 'string'],
-            'string for bool' => [['type' => 'boolean', 'default' => 'true'], '"true"', 'bool'],
-            'string for float' => [['type' => 'number', 'default' => '1'], '"1"', 'float'],
+            'string for bool' => [['type' => 'boolean', 'default' => 'yes'], '"yes"', 'bool'],
+            'string for float' => [['type' => 'number', 'default' => 'one'], '"one"', 'float'],
+            'fraction string for int' => [['type' => 'integer', 'default' => '1.5'], '"1.5"', 'int'],
+            'fraction for a number of whole numbers' => [['type' => 'number', 'format' => 'int32', 'default' => 1.5], '1.5', 'int'],
+            'huge whole float for int' => [['type' => 'number', 'format' => 'int64', 'default' => 1.0e19], '1.0e+19', 'int'],
+            'word for a numeric string' => [['type' => 'string', 'format' => 'int64', 'default' => 'abc'], '"abc"', 'numeric-string'],
+            'numeric string with a space' => [['type' => 'string', 'format' => 'decimal', 'default' => ' 1'], '" 1"', 'numeric-string'],
+            'numeric string with a newline' => [['type' => 'string', 'format' => 'decimal', 'default' => "1\n"], '"1\\n"', 'numeric-string'],
+            'numeric string with a plus' => [['type' => 'string', 'format' => 'decimal', 'default' => '+1'], '"+1"', 'numeric-string'],
+            'numeric string with a trailing point' => [['type' => 'string', 'format' => 'decimal', 'default' => '1.'], '"1."', 'numeric-string'],
+            'numeric string without leading digits' => [['type' => 'string', 'format' => 'decimal', 'default' => '.5'], '".5"', 'numeric-string'],
+            'negative whole float past int' => [['type' => 'number', 'format' => 'int64', 'default' => -1.0e19], '-1.0e+19', 'int'],
+            'whole float at the top of int' => [['type' => 'number', 'format' => 'int64', 'default' => (float) PHP_INT_MAX], '9.223372036854776e+18', 'int'],
+            'empty numeric string' => [['type' => 'string', 'format' => 'decimal', 'default' => ''], '""', 'numeric-string'],
+            'bool in capitals' => [['type' => 'boolean', 'default' => 'FALSE'], '"FALSE"', 'bool'],
+            'int with spaces' => [['type' => 'integer', 'default' => ' 42'], '" 42"', 'int'],
+            'int with a leading zero' => [['type' => 'integer', 'default' => '010'], '"010"', 'int'],
+            'int with a newline' => [['type' => 'integer', 'default' => "42\n"], '"42\\n"', 'int'],
+            'float with a newline' => [['type' => 'number', 'default' => "1.5\n"], '"1.5\\n"', 'float'],
+            'int with a plus' => [['type' => 'integer', 'default' => '+1'], '"+1"', 'int'],
+            'int with an exponent' => [['type' => 'integer', 'default' => '1e3'], '"1e3"', 'int'],
+            'int overflow' => [['type' => 'integer', 'default' => '99999999999999999999'], '"99999999999999999999"', 'int'],
+            'float with a trailing space' => [['type' => 'number', 'default' => '1.5 '], '"1.5 "', 'float'],
+            'float with a leading zero' => [['type' => 'number', 'default' => '010'], '"010"', 'float'],
+            'float without digits after the point' => [['type' => 'number', 'default' => '1.'], '"1."', 'float'],
+            'string out of range' => [['type' => 'integer', 'minimum' => 0, 'default' => '-1'], '"-1"', 'non-negative-int'],
+            'infinite string for float' => [['type' => 'number', 'default' => '1e999'], '"1e999"', 'float'],
             'bool for union' => [['type' => ['integer', 'string'], 'default' => true], 'true', 'int|string'],
             'empty for non-empty' => [['type' => 'string', 'minLength' => 1, 'default' => ''], '""', 'non-empty-string'],
             'below the range' => [['type' => 'integer', 'minimum' => 5, 'default' => 4], '4', 'int<5, max>'],
@@ -557,7 +624,9 @@ final class ClassBuilderTest extends TestCase
         [$class, $messages] = $this->build(['type' => 'object', 'properties' => ['v' => $property]]);
 
         self::assertSame([], $messages);
-        self::assertEquals(new DefaultValue($expected), $this->property($class, 'v')->default());
+        $default = $this->property($class, 'v')->default();
+        self::assertNotNull($default);
+        self::assertSame($expected, $default->value());
     }
 
     /**

@@ -31,7 +31,6 @@ use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\KeywordChecks;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassType;
-use MSSTC4PHP\DtoGenerator\Domain\Model\TypeModel;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\Path;
 use MSSTC4PHP\DtoGenerator\Domain\Target\TargetProfile;
@@ -240,9 +239,20 @@ final class Action
         $keywordChecks = new KeywordChecks($registry->claimedKeywords());
         $schemas = ($this->loadSchemas)(new SchemasInput($config, $remotePolicy, $keywordChecks));
         $diagnostics->merge($schemas->diagnostics());
-        $formats = $registry->formats(array_map(static fn (ClassName $class): TypeModel => new ClassType($class), $config->formats()));
+        $classes = [];
+        $known = [];
+        // A scalar only marks the format as known for it.
+        foreach ($config->formats() as $format => $type) {
+            if ($type instanceof ClassName) {
+                $classes[$format] = new ClassType($type);
+            } else {
+                $known[$format] = $type->kind();
+            }
+        }
+
+        $formats = $registry->formats($classes, array_keys($known));
         $aliases = array_keys($config->extensions()->aliases());
-        $model = ($this->buildModel)(new BuildInput($config, $target, $schemas->graph(), $formats, $aliases));
+        $model = ($this->buildModel)(new BuildInput($config, $target, $schemas->graph(), $formats, $aliases, $known));
         $diagnostics->merge($model->diagnostics());
         $enriched = ($this->enrichModel)(new EnrichInput($model->classes(), $model->enums(), $schemas->graph(), $target, $registry, $this->packages($config, $diagnostics), $verifier, $keywordChecks));
         $diagnostics->merge($enriched->diagnostics());

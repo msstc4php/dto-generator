@@ -14,10 +14,12 @@ classes too; parameters, headers, callbacks and `webhooks` are not read.
 | `type: integer` | `int` | `int<min, max>`, `positive-int`, `non-negative-int` from `minimum`/`maximum`/`exclusive*` |
 | `type: number` | `float` | |
 | `type: boolean` | `bool` | `true`/`false` from a one-value `enum` (`enum: [true]`), as from `const` |
-| `format: date-time`, `date` | `\DateTimeImmutable` (or `\DateTime`, see `dto.dateTimeClass`) | |
-| `format: int32`, `int64` / `float`, `double` | `int` / `float` | |
-| `format: email`, `uri`, `uuid`, `hostname`, `ipv4`, `ipv6`, `time`, `byte`, `binary` | `string` | |
-| a format from `formats` in the config | that class | |
+| `format: date-time`, `date`, `date-time-rfc-2822` (Twilio) | `\DateTimeImmutable` (or `\DateTime`, see `dto.dateTimeClass`) | |
+| `type: integer`, `format: int8` … `int64`, `uint8` … `uint64`, `unix-time` / `type: number`, `format: float`, `double`, `decimal`, `unix-time` | `int` / `float` | |
+| `type: number` with a format of whole numbers (`integer`, `int32`, `uint64`…; Xero) | `int` | `minimum`/`maximum` give its range |
+| `type: string`, `format: int64`, `uint64`… (Youtube), `integer`, `decimal`, `digits` | `string` | `numeric-string` |
+| `format: email`, `uri`, `uri-reference`, `uuid`, `ulid`, `hostname`, `ip`, `ipv4`, `ipv6`, `cidr`, `mac-address`, `time`, `duration`, `byte`, `binary`, `json`, `phone`, `currency`, `country`, `language`, `locale`, `timezone`, `color`, `iban`, `bic`, `isbn`, `issn`, `isin`, `http-method`… (the [list](#formats)) | `string` | |
+| a format from `formats` in the config | that class or scalar | |
 | `type: [T, 'null']`, or a `oneOf`/`anyOf` of `T` and `null` | `?T` | |
 | `type: [string, integer]`, or `oneOf`/`anyOf` without a discriminator | `string\|int` (PHP 8.0+); no native type on 7.4 | `string\|int` |
 | `type: array` with `items` | `array` | `list<T>` |
@@ -36,6 +38,43 @@ Map keys are `array-key`, not `string`: PHP turns a JSON key such as `"200"` int
 
 An unknown `format` falls back to the base type with a warning.
 
+### Formats
+
+Specs write one format many ways. The generator reads a format by its name below, whatever the letter case, with
+spaces and underscores as hyphens, and reads these spellings as that name; the Symfony bridge checks each by that name.
+
+| Name | Also written |
+|---|---|
+| `date-time` | `dateTime`, `datetime`, `ISO 8601 date-time`, `iso8601`, `rfc3339`, `date-time-rfc3339`, `date-time-iso8601` |
+| `date` / `time` | `full-date`, `iso-date` / `full-time` |
+| `date-time-rfc-2822` | `rfc2822`, `date-time-rfc2822` |
+| `unix-time` (integers and numbers) | `unixtime`, `unix-timestamp`, `epoch`, `timestamp` |
+| `email` / `hostname` | `e-mail`, `email-address` / `host-name` |
+| `ip`, `ipv4`, `ipv6` | `ip-address`, `ip-v4`, `ipv4-address`, `ip-v6`, `ipv6-address` |
+| `cidr`, `ipv4-cidr`, `ipv6-cidr` | `ip/netmask`, `ip/prefix_length`; `ipv4/prefix_length`, `ipv4/netmask`; `ipv6/prefix_length`, `ipv6/128` (Linode) |
+| `mac-address` | `mac`, `macaddress` |
+| `uuid` / `byte` / `json` | `guid` / `base64` / `json-string` |
+| `uri-reference` | `url`, which specs write for relative paths and bare host names as well (Linode) |
+| `phone` | `phone-number` (Twilio), `phone_number`, `tel`, `telephone`, `e164` |
+| `currency` | `currency-code`, `iso-4217` |
+| `country` | `iso-country-code` (Twilio), `country-code`, `iso-3166`, `iso-3166-1-alpha-2` |
+| `language` / `locale` / `timezone` | `language-code`, `iso-639-1` / `bcp47`, `language-tag` / `time-zone`, `iana-timezone`, `tz` |
+| `color` / `bic` / `decimal` | `colour`, `css-color` / `swift`, `swift-code` / `numeric`, `decimal-string` |
+| `http-method` / `integer` / `int64` / `int16` | `http-verb` / `int` / `long` / `short` |
+
+A format is read in lower case, with spaces and underscores as hyphens, whether the generator knows it or not
+(`SSH_key` is `ssh-key`). Known without another spelling: `partial-time`, `hex-color` (`hexColor`),
+`idn-email`, `idn-hostname`, `iri`, `iri-reference`, `uri-template`, `ulid`, `base64url`, `password`, `regex`,
+`json-pointer`, `relative-json-pointer`, `iban`, `isbn`, `issn`, `isin`, `digits`, `MM/YYYY` (Linode), a format named
+after its type (`format: string`). `formats` in the config maps a format by its spelling first, then by its name, so
+`formats: {date-time: …}` covers `dateTime` too.
+
+A string default of a boolean, a number or an enum of integers is read only as JSON would write it without the quotes:
+`"true"`, `"-42"`, `"1.5e3"`; `"TRUE"`, `" 42"`, `"010"` or `"+1"` still give the warning. A whole float default of a
+`type: number` the format made an `int` is that int when the property's own schema says `number` (not through a
+`$ref`, nor in the items of a list). The default of a `numeric-string` must be digits, with a fraction or an exponent
+(`"0012"` passes, `" 1"` and `".5"` do not).
+
 PHPDoc comes in two layers. `@var`, `@param` and `@return` carry what any PHPDoc reader understands (`list<T>`,
 `?string`), and only when it says more than the native type. `@phpstan-var`, `@phpstan-param` and `@phpstan-return`
 carry the precise type (`non-empty-string`, `int<1, 100>`, `Status::*`) when it differs. Older readers, such as the
@@ -46,8 +85,9 @@ PHPDoc extractor of Symfony 5.4, mistake `non-empty-string` for a class name; th
 - A property listed in `required` and not nullable is a required constructor argument.
 - Any other property is nullable, defaulting to the schema's `default` or to `null`.
 - Required arguments come first, then optional ones, each in the order of `properties`.
-- A `default` that does not fit the type (Xero's `default: "false"` of a boolean) gives a warning and the property
-  defaults to `null`; a default on a required property is ignored.
+- A string default of a boolean or a number is the value it spells, as JSON writes it: Xero's `default: "false"` is
+  `false`, `"10"` of an integer is `10`. Any other `default` that does not fit the type gives a warning and the property defaults to `null`;
+  a default on a required property is ignored.
 - A default for an object (a date included) or a map cannot be a PHP constant expression: the property defaults to
   `null`, with a warning. On PHP 8.1 and newer, the empty object `{}` as the default of a generated class is
   `new Name()`, when that class is not abstract and its constructor needs no argument; a default leading back to its
@@ -60,7 +100,8 @@ PHPDoc extractor of Symfony 5.4, mistake `non-empty-string` for a class name; th
 |---|---|
 | `enum` of strings or of integers | PHP 8.1+: a backed `enum`. 7.4 and 8.0: a `final class` of constants; the property is `string`/`int` with `@phpstan-var Name::*` |
 | `enum` mixing strings and integers | no PHP enum: a union of the literals (see [Types](#types)), with a warning |
-| `enum` whose values `type` admits none of (`type: array` with the values of its items, as Zoom and Vimeo write; `type: string` with integers) | the enum is ignored, with a warning: the property keeps its type (`list<string>`) |
+| `type: array` with an `enum` of scalars its items admit (Zoom, Vimeo) | the enum of its items, with its `x-enum-*` keys: `list<<Parent><Property>Item>`. Items given by a `$ref`, or with an `enum` or `const` of their own, keep the schema as written. A diagnostic of the moved enum points at `…/items/enum`, even where the document writes no `items` |
+| `enum` whose values `type` admits none of (`type: string` with integers, an array whose items take other values) | the enum is ignored, with a warning: the property keeps its type |
 | `allOf` with one `$ref` plus own properties, `extends` strategy | `class Child extends Base`; `Base` is not `final` |
 | a child's `required` (or one beside the parent's `$ref`) naming a property its parent leaves optional, `extends` strategy (Shipengine, Plaid) | the child's constructor takes it without a default, among its required parameters, and rejects `null`; the parent's property keeps its nullable type, so with-methods keep it too, and a setter or `clone` wither of the parent still accepts `null`. A property the child declares again but keeps from the parent counts as well. A child's own property that an ancestor's `required` names is required. A variant only listed by a discriminated union keeps what its own schema requires; a property the variants share, which the union's `required` names, goes to the base optional, and the variants extending the union through `allOf` require it. A property whose schema admits `null`, or a discriminator selecting the child, stays as the parent declares it. A class extending the child requires it as well |
 | an `allOf` member that only says `type: object` (no properties, `required`, composition, enum, `const`, `patternProperties`, discriminator or schema for other properties; `additionalProperties: true` and annotations allowed) beside members that are objects | no member: `allOf: [$ref: Tag, {type: object, description: …}]` is `Tag`, as Asana, Bitbucket and Plaid write it; it still rules out `null` unless it admits it, and a union stays as it is (`Tag` or a string stays `Tag|string`). Its other keywords (`minProperties`, `not`, …) give no PHP type and are left to validation. Beside a member that can be no object, however written (a string with a date format or an `x-php-type`, an enum, a list), no value passes: an error |
@@ -78,7 +119,7 @@ PHPDoc extractor of Symfony 5.4, mistake `non-empty-string` for a class name; th
 | an inline object or enum as a member of a `oneOf`/`anyOf` | a named class: the member's `title` in PascalCase (the title of an inline property schema is not used), else `<Parent><Property>Option<N>` (N counts from 1 over `oneOf`, then `anyOf`) |
 | an inline object or enum in a named alias (`Pets: {type: array, items: {…}}`) | `<Alias>Item`, `<Alias>Value`, `<Alias>Option<N>` |
 | an inline schema whose name another schema already holds | the class or enum of that schema when the two say the same in one file (every keyword but the schema's own `title`, `description` included, in any order, subschemas too: OpenAI's `Beta` copies; for an enum, the same cases and deprecation are enough, so `allOf` members that restate an enum in another order, with another description or with `null` share it, unless such an enum has a warning of its own), unless an `allOf` gives either class the properties of another schema; otherwise it gives way: quietly to the name derived from its place when a title gave the first (or to the class of the schema holding that name, on the same terms), else, with a warning, to that name numbered from 2 (`UserAddress2`) |
-| named schemas whose names differ only in letter case or separators (`User`, `user`, `user_profile`, `UserProfile`), or are the same in two files of one namespace, as are a schema a `$ref` points into (`#/components/schemas/Database/properties/hosts`, named by its last segment) and another such | the later one in the document is numbered from its own name (`user` → `User2`, `USER` → `USER3`), with a warning, once every named schema holds its name, so a number never takes the name of another named schema (`Notary2`); an inline schema whose `x-php-class-name` asks for that number gets the error instead. The result follows the order of the document; `x-php-class-name` pins a name. A schema with an explicit `x-php-class-name` that another holds, and a name a read or write suffix gives (`PetRead`), stay errors (the latter suggests `dto.readWriteSuffixes`) |
+| named schemas whose names differ only in letter case or separators (`User`, `user`, `user_profile`, `UserProfile`), or are the same in two files of one namespace, as are a schema a `$ref` points into (`#/components/schemas/Database/properties/hosts`, named by its last segment) and another such | two enums of the same cases share one (Linode's `replication_type` of `DatabaseMySQL` and of `DatabasePostgreSQL`, `Status` and `status`), without a warning; the first one's case descriptions stay. Otherwise the later one in the document is numbered from its own name (`user` → `User2`, `USER` → `USER3`), with a warning, once every named schema holds its name, so a number never takes the name of another named schema (`Notary2`); an inline schema whose `x-php-class-name` asks for that number gets the error instead. The result follows the order of the document; `x-php-class-name` pins a name. A schema with an explicit `x-php-class-name` that another holds, and a name a read or write suffix gives (`PetRead`), stay errors (the latter suggests `dto.readWriteSuffixes`) |
 | a schema whose `x-php-class-name` names a class another schema has | an error suggesting `x-php-class-name`, which `classNames` of the source sets without changing the document; an inline schema that says the same as the one holding the name (an enum: has the same cases) gets its class instead |
 | properties of one class that become the same PHP name, letter case ignored (Trello's `prefs/background` and `prefs_background`) | the later one in the document is numbered from 2 past every name a property of the class has by itself, an `x-php-name` included (`$prefsBackground2`), with a warning, alike in the read and the write model and in every `allOf` member that declares it; one whose `x-php-name` asks for a name another holds is an error. Numbers are given within a class: a name a parent declares, or a numbered parent property a child declares again, is still an error that `x-php-name` resolves. An `x-php-name` applies to the declaration that has it, so another `allOf` member naming the property otherwise is an error, as without a clash. The number follows the name as it is (`_1` beside `1` becomes `$_12`), and an explicit name met by a spelled sign (`plus1` beside `+1`) numbers the later one: `$plus12`, or the error when the explicit name comes later. A property name with no usable characters (SendGrid's `""`) leaves the property out of the class, with a warning, unless `x-php-name` names it |
 | names that only a leading sign tells apart (`+1`, `-1`), or a sign alone (`*`) | the signs spelled out: `$plus1`, `$minus1`, case `ASTERISK`; a lone `+1` stays `$_1`, and so does one whose spelled name another name holds (`+1` beside `plus1` stays `$_1`, `-1` becomes `$minus1`; with `minus1` there too, `-1` is numbered: `$_12`) |

@@ -29,6 +29,12 @@ final class SchemaFingerprintTest extends TestCase
         'discriminator' => ['propertyName' => 'x', 'mapping' => ['1' => '#/components/schemas/P']],
     ];
 
+    public function testTellsTwoSpellingsOfAFormatApart(): void
+    {
+        // The config may map one spelling and not the other.
+        self::assertNotSame(SchemaFingerprint::of($this->schema(['type' => 'string', 'format' => 'url'])), SchemaFingerprint::of($this->schema(['type' => 'string', 'format' => 'uri-reference'])));
+    }
+
     public function testLeavesOutWhereTheSchemaIs(): void
     {
         self::assertSame(

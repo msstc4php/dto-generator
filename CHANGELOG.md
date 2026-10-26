@@ -25,6 +25,31 @@ All notable changes to this package are documented here. The format follows
   `UpdateWarehouseRequestBody(name, originAddress, …)`); call it with named arguments, or check positional calls.
 - `ClassModel::requiredInherited()` lists, for extensions, the wire names of the inherited properties the class
   requires so.
+- Formats are read by name whatever the spelling (`dateTime`, `ISO 8601 date-time` and `rfc3339` are `date-time`;
+  `phone_number` is `phone`; `UUID` is `uuid`), and many more are known: unsigned and small integers, `unix-time`,
+  `decimal`, `ip`, CIDR ranges, `phone`, `currency`, `country`, `language`, `locale`, `timezone`, `color`, `iban`,
+  `json` and others (docs/openapi-support.md#formats). A property with `format: dateTime` is a date now, as is one
+  with Twilio's `date-time-rfc-2822`; `url` reads as `uri-reference`. `Schema::normalizedFormat()` gives the name,
+  `Formats` the list; `format()` stays as written.
+- `type: number` with a format of whole numbers (Xero's `format: integer`, also `int32`, `int64`) is an `int`; it was
+  a `float`. Its whole float default (`1.0`, on the property's own schema) is the int; a payload that sends such a
+  number as `1.0` no longer fits the type: map the format to `float` through an extension, or fix the spec.
+- A string with an integer or decimal format (Youtube's `uint64`) is a `numeric-string`; a default that is no number
+  gives the warning and `null`.
+- A string default of a boolean, a number or an enum of integers is the value it spells, as JSON writes it (Xero's
+  `default: "false"`); it was replaced by `null` with a warning. Beside a `const` it is compared as that value.
+- A whole float bound (`maximum: 1000.0`) gives an integer its range.
+- An array whose `enum` lists values of its items (Zoom, Vimeo) gets the enum on its items: `list<Enum>`; it was
+  ignored with a warning.
+- Two named enums whose names clash and whose cases are the same (Linode's `replication_type` of two schemas a `$ref`
+  points into, `Status` and `status`) share one instead of numbering the second (`ReplicationType2`).
+- Extensions registering two spellings of one format (`date-time`, `dateTime`) is an error, as one format twice was;
+  so are two spellings in `formats` of the config, which wins over an extension's format in any spelling.
+
+### Added
+
+- `formats` in the config names a format of your API known for `string`, `int`, `float` or `bool`, which silences the
+  warning about it and changes no type; a format is looked up as written, then by its name.
 
 ## [1.15.0] - 2026-10-25
 

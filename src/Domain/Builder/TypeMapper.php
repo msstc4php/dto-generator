@@ -15,6 +15,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\NullableType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ScalarType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\TypeModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\UnionType;
+use MSSTC4PHP\DtoGenerator\Domain\Schema\Formats;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\ReferenceUse;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\ResolvedSchema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
@@ -40,19 +41,19 @@ final class TypeMapper
 
     private TypeMeet $meet;
 
-    /** @var array<int|string, TypeModel> */
-    private array $formats;
+    private FormatMap $formats;
 
     /**
      * @param array<int|string, TypeModel> $formats custom formats of the config and the extensions
+     * @param array<int|string, 'string'|'int'|'float'|'bool'> $known formats of the config known for a scalar
      */
-    public function __construct(SchemaGraph $graph, Declarations $declarations, TargetProfile $target, array $formats)
+    public function __construct(SchemaGraph $graph, Declarations $declarations, TargetProfile $target, array $formats, array $known = [])
     {
         $this->graph = $graph;
         $this->declarations = $declarations;
         $this->target = $target;
-        $this->formats = $formats;
-        $this->consts = new ConstMapper($formats);
+        $this->formats = new FormatMap($formats, $known);
+        $this->consts = new ConstMapper($this->formats);
         $this->meet = new TypeMeet(ClassName::fromFqcn($target->dateTimeClass()->className()), $declarations);
     }
 
@@ -189,9 +190,9 @@ final class TypeMapper
             }
         }
 
-        $format = $schema->format();
-        if ($format !== null && isset($this->formats[$format])) {
-            return $this->formats[$format];
+        $mapped = $this->formats->typeOf($schema);
+        if ($mapped instanceof TypeModel) {
+            return $mapped;
         }
 
         $members = [];
@@ -203,8 +204,8 @@ final class TypeMapper
             return $this->consts->narrow($schema, new MixedType(), $diagnostics);
         }
 
-        // Parsed type lists hold no duplicates, so two or more members always form a valid union.
-        return $this->consts->narrow($schema, count($members) === 1 ? $members[0] : new UnionType(...$members), $diagnostics);
+        // `type: [integer, number]` with a format of whole numbers gives int twice.
+        return $this->consts->narrow($schema, UnionType::of(...$members), $diagnostics);
     }
 
     /**
@@ -540,11 +541,16 @@ final class TypeMapper
             case SchemaType::STRING:
                 return $this->stringType($schema, $diagnostics);
             case SchemaType::INTEGER:
-                FormatCheck::check($schema, 'int', $diagnostics);
+                FormatCheck::check($schema, 'int', $this->formats, $diagnostics);
 
                 return ScalarType::int($this->integerRange($schema, $diagnostics));
             case SchemaType::NUMBER:
-                FormatCheck::check($schema, 'float', $diagnostics);
+                // `type: number, format: integer` (Xero) holds whole numbers.
+                if (in_array($schema->normalizedFormat(), Formats::INTEGERS, true)) {
+                    return ScalarType::int($this->integerRange($schema, $diagnostics));
+                }
+
+                FormatCheck::check($schema, 'float', $this->formats, $diagnostics);
 
                 return ScalarType::float();
             case SchemaType::BOOLEAN:
@@ -562,11 +568,15 @@ final class TypeMapper
 
     private function stringType(Schema $schema, Diagnostics $diagnostics): TypeModel
     {
-        if (in_array($schema->format(), FormatCheck::DATE, true)) {
+        if (in_array($schema->normalizedFormat(), Formats::DATES, true)) {
             return new ClassType(ClassName::fromFqcn($this->target->dateTimeClass()->className()));
         }
 
-        FormatCheck::check($schema, 'string', $diagnostics);
+        FormatCheck::check($schema, 'string', $this->formats, $diagnostics);
+        if (in_array($schema->normalizedFormat(), Formats::NUMERIC_STRINGS, true)) {
+            return ScalarType::string('numeric-string');
+        }
+
         $minLength = $schema->hasKeyword('minLength') ? $schema->keyword('minLength') : null;
 
         return ScalarType::string(is_int($minLength) && $minLength >= 1 ? 'non-empty-string' : null);
@@ -601,7 +611,8 @@ final class TypeMapper
     {
         $value = $schema->hasKeyword($keyword) ? $schema->keyword($keyword) : null;
 
-        return is_int($value) ? $value : null;
+        // A whole float (`maximum: 1000.0`) bounds integers as well.
+        return is_float($value) ? WholeNumber::of($value) : (is_int($value) ? $value : null);
     }
 
     /**

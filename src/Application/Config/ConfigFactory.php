@@ -11,7 +11,9 @@ use MSSTC4PHP\DtoGenerator\Domain\Exception\InvalidModel;
 use MSSTC4PHP\DtoGenerator\Domain\Exception\UnsupportedPhpVersion;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\Identifier;
+use MSSTC4PHP\DtoGenerator\Domain\Model\ScalarType;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Extensions;
+use MSSTC4PHP\DtoGenerator\Domain\Schema\Formats;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Reference;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\AbstractEnum;
@@ -259,16 +261,35 @@ final class ConfigFactory
     }
 
     /**
-     * @return array<int|string, ClassName>
+     * A class, or a scalar the format is known for: the property keeps the type its schema gives.
+     *
+     * @return array<int|string, ClassName|ScalarType>
      */
     private function formats(RawSection $section): array
     {
+        $scalars = $this->scalars();
         $formats = [];
+        $names = [];
         foreach ($section->keys() as $name) {
+            $normalized = Formats::normalize((string) $name);
+            if (isset($names[$normalized])) {
+                $section->report(sprintf('"%s" and "%s" name one format; keep one of them.', $names[$normalized], $name), (string) $name);
+
+                continue;
+            }
+
+            $names[$normalized] = $name;
             $entry = $section->section($name);
             $entry->rejectUnknownKeys(['type']);
             $type = $entry->requiredString('type');
             if ($type === null) {
+                continue;
+            }
+
+            $scalar = $scalars[strtolower($type)] ?? null;
+            if ($scalar instanceof ScalarType) {
+                $formats[$name] = $scalar;
+
                 continue;
             }
 
@@ -280,6 +301,28 @@ final class ConfigFactory
         }
 
         return $formats;
+    }
+
+    /**
+     * PHP's names of the scalars and JSON Schema's; neither is a class anyone means.
+     *
+     * @return array<string, ScalarType>
+     */
+    private function scalars(): array
+    {
+        $integer = ScalarType::int();
+        $float = ScalarType::float();
+        $boolean = ScalarType::bool();
+
+        return [
+            'string' => ScalarType::string(),
+            'int' => $integer,
+            'integer' => $integer,
+            'float' => $float,
+            'number' => $float,
+            'bool' => $boolean,
+            'boolean' => $boolean,
+        ];
     }
 
     private function extensions(RawSection $root): ExtensionSettings

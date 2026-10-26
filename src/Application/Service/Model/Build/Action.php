@@ -154,6 +154,11 @@ final class Action
 
         // Numbered only now, so that a number never takes the name of a schema further down (`Notary2`).
         foreach ($numbered as [$schema, $taken, $namespace, $source, $isEnum]) {
+            // Two places a `$ref` points into that hold the same enum (Linode's replication types) share it.
+            if ($isEnum && $this->reuses($taken, $schema, $registry, $enums)) {
+                continue;
+            }
+
             $name = $this->numbered($schema, $taken, $taken->shortName(), $namespace, $registry, $diagnostics);
             $registry->claim($name, $schema, $diagnostics);
             $this->declare($schema, $name, $source, $isEnum, $registry, $enums, $diagnostics);
@@ -200,7 +205,7 @@ final class Action
         }
 
         $declarations = $registry->declarationsWithHierarchy($input->graph(), $parents);
-        $types = new TypeMapper($input->graph(), $declarations, $input->target(), $input->formats());
+        $types = new TypeMapper($input->graph(), $declarations, $input->target(), $input->formats(), $input->knownFormats());
         $superseded = new Superseded();
         $builder = new ClassBuilder(
             $this->names,

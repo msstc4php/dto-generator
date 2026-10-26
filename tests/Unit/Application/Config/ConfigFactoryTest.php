@@ -13,6 +13,7 @@ use MSSTC4PHP\DtoGenerator\Application\Config\OperationFilter;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostic;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
+use MSSTC4PHP\DtoGenerator\Domain\Model\ScalarType;
 use MSSTC4PHP\DtoGenerator\Domain\Target\PhpVersion;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Yaml\Yaml;
@@ -82,7 +83,9 @@ final class ConfigFactoryTest extends TestCase
         self::assertSame('mutable', $config->dto()->mutability()->value());
         self::assertSame('merge', $config->dto()->allOfStrategy()->value());
         self::assertTrue($config->dto()->hasWithers());
-        self::assertSame('Symfony\Component\Uid\Uuid', $config->formats()['uuid']->fqcn());
+        $uuid = $config->formats()['uuid'];
+        self::assertInstanceOf(ClassName::class, $uuid);
+        self::assertSame('Symfony\Component\Uid\Uuid', $uuid->fqcn());
         self::assertSame(['x-audit' => ['class' => 'App\Attr\Audited']], $config->extensions()->aliases());
         self::assertFalse($config->extensions()->verifyClasses());
         self::assertFalse($config->extensions()->discover());
@@ -157,6 +160,7 @@ final class ConfigFactoryTest extends TestCase
             'target list' => [['version' => 1, 'target' => ['8.2'], 'sources' => [$source]], '"target" must be an object', '/target'],
             'bad mutability' => [['version' => 1, 'dto' => ['mutability' => 'frozen'], 'sources' => [$source]], 'must be one of: immutable, mutable', '/dto/mutability'],
             'format without type' => [['version' => 1, 'formats' => ['uuid' => []], 'sources' => [$source]], '"type" is required', '/formats/uuid'],
+            'two spellings of one format' => [['version' => 1, 'formats' => ['uuid' => ['type' => 'App\Uuid'], 'GUID' => ['type' => 'App\Guid']], 'sources' => [$source]], '"uuid" and "GUID" name one format; keep one of them.', '/formats/GUID'],
             'format bad class' => [['version' => 1, 'formats' => ['uuid' => ['type' => 'Not A Class']], 'sources' => [$source]], 'is not a valid class name', '/formats/uuid/type'],
             'reserved alias prefix' => [['version' => 1, 'attributeAliases' => ['x-php-audit' => []], 'sources' => [$source]], 'outside the reserved', '/attributeAliases/x-php-audit'],
             'alias not object' => [['version' => 1, 'attributeAliases' => ['x-audit' => 'App\A'], 'sources' => [$source]], 'An alias must be an object', '/attributeAliases/x-audit'],
@@ -451,6 +455,38 @@ final class ConfigFactoryTest extends TestCase
             'non-string includes' => [['version' => 1, 'sources' => [$source + ['include' => [1, 2]]]], 'Expected a non-empty string', 2],
             'non-object sources' => [['version' => 1, 'sources' => ['a', 'b']], 'Expected an object', 2],
         ];
+    }
+
+    public function testKeepsReadingTheFormatsAfterTwoSpellingsOfOne(): void
+    {
+        $diagnostics = new Diagnostics();
+        (new ConfigFactory())->create([
+            'version' => 1,
+            'formats' => ['uuid' => ['type' => 'App\Uuid'], 'GUID' => ['type' => 'Not A Class'], 'odd' => ['type' => 'Not A Class']],
+            'sources' => [['spec' => 'a.yaml', 'namespace' => 'App\A', 'outputDir' => 'a']],
+        ], self::PATH, $diagnostics);
+
+        self::assertSame(['/formats/GUID', '/formats/odd/type'], array_map(static fn (Diagnostic $error): string => $error->location()->pointer(), $diagnostics->errors()));
+    }
+
+    public function testMapsAFormatToAScalar(): void
+    {
+        $config = $this->valid([
+            'version' => 1,
+            'formats' => [
+                'a' => ['type' => 'string'], 'b' => ['type' => 'int'], 'c' => ['type' => 'float'], 'd' => ['type' => 'bool'],
+                'e' => ['type' => 'Integer'], 'f' => ['type' => 'number'], 'g' => ['type' => 'BOOLEAN'], 'h' => ['type' => 'String'],
+            ],
+            'sources' => [['spec' => 'a.yaml', 'namespace' => 'App\A', 'outputDir' => 'a']],
+        ]);
+
+        self::assertEquals(
+            [
+                'a' => ScalarType::string(), 'b' => ScalarType::int(), 'c' => ScalarType::float(), 'd' => ScalarType::bool(),
+                'e' => ScalarType::int(), 'f' => ScalarType::float(), 'g' => ScalarType::bool(), 'h' => ScalarType::string(),
+            ],
+            $config->formats(),
+        );
     }
 
     public function testKeepsEveryEntryOfMultiValuedSettings(): void

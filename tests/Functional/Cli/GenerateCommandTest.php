@@ -111,7 +111,7 @@ final class GenerateCommandTest extends TestCase
     public function testShowsAWarningThatRecursOnceUnlessVerbose(): void
     {
         file_put_contents($this->dir . '/api/openapi.yaml', str_replace('label: { type: string }', "label: { type: string, format: odd }\n        note: { type: string, format: odd }", self::SPEC));
-        $warning = 'warning api/openapi.yaml#/components/schemas/Tag/properties/%s/format: Unknown string format "odd"; the property stays a string.';
+        $warning = 'warning api/openapi.yaml#/components/schemas/Tag/properties/%s/format: Unknown string format "odd"; the property stays a string. "formats" in the config can map it to a type.';
 
         self::assertSame(sprintf($warning, 'label') . " (Also at 1 more place; -v lists them.)\n", $this->execute(['--dry-run' => true])[2]);
         self::assertSame(sprintf($warning, 'label') . "\n" . sprintf($warning, 'note') . "\n", $this->execute(['--dry-run' => true], OutputInterface::VERBOSITY_VERBOSE)[2]);
