@@ -63,10 +63,11 @@ spaces and underscores as hyphens, and reads these spellings as that name; the S
 | `http-method` / `integer` / `int64` / `int16` | `http-verb` / `int` / `long` / `short` |
 
 A format is read in lower case, with spaces and underscores as hyphens, whether the generator knows it or not
-(`SSH_key` is `ssh-key`). Known without another spelling: `partial-time`, `hex-color` (with or without `#`), `idn-email`, `idn-hostname`, `iri`, `iri-reference`, `uri-template`,
-`ulid`, `base64url`, `password`, `regex`, `json-pointer`, `relative-json-pointer`, `iban`, `isbn`, `issn`, `isin`,
-`digits`, `MM/YYYY` (Linode), a format named after its type (`format: string`). `formats` in the config maps a format
-by its spelling first, then by its name, so `formats: {date-time: …}` covers `dateTime` too.
+(`SSH_key` is `ssh-key`). Known without another spelling: `partial-time`, `hex-color` (with or without `#`),
+`idn-email`, `idn-hostname`, `iri`, `iri-reference`, `uri-template`, `ulid`, `base64url`, `password`, `regex`,
+`json-pointer`, `relative-json-pointer`, `iban`, `isbn`, `issn`, `isin`, `digits`, `MM/YYYY` (Linode), a format named
+after its type (`format: string`). `formats` in the config maps a format by its spelling first, then by its name, so
+`formats: {date-time: …}` covers `dateTime` too.
 
 A string default of a boolean or a number is read only as JSON would write it without the quotes: `"true"`, `"-42"`,
 `"1.5e3"`; `"TRUE"`, `" 42"`, `"010"` or `"+1"` still give the warning.
