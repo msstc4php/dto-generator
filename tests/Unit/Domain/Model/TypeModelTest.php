@@ -7,6 +7,7 @@ namespace MSSTC4PHP\DtoGenerator\Tests\Unit\Domain\Model;
 use MSSTC4PHP\DtoGenerator\Domain\Exception\InvalidModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassType;
+use MSSTC4PHP\DtoGenerator\Domain\Model\CollectionType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ListType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\MapType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\MixedType;
@@ -45,6 +46,45 @@ final class TypeModelTest extends TestCase
             'union' => [new UnionType($user, ScalarType::string()), 'App\User|string'],
             'nullable' => [new NullableType(new ListType(ScalarType::string())), 'list<string>|null'],
             'mixed' => [new MixedType(), 'mixed'],
+            'collection' => [new CollectionType(ClassName::fromFqcn('App\UserList'), new ListType($user)), 'App\UserList<App\User>'],
+            'generic collection' => [new CollectionType(ClassName::fromFqcn('App\Bag'), new ListType(ScalarType::int('positive-int')), ['int', 'item']), 'App\Bag<positive-int>'],
+        ];
+    }
+
+    public function testCollectionExposesItsParts(): void
+    {
+        $list = new ListType(ScalarType::string());
+        $type = new CollectionType(ClassName::fromFqcn('App\Bag'), $list, ['int', 'item']);
+
+        self::assertSame('App\Bag', $type->className()->fqcn());
+        self::assertSame($list, $type->list());
+        self::assertSame(['int', 'item'], $type->typeArguments());
+        self::assertSame([], (new CollectionType(ClassName::fromFqcn('App\Bag'), $list))->typeArguments());
+    }
+
+    /**
+     * @dataProvider invalidTypeArguments
+     *
+     * @param list<string> $arguments
+     */
+    public function testCollectionTypeArgumentsAreIntAndItem(array $arguments): void
+    {
+        $this->expectException(InvalidModel::class);
+        $this->expectExceptionMessage('Collection type arguments must be [], [item] or [int, item]');
+
+        new CollectionType(ClassName::fromFqcn('App\Bag'), new ListType(ScalarType::string()), $arguments);
+    }
+
+    /**
+     * @return array<string, array{list<string>}>
+     */
+    public static function invalidTypeArguments(): array
+    {
+        return [
+            'int alone' => [['int']],
+            'reversed' => [['item', 'int']],
+            'unknown' => [['string', 'item']],
+            'repeated' => [['item', 'item']],
         ];
     }
 

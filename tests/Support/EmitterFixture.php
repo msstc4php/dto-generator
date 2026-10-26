@@ -11,6 +11,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\ClassKind;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassType;
+use MSSTC4PHP\DtoGenerator\Domain\Model\CollectionType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\DiscriminatorModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\DiscriminatorValues;
 use MSSTC4PHP\DtoGenerator\Domain\Model\DocModel;
@@ -96,7 +97,23 @@ final class EmitterFixture
             self::rim($mutability),
             self::openSide($mutability),
             self::subSide($mutability),
+            self::basket($mutability),
         ];
+    }
+
+    /**
+     * Lists held by collection objects: typed in the namespace, typed elsewhere, generic with refined items.
+     */
+    public static function basket(string $mutability = Mutability::IMMUTABLE): ClassModel
+    {
+        $tags = new ListType(new ClassType(ClassName::fromFqcn('App\Dto\Tag')));
+
+        return self::model('App\Dto\Basket', null, [
+            self::property('tags', new CollectionType(ClassName::fromFqcn('App\Dto\TagList'), $tags), true),
+            self::property('labels', new NullableType(new CollectionType(ClassName::fromFqcn('App\Collection\StringList'), new ListType(ScalarType::string('non-empty-string')))), false, new DefaultValue(null)),
+            self::property('codes', new CollectionType(ClassName::fromFqcn('App\Collection\ListOf'), new ListType(ScalarType::int('positive-int')), ['item']), true),
+            self::property('history', new NullableType(new CollectionType(ClassName::fromFqcn('Doctrine\Common\Collections\ArrayCollection'), $tags, ['int', 'item'])), false, new DefaultValue(null)),
+        ], $mutability);
     }
 
     /**
