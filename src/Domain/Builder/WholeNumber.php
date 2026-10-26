@@ -16,7 +16,7 @@ final class WholeNumber
     public static function of(float $value): ?int
     {
         // Range first: PHP 8.5 warns about casting a float int cannot hold. PHP_INT_MAX compares as 2^63, outside.
-        if ($value < PHP_INT_MIN || $value >= PHP_INT_MAX || $value !== floor($value)) {
+        if ($value < PHP_INT_MIN || $value >= PHP_INT_MAX || fmod($value, 1.0) !== 0.0) {
             return null;
         }
 
