@@ -59,12 +59,9 @@ final class FormatMap
      */
     public function knows(Schema $schema, string $kind): bool
     {
-        $format = $schema->format();
+        // A schema has a name for its format exactly when it has one.
         $name = $schema->normalizedFormat();
-        if ($format === null || $name === null) {
-            return false;
-        }
 
-        return ($this->known[$format] ?? $this->knownByName[$name] ?? null) === $kind;
+        return $name !== null && ($this->known[(string) $schema->format()] ?? $this->knownByName[$name] ?? null) === $kind;
     }
 }

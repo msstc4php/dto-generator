@@ -578,8 +578,8 @@ final class ClassBuilder
             return new DefaultValue($value === 'true');
         }
 
-        $int = preg_match('/^-?(?:0|[1-9][0-9]*)$/D', $value) === 1 ? filter_var($value, FILTER_VALIDATE_INT) : false;
-        if ($kind === 'int' && is_int($int)) {
+        $int = filter_var($value, FILTER_VALIDATE_INT);
+        if ($kind === 'int' && is_int($int) && preg_match('/^-?(?:0|[1-9][0-9]*)$/D', $value) === 1) {
             return new DefaultValue($int);
         }
 

@@ -36,8 +36,8 @@ final class EnumOfItemsTest extends TestCase
             ['type' => 'array', 'nullable' => true, 'items' => ['type' => 'string', 'enum' => ['x']]],
         ];
         yield 'with the names and descriptions of the cases' => [
-            ['type' => 'array', 'enum' => ['a'], 'x-enum-varnames' => ['A'], 'x-enum-descriptions' => ['The a.'], 'x-other' => 1],
-            ['type' => 'array', 'x-other' => 1, 'items' => ['enum' => ['a'], 'x-enum-varnames' => ['A'], 'x-enum-descriptions' => ['The a.']]],
+            ['type' => 'array', 'enum' => ['a'], 'x-enum-varnames' => ['A'], 'x-enum-descriptions' => ['The a.'], 'x-enumerated' => 1],
+            ['type' => 'array', 'x-enumerated' => 1, 'items' => ['enum' => ['a'], 'x-enum-varnames' => ['A'], 'x-enum-descriptions' => ['The a.']]],
         ];
         yield 'of a nullable array, without null' => [
             ['type' => ['array', 'null'], 'enum' => [null, 'a']],

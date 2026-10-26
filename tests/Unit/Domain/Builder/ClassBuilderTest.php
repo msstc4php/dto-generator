@@ -565,6 +565,8 @@ final class ClassBuilderTest extends TestCase
             'bool in capitals' => [['type' => 'boolean', 'default' => 'FALSE'], '"FALSE"', 'bool'],
             'int with spaces' => [['type' => 'integer', 'default' => ' 42'], '" 42"', 'int'],
             'int with a leading zero' => [['type' => 'integer', 'default' => '010'], '"010"', 'int'],
+            'int with a newline' => [['type' => 'integer', 'default' => "42\n"], '"42\\n"', 'int'],
+            'float with a newline' => [['type' => 'number', 'default' => "1.5\n"], '"1.5\\n"', 'float'],
             'int with a plus' => [['type' => 'integer', 'default' => '+1'], '"+1"', 'int'],
             'int with an exponent' => [['type' => 'integer', 'default' => '1e3'], '"1e3"', 'int'],
             'int overflow' => [['type' => 'integer', 'default' => '99999999999999999999'], '"99999999999999999999"', 'int'],
