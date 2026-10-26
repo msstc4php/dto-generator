@@ -91,3 +91,30 @@
 
 - **Обязательные унаследованные свойства** (2026-10-25 UTC). `AllOfResolver::withRequirements` (при extends): `required` всей цепочки предков → `Composition::withRequired` (собственное свойство, которое называет `required` предка, обязательно), и кандидаты `Composition::withInheritedRequirements` — свойства, объявленные предком необязательными, которые требует класс или промежуточный предок (wire → все декларации ближайшего объявляющего). Union: `Variants::required()` — `required` базы, перечисляющей варианты; `Hierarchy::shareCommonProperties` считает общими свойства, различающиеся только обязательностью, если их называет `required` базы (`shared()`/`alikeButForRequirement`: тип с точностью до null, необязательные декларации совпадают между собой): в базу — необязательная декларация, вариантам, где оно обязательно (allOf-варианты, CR-104), — `requiredInherited` (ревью CR-201/301/303). `ClassBuilder::requiredInherited` оставляет кандидатов, чей meet деклараций не допускает null (`mixed` остаётся) → `ClassModel::withRequiredInherited`. `Hierarchy::checkRedeclarations` добавляет переобъявленное-но-оставленное-родительским свойство, если потомок его требует. Итог — `InheritedRequirements::settle()` (после `check()`): списки всей цепочки ∩ необязательные свойства реальных предков, минус собственные свойства класса; порядок от корня, транзитивно. Правило — в модели: `ClassModel::requires()` и `constructorDefaultOf()` (нет default, если не выбирает дискриминатор); его спрашивают `ClassShape` (`defaultOf`, `nullChecks` → `if ($x === null) throw InvalidArgumentException('Chick requires "x".')`), `RequiredCycles`, `ObjectDefaults` (отказ `new X()` для `default: {}`). Тип параметра остаётся `?T`: with-методы `new self` передают `$this->x`, PHPStan max на golden не пропустил бы `T`. Мутаторы родителя (setters, clone-withers) по-прежнему принимают null. Внук повторяет проверки родителя — сообщение называет класс, который строили (ревью CR-205, оставлено).
 
+## Коллекции вместо массивов (подпроект C1, 2026-10-26 UTC)
+
+Спецификация: `docs/internal/specs/2026-10-26-collections-design.md`.
+
+- `Domain\Model\CollectionType` (`@api`): `className()`, `list(): ListType`, `typeArguments(): list<'int'|'item'>`
+  (`[]`, `[item]`, `[int, item]` — других нет). `describe()` = `Fqcn<item>`: две коллекции разных элементов —
+  разные типы, это нужно `Views::reconcile` и `TypeMeet`.
+- `Domain\Builder\CollectionClass` — шаблон (`{item}` только в коротком имени) + явные typeArguments или `null`
+  (по умолчанию `[]` с `{item}`, `[item]` без). `withPattern()` для `x-php-collection` сохраняет явные аргументы
+  конфига. `className($item)` бросает `InvalidModel`, если подстановка даёт зарезервированное имя (`App\String`).
+- `Domain\Builder\Collections` = `CollectionClass` + `typedCollection` (`immutable`/`mutable`/null); без `{item}`
+  `typedCollection` — `InvalidModel`.
+- Подстановка — `ClassBuilder::collected()` сразу после `TypeMapper::map()` и до `NullableType::of`/`defaultFor`;
+  только тип свойства `ListType` или `NullableType(ListType)`. Носитель `x-php-collection` ищет
+  `TypeMapper::collectionCarrier()`: сама схема свойства, затем цепочка `$ref` (с защитой от циклов); `allOf`-обёртки
+  не просматриваются.
+- `{item}`: `ClassType`/`EnumType` → короткое имя; enum до 8.1 → его скаляр; скаляры → `Integer`, `Float`,
+  `String`, `Boolean`; остальное → массив + warning (только если в шаблоне есть `{item}`).
+- `defaultFor`: у коллекции `[]` → `null` молча, иное → warning «cannot be a PHP constant expression».
+- Обходчики типов с веткой `CollectionType`: `Superseded::named` (иначе отложенные inline-enum-ы элементов остаются
+  в выводе), `ViewDependence::classesOf` (иначе держатель коллекции split-класса не делится на read/write и `Views`
+  сообщает «defect of the generator»), `TypeMeet::kind/admits` (коллекции сравниваются по спискам).
+- `TypedCollections::mark()` — после `ObjectDefaults` в `Build\Action`: атрибут
+  `MSSTC4PHP\DtoCollection\Attribute\TypedCollection('<fqcn>', Variant::Immutable|Mutable)` только на
+  сгенерированные классы элементов и только для класса из `dto.collections.class` (не из `x-php-collection`).
+  Проверки цели (8.1+, `metadata` = attributes) — в `TargetResolver::checkTypedCollection()`.
+

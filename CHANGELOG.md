@@ -6,6 +6,16 @@ All notable changes to this package are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `dto.collections`: list properties typed as a collection class instead of `array` + `@var list<T>` — one class per
+  item type (`App\Collection\{item}List` → `TagList`) or one generic class (`ArrayCollection<int, Tag>`, through
+  `typeArguments`). `typedCollection: immutable|mutable` marks the generated item classes with
+  `#[TypedCollection]` for dto-collection-generator (PHP 8.1+). See
+  [configuration](docs/configuration.md#dtocollections).
+- `x-php-collection` on an array schema or a property: the collection class of that list, or `false` to keep an array.
+- `Domain\Model\CollectionType` in the model the SPI exposes, for extensions that read property types.
+
 ## [1.16.0] - 2026-10-26
 
 ### Changed

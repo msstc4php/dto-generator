@@ -22,6 +22,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Builder\ReadWriteMode;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\RequiredCycles;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\SchemaShape;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\Superseded;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\TypedCollections;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\TypeMapper;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\VariantResolver;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\Variants;
@@ -250,7 +251,8 @@ final class Action
         // Only an Output follows the parents; the object defaults it gives up change what the next one inherits.
         [$models, $inherited] = $this->models(new Output($built, $diagnostics, $enums));
         $resolved = [];
-        foreach (ObjectDefaults::resolve($models, $inherited, $diagnostics) as $index => $model) {
+        $models = TypedCollections::mark(ObjectDefaults::resolve($models, $inherited, $diagnostics), $input->config()->dto()->collections());
+        foreach ($models as $index => $model) {
             $resolved[] = new BuiltClass($model, $built[$index]->source());
         }
 

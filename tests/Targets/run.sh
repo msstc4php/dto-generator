@@ -29,6 +29,6 @@ for profile in tests/Fixtures/Emitter/*/; do
     check "$profile" "$(basename "$profile" | cut -d- -f1)" 'php tests/Targets/smoke.php "$1"'
 done
 
-for expected in tests/Fixtures/Projects/golden/expected/*/; do
+for expected in tests/Fixtures/Projects/golden/expected/*/ tests/Fixtures/Projects/collections/expected/*/; do
     check "$expected" "$(basename "$expected" | cut -d- -f1)" 'echo "ok $1"'
 done

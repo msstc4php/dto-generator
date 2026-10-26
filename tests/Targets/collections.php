@@ -2,7 +2,8 @@
 
 declare(strict_types=1);
 
-// Collection classes the Basket golden names; plain PHP 7.4 so the file loads on every target.
+// Collection classes the Basket golden and tests/Fixtures/Projects/collections name; plain PHP 7.4 so the file loads
+// on every target.
 
 namespace App\Dto;
 
@@ -79,4 +80,36 @@ final class ArrayCollection
     public function __construct(array $elements)
     {
     }
+}
+
+namespace App\Shop\Collection;
+
+final class TagList
+{
+}
+
+final class ColourList
+{
+}
+
+final class StringList
+{
+}
+
+namespace MSSTC4PHP\DtoCollection\Attribute;
+
+// dto-collection's attribute; its Variant enum as constants, so the file stays PHP 7.4.
+#[\Attribute(\Attribute::TARGET_CLASS | \Attribute::IS_REPEATABLE)]
+final class TypedCollection
+{
+    public function __construct(string $class, string $variant)
+    {
+    }
+}
+
+final class Variant
+{
+    public const Immutable = 'immutable';
+
+    public const Mutable = 'mutable';
 }

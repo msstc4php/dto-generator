@@ -11,6 +11,7 @@ them; the [Symfony bridge](https://github.com/msstc4symfony/dto-generator-bridge
 | `x-php-name` | property | identifier | Name of the PHP property |
 | `x-php-type` | schema, property, `items`, `additionalProperties` | FQCN | Use this class instead of generating one |
 | `x-php-skip` | schema, property | `true` / `false` | Leave it out of the output |
+| `x-php-collection` | array schema, property | class name / `false` | The collection class of this list, or `false` for an array |
 | `x-dto-mutable` | schema | `true` / `false` | Overrides `dto.mutability` for this class |
 | `x-php-all-of` | schema | `extends` / `merge` | Overrides `dto.allOfStrategy` for this `allOf` |
 | `x-php-read-write` | object schema | `single` / `split` | Overrides `dto.readWriteModels` for this class |
@@ -55,6 +56,21 @@ Money:
 `total: {$ref: '#/components/schemas/Money'}` becomes a property of type `\App\Money\Money`. The generator does not check
 that your class matches the schema; building it from the wire data is up to your serializer. For a `format` used in
 many places, [`formats`](configuration.md#formats) in the config is shorter.
+
+## `x-php-collection`
+
+Chooses how one list property is held, over [`dto.collections`](configuration.md#dtocollections):
+
+```yaml
+tags:
+  type: array
+  items: {$ref: '#/components/schemas/Tag'}
+  x-php-collection: App\Tags\TagSet       # or App\Tags\{item}Set; false keeps the array
+```
+
+It works without `dto.collections` too, and takes its `typeArguments`. On an array schema it applies to every
+property that `$ref`s the schema; the property's own key wins. On anything but a list it has no effect (a warning).
+A class named here gets no `#[TypedCollection]`.
 
 ## `x-php-skip`
 

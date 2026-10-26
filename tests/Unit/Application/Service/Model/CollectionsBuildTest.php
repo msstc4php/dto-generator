@@ -5,8 +5,13 @@ declare(strict_types=1);
 namespace MSSTC4PHP\DtoGenerator\Tests\Unit\Application\Service\Model;
 
 use MSSTC4PHP\DtoGenerator\Application\Config\ViewSuffixes;
+use MSSTC4PHP\DtoGenerator\Application\Service\Model\Build\Output;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\CollectionClass;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\Collections;
+use MSSTC4PHP\DtoGenerator\Domain\Model\ArgumentValue;
+use MSSTC4PHP\DtoGenerator\Domain\Model\AttributeArgument;
+use MSSTC4PHP\DtoGenerator\Domain\Model\AttributeModel;
+use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\CollectionType;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\DefaultValue;
 use MSSTC4PHP\DtoGenerator\Tests\Support\ModelFixture;
@@ -229,6 +234,73 @@ final class CollectionsBuildTest extends TestCase
         self::assertSame(['tags: App\Collection\DogTagsItemList<App\Dto\DogTagsItem>|null'], $classes['App\Dto\Dog']);
         self::assertSame(['App\Dto\DogTagsItem'], array_values(array_filter(ModelFixture::enums($output), static fn (string $enum): bool => strpos($enum, 'Dog') === 0 || strpos($enum, 'App\Dto\Dog') === 0)));
         self::assertSame(['codes: App\Collection\StringList<non-empty-string>|null'], $classes['App\Dto\Kid']);
+    }
+
+    public function testTypedCollectionMarksTheGeneratedItemClasses(): void
+    {
+        $output = ModelFixture::collections([
+            'Tag' => self::TAG,
+            'Note' => self::TAG,
+            'Basket' => ['type' => 'object', 'properties' => [
+                'tags' => ['type' => 'array', 'items' => ['$ref' => '#/components/schemas/Tag']],
+                'moreTags' => ['type' => 'array', 'items' => ['$ref' => '#/components/schemas/Tag']],
+                'notes' => ['type' => 'array', 'items' => ['$ref' => '#/components/schemas/Note'], 'x-php-collection' => 'App\\Notes\\{item}Bag'],
+                'labels' => ['type' => 'array', 'items' => ['type' => 'string']],
+                'money' => ['type' => 'array', 'items' => ['x-php-type' => 'App\\Money']],
+                'plain' => ['type' => 'array', 'items' => ['$ref' => '#/components/schemas/Note'], 'x-php-collection' => false],
+            ]],
+        ], new Collections(CollectionClass::fromPattern('App\\Collection\\{item}List'), Collections::MUTABLE));
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(
+            ['App\\Dto\\Tag' => ['MSSTC4PHP\DtoCollection\Attribute\TypedCollection(\'App\Collection\TagList\', MSSTC4PHP\DtoCollection\Attribute\Variant::Mutable)'], 'App\\Dto\\Note' => [], 'App\\Dto\\Basket' => []],
+            $this->attributes($output),
+        );
+    }
+
+    public function testWithoutTypedCollectionNoClassIsMarked(): void
+    {
+        $output = ModelFixture::collections([
+            'Tag' => self::TAG,
+            'Basket' => ['type' => 'object', 'properties' => ['tags' => ['type' => 'array', 'items' => ['$ref' => '#/components/schemas/Tag']]]],
+        ], $this->pattern());
+
+        self::assertSame(['App\\Dto\\Tag' => [], 'App\\Dto\\Basket' => []], $this->attributes($output));
+    }
+
+    public function testEachViewMarksItsOwnItemClass(): void
+    {
+        $output = ModelFixture::collections([
+            'Tag' => ['type' => 'object', 'properties' => ['id' => ['type' => 'string', 'readOnly' => true]]],
+            'Basket' => ['type' => 'object', 'properties' => ['tags' => ['type' => 'array', 'items' => ['$ref' => '#/components/schemas/Tag']]]],
+        ], new Collections(CollectionClass::fromPattern('App\\Collection\\{item}List'), Collections::IMMUTABLE), new ViewSuffixes());
+
+        $attributes = $this->attributes($output);
+        self::assertSame(['MSSTC4PHP\DtoCollection\Attribute\TypedCollection(\'App\Collection\TagReadList\', MSSTC4PHP\DtoCollection\Attribute\Variant::Immutable)'], $attributes['App\\Dto\\TagRead']);
+        self::assertSame(['MSSTC4PHP\DtoCollection\Attribute\TypedCollection(\'App\Collection\TagWriteList\', MSSTC4PHP\DtoCollection\Attribute\Variant::Immutable)'], $attributes['App\\Dto\\TagWrite']);
+    }
+
+    /**
+     * @return array<string, list<string>>
+     */
+    private function attributes(Output $output): array
+    {
+        $attributes = [];
+        foreach ($output->classes() as $class) {
+            $attributes[$class->model()->name()->fqcn()] = array_map(static function (AttributeModel $attribute): string {
+                $arguments = array_map(static function (AttributeArgument $argument): string {
+                    $value = $argument->value();
+
+                    return $value->kind() === ArgumentValue::KIND_CONSTANT
+                        ? sprintf('%s::%s', $value->constantClass() instanceof ClassName ? $value->constantClass()->fqcn() : '', $value->constantName())
+                        : "'" . (is_string($value->literalValue()) ? $value->literalValue() : '') . "'";
+                }, $attribute->arguments());
+
+                return sprintf('%s(%s)', $attribute->className()->fqcn(), implode(', ', $arguments));
+            }, $class->model()->attributes());
+        }
+
+        return $attributes;
     }
 
     private function pattern(): Collections

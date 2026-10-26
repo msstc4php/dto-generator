@@ -1,0 +1,31 @@
+openapi: 3.1.0
+info: { title: Collections, version: '1' }
+paths: {}
+components:
+  schemas:
+    Tag:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+    Colour:
+      type: string
+      enum: [red, green]
+    Basket:
+      type: object
+      required: [tags]
+      properties:
+        tags:
+          type: array
+          items: { $ref: '#/components/schemas/Tag' }
+        colours:
+          type: array
+          items: { $ref: '#/components/schemas/Colour' }
+        labels:
+          type: array
+          items: { type: string, minLength: 1 }
+          default: []
+        notes:
+          type: array
+          items: { type: string }
+          x-php-collection: false

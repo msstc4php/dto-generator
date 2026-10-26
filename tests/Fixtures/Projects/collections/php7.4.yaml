@@ -1,0 +1,11 @@
+version: 1
+verifyClasses: false
+target:
+  php: '7.4'
+dto:
+  collections:
+    class: App\Shop\Collection\{item}List
+sources:
+  - spec: api/openapi.yaml
+    namespace: App\Shop
+    outputDir: generated/7.4

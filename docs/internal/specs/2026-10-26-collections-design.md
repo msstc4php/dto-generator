@@ -37,8 +37,9 @@ dto:
     typedCollection: none                  # none | immutable | mutable
 ```
 
-- `class` — шаблон FQCN. `{item}` — единственный плейсхолдер; после подстановки имя должно быть корректным FQCN с
-  неймспейсом, иначе ошибка конфига.
+- `class` — шаблон FQCN. `{item}` — единственный плейсхолдер и только в коротком имени; после подстановки имя должно
+  быть корректным именем класса, иначе ошибка конфига. Глобальный класс (`ArrayObject`) допустим [решение Claude при
+  реализации: `x-php-type` тоже допускает глобальные классы].
 - `typeArguments` по умолчанию: `[]`, если в `class` есть `{item}` (типизированная коллекция сама знает тип), и
   `[item]` без него (обобщённая, `ListOf<Tag>`). `[int, item]` — для Doctrine `ArrayCollection<int, Tag>`. Других
   значений нет [решение Claude: YAGNI, произвольный шаблон PHPDoc не нужен ни одной известной библиотеке].
@@ -77,7 +78,9 @@ dto:
 
 `Domain\Model\CollectionType implements TypeModel` (`@api`): `className(): ClassName`, `list(): ListType`,
 `typeArguments(): list<'int'|'item'>`; `describe()` = `<fqcn><<описание элемента>>`, чтобы `TypeMeet`, `Views` и
-дедупликация union различали коллекции разных элементов. `ListType`/`MapType`/`PropertyModel` не меняются (BC).
+дедупликация union различали коллекции разных элементов. `TypeMeet` сравнивает две коллекции по их спискам: класс
+следует из элемента, так что сужение элемента в allOf выбирает коллекцию более узкого элемента [решение Claude при
+реализации]. `ListType`/`MapType`/`PropertyModel` не меняются (BC).
 
 Подстановка — в `ClassBuilder::property()` после `TypeMapper::map()`: каждое представление (read/write) строится
 заново, поэтому имя элемента уже нужное. Места с `instanceof ListType` (`TypeMeet`, `Superseded`, `ViewDependence`,
@@ -101,8 +104,9 @@ dto:
 
 ### 3.7 Атрибут `#[TypedCollection]`
 
-После сборки всех классов для каждого `CollectionType` с `{item}`, чей элемент — класс или enum этого запуска,
-классу элемента добавляется атрибут (по одному на класс коллекции; повторяемый). Аргументы: имя класса коллекции
+После сборки всех классов для каждого `CollectionType` из `dto.collections.class`, чей элемент — класс этого запуска,
+классу элемента добавляется атрибут [решение Claude при реализации: enum-ы атрибутов не несут (`ExtensionVocabulary`),
+их коллекции перечисляются в `dto-collection-generator.yaml`, как скалярные] (по одному на класс коллекции; повторяемый). Аргументы: имя класса коллекции
 строкой и `Variant::Immutable|Mutable` константой. `verifyClasses` проверит, что dto-collection установлен.
 Скалярные коллекции (`StringList`) перечисляются в `dto-collection-generator.yaml` вручную.
 
