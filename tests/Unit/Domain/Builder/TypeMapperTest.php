@@ -83,7 +83,7 @@ final class TypeMapperTest extends TestCase
             'large whole float bound' => [['type' => 'integer', 'minimum' => 2.0 ** 54], 'int<18014398509481984, max>'],
             'whole float exclusive bound' => [['type' => 'integer', 'exclusiveMaximum' => 10.0], 'int<min, 9>'],
             'integer or number without a format' => [['type' => ['integer', 'number']], 'int|float'],
-            'largest exact float bound' => [['type' => 'integer', 'maximum' => -(2.0 ** 53)], 'int<min, -9007199254740992>'],
+            'negative whole float bound' => [['type' => 'integer', 'maximum' => -(2.0 ** 53)], 'int<min, -9007199254740992>'],
             'positive' => [['type' => 'integer', 'minimum' => 1], 'positive-int'],
             'non-negative' => [['type' => 'integer', 'minimum' => 0], 'non-negative-int'],
             'exclusive minimum' => [['type' => 'integer', 'exclusiveMinimum' => 0], 'positive-int'],
