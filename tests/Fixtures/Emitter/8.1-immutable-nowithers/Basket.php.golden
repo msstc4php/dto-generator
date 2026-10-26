@@ -11,13 +11,12 @@ final class Basket
     public function __construct(
         public readonly TagList $tags,
         /**
-         * @var \App\Collection\ListOf<int>
          * @phpstan-var \App\Collection\ListOf<positive-int>
          */
         public readonly \App\Collection\ListOf $codes,
         public readonly ?\App\Collection\StringList $labels = null,
         /**
-         * @var ?\Doctrine\Common\Collections\ArrayCollection<int, Tag>
+         * @phpstan-var ?\Doctrine\Common\Collections\ArrayCollection<int, Tag>
          */
         public readonly ?\Doctrine\Common\Collections\ArrayCollection $history = null,
     ) {

@@ -218,6 +218,7 @@ final class ConfigFactoryTest extends TestCase
             'collections class not a string' => [['version' => 1, 'dto' => ['collections' => ['class' => 5]], 'sources' => [$source]], '"class" must be a non-empty string', '/dto/collections/class'],
             'collections class pattern' => [['version' => 1, 'dto' => ['collections' => ['class' => 'App\\{type}List']], 'sources' => [$source]], '"App\\{type}List" must be a class name, optionally with {item}', '/dto/collections/class'],
             'collections type arguments' => [['version' => 1, 'dto' => ['collections' => ['class' => 'App\\Bag', 'typeArguments' => ['int']]], 'sources' => [$source]], 'Collection type arguments must be [], [item] or [int, item]', '/dto/collections/typeArguments'],
+            'collections type argument empty' => [['version' => 1, 'dto' => ['collections' => ['class' => 'App\\{item}List', 'typeArguments' => ['', 'item']]], 'sources' => [$source]], 'Expected a non-empty string.', '/dto/collections/typeArguments/0'],
             'collections type arguments not a list' => [['version' => 1, 'dto' => ['collections' => ['class' => 'App\\Bag', 'typeArguments' => 'item']], 'sources' => [$source]], '"typeArguments" must be a list of strings', '/dto/collections/typeArguments'],
             'collections typedCollection' => [['version' => 1, 'dto' => ['collections' => ['class' => 'App\\{item}List', 'typedCollection' => 'odm']], 'sources' => [$source]], '"typedCollection" must be one of: none, immutable, mutable', '/dto/collections/typedCollection'],
             'collections typedCollection without item' => [['version' => 1, 'dto' => ['collections' => ['class' => 'App\\Bag', 'typedCollection' => 'immutable']], 'sources' => [$source]], '"typedCollection" needs {item} in "class": dto-collection-generator makes one class per item type.', '/dto/collections/typedCollection'],
@@ -414,6 +415,18 @@ final class ConfigFactoryTest extends TestCase
         $none = $this->valid(['version' => 1, 'dto' => ['collections' => ['class' => 'App\{item}List', 'typedCollection' => 'none']], 'sources' => $source])->dto()->collections();
         self::assertNotNull($none);
         self::assertNull($none->typedCollection());
+    }
+
+    public function testReportsAnEmptyTypeArgumentOnly(): void
+    {
+        $diagnostics = new Diagnostics();
+        (new ConfigFactory())->create(
+            ['version' => 1, 'dto' => ['collections' => ['class' => 'App\{item}List', 'typeArguments' => ['', 'item']]], 'sources' => [['spec' => '/abs/openapi.yaml', 'namespace' => 'App\Dto', 'outputDir' => 'src/Dto']]],
+            self::PATH,
+            $diagnostics,
+        );
+
+        self::assertSame(['error ' . self::PATH . '#/dto/collections/typeArguments/0: Expected a non-empty string.'], array_map(static fn (Diagnostic $d): string => $d->toString(), $diagnostics->all()));
     }
 
     public function testReadsWithersOff(): void

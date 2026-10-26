@@ -7,6 +7,7 @@ namespace MSSTC4PHP\DtoGenerator\Tests\Unit\Infrastructure\Emitter;
 use LogicException;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassType;
+use MSSTC4PHP\DtoGenerator\Domain\Model\CollectionType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumBacking;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ListType;
@@ -68,6 +69,10 @@ final class TypeRendererTest extends TestCase
 
         return [
             'plain' => [ScalarType::string(), '8.2', []],
+            // Symfony PropertyInfo reads a generic iterable class in @var as a list and never builds the object.
+            'typed collection' => [new NullableType(new CollectionType(ClassName::fromFqcn('App\Dto\TagList'), new ListType($tag))), '8.2', []],
+            'generic collection' => [new CollectionType(ClassName::fromFqcn('App\Bag'), new ListType($name), ['int', 'item']), '8.2', ['@phpstan-param \App\Bag<int, non-empty-string> $value']],
+            'generic collection on 7.4' => [new NullableType(new CollectionType(ClassName::fromFqcn('App\Bag'), new ListType($tag), ['item'])), '7.4', ['@phpstan-param ?\App\Bag<Tag> $value']],
             'refined scalar' => [new NullableType($name), '8.2', ['@phpstan-param ?non-empty-string $value']],
             'refined int' => [ScalarType::int('int<0, 30>'), '8.2', ['@phpstan-param int<0, 30> $value']],
             'list of classes' => [new NullableType(new ListType($tag)), '8.2', ['@param ?list<Tag> $value']],

@@ -149,7 +149,9 @@ serializer (the Symfony bridge does it).
   holds every list.
 - **`typeArguments`** is what the PHPDoc type passes the class: nothing for a class made for one item type
   (`TagList`), the item for a generic one (`ListOf<Tag>`), or `[int, item]` for Doctrine's
-  `ArrayCollection<int, Tag>`. Refinements of the item (`non-empty-string`) go into `@phpstan-var`, as for arrays.
+  `ArrayCollection<int, Tag>`. The arguments are written in `@phpstan-var` only, with the refinements of the item:
+  `@var` names the bare class, because Symfony's PropertyInfo reads a generic iterable class there as a list and
+  never builds the collection object.
 - **`typedCollection`** writes `#[\MSSTC4PHP\DtoCollection\Attribute\TypedCollection(<class>, Variant::Immutable)]`
   (or `Mutable`) on every generated class a property lists through `class`, so that
   [dto-collection-generator](https://github.com/msstc4php/dto-collection-generator) builds the collection. It needs

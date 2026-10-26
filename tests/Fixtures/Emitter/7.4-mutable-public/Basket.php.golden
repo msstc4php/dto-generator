@@ -11,7 +11,6 @@ final class Basket
     public TagList $tags;
 
     /**
-     * @var \App\Collection\ListOf<int>
      * @phpstan-var \App\Collection\ListOf<positive-int>
      */
     public \App\Collection\ListOf $codes;
@@ -19,14 +18,13 @@ final class Basket
     public ?\App\Collection\StringList $labels;
 
     /**
-     * @var ?\Doctrine\Common\Collections\ArrayCollection<int, Tag>
+     * @phpstan-var ?\Doctrine\Common\Collections\ArrayCollection<int, Tag>
      */
     public ?\Doctrine\Common\Collections\ArrayCollection $history;
 
     /**
-     * @param \App\Collection\ListOf<int> $codes
      * @phpstan-param \App\Collection\ListOf<positive-int> $codes
-     * @param ?\Doctrine\Common\Collections\ArrayCollection<int, Tag> $history
+     * @phpstan-param ?\Doctrine\Common\Collections\ArrayCollection<int, Tag> $history
      */
     public function __construct(
         TagList $tags,

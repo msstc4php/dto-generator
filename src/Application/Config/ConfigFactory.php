@@ -269,7 +269,7 @@ final class ConfigFactory
         } catch (InvalidModel $exception) {
             $section->report($exception->getMessage(), 'typedCollection');
 
-            return new Collections($collectionClass);
+            return null;
         }
     }
 

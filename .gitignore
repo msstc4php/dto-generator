@@ -17,3 +17,6 @@
 
 /.claude/settings.local.json
 /.claude/**/*.tmp.*
+
+# A mutant of the dry run writes the fixture projects' output (outputDir: generated/...).
+/tests/Fixtures/Projects/*/generated/

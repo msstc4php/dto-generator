@@ -109,6 +109,9 @@
   не просматриваются.
 - `{item}`: `ClassType`/`EnumType` → короткое имя; enum до 8.1 → его скаляр; скаляры → `Integer`, `Float`,
   `String`, `Boolean`; остальное → массив + warning (только если в шаблоне есть `{item}`).
+- Рендер: аргументы типа (`Bag<int, Tag>`) — только в `@phpstan-*` (неportable-форма). В `@var` голый класс:
+  Symfony PropertyInfo (TypeInfo) читает обобщённый iterable-класс в `@var` как CollectionType, сам заполняет
+  элементы и передаёт в конструктор массив — найдено интеграционным тестом Symfony-моста.
 - `defaultFor`: у коллекции `[]` → `null` молча, иное → warning «cannot be a PHP constant expression».
 - Обходчики типов с веткой `CollectionType`: `Superseded::named` (иначе отложенные inline-enum-ы элементов остаются
   в выводе), `ViewDependence::classesOf` (иначе держатель коллекции split-класса не делится на read/write и `Views`

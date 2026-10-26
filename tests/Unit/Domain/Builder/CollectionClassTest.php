@@ -18,6 +18,7 @@ final class CollectionClassTest extends TestCase
         $collection = CollectionClass::fromPattern('\App\Collection\{item}List');
 
         self::assertTrue($collection->hasItem());
+        self::assertSame('App\Collection\{item}List', $collection->pattern());
         self::assertSame('App\Collection\TagList', $collection->className('Tag')->fqcn());
         self::assertSame([], $collection->typeArguments());
     }
@@ -83,6 +84,7 @@ final class CollectionClassTest extends TestCase
             'stray brace' => ['App\{item}List}', null, '"App\{item}List}" ' . $shape],
             'not a name' => ['App\{item} List', null, '"App\{item} List" ' . $shape],
             'item in the namespace' => ['App\{item}\Items', null, '"App\{item}\Items" ' . $shape],
+            'item as the first namespace' => ['{item}\Items', null, '"{item}\Items" ' . $shape],
             'reserved' => ['App\List', null, '"App\List" ' . $shape],
             'type arguments' => ['App\Bag', ['int'], 'Collection type arguments must be [], [item] or [int, item]'],
         ];

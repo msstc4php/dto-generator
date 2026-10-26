@@ -134,7 +134,8 @@ final class TypeRenderer
             }
             $class = $this->printer->type($this->className($type->className()));
 
-            return $arguments === [] ? $class : $class . '<' . implode(', ', $arguments) . '>';
+            // Symfony PropertyInfo reads `Bag<T>` in @var as a list of T, fills it itself and never builds the Bag.
+            return $arguments === [] || $portable ? $class : $class . '<' . implode(', ', $arguments) . '>';
         }
 
         if ($type instanceof ListType) {

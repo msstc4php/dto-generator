@@ -11,13 +11,12 @@ final class Basket
     public function __construct(
         private TagList $tags,
         /**
-         * @var \App\Collection\ListOf<int>
          * @phpstan-var \App\Collection\ListOf<positive-int>
          */
         private \App\Collection\ListOf $codes,
         private ?\App\Collection\StringList $labels = null,
         /**
-         * @var ?\Doctrine\Common\Collections\ArrayCollection<int, Tag>
+         * @phpstan-var ?\Doctrine\Common\Collections\ArrayCollection<int, Tag>
          */
         private ?\Doctrine\Common\Collections\ArrayCollection $history = null,
     ) {
@@ -48,7 +47,6 @@ final class Basket
     }
 
     /**
-     * @return \App\Collection\ListOf<int>
      * @phpstan-return \App\Collection\ListOf<positive-int>
      */
     public function getCodes(): \App\Collection\ListOf
@@ -57,7 +55,6 @@ final class Basket
     }
 
     /**
-     * @param \App\Collection\ListOf<int> $codes
      * @phpstan-param \App\Collection\ListOf<positive-int> $codes
      */
     public function setCodes(\App\Collection\ListOf $codes): self
@@ -68,7 +65,7 @@ final class Basket
     }
 
     /**
-     * @return ?\Doctrine\Common\Collections\ArrayCollection<int, Tag>
+     * @phpstan-return ?\Doctrine\Common\Collections\ArrayCollection<int, Tag>
      */
     public function getHistory(): ?\Doctrine\Common\Collections\ArrayCollection
     {
@@ -76,7 +73,7 @@ final class Basket
     }
 
     /**
-     * @param ?\Doctrine\Common\Collections\ArrayCollection<int, Tag> $history
+     * @phpstan-param ?\Doctrine\Common\Collections\ArrayCollection<int, Tag> $history
      */
     public function setHistory(?\Doctrine\Common\Collections\ArrayCollection $history): self
     {

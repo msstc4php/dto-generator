@@ -11,13 +11,12 @@ final class Basket
     public function __construct(
         public readonly TagList $tags,
         /**
-         * @var \App\Collection\ListOf<int>
          * @phpstan-var \App\Collection\ListOf<positive-int>
          */
         public readonly \App\Collection\ListOf $codes,
         public readonly ?\App\Collection\StringList $labels = null,
         /**
-         * @var ?\Doctrine\Common\Collections\ArrayCollection<int, Tag>
+         * @phpstan-var ?\Doctrine\Common\Collections\ArrayCollection<int, Tag>
          */
         public readonly ?\Doctrine\Common\Collections\ArrayCollection $history = null,
     ) {
@@ -34,7 +33,6 @@ final class Basket
     }
 
     /**
-     * @param \App\Collection\ListOf<int> $codes
      * @phpstan-param \App\Collection\ListOf<positive-int> $codes
      */
     public function withCodes(\App\Collection\ListOf $codes): self
@@ -43,7 +41,7 @@ final class Basket
     }
 
     /**
-     * @param ?\Doctrine\Common\Collections\ArrayCollection<int, Tag> $history
+     * @phpstan-param ?\Doctrine\Common\Collections\ArrayCollection<int, Tag> $history
      */
     public function withHistory(?\Doctrine\Common\Collections\ArrayCollection $history): self
     {
