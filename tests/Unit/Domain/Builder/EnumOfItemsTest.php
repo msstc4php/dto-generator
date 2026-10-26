@@ -19,6 +19,10 @@ final class EnumOfItemsTest extends TestCase
             ['type' => 'array', 'items' => ['type' => 'string', 'enum' => ['EU', 'US']]],
         ];
         yield 'to missing items' => [['type' => 'array', 'enum' => [1, 2]], ['type' => 'array', 'items' => ['enum' => [1, 2]]]];
+        yield 'integers' => [
+            ['type' => 'array', 'enum' => [1, 2], 'items' => ['type' => 'integer']],
+            ['type' => 'array', 'items' => ['type' => 'integer', 'enum' => [1, 2]]],
+        ];
         yield 'integers to numbers' => [
             ['type' => 'array', 'enum' => [1, 2.5], 'items' => ['type' => 'number']],
             ['type' => 'array', 'items' => ['type' => 'number', 'enum' => [1, 2.5]]],
@@ -28,7 +32,7 @@ final class EnumOfItemsTest extends TestCase
             ['type' => 'array', 'items' => ['type' => ['boolean', 'null'], 'enum' => [true]]],
         ];
         yield 'of a nullable array, without null' => [
-            ['type' => ['array', 'null'], 'enum' => ['a', null]],
+            ['type' => ['array', 'null'], 'enum' => [null, 'a']],
             ['type' => ['array', 'null'], 'items' => ['enum' => ['a']]],
         ];
     }
@@ -61,6 +65,7 @@ final class EnumOfItemsTest extends TestCase
         yield 'items with a const' => [['type' => 'array', 'enum' => ['a'], 'items' => ['const' => 'b']]];
         yield 'items of another type' => [['type' => 'array', 'enum' => ['a', 1], 'items' => ['type' => 'string']]];
         yield 'fraction for integer items' => [['type' => 'array', 'enum' => [1.5], 'items' => ['type' => 'integer']]];
+        yield 'items of no type the parser reads' => [['type' => 'array', 'enum' => ['a'], 'items' => ['type' => 5]]];
         yield 'enum no list' => [['type' => 'array', 'enum' => 'a']];
         yield 'items no object' => [['type' => 'array', 'enum' => ['a'], 'items' => true]];
     }

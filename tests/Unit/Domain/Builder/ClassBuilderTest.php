@@ -520,18 +520,20 @@ final class ClassBuilderTest extends TestCase
      * @dataProvider defaultsWrittenAsStrings
      *
      * @param array<array-key, mixed> $property
-     * @param bool|int|float $expected
+     * @param bool|int|float|string $expected
      */
     public function testReadsADefaultWrittenAsAString(array $property, $expected): void
     {
         [$class, $messages] = $this->build(['type' => 'object', 'properties' => ['v' => $property]]);
 
         self::assertSame([], $messages);
-        self::assertEquals(new DefaultValue($expected), $this->property($class, 'v')->default());
+        $default = $this->property($class, 'v')->default();
+        self::assertNotNull($default);
+        self::assertSame($expected, $default->value());
     }
 
     /**
-     * @return array<string, array{array<array-key, mixed>, bool|int|float}>
+     * @return array<string, array{array<array-key, mixed>, bool|int|float|string}>
      */
     public static function defaultsWrittenAsStrings(): array
     {
@@ -542,6 +544,7 @@ final class ClassBuilderTest extends TestCase
             'float' => [['type' => 'number', 'default' => '1.5'], 1.5],
             'whole float' => [['type' => 'number', 'default' => '2'], 2.0],
             'nullable bool' => [['type' => ['boolean', 'null'], 'default' => 'true'], true],
+            'string' => [['type' => 'string', 'default' => 'true'], 'true'],
         ];
     }
 
@@ -589,7 +592,9 @@ final class ClassBuilderTest extends TestCase
         [$class, $messages] = $this->build(['type' => 'object', 'properties' => ['v' => $property]]);
 
         self::assertSame([], $messages);
-        self::assertEquals(new DefaultValue($expected), $this->property($class, 'v')->default());
+        $default = $this->property($class, 'v')->default();
+        self::assertNotNull($default);
+        self::assertSame($expected, $default->value());
     }
 
     /**

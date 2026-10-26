@@ -30,7 +30,7 @@ final class EnumOfItems
         }
 
         $values = array_values(array_filter($enum, static fn ($value): bool => $value !== null));
-        $itemTypes = array_filter((array) ($items['type'] ?? []), 'is_string');
+        $itemTypes = (array) ($items['type'] ?? []);
         $admitted = array_filter($values, static fn ($value): bool => self::admits($itemTypes, $value));
         // A null the type does not admit is a contradiction the parser reports as it is.
         if ($values === [] || count($admitted) !== count($values) || (count($values) !== count($enum) && !in_array('null', $types, true))) {
@@ -46,7 +46,7 @@ final class EnumOfItems
     /**
      * Whether items of these types, any when none is given, may hold the scalar.
      *
-     * @param array<array-key, string> $types
+     * @param array<array-key, mixed> $types
      * @param mixed $value
      */
     private static function admits(array $types, $value): bool
@@ -54,6 +54,6 @@ final class EnumOfItems
         $kinds = ['string' => ['string'], 'integer' => ['integer', 'number'], 'double' => ['number'], 'boolean' => ['boolean']];
         $kind = $kinds[gettype($value)] ?? null;
 
-        return $kind !== null && ($types === [] || array_intersect($kind, $types) !== []);
+        return $kind !== null && ($types === [] || array_filter($kind, static fn (string $name): bool => in_array($name, $types, true)) !== []);
     }
 }

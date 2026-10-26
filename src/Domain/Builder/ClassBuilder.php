@@ -569,7 +569,7 @@ final class ClassBuilder
     {
         $value = $default->value();
         $kind = $type instanceof ScalarType ? $type->kind() : null;
-        if (!is_string($value) || $kind === null || $kind === 'string') {
+        if (!is_string($value)) {
             return $default;
         }
 
