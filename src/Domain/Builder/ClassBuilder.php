@@ -6,10 +6,12 @@ namespace MSSTC4PHP\DtoGenerator\Domain\Builder;
 
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
 use MSSTC4PHP\DtoGenerator\Domain\Exception\IncompatibleTarget;
+use MSSTC4PHP\DtoGenerator\Domain\Exception\InvalidModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassKind;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassType;
+use MSSTC4PHP\DtoGenerator\Domain\Model\CollectionType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\DocModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumBacking;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumType;
@@ -21,6 +23,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\PropertyModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ScalarType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\TypeModel;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
+use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaType;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\DefaultValue;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\Json;
@@ -54,12 +57,16 @@ final class ClassBuilder
 
     private ?PropertyView $view;
 
+    private ?Collections $collections;
+
     /**
      * @param list<string> $aliases keys of attributeAliases, which properties may carry
      * @param PropertyView|null $view the view of a direction-dependent class; null keeps every property
+     * @param Collections|null $collections `dto.collections`; null keeps lists as arrays unless x-php-collection asks
      */
-    public function __construct(NameResolver $names, TypeMapper $types, TargetProfile $target, array $aliases = [], ?PropertyView $view = null, ?Superseded $superseded = null)
+    public function __construct(NameResolver $names, TypeMapper $types, TargetProfile $target, array $aliases = [], ?PropertyView $view = null, ?Superseded $superseded = null, ?Collections $collections = null)
     {
+        $this->collections = $collections;
         $this->superseded = $superseded ?? new Superseded();
         $this->names = $names;
         $this->types = $types;
@@ -307,7 +314,7 @@ final class ClassBuilder
             return null;
         }
 
-        $type = $this->types->map($schema, $diagnostics);
+        $type = $this->collected($schema, $this->types->map($schema, $diagnostics), $diagnostics);
         $required = $required && !$type instanceof NullableType;
         $default = null;
         if (!$required) {
@@ -324,6 +331,81 @@ final class ClassBuilder
             new DocModel($schema->description(), $schema->isDeprecated()),
             $schema->location(),
         );
+    }
+
+    /**
+     * The type with its list held by a collection object, when `dto.collections` or `x-php-collection` asks for one.
+     */
+    private function collected(Schema $schema, TypeModel $type, Diagnostics $diagnostics): TypeModel
+    {
+        $carrier = $this->types->collectionCarrier($schema);
+        $at = $carrier instanceof Schema ? $carrier->location()->child('x-php-collection') : null;
+        $class = $this->collections instanceof Collections ? $this->collections->collectionClass() : null;
+        if ($carrier instanceof Schema && $at instanceof SchemaLocation) {
+            $value = $carrier->extensions()->get('x-php-collection');
+            if ($value === false) {
+                return $type;
+            }
+
+            if (!is_string($value)) {
+                $diagnostics->error('"x-php-collection" must be a class name or false.', $at);
+
+                return $type;
+            }
+
+            try {
+                $class = $class instanceof CollectionClass ? $class->withPattern($value) : CollectionClass::fromPattern($value);
+            } catch (InvalidModel $exception) {
+                $diagnostics->error($exception->getMessage(), $at);
+
+                return $type;
+            }
+        }
+
+        $list = $type instanceof NullableType ? $type->inner() : $type;
+        if (!$class instanceof CollectionClass || !$list instanceof ListType) {
+            if ($at instanceof SchemaLocation) {
+                $diagnostics->warning('"x-php-collection" applies to a list only; this property stays as it is.', $at);
+            }
+
+            return $type;
+        }
+
+        $item = $this->itemName($list->item());
+        if ($item === null && $class->hasItem()) {
+            $diagnostics->warning(
+                sprintf('This list stays an array: {item} in %s stands for one class, enum or scalar item type, not %s.', $class->pattern(), $list->item()->describe()),
+                $schema->location(),
+            );
+
+            return $type;
+        }
+
+        try {
+            $collection = $class->wrap($list, $item ?? '');
+        } catch (InvalidModel $exception) {
+            $diagnostics->error($exception->getMessage(), $at ?? $schema->location());
+
+            return $type;
+        }
+
+        return $type instanceof NullableType ? NullableType::of($collection) : $collection;
+    }
+
+    /**
+     * What `{item}` stands for: the short name of a class or enum, or the scalar in full words.
+     */
+    private function itemName(TypeModel $item): ?string
+    {
+        if ($item instanceof EnumType && !$this->target->supports(Capability::from(Capability::ENUMS))) {
+            $item = $item->backing()->value() === EnumBacking::INT ? ScalarType::int() : ScalarType::string();
+        }
+
+        if ($item instanceof ClassType || $item instanceof EnumType) {
+            return $item->className()->shortName();
+        }
+
+        return $item instanceof ScalarType ? ['int' => 'Integer', 'float' => 'Float', 'string' => 'String', 'bool' => 'Boolean'][$item->kind()] : null;
     }
 
     /**
@@ -522,6 +604,15 @@ final class ClassBuilder
 
         $at = $schema->location()->child('default');
         $inner = $type instanceof NullableType ? $type->inner() : $type;
+        // A collection object is no constant expression; an empty one stands for "no elements", as null does.
+        if ($inner instanceof CollectionType) {
+            if ($default->value() !== []) {
+                $diagnostics->warning(sprintf('A default for %s cannot be a PHP constant expression; null is used instead.', $inner->describe()), $at);
+            }
+
+            return null;
+        }
+
         // Read first: `default: "5"` beside `const: 5` is the constant.
         $read = $this->read($default, $inner, $schema);
         $forbidden = $this->forbiddenBySchema($schema, $default->value(), $read->value());

@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Application\Config;
 
-use MSSTC4PHP\DtoGenerator\Domain\Builder\Collections;
-use MSSTC4PHP\DtoGenerator\Domain\Builder\CollectionClass;
 use InvalidArgumentException;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\CollectionClass;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\Collections;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\ExtensionVocabulary;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
 use MSSTC4PHP\DtoGenerator\Domain\Exception\InvalidModel;

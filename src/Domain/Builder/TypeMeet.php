@@ -6,6 +6,7 @@ namespace MSSTC4PHP\DtoGenerator\Domain\Builder;
 
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassType;
+use MSSTC4PHP\DtoGenerator\Domain\Model\CollectionType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumBacking;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ListType;
@@ -118,7 +119,7 @@ final class TypeMeet
             return $type->backing()->value() === EnumBacking::INT ? 'integer' : 'string';
         }
 
-        if ($type instanceof ListType) {
+        if ($type instanceof ListType || $type instanceof CollectionType) {
             return 'array';
         }
 
@@ -156,6 +157,11 @@ final class TypeMeet
 
         if ($wide instanceof ListType) {
             return $narrow instanceof ListType && $this->admits($wide->item(), $narrow->item());
+        }
+
+        // The class of a collection follows from its items, so two collections compare as their lists do.
+        if ($wide instanceof CollectionType) {
+            return $narrow instanceof CollectionType && $this->admits($wide->list(), $narrow->list());
         }
 
         if ($wide instanceof MapType) {

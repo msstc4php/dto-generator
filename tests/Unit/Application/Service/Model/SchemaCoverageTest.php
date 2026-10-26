@@ -437,7 +437,7 @@ final class SchemaCoverageTest extends TestCase
 
         self::assertSame(
             [
-                self::AT . 'Holder/properties/either/oneOf/0/x-php-clas-name: Unknown extension "x-php-clas-name"; known: x-php-class-name, x-php-name, x-php-type, x-dto-mutable, x-php-all-of, x-php-skip, x-php-attributes, x-php-read-write, x-enum-descriptions, x-enum-varnames.',
+                self::AT . 'Holder/properties/either/oneOf/0/x-php-clas-name: Unknown extension "x-php-clas-name"; known: x-php-class-name, x-php-name, x-php-type, x-dto-mutable, x-php-all-of, x-php-skip, x-php-attributes, x-php-read-write, x-enum-descriptions, x-enum-varnames, x-php-collection.',
                 'warning /project/api/openapi.yaml#/components/schemas/Holder/properties/either/oneOf/1/x-dto-mutable: "x-dto-mutable" has no effect here.',
             ],
             ModelFixture::messages($output),

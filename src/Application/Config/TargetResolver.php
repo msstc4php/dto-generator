@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Application\Config;
 
-use MSSTC4PHP\DtoGenerator\Domain\Builder\Collections;
 use MSSTC4PHP\DtoGenerator\Application\Port\ProjectPhpConstraint;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\Collections;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
 use MSSTC4PHP\DtoGenerator\Domain\Exception\IncompatibleTarget;
 use MSSTC4PHP\DtoGenerator\Domain\Exception\UnsupportedPhpVersion;

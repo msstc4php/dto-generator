@@ -14,6 +14,7 @@ use MSSTC4PHP\DtoGenerator\Application\Service\Model\Build\Input;
 use MSSTC4PHP\DtoGenerator\Application\Service\Model\Build\Output;
 use MSSTC4PHP\DtoGenerator\Application\Service\Schemas\Load\Action as LoadAction;
 use MSSTC4PHP\DtoGenerator\Application\Service\Schemas\Load\Input as LoadInput;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\Collections;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\NameResolver;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\SchemaParser;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostic;
@@ -45,6 +46,19 @@ final class ModelFixture
         $config = $split instanceof ViewSuffixes ? ConfigMother::readWrite($source, $split, $readWriteModels, $allOfStrategy) : ConfigMother::configWith(AllOfStrategy::from($allOfStrategy), $source);
 
         return (new Action(new NameResolver()))(new Input($config, self::target(), $graph, []));
+    }
+
+    /**
+     * A run whose lists collection classes may hold; with $split, one with read and write views.
+     *
+     * @param array<int|string, array<array-key, mixed>> $schemas components/schemas of the spec
+     */
+    public static function collections(array $schemas, ?Collections $collections, ?ViewSuffixes $split = null): Output
+    {
+        $source = ConfigMother::source(GraphFixture::SPEC);
+        $config = ConfigMother::collections($source, $collections, $split);
+
+        return (new Action(new NameResolver()))(new Input($config, self::target(), GraphFixture::load($schemas, [], $source), []));
     }
 
     /**

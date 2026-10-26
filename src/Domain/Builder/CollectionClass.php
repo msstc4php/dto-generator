@@ -63,6 +63,11 @@ final class CollectionClass
         return self::fromPattern($pattern, $this->typeArguments);
     }
 
+    public function pattern(): string
+    {
+        return $this->pattern;
+    }
+
     public function hasItem(): bool
     {
         return strpos($this->pattern, self::ITEM) !== false;
@@ -77,7 +82,7 @@ final class CollectionClass
         try {
             return ClassName::fromFqcn($fqcn);
         } catch (InvalidModel $exception) {
-            throw new InvalidModel(sprintf('"%s" gives "%s" for the item type %s, which is not a valid class name.', $this->pattern, $fqcn, $item));
+            throw new InvalidModel(sprintf('"%s" gives "%s" for the item type %s, which is not a valid class name.', $this->pattern, $fqcn, $item), $exception->getCode(), $exception);
         }
     }
 

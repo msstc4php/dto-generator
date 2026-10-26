@@ -11,6 +11,7 @@ use MSSTC4PHP\DtoGenerator\Application\Config\RemoteRefsSettings;
 use MSSTC4PHP\DtoGenerator\Application\Config\SourceConfig;
 use MSSTC4PHP\DtoGenerator\Application\Config\TargetSettings;
 use MSSTC4PHP\DtoGenerator\Application\Config\ViewSuffixes;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\Collections;
 use MSSTC4PHP\DtoGenerator\Domain\Target\AccessorStyle;
 use MSSTC4PHP\DtoGenerator\Domain\Target\AllOfStrategy;
 use MSSTC4PHP\DtoGenerator\Domain\Target\DateTimeClass;
@@ -84,6 +85,27 @@ final class ConfigMother
             new ExtensionSettings([], true, [], [], null),
             [$source],
             new RemoteRefsSettings($allow, '/project/.dto-generator/remote'),
+        );
+    }
+
+    public static function collections(SourceConfig $source, ?Collections $collections, ?ViewSuffixes $suffixes = null): GeneratorConfig
+    {
+        return new GeneratorConfig(
+            self::PATH,
+            new TargetSettings(null, null, true),
+            new DtoSettings(
+                Mutability::from(Mutability::IMMUTABLE),
+                AccessorStyle::from(AccessorStyle::AUTO),
+                DateTimeClass::from(DateTimeClass::IMMUTABLE),
+                AllOfStrategy::from(AllOfStrategy::EXTENDS),
+                true,
+                ReadWriteModels::from($suffixes instanceof ViewSuffixes ? ReadWriteModels::SPLIT : ReadWriteModels::SINGLE),
+                $suffixes,
+                $collections,
+            ),
+            [],
+            new ExtensionSettings([], true, [], [], null),
+            [$source],
         );
     }
 

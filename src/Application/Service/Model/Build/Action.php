@@ -214,6 +214,7 @@ final class Action
             $input->aliases(),
             $registry->properties(),
             $superseded,
+            $input->config()->dto()->collections(),
         );
         $models = [];
         $children = [];

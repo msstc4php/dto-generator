@@ -65,6 +65,27 @@ final class TypeMapper
         return $this->meet;
     }
 
+    /**
+     * The schema whose x-php-collection decides how a property holds its list: the property's own, or the first along
+     * its $ref chain.
+     */
+    public function collectionCarrier(Schema $schema): ?Schema
+    {
+        $visited = [];
+        while (!$schema->extensions()->has('x-php-collection')) {
+            $visited[] = $schema->location()->toString();
+            $ref = $schema->ref();
+            $target = $ref === null ? null : $this->graph->resolve(new ReferenceUse($ref, $schema->location()));
+            if (!$target instanceof ResolvedSchema || in_array($target->location()->toString(), $visited, true)) {
+                return null;
+            }
+
+            $schema = $target->schema();
+        }
+
+        return $schema;
+    }
+
     public function map(Schema $schema, Diagnostics $diagnostics): TypeModel
     {
         return $this->mapWithin($schema, $diagnostics, []);

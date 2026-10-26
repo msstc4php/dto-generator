@@ -8,6 +8,7 @@ use Generator;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassType;
+use MSSTC4PHP\DtoGenerator\Domain\Model\CollectionType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\DiscriminatorModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ListType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\MapType;
@@ -90,6 +91,8 @@ final class ViewDependence
             yield $type->className();
         } elseif ($type instanceof ListType) {
             yield from self::classesOf($type->item());
+        } elseif ($type instanceof CollectionType) {
+            yield from self::classesOf($type->list());
         } elseif ($type instanceof MapType) {
             yield from self::classesOf($type->value());
         } elseif ($type instanceof NullableType) {
