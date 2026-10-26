@@ -573,8 +573,9 @@ final class ClassBuilder
         $value = $default->value();
         $kind = $type instanceof ScalarType ? $type->kind() : null;
         $number = in_array(SchemaType::NUMBER, array_map(static fn (SchemaType $declared): string => $declared->value(), $schema->nonNullTypes()), true);
-        // Range first: PHP 8.5 warns about casting a float int cannot hold. PHP_INT_MAX compares as 2^63, outside.
-        if ($kind === 'int' && $number && is_float($value) && $value >= PHP_INT_MIN && $value < PHP_INT_MAX && (float) (int) $value === $value) {
+        // Beyond 2^53 a float holds no exact integer of JSON's; the range comes first, as PHP 8.5 warns about casting a
+        // float int cannot hold.
+        if ($kind === 'int' && $number && is_float($value) && abs($value) <= 2 ** 53 && (float) (int) $value === $value) {
             return new DefaultValue((int) $value);
         }
 
