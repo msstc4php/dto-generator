@@ -114,6 +114,22 @@ final class SchemaParserTest extends TestCase
         self::assertSame(['EU', 'US'], $items->enum());
     }
 
+    public function testReadsNullableBesideTheEnumOfAnArrayOnlyInOpenApi30(): void
+    {
+        $node = ['type' => 'array', 'nullable' => true, 'enum' => ['a', null], 'items' => ['type' => 'string']];
+        $openApi30 = (new SchemaParser())->forOpenApi30()->parse($node, $this->root(), new Diagnostics());
+        $openApi31 = (new SchemaParser())->parse($node, $this->root(), new Diagnostics());
+        $items30 = $openApi30->items();
+        $items31 = $openApi31->items();
+
+        self::assertNull($openApi30->enum());
+        self::assertNotNull($items30);
+        self::assertSame(['a'], $items30->enum());
+        self::assertSame(['a', null], $openApi31->enum());
+        self::assertNotNull($items31);
+        self::assertNull($items31->enum());
+    }
+
     public function testKeepsTheFormatAsWrittenBesideItsName(): void
     {
         $schema = (new SchemaParser())->parse(['type' => 'string', 'format' => 'dateTime'], $this->root(), new Diagnostics());

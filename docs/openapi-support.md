@@ -63,14 +63,17 @@ spaces and underscores as hyphens, and reads these spellings as that name; the S
 | `http-method` / `integer` / `int64` / `int16` | `http-verb` / `int` / `long` / `short` |
 
 A format is read in lower case, with spaces and underscores as hyphens, whether the generator knows it or not
-(`SSH_key` is `ssh-key`). Known without another spelling: `partial-time`, `hex-color` (with or without `#`),
+(`SSH_key` is `ssh-key`). Known without another spelling: `partial-time`, `hex-color` (`hexColor`),
 `idn-email`, `idn-hostname`, `iri`, `iri-reference`, `uri-template`, `ulid`, `base64url`, `password`, `regex`,
 `json-pointer`, `relative-json-pointer`, `iban`, `isbn`, `issn`, `isin`, `digits`, `MM/YYYY` (Linode), a format named
 after its type (`format: string`). `formats` in the config maps a format by its spelling first, then by its name, so
 `formats: {date-time: …}` covers `dateTime` too.
 
-A string default of a boolean or a number is read only as JSON would write it without the quotes: `"true"`, `"-42"`,
-`"1.5e3"`; `"TRUE"`, `" 42"`, `"010"` or `"+1"` still give the warning.
+A string default of a boolean, a number or an enum of integers is read only as JSON would write it without the quotes:
+`"true"`, `"-42"`, `"1.5e3"`; `"TRUE"`, `" 42"`, `"010"` or `"+1"` still give the warning. A whole float default of a
+`type: number` the format made an `int` is that int when the property's own schema says `number` (not through a
+`$ref`, nor in the items of a list). The default of a `numeric-string` must be digits, with a fraction or an exponent
+(`"0012"` passes, `" 1"` and `".5"` do not).
 
 PHPDoc comes in two layers. `@var`, `@param` and `@return` carry what any PHPDoc reader understands (`list<T>`,
 `?string`), and only when it says more than the native type. `@phpstan-var`, `@phpstan-param` and `@phpstan-return`

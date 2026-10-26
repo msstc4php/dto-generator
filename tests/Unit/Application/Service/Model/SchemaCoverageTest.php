@@ -598,6 +598,7 @@ final class SchemaCoverageTest extends TestCase
             'a' => ['type' => 'number', 'const' => 2.0, 'default' => 2],
             'b' => ['type' => 'number', 'const' => 2, 'default' => 2.0],
             'c' => ['const' => 'x', 'default' => 'x'],
+            // A string default of a number is the number it spells, here the constant.
             'd' => ['const' => 1, 'default' => '1'],
             'e' => ['type' => 'string', 'const' => '1', 'default' => 1],
             'f' => ['const' => 'a/é', 'default' => 'b'],
@@ -608,7 +609,6 @@ final class SchemaCoverageTest extends TestCase
         $mixed = 'warning /project/api/openapi.yaml#/components/schemas/C/properties/g/enum: The enum mixes strings and integers, which no PHP enum can back; the property takes either.';
         self::assertSame(
             [
-                self::AT . 'C/properties/d/default: Default "1" is not the "const" value 1; null is used instead.',
                 self::AT . 'C/properties/e/default: Default 1 is not the "const" value "1"; null is used instead.',
                 self::AT . 'C/properties/f/default: Default "b" is not the "const" value "a/é"; null is used instead.',
                 $mixed,
@@ -616,6 +616,20 @@ final class SchemaCoverageTest extends TestCase
             ],
             ModelFixture::messages($output),
         );
+    }
+
+    public function testReadsAStringDefaultOfAnEnumOfIntegers(): void
+    {
+        $output = ModelFixture::build([
+            'Level' => ['type' => 'integer', 'enum' => [1, 2]],
+            'C' => ['type' => 'object', 'properties' => [
+                'level' => ['allOf' => [['$ref' => '#/components/schemas/Level']], 'default' => '2'],
+                'count' => ['type' => 'number', 'format' => 'int32', 'const' => 5],
+            ]],
+        ]);
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(['level: App\\Dto\\Level|null', 'count: 5|null'], ModelFixture::classes($output)['App\\Dto\\C']);
     }
 
     public function testKeepsTheDeclaredTypeAgainstAConstOfAnotherKind(): void

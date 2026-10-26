@@ -89,7 +89,8 @@ Required; must be `1`.
 - **`accessors`.** `auto` gives getters to immutable DTOs on 7.4 and 8.0 and public `readonly` properties from 8.1 on;
   mutable DTOs get getters and setters. `public-properties` on an immutable DTO needs PHP 8.1 (`readonly`) and is a
   config error below it. See [the class shapes](openapi-support.md#class-shape-per-target).
-- **`dateTimeClass`** is the class for `format: date` and `format: date-time`.
+- **`dateTimeClass`** is the class for `format: date`, `format: date-time` (any
+  [spelling](openapi-support.md#formats)) and `format: date-time-rfc-2822`.
 - **`allOfStrategy`** is how `allOf` with one `$ref` plus own properties is generated: `extends` makes a subclass of
   the referenced class, `merge` copies its properties into one class. `allOf` with several `$ref` always merges. A
   schema can override it with `x-php-all-of`.
@@ -136,7 +137,7 @@ Constructing an object from the wire value is the job of your serializer. A form
 it, then by the name the generator reads it as (see [formats](openapi-support.md#formats)): `uuid` covers `guid` and
 `UUID` too, `ssh-key` covers `SSH_key`. A format the generator does not know gives the base type (`string`, `int`…)
 and a warning. Extensions can register formats too; two extensions registering one format (in any spelling) is an
-error, as are two spellings of one format here. A format here wins over an extension's in any spelling.
+error, as are two spellings of one format here. A format here, a class or a scalar, wins over an extension's in any spelling.
 
 ## `attributeAliases`
 

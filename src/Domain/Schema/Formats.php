@@ -114,6 +114,7 @@ final class Formats
         'time-zone' => 'timezone',
         'iana-timezone' => 'timezone',
         'tz' => 'timezone',
+        'hexcolor' => 'hex-color',
         'colour' => 'color',
         'css-color' => 'color',
         'swift' => 'bic',

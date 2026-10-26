@@ -267,11 +267,7 @@ final class ConfigFactory
      */
     private function formats(RawSection $section): array
     {
-        $int = ScalarType::int();
-        $float = ScalarType::float();
-        $bool = ScalarType::bool();
-        // PHP's names and JSON Schema's; neither is a class anyone means.
-        $scalars = ['string' => ScalarType::string(), 'int' => $int, 'integer' => $int, 'float' => $float, 'number' => $float, 'bool' => $bool, 'boolean' => $bool];
+        $scalars = $this->scalars();
         $formats = [];
         $names = [];
         foreach ($section->keys() as $name) {
@@ -305,6 +301,20 @@ final class ConfigFactory
         }
 
         return $formats;
+    }
+
+    /**
+     * PHP's names of the scalars and JSON Schema's; neither is a class anyone means.
+     *
+     * @return array<string, ScalarType>
+     */
+    private function scalars(): array
+    {
+        $integer = ScalarType::int();
+        $float = ScalarType::float();
+        $boolean = ScalarType::bool();
+
+        return ['string' => ScalarType::string(), 'int' => $integer, 'integer' => $integer, 'float' => $float, 'number' => $float, 'bool' => $boolean, 'boolean' => $boolean];
     }
 
     private function extensions(RawSection $root): ExtensionSettings

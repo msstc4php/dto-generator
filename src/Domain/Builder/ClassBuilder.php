@@ -11,6 +11,8 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\ClassModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\DocModel;
+use MSSTC4PHP\DtoGenerator\Domain\Model\EnumBacking;
+use MSSTC4PHP\DtoGenerator\Domain\Model\EnumType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\Identifier;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ListType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\MapType;
@@ -33,6 +35,15 @@ use MSSTC4PHP\DtoGenerator\Domain\Target\TargetProfile;
  */
 final class ClassBuilder
 {
+    /** The integers JSON writes. */
+    private const JSON_INTEGER = '/^-?(?:0|[1-9][0-9]*)$/D';
+
+    /** The numbers JSON writes, which every PHP version reads alike. */
+    private const JSON_NUMBER = '/^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?$/D';
+
+    /** 2^53: the largest integer below which every integer is a float too. */
+    private const MAX_EXACT_INTEGER = 9007199254740992;
+
     private NameResolver $names;
 
     private Superseded $superseded;
@@ -511,14 +522,16 @@ final class ClassBuilder
         }
 
         $at = $schema->location()->child('default');
-        $forbidden = $this->forbiddenBySchema($schema, $default->value());
+        $inner = $type instanceof NullableType ? $type->inner() : $type;
+        // Read first: `default: "5"` beside `const: 5` is the constant.
+        $read = $this->read($default, $inner, $schema);
+        $forbidden = $this->forbiddenBySchema($schema, $read->value());
         if ($forbidden !== null) {
             $diagnostics->error($forbidden, $at);
 
             return null;
         }
 
-        $inner = $type instanceof NullableType ? $type->inner() : $type;
         $value = $default->value();
         // `new X()` waits for every class to be built: ObjectDefaults keeps it only where X takes no arguments.
         if ($inner instanceof ClassType && $value === [] && $this->target->supports(Capability::from(Capability::NEW_IN_INITIALIZERS))) {
@@ -546,7 +559,6 @@ final class ClassBuilder
             return null;
         }
 
-        $read = $this->read($default, $inner, $schema);
         if (!DefaultFit::fits($read->value(), $inner)) {
             $diagnostics->warning(
                 sprintf(
@@ -564,18 +576,15 @@ final class ClassBuilder
     }
 
     /**
-     * A default written as a string for a boolean or a number (`default: "true"`, Xero) is the value it spells; a whole
-     * float is the int of a number its format made one (`type: number, format: int32, default: 1.0`). An `integer`
-     * keeps refusing `2.0`.
+     * A default written as a string for a boolean or a number (`default: "true"`, Xero) is the value it spells, as JSON
+     * would write it without the quotes: no spaces, no leading zeros, no `+`. A whole float is the int of a number its
+     * format made one (`type: number, format: int32, default: 1.0`); an `integer` keeps refusing `2.0`.
      */
     private function read(DefaultValue $default, TypeModel $type, Schema $schema): DefaultValue
     {
         $value = $default->value();
-        $kind = $type instanceof ScalarType ? $type->kind() : null;
-        $number = in_array(SchemaType::NUMBER, array_map(static fn (SchemaType $declared): string => $declared->value(), $schema->nonNullTypes()), true);
-        // Beyond 2^53 a float holds no exact integer of JSON's; the range comes first, as PHP 8.5 warns about casting a
-        // float int cannot hold.
-        if ($kind === 'int' && $number && is_float($value) && abs($value) <= 2 ** 53 && (float) (int) $value === $value) {
+        $kind = $this->kindOf($type);
+        if ($kind === 'int' && is_float($value) && $this->isExactInteger($value) && $this->declaresNumber($schema)) {
             return new DefaultValue((int) $value);
         }
 
@@ -583,17 +592,44 @@ final class ClassBuilder
             return $default;
         }
 
-        // Only what JSON would have written without the quotes: no spaces, no leading zeros, no `+`.
         if ($kind === 'bool' && in_array($value, ['true', 'false'], true)) {
             return new DefaultValue($value === 'true');
         }
 
         $int = filter_var($value, FILTER_VALIDATE_INT);
-        if ($kind === 'int' && is_int($int) && preg_match('/^-?(?:0|[1-9][0-9]*)$/D', $value) === 1) {
+        if ($kind === 'int' && is_int($int) && preg_match(self::JSON_INTEGER, $value) === 1) {
             return new DefaultValue($int);
         }
 
-        return $kind === 'float' && preg_match(DefaultFit::JSON_NUMBER, $value) === 1 && is_finite((float) $value) ? new DefaultValue((float) $value) : $default;
+        return $kind === 'float' && preg_match(self::JSON_NUMBER, $value) === 1 && is_finite((float) $value) ? new DefaultValue((float) $value) : $default;
+    }
+
+    /**
+     * The scalar a default is read as; an enum of integers takes an int.
+     *
+     * @return 'string'|'int'|'float'|'bool'|null
+     */
+    private function kindOf(TypeModel $type): ?string
+    {
+        if ($type instanceof EnumType) {
+            return $type->backing()->value() === EnumBacking::INT ? 'int' : null;
+        }
+
+        return $type instanceof ScalarType ? $type->kind() : null;
+    }
+
+    /**
+     * Beyond 2^53 a float holds no exact integer of JSON's; the range comes first, as PHP 8.5 warns about casting a
+     * float int cannot hold.
+     */
+    private function isExactInteger(float $value): bool
+    {
+        return abs($value) <= self::MAX_EXACT_INTEGER && (float) (int) $value === $value;
+    }
+
+    private function declaresNumber(Schema $schema): bool
+    {
+        return in_array(SchemaType::NUMBER, array_map(static fn (SchemaType $declared): string => $declared->value(), $schema->nonNullTypes()), true);
     }
 
     /**

@@ -250,7 +250,7 @@ final class Action
             }
         }
 
-        $formats = $registry->formats($classes);
+        $formats = $registry->formats($classes, array_keys($known));
         $aliases = array_keys($config->extensions()->aliases());
         $model = ($this->buildModel)(new BuildInput($config, $target, $schemas->graph(), $formats, $aliases, $known));
         $diagnostics->merge($model->diagnostics());

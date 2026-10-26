@@ -46,8 +46,9 @@ final class ConstMapper
         // JSON Schema counts 2.0 as an integer and every integer as a number.
         $normalised = $this->whole($value);
         $whole = is_int($normalised) ? $normalised : null;
-        $integer = in_array(SchemaType::INTEGER, $declared, true);
         $number = in_array(SchemaType::NUMBER, $declared, true);
+        // A number of a format of whole numbers is an int (TypeMapper).
+        $integer = in_array(SchemaType::INTEGER, $declared, true) || ($number && in_array($schema->normalizedFormat(), Formats::INTEGERS, true));
         if ($whole !== null && $integer) {
             $type = ScalarType::int(LiteralType::of($whole));
         } elseif (is_float($value) && $value === floor($value) && $integer && !$number) {

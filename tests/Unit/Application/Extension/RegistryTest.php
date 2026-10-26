@@ -133,6 +133,30 @@ final class RegistryTest extends TestCase
         self::assertSame($configured, $formats['dateTime']);
     }
 
+    public function testTheConfigWinsOverAnExtensionOfAnotherSpelling(): void
+    {
+        $registry = $this->registry($diagnostics);
+        $registry->register($this->extension('uid', static function (ExtensionRegistry $registry): void {
+            $registry->addFormat('GUID', new FormatMapping(new ClassType(ClassName::fromFqcn('App\\Extended'))));
+            $registry->addFormat('ssh_key', new FormatMapping(new ClassType(ClassName::fromFqcn('App\\Key'))));
+        }), []);
+        $configured = new ClassType(ClassName::fromFqcn('App\\Configured'));
+
+        self::assertSame([], array_keys($registry->formats([], ['SSH key', 'Uuid'])));
+        self::assertSame(['ssh_key', 'uuid'], array_keys($registry->formats(['uuid' => $configured], [])));
+    }
+
+    public function testReportsOneExtensionRegisteringTwoSpellingsOfAFormat(): void
+    {
+        $registry = $this->registry($diagnostics);
+        $registry->register($this->extension('one', static function (ExtensionRegistry $registry): void {
+            $registry->addFormat('date-time', new FormatMapping(ScalarType::string()));
+            $registry->addFormat('dateTime', new FormatMapping(ScalarType::string()));
+        }), []);
+
+        self::assertSame(['error ' . self::CONFIG . '#: Extension "one" registers format "dateTime" twice, in two spellings.'], $this->messages($diagnostics));
+    }
+
     public function testReportsTwoExtensionsRegisteringOneFormat(): void
     {
         $registry = $this->registry($diagnostics);

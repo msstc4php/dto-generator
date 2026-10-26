@@ -98,7 +98,12 @@ final class Registry implements ExtensionRegistry
         $name = Formats::normalize($format);
         $owner = $this->formatOwners[$name] ?? null;
         if ($owner !== null) {
-            $this->diagnostics->error(sprintf('Extensions "%s" and "%s" both register format "%s".', $owner, $this->current, $format), $this->location);
+            $this->diagnostics->error(
+                $owner === $this->current
+                    ? sprintf('Extension "%s" registers format "%s" twice, in two spellings.', $owner, $format)
+                    : sprintf('Extensions "%s" and "%s" both register format "%s".', $owner, $this->current, $format),
+                $this->location,
+            );
 
             return;
         }
@@ -151,17 +156,25 @@ final class Registry implements ExtensionRegistry
     }
 
     /**
-     * @param array<int|string, TypeModel> $configured formats from the config, which win over any spelling of theirs
+     * @param array<int|string, TypeModel> $configured formats the config maps to a class, which win over any spelling of theirs
+     * @param list<int|string> $known formats the config knows for a scalar, which win as well
      *
      * @return array<int|string, TypeModel>
      */
-    public function formats(array $configured): array
+    public function formats(array $configured, array $known = []): array
     {
-        $names = array_flip(array_map(static fn ($format): string => Formats::normalize((string) $format), array_keys($configured)));
-
-        $registered = array_filter($this->formats, static fn ($format): bool => !isset($names[Formats::normalize((string) $format)]), ARRAY_FILTER_USE_KEY);
+        $configuredNames = array_flip(array_map(static fn ($key): string => self::nameOf($key), array_merge(array_keys($configured), $known)));
+        $registered = array_filter($this->formats, static fn ($key): bool => !isset($configuredNames[self::nameOf($key)]), ARRAY_FILTER_USE_KEY);
 
         return array_replace($registered, $configured);
+    }
+
+    /**
+     * @param int|string $key a format as a key, which PHP turns into an int when it is numeric
+     */
+    private static function nameOf($key): string
+    {
+        return Formats::normalize((string) $key);
     }
 
     /**

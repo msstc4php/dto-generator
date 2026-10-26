@@ -94,6 +94,14 @@ final class EnumOfItemsTest extends TestCase
     {
         $node = ['type' => 'array', 'nullable' => true, 'enum' => ['a', null]];
 
-        self::assertSame($node, EnumOfItems::moved($node));
+        self::assertSame($node, EnumOfItems::moved($node, false));
+    }
+
+    public function testMovesTheEnumOfAnArrayOfANullTypeWithoutTheKeyword(): void
+    {
+        self::assertSame(
+            ['type' => ['array', 'null'], 'items' => ['enum' => ['a']]],
+            EnumOfItems::moved(['type' => ['array', 'null'], 'enum' => ['a', null]], false),
+        );
     }
 }

@@ -32,12 +32,13 @@ All notable changes to this package are documented here. The format follows
   with Twilio's `date-time-rfc-2822`; `url` reads as `uri-reference`. `Schema::normalizedFormat()` gives the name,
   `Formats` the list; `format()` stays as written.
 - `type: number` with a format of whole numbers (Xero's `format: integer`, also `int32`, `int64`) is an `int`; it was
-  a `float`. Its whole float default (`1.0`) is the int; a payload that sends such a number as `1.0` no longer fits
+  a `float`. Its whole float default (`1.0`, on the property's own schema) is the int; a payload that sends such a number as `1.0` no longer fits
   the type: map the format to `float` through an extension, or fix the spec.
 - A string with an integer or decimal format (Youtube's `uint64`) is a `numeric-string`; a default that is no number
   gives the warning and `null`.
-- A string default of a boolean or a number is the value it spells, as JSON writes it (Xero's `default: "false"`); it
-  was replaced by `null` with a warning.
+- A string default of a boolean, a number or an enum of integers is the value it spells, as JSON writes it (Xero's
+  `default: "false"`); it was replaced by `null` with a warning. Beside a `const` it is compared as that value.
+- A whole float bound (`maximum: 1000.0`) gives an integer its range.
 - An array whose `enum` lists values of its items (Zoom, Vimeo) gets the enum on its items: `list<Enum>`; it was
   ignored with a warning.
 - Two named enums whose names clash and whose cases are the same (Linode's `replication_type` of two schemas a `$ref`

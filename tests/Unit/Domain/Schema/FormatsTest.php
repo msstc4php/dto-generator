@@ -26,6 +26,9 @@ final class FormatsTest extends TestCase
         yield 'netmask' => ['ip/netmask', 'cidr'];
         yield 'prefix length' => ['ipv4/prefix_length', 'ipv4-cidr'];
         yield 'month and year' => ['MM/YYYY', 'mm/yyyy'];
+        yield 'hex colour' => ['hex-color', 'hex-color'];
+        yield 'hex colour in camel case' => ['hexColor', 'hex-color'];
+        yield 'css colour' => ['css-color', 'color'];
         yield 'unknown in lower case and hyphens' => ['Ssh_Key', 'ssh-key'];
     }
 
@@ -53,6 +56,7 @@ final class FormatsTest extends TestCase
         yield 'number format' => ['decimal', 'number', true];
         yield 'number format of an integer' => ['double', 'integer', false];
         yield 'unknown' => ['ssh-key', 'string', false];
+        yield 'hex colour' => ['hex-color', 'string', true];
     }
 
     /**

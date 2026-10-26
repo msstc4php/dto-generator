@@ -457,12 +457,12 @@ final class ConfigFactoryTest extends TestCase
         ];
     }
 
-    public function testReadsTheFormatsAfterTwoSpellingsOfOne(): void
+    public function testKeepsReadingTheFormatsAfterTwoSpellingsOfOne(): void
     {
         $diagnostics = new Diagnostics();
         (new ConfigFactory())->create([
             'version' => 1,
-            'formats' => ['uuid' => ['type' => 'App\Uuid'], 'GUID' => ['type' => 'App\Guid'], 'odd' => ['type' => 'Not A Class']],
+            'formats' => ['uuid' => ['type' => 'App\Uuid'], 'GUID' => ['type' => 'Not A Class'], 'odd' => ['type' => 'Not A Class']],
             'sources' => [['spec' => 'a.yaml', 'namespace' => 'App\A', 'outputDir' => 'a']],
         ], self::PATH, $diagnostics);
 

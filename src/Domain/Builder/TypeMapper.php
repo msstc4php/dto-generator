@@ -204,8 +204,8 @@ final class TypeMapper
             return $this->consts->narrow($schema, new MixedType(), $diagnostics);
         }
 
-        // Parsed type lists hold no duplicates, so two or more members always form a valid union.
-        return $this->consts->narrow($schema, count($members) === 1 ? $members[0] : new UnionType(...$members), $diagnostics);
+        // `type: [integer, number]` with a format of whole numbers gives int twice.
+        return $this->consts->narrow($schema, UnionType::of(...$members), $diagnostics);
     }
 
     /**
@@ -610,6 +610,10 @@ final class TypeMapper
     private function intKeyword(Schema $schema, string $keyword): ?int
     {
         $value = $schema->hasKeyword($keyword) ? $schema->keyword($keyword) : null;
+        // A whole float (`maximum: 1000.0`) bounds integers as well; beyond 2^53 no float is an exact integer.
+        if (is_float($value) && abs($value) <= 2 ** 53 && (float) (int) $value === $value) {
+            return (int) $value;
+        }
 
         return is_int($value) ? $value : null;
     }
