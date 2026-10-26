@@ -6,6 +6,8 @@
 - `Extensions` — только ключи `x-<name>`; порядок — как в документе.
 - `default` обёрнут в `DefaultValue`: «default = null» ≠ «default нет».
 
+- `Schema::format()` — как в документе; `normalizedFormat()` — имя по `Formats::normalize()` (lower case, `[\s_]+`→`-`, алиасы). Решения о типе и проверках — по имени; отпечатки (`SchemaFingerprint`, `ObjectShape`) — по написанию. `Formats` (public API): `DATES`, `INTEGERS`, `NUMERIC_STRINGS`, `isKnown(name, string|integer|number)`. Подстановки конфига/расширений — `Builder\FormatMap` (тип по написанию, затем по имени; «известен для скаляра» — `knows()`).
+
 ## IR (`Domain/Model`)
 - `TypeModel`: `ScalarType` (с PHPDoc-уточнением), `ClassType`, `ListType`, `MapType` (`array<array-key, T>` — числовые ключи JSON становятся int), `UnionType` (≥2 разных, плоский, без nullable/mixed), `NullableType` (не вкладывается, не над mixed), `MixedType`. Равенство типов — по `describe()`.
 - `ClassName` отклоняет зарезервированные слова (включая soft keywords `enum`, `readonly`) только в **коротком имени**; сегменты namespace — лишь синтаксис идентификатора, т.к. с PHP 8.0 `App\Dto\Public` допустим. Отказ для target < 8.0 — обязанность валидации конфига (этап 2). Переименование (суффикс `_`) делает Builder, не модель.
