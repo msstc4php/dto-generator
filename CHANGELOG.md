@@ -6,6 +6,8 @@ All notable changes to this package are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.17.0] - 2026-10-27
+
 ### Added
 
 - The format `ip-or-cidr`, an IP address or a range of either version, which Linode writes `ipv4|ipv6/prefix_length`
@@ -547,7 +549,8 @@ First release.
 - A manifest per output directory: stale classes are deleted, files without the `@generated` header are never
   overwritten.
 
-[Unreleased]: https://github.com/msstc4php/dto-generator/compare/v1.16.0...HEAD
+[Unreleased]: https://github.com/msstc4php/dto-generator/compare/v1.17.0...HEAD
+[1.17.0]: https://github.com/msstc4php/dto-generator/compare/v1.16.0...v1.17.0
 [1.16.0]: https://github.com/msstc4php/dto-generator/compare/v1.15.0...v1.16.0
 [1.15.0]: https://github.com/msstc4php/dto-generator/compare/v1.14.0...v1.15.0
 [1.14.0]: https://github.com/msstc4php/dto-generator/compare/v1.13.0...v1.14.0
