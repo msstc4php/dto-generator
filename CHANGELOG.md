@@ -6,6 +6,11 @@ All notable changes to this package are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- The format `ip-or-cidr`, an IP address or a range of either version, which Linode writes `ipv4|ipv6/prefix_length`
+  (with examples that have no prefix); `ipv4|ipv6` is read as `ip`.
+
 ## [1.16.0] - 2026-10-26
 
 ### Changed
