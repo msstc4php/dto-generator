@@ -50,8 +50,9 @@ spaces and underscores as hyphens, and reads these spellings as that name; the S
 | `date-time-rfc-2822` | `rfc2822`, `date-time-rfc2822` |
 | `unix-time` (integers and numbers) | `unixtime`, `unix-timestamp`, `epoch`, `timestamp` |
 | `email` / `hostname` | `e-mail`, `email-address` / `host-name` |
-| `ip`, `ipv4`, `ipv6` | `ip-address`, `ip-v4`, `ipv4-address`, `ip-v6`, `ipv6-address` |
+| `ip`, `ipv4`, `ipv6` | `ip-address`, `ipv4\|ipv6`, `ip-v4`, `ipv4-address`, `ip-v6`, `ipv6-address` |
 | `cidr`, `ipv4-cidr`, `ipv6-cidr` | `ip/netmask`, `ip/prefix_length`; `ipv4/prefix_length`, `ipv4/netmask`; `ipv6/prefix_length`, `ipv6/128` (Linode) |
+| `ip-or-cidr`: an address or a range, of either version | `ipv4\|ipv6/prefix_length` (Linode, whose examples have no prefix) |
 | `mac-address` | `mac`, `macaddress` |
 | `uuid` / `byte` / `json` | `guid` / `base64` / `json-string` |
 | `uri-reference` | `url`, which specs write for relative paths and bare host names as well (Linode) |
@@ -67,7 +68,8 @@ A format is read in lower case, with spaces and underscores as hyphens, whether 
 `idn-email`, `idn-hostname`, `iri`, `iri-reference`, `uri-template`, `ulid`, `base64url`, `password`, `regex`,
 `json-pointer`, `relative-json-pointer`, `iban`, `isbn`, `issn`, `isin`, `digits`, `MM/YYYY` (Linode), a format named
 after its type (`format: string`). `formats` in the config maps a format by its spelling first, then by its name, so
-`formats: {date-time: …}` covers `dateTime` too.
+`formats: {date-time: …}` covers `dateTime` too. A format of one API only (Linode's `ssh-key`, `ssl-cert`, `ssl-key`,
+`oauth-scopes`) stays unknown: name it in `formats` with its scalar (`ssh-key: {type: string}`) to drop the warning.
 
 A string default of a boolean, a number or an enum of integers is read only as JSON would write it without the quotes:
 `"true"`, `"-42"`, `"1.5e3"`; `"TRUE"`, `" 42"`, `"010"` or `"+1"` still give the warning. A whole float default of a

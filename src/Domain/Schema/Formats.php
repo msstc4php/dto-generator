@@ -25,7 +25,7 @@ final class Formats
     private const STRINGS = [
         ...self::NUMERIC_STRINGS,
         'date-time', 'date', 'time', 'partial-time', 'duration', 'date-time-rfc-2822', 'email', 'idn-email', 'hostname',
-        'idn-hostname', 'ipv4', 'ipv6', 'ip', 'cidr', 'ipv4-cidr', 'ipv6-cidr', 'mac-address', 'uri', 'uri-reference',
+        'idn-hostname', 'ipv4', 'ipv6', 'ip', 'cidr', 'ipv4-cidr', 'ipv6-cidr', 'ip-or-cidr', 'mac-address', 'uri', 'uri-reference',
         'iri', 'iri-reference', 'uri-template', 'uuid', 'ulid', 'byte', 'base64url', 'binary', 'password', 'regex',
         'json-pointer', 'relative-json-pointer', 'json', 'phone', 'currency', 'country', 'language', 'locale',
         'timezone', 'color', 'hex-color', 'iban', 'bic', 'isbn', 'issn', 'isin', 'http-method', 'mm/yyyy', 'string',
@@ -75,6 +75,7 @@ final class Formats
         'ipaddress' => 'ip',
         'ip-v4' => 'ipv4',
         'ipv4-address' => 'ipv4',
+        'ipv4|ipv6' => 'ip',
         'ip-v6' => 'ipv6',
         'ipv6-address' => 'ipv6',
         'ip/netmask' => 'cidr',
@@ -83,6 +84,8 @@ final class Formats
         'ipv4/prefix-length' => 'ipv4-cidr',
         'ipv6/prefix-length' => 'ipv6-cidr',
         'ipv6/128' => 'ipv6-cidr',
+        // Linode's examples of it have no prefix: an address or a range.
+        'ipv4|ipv6/prefix-length' => 'ip-or-cidr',
         'mac' => 'mac-address',
         'macaddress' => 'mac-address',
         'guid' => 'uuid',

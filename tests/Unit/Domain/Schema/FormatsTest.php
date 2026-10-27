@@ -25,6 +25,8 @@ final class FormatsTest extends TestCase
         yield 'url' => ['url', 'uri-reference'];
         yield 'netmask' => ['ip/netmask', 'cidr'];
         yield 'prefix length' => ['ipv4/prefix_length', 'ipv4-cidr'];
+        yield 'address or range of either version' => ['ipv4|ipv6/prefix_length', 'ip-or-cidr'];
+        yield 'address of either version' => ['ipv4|ipv6', 'ip'];
         yield 'month and year' => ['MM/YYYY', 'mm/yyyy'];
         yield 'hex colour' => ['hex-color', 'hex-color'];
         yield 'hex colour in camel case' => ['hexColor', 'hex-color'];
