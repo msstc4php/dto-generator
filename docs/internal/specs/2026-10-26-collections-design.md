@@ -19,11 +19,11 @@ dto-collection и dto-collection-generator.
 
 | Этап | Репозиторий | Содержание | Релиз |
 |---|---|---|---|
-| C1 | ядро | конфиг `dto.collections`, `x-php-collection`, `CollectionType`, рендер, атрибут `#[TypedCollection]` | 1.17.0 (minor) |
+| C1 | ядро | конфиг `dto.collections`, `x-php-collection`, `CollectionType`, рендер, атрибут `#[TypedCollection]` | 1.18.0 (minor; 1.17.0 вышел раньше с другим) |
 | C2 | runtime-мост | `CollectionNormalizer` для Symfony Serializer | 1.4.0 (minor) |
-| C3 | Symfony-мост | `#[Context]` для коллекций, ограничения валидатора | 1.9.0, требует ядро `^1.17` |
+| C3 | Symfony-мост | `#[Context]` для коллекций, ограничения валидатора | 1.10.0, требует ядро `^1.18` |
 
-C3 берёт ядро из GitHub (`vcs`), поэтому сливается только после публикации ядра 1.17.0; публикует владелец.
+C3 берёт ядро из GitHub (`vcs`), поэтому сливается только после публикации ядра 1.18.0; публикует владелец.
 
 ## 3. C1 — ядро
 

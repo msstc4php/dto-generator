@@ -15,8 +15,15 @@ All notable changes to this package are documented here. The format follows
   [configuration](docs/configuration.md#dtocollections).
 - `x-php-collection` on an array schema or a property: the collection class of that list, or `false` to keep an array.
 - `Domain\Model\CollectionType` in the model the SPI exposes, for extensions that read property types.
-  The Symfony bridge writes the serializer context and the constraints of a collection from its 1.9.0 (with
+  The Symfony bridge writes the serializer context and the constraints of a collection from its 1.10.0 (with
   dto-generator-bridge-runtime 1.4.0); an older bridge does not know the type and writes neither.
+
+## [1.17.0] - 2026-10-27
+
+### Added
+
+- The format `ip-or-cidr`, an IP address or a range of either version, which Linode writes `ipv4|ipv6/prefix_length`
+  (with examples that have no prefix); `ipv4|ipv6` is read as `ip`.
 
 ## [1.16.0] - 2026-10-26
 
@@ -554,7 +561,8 @@ First release.
 - A manifest per output directory: stale classes are deleted, files without the `@generated` header are never
   overwritten.
 
-[Unreleased]: https://github.com/msstc4php/dto-generator/compare/v1.16.0...HEAD
+[Unreleased]: https://github.com/msstc4php/dto-generator/compare/v1.17.0...HEAD
+[1.17.0]: https://github.com/msstc4php/dto-generator/compare/v1.16.0...v1.17.0
 [1.16.0]: https://github.com/msstc4php/dto-generator/compare/v1.15.0...v1.16.0
 [1.15.0]: https://github.com/msstc4php/dto-generator/compare/v1.14.0...v1.15.0
 [1.14.0]: https://github.com/msstc4php/dto-generator/compare/v1.13.0...v1.14.0
