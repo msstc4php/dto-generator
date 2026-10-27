@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Rector\CodeQuality\Rector\Foreach_\ForeachItemsAssignToEmptyArrayToAssignRector;
 use Rector\CodingStyle\Rector\Catch_\CatchExceptionNameMatchingTypeRector;
 use Rector\CodingStyle\Rector\Stmt\NewlineAfterStatementRector;
+use Rector\CodingStyle\Rector\String_\UseClassKeywordForClassNameResolutionRector;
 use Rector\Config\RectorConfig;
 use Rector\DeadCode\Rector\ClassMethod\RemoveDuplicatedReturnSelfDocblockRector;
 use Rector\Php55\Rector\String_\StringClassNameToClassConstantRector;
@@ -34,7 +35,9 @@ return RectorConfig::configure()
         // Generated code and the attribute classes it uses, checked on each target PHP version instead.
         __DIR__ . '/tests/Targets',
         // Tests name the attribute classes of tests/Targets/attributes.php, which only the generated code loads.
-        StringClassNameToClassConstantRector::class => [__DIR__ . '/tests'],
+        // dto-collection's attribute is named, not installed: only tests/Targets/collection-attribute.php declares it.
+        StringClassNameToClassConstantRector::class => [__DIR__ . '/tests', __DIR__ . '/src/Domain/Builder/TypedCollections.php'],
+        UseClassKeywordForClassNameResolutionRector::class => [__DIR__ . '/tests/Unit/Application/Service/Model/CollectionsBuildTest.php', __DIR__ . '/tests/Unit/Application/Service/Model/EnrichTest.php'],
         NewlineAfterStatementRector::class,
         CatchExceptionNameMatchingTypeRector::class,
         // `@return static` on AbstractEnum factories is what types subclasses; it is not redundant with `: self`.

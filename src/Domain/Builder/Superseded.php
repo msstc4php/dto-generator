@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MSSTC4PHP\DtoGenerator\Domain\Builder;
 
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassType;
+use MSSTC4PHP\DtoGenerator\Domain\Model\CollectionType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ListType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\MapType;
@@ -47,6 +48,8 @@ final class Superseded
                 $types[] = $current->inner();
             } elseif ($current instanceof ListType) {
                 $types[] = $current->item();
+            } elseif ($current instanceof CollectionType) {
+                $types[] = $current->list();
             } elseif ($current instanceof MapType) {
                 $types[] = $current->value();
             } elseif ($current instanceof UnionType) {

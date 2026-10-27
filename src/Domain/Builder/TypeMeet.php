@@ -6,6 +6,7 @@ namespace MSSTC4PHP\DtoGenerator\Domain\Builder;
 
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassType;
+use MSSTC4PHP\DtoGenerator\Domain\Model\CollectionType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumBacking;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ListType;
@@ -60,6 +61,23 @@ final class TypeMeet
             $meet = $this->of($this->withoutNull($a), $this->withoutNull($b));
 
             return !$meet instanceof TypeModel || !$a instanceof NullableType || !$b instanceof NullableType ? $meet : NullableType::of($meet);
+        }
+
+        // A member that only constrains the list (`minItems`, or items it leaves untyped) keeps the collection; one that
+        // narrows the items keeps a generic class only, as one made for an item type would need the other item's class.
+        $collection = $a instanceof CollectionType ? $a : ($b instanceof CollectionType ? $b : null);
+        $other = $collection === $a ? $b : $a;
+        if ($collection instanceof CollectionType && $other instanceof ListType) {
+            $list = $this->of($collection->list(), $other);
+            if (!$list instanceof ListType) {
+                return null;
+            }
+
+            if ($list->describe() === $collection->list()->describe()) {
+                return $collection;
+            }
+
+            return $collection->isGeneric() ? $collection->withList($list) : null;
         }
 
         if ($a instanceof ListType && $b instanceof ListType) {
@@ -118,7 +136,7 @@ final class TypeMeet
             return $type->backing()->value() === EnumBacking::INT ? 'integer' : 'string';
         }
 
-        if ($type instanceof ListType) {
+        if ($type instanceof ListType || $type instanceof CollectionType) {
             return 'array';
         }
 
@@ -156,6 +174,13 @@ final class TypeMeet
 
         if ($wide instanceof ListType) {
             return $narrow instanceof ListType && $this->admits($wide->item(), $narrow->item());
+        }
+
+        // Two collections compare as their lists do when the class follows from the items: it is the same, or the same
+        // pattern gives both. Two classes the document chose otherwise are no meet of anything.
+        if ($wide instanceof CollectionType) {
+            return $narrow instanceof CollectionType && $this->admits($wide->list(), $narrow->list())
+                && ($wide->className()->fqcn() === $narrow->className()->fqcn() || ($wide->pattern() !== null && $wide->pattern() === $narrow->pattern()));
         }
 
         if ($wide instanceof MapType) {

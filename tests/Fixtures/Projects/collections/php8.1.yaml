@@ -1,0 +1,12 @@
+version: 1
+verifyClasses: false
+target:
+  php: '8.1'
+dto:
+  collections:
+    class: App\Shop\Collection\{item}List
+    typedCollection: immutable
+sources:
+  - spec: api/openapi.yaml
+    namespace: App\Shop
+    outputDir: generated/8.1

@@ -14,6 +14,7 @@ use MSSTC4PHP\DtoGenerator\Application\Service\Model\Build\Input;
 use MSSTC4PHP\DtoGenerator\Application\Service\Model\Build\Output;
 use MSSTC4PHP\DtoGenerator\Application\Service\Schemas\Load\Action as LoadAction;
 use MSSTC4PHP\DtoGenerator\Application\Service\Schemas\Load\Input as LoadInput;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\Collections;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\NameResolver;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\SchemaParser;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostic;
@@ -48,6 +49,19 @@ final class ModelFixture
     }
 
     /**
+     * A run whose lists collection classes may hold; with $split, one with read and write views.
+     *
+     * @param array<int|string, array<array-key, mixed>> $schemas components/schemas of the spec
+     */
+    public static function collections(array $schemas, ?Collections $collections, ?ViewSuffixes $split = null, string $php = '8.2'): Output
+    {
+        $source = ConfigMother::source(GraphFixture::SPEC);
+        $config = ConfigMother::collections($source, $collections, $split);
+
+        return (new Action(new NameResolver()))(new Input($config, self::target($php), GraphFixture::load($schemas, [], $source), []));
+    }
+
+    /**
      * A run over a whole document whose every operation gives classes; load diagnostics come first.
      *
      * @param array<string, array<array-key, mixed>> $root the document without its version
@@ -75,10 +89,10 @@ final class ModelFixture
         return new Output($output->classes(), $diagnostics, $output->enums());
     }
 
-    private static function target(): TargetProfile
+    private static function target(string $php = '8.2'): TargetProfile
     {
         return new TargetProfile(
-            PhpVersion::fromString('8.2'),
+            PhpVersion::fromString($php),
             MetadataMode::from(MetadataMode::NONE),
             Mutability::from(Mutability::IMMUTABLE),
             AccessorStyle::from(AccessorStyle::AUTO),

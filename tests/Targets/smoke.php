@@ -296,4 +296,11 @@ if (is_file($profile . 'Rules.php.golden')) {
     check($options instanceof App\Dto\Options && read($options, 'verbose') === false, 'new in a default');
 }
 
+require __DIR__ . '/collections.php';
+require $profile . 'Basket.php.golden';
+$basket = new App\Dto\Basket(new App\Dto\TagList([$tag]), new App\Collection\ListOf([1, 2]));
+check(read($basket, 'tags')->toArray() === [$tag], 'collection property');
+check(read($basket, 'codes')->toArray() === [1, 2], 'generic collection property');
+check(read($basket, 'labels') === null && read($basket, 'history') === null, 'optional collections default to null');
+
 echo 'ok ' . basename($profile) . "\n";

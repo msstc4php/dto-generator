@@ -10,6 +10,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\ClassKind;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassType;
+use MSSTC4PHP\DtoGenerator\Domain\Model\CollectionType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\DocModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumBacking;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumType;
@@ -54,12 +55,20 @@ final class ClassBuilder
 
     private ?PropertyView $view;
 
+    private PropertyCollections $collections;
+
+    private CollectionDeclines $declines;
+
     /**
      * @param list<string> $aliases keys of attributeAliases, which properties may carry
      * @param PropertyView|null $view the view of a direction-dependent class; null keeps every property
+     * @param Collections|null $collections `dto.collections`; null keeps lists as arrays unless x-php-collection asks
+     * @param CollectionDeclines|null $declines takes the lists that decline a collection, for Hierarchy to ask too
      */
-    public function __construct(NameResolver $names, TypeMapper $types, TargetProfile $target, array $aliases = [], ?PropertyView $view = null, ?Superseded $superseded = null)
+    public function __construct(NameResolver $names, TypeMapper $types, TargetProfile $target, array $aliases = [], ?PropertyView $view = null, ?Superseded $superseded = null, ?Collections $collections = null, ?CollectionDeclines $declines = null)
     {
+        $this->declines = $declines ?? new CollectionDeclines();
+        $this->collections = new PropertyCollections($types, $target, $collections, $this->declines);
         $this->superseded = $superseded ?? new Superseded();
         $this->names = $names;
         $this->types = $types;
@@ -93,6 +102,8 @@ final class ClassBuilder
         $properties = [];
         $taken = [];
         $byWireName = [];
+        $declined = [];
+        $reported = [];
         $sources = $composition->propertySources();
         ReadWriteMode::check($schema, $diagnostics);
         $view = $this->view instanceof PropertyView && $this->view->appliesTo($schema) ? $this->view : null;
@@ -123,6 +134,10 @@ final class ClassBuilder
             if ($earlier instanceof PropertyModel) {
                 // Every member of the allOf applies: the property has the type of the values both admit.
                 $meet = $this->types->meet()->of($earlier->type(), $property->type());
+                // A member that narrows the declining list keeps the decline, though not its location.
+                if ($this->declines->declines($property)) {
+                    $declined[] = $wireName;
+                }
                 if (!$meet instanceof TypeModel) {
                     $diagnostics->error(
                         sprintf(
@@ -139,6 +154,12 @@ final class ClassBuilder
                         sprintf('Property "%s" of %s has another PHP name or default here than in an earlier allOf member.', $wireName, $name->fqcn()),
                         $propertySchema->location(),
                     );
+                } elseif (in_array($wireName, $declined, true) && CollectionDeclines::isCollection($meet)) {
+                    // Once: a member after the declining one conflicts again with what the class keeps.
+                    if (!in_array($wireName, $reported, true)) {
+                        $reported[] = $wireName;
+                        $diagnostics->error(self::declined($wireName, $name, $meet), $propertySchema->location());
+                    }
                 } else {
                     $this->superseded->add($earlier->type());
                     $this->superseded->add($property->type());
@@ -164,8 +185,16 @@ final class ClassBuilder
             }
 
             $taken[$key] = $wireName;
+            if ($this->declines->declines($property)) {
+                $declined[] = $wireName;
+            }
+
             $byWireName[$wireName] = $property;
             $properties[] = $property;
+        }
+
+        foreach (array_unique($declined) as $wireName) {
+            $this->declines->addProperty($name, (string) $wireName);
         }
 
         $additional = $this->additionalProperties($schema, $view, isset($taken['additionalproperties']), $diagnostics);
@@ -287,6 +316,15 @@ final class ClassBuilder
     }
 
     /**
+     * The error of a property that one allOf member keeps an array by x-php-collection: false and another holds in a
+     * collection.
+     */
+    public static function declined(string $wireName, ClassName $class, TypeModel $collection): string
+    {
+        return sprintf('Property "%s" of %s stays an array by "x-php-collection: false" in one allOf member, but is %s in another.', $wireName, $class->fqcn(), $collection->describe());
+    }
+
+    /**
      * The default a schema sets, as JSON writes it (`1` and `1.0` of a number are the same); a null one only stands for
      * a missing value.
      */
@@ -307,7 +345,8 @@ final class ClassBuilder
             return null;
         }
 
-        $type = $this->types->map($schema, $diagnostics);
+        $type = $this->collections->hold($schema, $this->types->map($schema, $diagnostics), $diagnostics);
+
         $required = $required && !$type instanceof NullableType;
         $default = null;
         if (!$required) {
@@ -522,6 +561,15 @@ final class ClassBuilder
 
         $at = $schema->location()->child('default');
         $inner = $type instanceof NullableType ? $type->inner() : $type;
+        // A collection object is no constant expression; an empty one stands for "no elements", as null does.
+        if ($inner instanceof CollectionType) {
+            if ($default->value() !== []) {
+                $diagnostics->warning(sprintf('A default for %s cannot be a PHP constant expression; null is used instead.', $inner->describe()), $at);
+            }
+
+            return null;
+        }
+
         // Read first: `default: "5"` beside `const: 5` is the constant.
         $read = $this->read($default, $inner, $schema);
         $forbidden = $this->forbiddenBySchema($schema, $default->value(), $read->value());

@@ -27,6 +27,10 @@ when it is out of date.
   defaults, `format`, internal and cross-file `$ref` (recursive types included), `allOf` as inheritance or merge,
   `oneOf`/`anyOf` with a discriminator (abstract base class) or as a union type, inline property schemas lifted into
   named classes.
+- **Collection objects instead of arrays** on request: `TagList $tags` or `ArrayCollection<int, Tag>`, with
+  `#[TypedCollection]` on the item classes for
+  [dto-collection-generator](https://github.com/msstc4php/dto-collection-generator) — see
+  [`dto.collections`](docs/configuration.md#dtocollections).
 - **Precise PHPDoc** — `list<T>`, `array<array-key, T>`, `non-empty-string`, `int<1, 100>`, `Status::*` — in
   `@phpstan-*` tags, with portable `@var`/`@param` tags for other readers.
 - **`x-` keywords** to rename classes and properties, map to your own types, skip schemas and add arbitrary

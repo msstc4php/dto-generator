@@ -8,6 +8,8 @@ use LogicException;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\AllOfResolver;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\ClassBuilder;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\ClassLookup;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\CollectionClashes;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\CollectionDeclines;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\Composition;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\Directions;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\EnumBuilder;
@@ -22,6 +24,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Builder\ReadWriteMode;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\RequiredCycles;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\SchemaShape;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\Superseded;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\TypedCollections;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\TypeMapper;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\VariantResolver;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\Variants;
@@ -38,6 +41,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Schema\ResolvedSchema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaGraph;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\VariantOrigin;
+use MSSTC4PHP\DtoGenerator\Domain\Target\Capability;
 
 /**
  * Turns the schema graph into the IR: one class per object schema and one enum per enum schema, including schemas
@@ -207,6 +211,7 @@ final class Action
         $declarations = $registry->declarationsWithHierarchy($input->graph(), $parents);
         $types = new TypeMapper($input->graph(), $declarations, $input->target(), $input->formats(), $input->knownFormats());
         $superseded = new Superseded();
+        $declines = new CollectionDeclines();
         $builder = new ClassBuilder(
             $this->names,
             $types,
@@ -214,6 +219,8 @@ final class Action
             $input->aliases(),
             $registry->properties(),
             $superseded,
+            $input->config()->dto()->collections(),
+            $declines,
         );
         $models = [];
         $children = [];
@@ -234,7 +241,7 @@ final class Action
         $unions = $this->unions($input, $registry, $children, $subclasses, $diagnostics);
         $built = [];
         $found = new Merges();
-        foreach (Hierarchy::link($models, $unions, $diagnostics, $types->meet(), $superseded, $found) as $index => $model) {
+        foreach (Hierarchy::link($models, $unions, $diagnostics, $types->meet(), $superseded, $found, $declines) as $index => $model) {
             $built[] = new BuiltClass($model, $registry->planned()[$index][2]);
         }
 
@@ -249,7 +256,9 @@ final class Action
         // Only an Output follows the parents; the object defaults it gives up change what the next one inherits.
         [$models, $inherited] = $this->models(new Output($built, $diagnostics, $enums));
         $resolved = [];
-        foreach (ObjectDefaults::resolve($models, $inherited, $diagnostics) as $index => $model) {
+        $models = TypedCollections::mark(ObjectDefaults::resolve($models, $inherited, $diagnostics), $input->config()->dto()->collections());
+        CollectionClashes::check($models, array_map(static fn (BuiltEnum $enum): EnumModel => $enum->model(), $enums), $input->target()->supports(Capability::from(Capability::ENUMS)), $diagnostics);
+        foreach ($models as $index => $model) {
             $resolved[] = new BuiltClass($model, $built[$index]->source());
         }
 

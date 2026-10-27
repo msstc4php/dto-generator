@@ -16,7 +16,7 @@ final class ExtensionVocabulary
     /** The core keys; any other key starting with x-php- or x-dto- is a typo. */
     public const KNOWN = [
         'x-php-class-name', 'x-php-name', 'x-php-type', 'x-dto-mutable', 'x-php-all-of', 'x-php-skip', 'x-php-attributes',
-        'x-php-read-write', 'x-enum-descriptions', 'x-enum-varnames',
+        'x-php-read-write', 'x-enum-descriptions', 'x-enum-varnames', 'x-php-collection',
     ];
 
     private const CLASS_SCHEMA = [
@@ -27,9 +27,9 @@ final class ExtensionVocabulary
     /** An enum is no class, so it carries no attributes. */
     private const ENUM_SCHEMA = ['x-php-class-name', 'x-php-type', 'x-dto-mutable', 'x-php-all-of', 'x-php-skip', 'x-enum-descriptions', 'x-enum-varnames'];
 
-    private const ALIAS_SCHEMA = ['x-php-type', 'x-php-skip'];
+    private const ALIAS_SCHEMA = ['x-php-type', 'x-php-skip', 'x-php-collection'];
 
-    private const PROPERTY = ['x-php-name', 'x-php-type', 'x-php-skip', 'x-php-attributes'];
+    private const PROPERTY = ['x-php-name', 'x-php-type', 'x-php-skip', 'x-php-attributes', 'x-php-collection'];
 
     /** An inline object or enum becomes a class or an enum, so it takes the keys of one. */
     private const DECLARATION = ['x-php-class-name', 'x-dto-mutable', 'x-enum-descriptions', 'x-enum-varnames'];

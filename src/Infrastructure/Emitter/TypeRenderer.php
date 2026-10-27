@@ -7,6 +7,7 @@ namespace MSSTC4PHP\DtoGenerator\Infrastructure\Emitter;
 use LogicException;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassType;
+use MSSTC4PHP\DtoGenerator\Domain\Model\CollectionType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\Identifier as ModelIdentifier;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ListType;
@@ -126,6 +127,21 @@ final class TypeRenderer
             return $portable ? $type->backing()->value() : $this->printer->type($this->className($type->className())) . '::*';
         }
 
+        if ($type instanceof CollectionType) {
+            $class = $this->printer->type($this->className($type->className()));
+            // Symfony PropertyInfo reads `Bag<T>` in @var as a list of T, fills it itself and never builds the Bag.
+            if ($portable || $type->typeArguments() === []) {
+                return $class;
+            }
+
+            $arguments = [];
+            foreach ($type->typeArguments() as $argument) {
+                $arguments[] = $argument === 'int' ? 'int' : $this->render($type->list()->item(), false);
+            }
+
+            return $class . '<' . implode(', ', $arguments) . '>';
+        }
+
         if ($type instanceof ListType) {
             // Symfony PropertyInfo reads "list<mixed>" as the class "list" (5.4) or throws on "?list<mixed>" (8.1).
             if ($portable && $type->item() instanceof MixedType) {
@@ -220,7 +236,7 @@ final class TypeRenderer
             return new Identifier($type->kind());
         }
 
-        if ($type instanceof ClassType) {
+        if ($type instanceof ClassType || $type instanceof CollectionType) {
             return $this->className($type->className());
         }
 

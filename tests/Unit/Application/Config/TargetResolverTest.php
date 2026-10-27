@@ -9,6 +9,8 @@ use MSSTC4PHP\DtoGenerator\Application\Config\ExtensionSettings;
 use MSSTC4PHP\DtoGenerator\Application\Config\GeneratorConfig;
 use MSSTC4PHP\DtoGenerator\Application\Config\TargetResolver;
 use MSSTC4PHP\DtoGenerator\Application\Config\TargetSettings;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\CollectionClass;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\Collections;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostic;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
@@ -117,6 +119,47 @@ final class TargetResolverTest extends TestCase
         self::assertNotNull($this->resolve($this->config('8.0', null, 'App\List\Dto'), null));
     }
 
+    /**
+     * @dataProvider targetsWithoutTypedCollections
+     */
+    public function testTypedCollectionNeedsPhp81AndAttributes(string $php, ?string $metadata, string $message): void
+    {
+        $diagnostics = new Diagnostics();
+        $config = $this->config($php, $metadata, 'App\Dto', [], true, new Collections(CollectionClass::fromPattern('App\Collection\{item}List'), Collections::IMMUTABLE));
+
+        self::assertNull((new TargetResolver(new FixedPhpConstraint(null)))->resolve($config, $diagnostics));
+        self::assertSame(['error /project/dto-generator.yaml#/dto/collections/typedCollection: ' . $message], array_map(static fn (Diagnostic $d): string => $d->toString(), $diagnostics->all()));
+    }
+
+    /**
+     * @return array<string, array{string, string|null, string}>
+     */
+    public static function targetsWithoutTypedCollections(): array
+    {
+        return [
+            'php 8.0' => ['8.0', null, '#[TypedCollection] needs PHP 8.1, as dto-collection does; the target is PHP 8.0.'],
+            'annotations' => ['8.1', MetadataMode::ANNOTATIONS, '#[TypedCollection] is a PHP attribute, which "metadata: annotations" does not write.'],
+            'no metadata' => ['8.3', MetadataMode::NONE, '#[TypedCollection] is a PHP attribute, which "metadata: none" does not write.'],
+        ];
+    }
+
+    public function testAllowsTypedCollectionsOnPhp81(): void
+    {
+        self::assertNotNull($this->resolve($this->config('8.1', null, 'App\Dto', [], true, new Collections(CollectionClass::fromPattern('App\Collection\{item}List'), Collections::MUTABLE)), null));
+    }
+
+    public function testRejectsReservedNamespaceSegmentsOfTheCollectionClassBeforePhp80(): void
+    {
+        $diagnostics = new Diagnostics();
+        $config = $this->config('7.4', null, 'App\Dto', [], true, new Collections(CollectionClass::fromPattern('App\List\{item}s')));
+
+        self::assertNull((new TargetResolver(new FixedPhpConstraint(null)))->resolve($config, $diagnostics));
+        self::assertSame(
+            ['error /project/dto-generator.yaml#/dto/collections/class: Namespace "App\List" contains the reserved word "List", which PHP 7.4 cannot parse in a namespace (allowed from PHP 8.0).'],
+            array_map(static fn (Diagnostic $d): string => $d->toString(), $diagnostics->all()),
+        );
+    }
+
     public function testCarriesTheWitherSettingIntoTheTarget(): void
     {
         $without = $this->resolve($this->config('8.2', null, 'App\Dto', [], false), null);
@@ -140,7 +183,7 @@ final class TargetResolverTest extends TestCase
     /**
      * @param array<int|string, ClassName> $formats
      */
-    private function config(?string $php, ?string $metadata = null, string $namespace = 'App\Dto', array $formats = [], bool $withers = true): GeneratorConfig
+    private function config(?string $php, ?string $metadata = null, string $namespace = 'App\Dto', array $formats = [], bool $withers = true, ?Collections $collections = null): GeneratorConfig
     {
         return new GeneratorConfig(
             ConfigMother::PATH,
@@ -151,6 +194,9 @@ final class TargetResolverTest extends TestCase
                 DateTimeClass::from(DateTimeClass::IMMUTABLE),
                 AllOfStrategy::from(AllOfStrategy::EXTENDS),
                 $withers,
+                null,
+                null,
+                $collections,
             ),
             $formats,
             new ExtensionSettings([], true, [], [], null),

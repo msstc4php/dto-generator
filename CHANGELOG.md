@@ -6,6 +6,18 @@ All notable changes to this package are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `dto.collections`: list properties typed as a collection class instead of `array` + `@var list<T>` — one class per
+  item type (`App\Collection\{item}List` → `TagList`) or one generic class (`ArrayCollection<int, Tag>`, through
+  `typeArguments`). `typedCollection: immutable|mutable` marks the generated item classes with
+  `#[TypedCollection]` for dto-collection-generator (PHP 8.1+). See
+  [configuration](docs/configuration.md#dtocollections).
+- `x-php-collection` on an array schema or a property: the collection class of that list, or `false` to keep an array.
+- `Domain\Model\CollectionType` in the model the SPI exposes, for extensions that read property types.
+  The Symfony bridge writes the serializer context and the constraints of a collection from its 1.10.0 (with
+  dto-generator-bridge-runtime 1.4.0); an older bridge does not know the type and writes neither.
+
 ## [1.17.0] - 2026-10-27
 
 ### Added

@@ -20,7 +20,7 @@ parameters:
     phpVersion: $(( ${2%.*} * 10000 + ${2#*.} * 100 ))
     fileExtensions: [golden]
     paths: ["$PWD/$1"]
-    scanFiles: ["$PWD/tests/Targets/attributes.php"]
+    scanFiles: ["$PWD/tests/Targets/attributes.php", "$PWD/tests/Targets/collections.php"]
 NEON
     tools/vendor/bin/phpstan analyse -c "$config" --no-progress --error-format=raw
 }
@@ -29,6 +29,6 @@ for profile in tests/Fixtures/Emitter/*/; do
     check "$profile" "$(basename "$profile" | cut -d- -f1)" 'php tests/Targets/smoke.php "$1"'
 done
 
-for expected in tests/Fixtures/Projects/golden/expected/*/; do
+for expected in tests/Fixtures/Projects/golden/expected/*/ tests/Fixtures/Projects/collections/expected/*/; do
     check "$expected" "$(basename "$expected" | cut -d- -f1)" 'echo "ok $1"'
 done

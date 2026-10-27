@@ -38,4 +38,6 @@
 ## Сквозной golden-проект (этап 3b)
 - `tests/Fixtures/Projects/golden/` — `api/openapi.yaml`, `api/shared/common.yaml`, конфиги `php<ver>.yaml`; эталоны `expected/<ver>/*.php.golden`. `GoldenProjectTest` гоняет `DtoGenerator::generator()` в dry-run, `UPDATE_SNAPSHOTS=1` перезаписывает; `make test-targets` линтует и прогоняет PHPStan max по `expected/<ver>`.
 - Функциональные тесты CLI — suite `functional` (`tests/Functional`), они же входят в infection (`testFrameworkOptions`).
-
+- **Стабы для `make test-targets`**: `tests/Targets/collections.php` — классы коллекций golden-фикстуры `Basket`,
+  проекта `tests/Fixtures/Projects/collections` и атрибут dto-collection (`Variant` — константы вместо enum).
+  Файл обязан парситься PHP 7.4: его грузит smoke на каждой цели, а `make lint-74` линтит все `tests/**/*.php`.

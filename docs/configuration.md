@@ -19,6 +19,10 @@ dto:
   withers: true                  # false: immutable DTOs get no with*()
   readWriteModels: single        # single | split — read and write models for readOnly/writeOnly
   readWriteSuffixes: { read: Read, write: Write }
+  collections:                   # lists as collection objects instead of arrays; off without this key
+    class: App\Collection\{item}List
+    typeArguments: []            # [] | [item] | [int, item]
+    typedCollection: none        # none | immutable | mutable
 
 formats:                         # your own formats → PHP classes or scalars
   money: { type: App\Money\Money }
@@ -83,6 +87,7 @@ Required; must be `1`.
 | `withers` | `true` | `true`, `false` |
 | `readWriteModels` | `single` | `single`, `split` |
 | `readWriteSuffixes` | `{read: Read, write: Write}` | two different PHP identifiers |
+| `collections` | none (lists are arrays) | see [`dto.collections`](#dtocollections) |
 
 - **`mutability`.** Immutable DTOs have `with*()` methods returning a copy; mutable ones have setters. A schema can
   override it with `x-dto-mutable`.
@@ -117,6 +122,54 @@ Required; must be `1`.
 - **`readWriteSuffixes`**: what the two models add to the class name, for example `{read: Response, write: Request}`.
   The two must differ, letter case ignored; they also name the models of schemas with `x-php-read-write: split`. A
   model named like another class is an error.
+
+### `dto.collections`
+
+A property that is a list gets the type of a collection class instead of `array` + `@var list<T>`:
+
+```yaml
+dto:
+  collections:
+    class: App\Collection\{item}List
+```
+
+`tags: {type: array, items: {$ref: '#/components/schemas/Tag'}}` becomes `TagList $tags` (or `?TagList`), on every
+target. The generated DTOs only declare the type; building the collection from the wire data is up to your
+serializer (the Symfony bridge does it).
+
+| Key | Default | Values |
+|---|---|---|
+| `class` | (required) | a class name, with `{item}` in its short name or without |
+| `typeArguments` | `[]` with `{item}`, `[item]` without | `[]`, `[item]`, `[int, item]` |
+| `typedCollection` | `none` | `none`, `immutable`, `mutable` |
+
+- **`{item}`** stands for the short name of the item type: a class (`Tag`, `TagRead` in a read model), an enum from
+  PHP 8.1 (before, the enum's `String` or `Integer`), or `Integer`, `Float`, `String`, `Boolean`. A list of anything
+  else (a union, nullable items, nested lists) stays an array, with a warning; an untyped list (`{type: array}`)
+  stays an array quietly. Without `{item}`, one class holds every list. `{item}` is a short name, so `App\Shop\Tag`
+  and `App\Other\Tag` would share `TagList`: a class without `typeArguments` that two item types get, or that the
+  run also generates from a schema, is an error.
+- **`typeArguments`** is what the PHPDoc type passes the class: nothing for a class made for one item type
+  (`TagList`), the item for a generic one (`ListOf<Tag>`), or `[int, item]` for Doctrine's
+  `ArrayCollection<int, Tag>`. The arguments are written in `@phpstan-var` only, with the refinements of the item:
+  `@var` names the bare class, because Symfony's PropertyInfo reads a generic iterable class there as a list and
+  never builds the collection object.
+- **`typedCollection`** writes `#[\MSSTC4PHP\DtoCollection\Attribute\TypedCollection(<class>, Variant::Immutable)]`
+  (or `Mutable`) on every generated class a property lists through `class`, so that
+  [dto-collection-generator](https://github.com/msstc4php/dto-collection-generator) builds the collection. It needs
+  `{item}` in `class`, a PHP 8.1 target and attributes (`metadata: auto` or `attributes`); `verifyClasses` checks that
+  dto-collection is installed. Enums carry no attributes,
+  and scalar lists have no class to mark: list their collections in `dto-collection-generator.yaml`.
+- Only a property's own list becomes a collection: lists inside a union, a map or another list stay arrays, and so do
+  `additionalProperties`. [`x-php-collection`](x-extensions.md#x-php-collection) picks another class for one list, or
+  keeps it an array.
+- In an `allOf`, merged or extended, a member that only constrains the list (`minItems`, untyped items) keeps the
+  other member's collection. A member that narrows the items keeps a class without `{item}` over the narrower items,
+  and a class of the same pattern follows the items (`AnimalList` → `DogList`); any other pair of classes, or a
+  member with `x-php-collection: false` beside a collection, is an error.
+- A collection object is no constant expression, so a `default` of the property gives `null`: `[]` silently, any
+  other value with a warning.
+- `with*()` copies the reference to the collection object: an immutable DTO wants an immutable collection.
 
 ## `formats`
 

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MSSTC4PHP\DtoGenerator\Application\Config;
 
 use MSSTC4PHP\DtoGenerator\Application\Port\ProjectPhpConstraint;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\Collections;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
 use MSSTC4PHP\DtoGenerator\Domain\Exception\IncompatibleTarget;
 use MSSTC4PHP\DtoGenerator\Domain\Exception\UnsupportedPhpVersion;
@@ -20,6 +21,9 @@ use MSSTC4PHP\DtoGenerator\Domain\Target\TargetProfile;
  */
 final class TargetResolver
 {
+    /** The lowest PHP dto-collection runs on. */
+    private const DTO_COLLECTION_PHP = '8.1';
+
     private ProjectPhpConstraint $constraints;
 
     public function __construct(ProjectPhpConstraint $constraints)
@@ -50,6 +54,7 @@ final class TargetResolver
         }
 
         $this->checkNamespaces($config, $profile, $diagnostics);
+        $this->checkTypedCollection($config, $profile, $diagnostics);
 
         return count($diagnostics->errors()) > $errors ? null : $profile;
     }
@@ -112,6 +117,14 @@ final class TargetResolver
             }
         }
 
+        $collections = $config->dto()->collections();
+        if ($collections instanceof Collections) {
+            $collectionClass = $collections->collectionClass()->className('Item');
+            foreach ($collectionClass->reservedNamespaceSegments() as $segment) {
+                $diagnostics->error($this->reservedSegment($collectionClass->namespace(), $segment, $profile), $config->location()->child('dto', 'collections', 'class'));
+            }
+        }
+
         foreach ($config->formats() as $format => $class) {
             if (!$class instanceof ClassName) {
                 continue;
@@ -123,6 +136,21 @@ final class TargetResolver
                     $config->location()->child('formats', (string) $format, 'type'),
                 );
             }
+        }
+    }
+
+    private function checkTypedCollection(GeneratorConfig $config, TargetProfile $profile, Diagnostics $diagnostics): void
+    {
+        $collections = $config->dto()->collections();
+        if (!$collections instanceof Collections || $collections->typedCollection() === null) {
+            return;
+        }
+
+        $at = $config->location()->child('dto', 'collections', 'typedCollection');
+        if (!$profile->php()->isAtLeast(PhpVersion::fromString(self::DTO_COLLECTION_PHP))) {
+            $diagnostics->error(sprintf('#[TypedCollection] needs PHP %s, as dto-collection does; the target is PHP %s.', self::DTO_COLLECTION_PHP, $profile->php()->toString()), $at);
+        } elseif (!$profile->metadata()->isAttributes()) {
+            $diagnostics->error(sprintf('#[TypedCollection] is a PHP attribute, which "metadata: %s" does not write.', $profile->metadata()->value()), $at);
         }
     }
 

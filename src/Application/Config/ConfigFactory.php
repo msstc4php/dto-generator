@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace MSSTC4PHP\DtoGenerator\Application\Config;
 
 use InvalidArgumentException;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\CollectionClass;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\Collections;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\ExtensionVocabulary;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
 use MSSTC4PHP\DtoGenerator\Domain\Exception\InvalidModel;
@@ -215,7 +217,7 @@ final class ConfigFactory
 
     private function dto(RawSection $section): DtoSettings
     {
-        $section->rejectUnknownKeys(['mutability', 'accessors', 'dateTimeClass', 'allOfStrategy', 'withers', 'readWriteModels', 'readWriteSuffixes']);
+        $section->rejectUnknownKeys(['mutability', 'accessors', 'dateTimeClass', 'allOfStrategy', 'withers', 'readWriteModels', 'readWriteSuffixes', 'collections']);
 
         $mutability = Mutability::from($section->choice('mutability', Mutability::IMMUTABLE, $this->values(Mutability::cases())));
         $withers = $section->bool('withers', true);
@@ -233,7 +235,42 @@ final class ConfigFactory
             $withers,
             $readWriteModels,
             $this->viewSuffixes($section->section('readWriteSuffixes')),
+            $section->has('collections') ? $this->collections($section->section('collections')) : null,
         );
+    }
+
+    private function collections(RawSection $section): ?Collections
+    {
+        $section->rejectUnknownKeys(['class', 'typeArguments', 'typedCollection']);
+        $pattern = $section->requiredString('class');
+        $typeArguments = $section->has('typeArguments') ? array_values($section->stringList('typeArguments', [])) : null;
+        $typedCollection = $section->choice('typedCollection', 'none', ['none', Collections::IMMUTABLE, Collections::MUTABLE]);
+        $typedCollection = $typedCollection === Collections::IMMUTABLE || $typedCollection === Collections::MUTABLE ? $typedCollection : null;
+        if ($pattern === null) {
+            return null;
+        }
+
+        try {
+            $collectionClass = CollectionClass::fromPattern($pattern);
+        } catch (InvalidModel $exception) {
+            $section->report($exception->getMessage(), 'class');
+
+            return null;
+        }
+
+        try {
+            $collectionClass = $collectionClass->withTypeArguments($typeArguments);
+        } catch (InvalidModel $exception) {
+            $section->report($exception->getMessage(), 'typeArguments');
+        }
+
+        try {
+            return new Collections($collectionClass, $typedCollection);
+        } catch (InvalidModel $exception) {
+            $section->report($exception->getMessage(), 'typedCollection');
+
+            return null;
+        }
     }
 
     private function viewSuffixes(RawSection $section): ViewSuffixes
