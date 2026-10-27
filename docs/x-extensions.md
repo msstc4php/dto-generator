@@ -69,7 +69,8 @@ tags:
 ```
 
 It works without `dto.collections` too, and takes its `typeArguments`. On an array schema it applies to every
-property that `$ref`s the schema; the property's own key wins. On anything but a list it has no effect (a warning).
+property that `$ref`s the schema, also through `allOf: [$ref]` or `oneOf`/`anyOf` of the `$ref` and `null`; the
+property's own key wins. On anything but a list it has no effect (a warning).
 A class named here gets no `#[TypedCollection]`.
 
 ## `x-php-skip`

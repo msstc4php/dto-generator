@@ -34,14 +34,14 @@ final class CollectionClassTest extends TestCase
 
     public function testExplicitTypeArgumentsWin(): void
     {
-        self::assertSame(['int', 'item'], CollectionClass::fromPattern('Doctrine\Common\Collections\ArrayCollection', ['int', 'item'])->typeArguments());
-        self::assertSame([], CollectionClass::fromPattern('App\Bag', [])->typeArguments());
-        self::assertSame(['item'], CollectionClass::fromPattern('App\{item}List', ['item'])->typeArguments());
+        self::assertSame(['int', 'item'], CollectionClass::fromPattern('Doctrine\Common\Collections\ArrayCollection')->withTypeArguments(['int', 'item'])->typeArguments());
+        self::assertSame([], CollectionClass::fromPattern('App\Bag')->withTypeArguments([])->typeArguments());
+        self::assertSame(['item'], CollectionClass::fromPattern('App\{item}List')->withTypeArguments(['item'])->typeArguments());
     }
 
     public function testAnotherPatternKeepsExplicitTypeArguments(): void
     {
-        $configured = CollectionClass::fromPattern('App\{item}List', ['int', 'item']);
+        $configured = CollectionClass::fromPattern('App\{item}List')->withTypeArguments(['int', 'item']);
 
         self::assertSame(['int', 'item'], $configured->withPattern('App\Bag')->typeArguments());
         self::assertSame(['item'], CollectionClass::fromPattern('App\{item}List')->withPattern('App\Bag')->typeArguments());
@@ -68,7 +68,7 @@ final class CollectionClassTest extends TestCase
         $this->expectException(InvalidModel::class);
         $this->expectExceptionMessage($message);
 
-        CollectionClass::fromPattern($pattern, $typeArguments);
+        CollectionClass::fromPattern($pattern)->withTypeArguments($typeArguments);
     }
 
     /**

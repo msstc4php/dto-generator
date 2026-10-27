@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MSSTC4PHP\DtoGenerator\Domain\Builder;
 
+use MSSTC4PHP\DtoGenerator\Domain\Exception\InvalidModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ArgumentValue;
 use MSSTC4PHP\DtoGenerator\Domain\Model\AttributeArgument;
 use MSSTC4PHP\DtoGenerator\Domain\Model\AttributeModel;
@@ -46,7 +47,7 @@ final class TypedCollections
                 $type = $type instanceof NullableType ? $type->inner() : $type;
                 $item = $type instanceof CollectionType ? $type->list()->item() : null;
                 // x-php-collection may name a class of its own, which no generator is asked for.
-                if ($item instanceof ClassType && $type->className()->fqcn() === $collections->collectionClass()->className($item->className()->shortName())->fqcn()) {
+                if ($item instanceof ClassType && $type->className()->fqcn() === self::configured($collections->collectionClass(), $item)) {
                     $byItem[$item->className()->fqcn()][$type->className()->fqcn()] = $type->className();
                 }
             }
@@ -63,6 +64,19 @@ final class TypedCollections
         }
 
         return $marked;
+    }
+
+    /**
+     * The class the configuration gives the item; none when its short name makes no class name, which only a collection
+     * x-php-collection chose can hold.
+     */
+    private static function configured(CollectionClass $class, ClassType $item): ?string
+    {
+        try {
+            return $class->className($item->className()->shortName())->fqcn();
+        } catch (InvalidModel $exception) {
+            return null;
+        }
     }
 
     /**

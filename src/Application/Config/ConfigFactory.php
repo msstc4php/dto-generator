@@ -259,7 +259,7 @@ final class ConfigFactory
         }
 
         try {
-            $collectionClass = CollectionClass::fromPattern($pattern, $typeArguments);
+            $collectionClass = $collectionClass->withTypeArguments($typeArguments);
         } catch (InvalidModel $exception) {
             $section->report($exception->getMessage(), 'typeArguments');
         }

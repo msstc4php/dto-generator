@@ -632,6 +632,24 @@ final class EnrichTest extends TestCase
         self::assertSame(['error ' . self::AT . 'Pet: Attribute class App\\Attr\\Marked does not exist.'], $this->messages($output));
     }
 
+    public function testVerifiesTheAttributesTheBuildAdded(): void
+    {
+        $typed = new AttributeModel(ClassName::fromFqcn('MSSTC4PHP\DtoCollection\Attribute\TypedCollection'), [
+            AttributeArgument::positional(ArgumentValue::literal('App\Collection\PetList')),
+            AttributeArgument::positional(ArgumentValue::constant('Immutable', ClassName::fromFqcn('MSSTC4PHP\DtoCollection\Attribute\Variant'))),
+        ]);
+        $output = $this->enrich(['Pet' => self::SCHEMAS['Pet']], static function (ExtensionRegistry $registry): void {
+        }, '8.2', true, MetadataMode::ATTRIBUTES, new FixedClassVerifier([]), static fn (array $classes): array => array_map(
+            static fn (BuiltClass $built): BuiltClass => new BuiltClass($built->model()->withAddedAttributes($typed), $built->source()),
+            $classes,
+        ));
+
+        self::assertSame([
+            'error ' . self::AT . 'Pet: Constant MSSTC4PHP\DtoCollection\Attribute\Variant::Immutable, used by attribute MSSTC4PHP\DtoCollection\Attribute\TypedCollection, does not exist.',
+            'error ' . self::AT . 'Pet: Attribute class MSSTC4PHP\DtoCollection\Attribute\TypedCollection does not exist.',
+        ], $this->messages($output));
+    }
+
     public function testReportsAMissingNameOnceWhicheverAttributeUsesIt(): void
     {
         $at = self::AT;

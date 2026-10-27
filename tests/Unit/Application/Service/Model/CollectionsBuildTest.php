@@ -13,6 +13,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\AttributeArgument;
 use MSSTC4PHP\DtoGenerator\Domain\Model\AttributeModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\CollectionType;
+use MSSTC4PHP\DtoGenerator\Domain\Model\NullableType;
 use MSSTC4PHP\DtoGenerator\Domain\Shared\DefaultValue;
 use MSSTC4PHP\DtoGenerator\Tests\Support\ModelFixture;
 use PHPUnit\Framework\TestCase;
@@ -69,7 +70,6 @@ final class CollectionsBuildTest extends TestCase
             'warning ' . self::AT . 'Basket/properties/codes: This list ' . sprintf($shape, 'int|string'),
             'warning ' . self::AT . 'Basket/properties/notes: This list ' . sprintf($shape, 'string|null'),
             'warning ' . self::AT . 'Basket/properties/grid: This list ' . sprintf($shape, 'list<int>'),
-            'warning ' . self::AT . 'Basket/properties/anything: This list ' . sprintf($shape, 'mixed'),
         ], ModelFixture::messages($output));
         self::assertSame([
             'codes: list<int|string>|null',
@@ -84,11 +84,12 @@ final class CollectionsBuildTest extends TestCase
         $output = ModelFixture::collections(['Basket' => ['type' => 'object', 'required' => ['grid'], 'properties' => [
             'grid' => ['type' => 'array', 'items' => ['type' => 'array', 'items' => ['type' => 'integer']]],
             'codes' => ['type' => 'array', 'items' => ['type' => ['integer', 'string']]],
-        ]]], new Collections(CollectionClass::fromPattern('Doctrine\Common\Collections\ArrayCollection', ['int', 'item'])));
+            'anything' => ['type' => 'array'],
+        ]]], new Collections(CollectionClass::fromPattern('Doctrine\Common\Collections\ArrayCollection')->withTypeArguments(['int', 'item'])));
 
         self::assertSame([], ModelFixture::messages($output));
         self::assertSame(
-            ['grid: Doctrine\Common\Collections\ArrayCollection<list<int>>', 'codes: Doctrine\Common\Collections\ArrayCollection<int|string>|null'],
+            ['grid: Doctrine\Common\Collections\ArrayCollection<list<int>>', 'codes: Doctrine\Common\Collections\ArrayCollection<int|string>|null', 'anything: Doctrine\Common\Collections\ArrayCollection<mixed>|null'],
             ModelFixture::classes($output)['App\Dto\Basket'],
         );
         $grid = $output->classes()[0]->model()->property('grid');
@@ -150,6 +151,8 @@ final class CollectionsBuildTest extends TestCase
             'number' => ['type' => 'array', 'items' => ['type' => 'string'], 'x-php-collection' => 5],
             'pattern' => ['type' => 'array', 'items' => ['type' => 'string'], 'x-php-collection' => 'App\{type}'],
             'name' => ['type' => 'string', 'x-php-collection' => 'App\Bag'],
+            'code' => ['type' => 'string', 'x-php-collection' => false],
+            'count' => ['type' => 'integer', 'x-php-collection' => 5],
             'reserved' => ['type' => 'array', 'items' => ['type' => 'object'], 'x-php-collection' => 'App\{item}'],
         ]]], null);
 
@@ -157,9 +160,11 @@ final class CollectionsBuildTest extends TestCase
             'error ' . self::AT . 'Basket/properties/number/x-php-collection: "x-php-collection" must be a class name or false.',
             'error ' . self::AT . 'Basket/properties/pattern/x-php-collection: "App\{type}" must be a class name, optionally with {item} for the short name of the item type, such as App\Collection\{item}List.',
             'warning ' . self::AT . 'Basket/properties/name/x-php-collection: "x-php-collection" applies to a list only; this property stays as it is.',
+            'warning ' . self::AT . 'Basket/properties/code/x-php-collection: "x-php-collection" applies to a list only; this property stays as it is.',
+            'warning ' . self::AT . 'Basket/properties/count/x-php-collection: "x-php-collection" applies to a list only; this property stays as it is.',
             'warning ' . self::AT . 'Basket/properties/reserved: This list stays an array: {item} in App\{item} stands for one class, enum or scalar item type, not array<array-key, mixed>.',
         ], ModelFixture::messages($output));
-        self::assertSame(['number: list<string>|null', 'pattern: list<string>|null', 'name: string|null', 'reserved: list<array<array-key, mixed>>|null'], ModelFixture::classes($output)['App\Dto\Basket']);
+        self::assertSame(['number: list<string>|null', 'pattern: list<string>|null', 'name: string|null', 'code: string|null', 'count: int|null', 'reserved: list<array<array-key, mixed>>|null'], ModelFixture::classes($output)['App\Dto\Basket']);
     }
 
     public function testAnItemNameThatMakesNoClassIsAnError(): void
@@ -278,6 +283,215 @@ final class CollectionsBuildTest extends TestCase
         $attributes = $this->attributes($output);
         self::assertSame(['MSSTC4PHP\DtoCollection\Attribute\TypedCollection(\'App\Collection\TagReadList\', MSSTC4PHP\DtoCollection\Attribute\Variant::Immutable)'], $attributes['App\\Dto\\TagRead']);
         self::assertSame(['MSSTC4PHP\DtoCollection\Attribute\TypedCollection(\'App\Collection\TagWriteList\', MSSTC4PHP\DtoCollection\Attribute\Variant::Immutable)'], $attributes['App\\Dto\\TagWrite']);
+    }
+
+    public function testXPhpCollectionCarriesThroughTheWrappersOfAReference(): void
+    {
+        $tags = ['$ref' => '#/components/schemas/Tags'];
+        $output = ModelFixture::collections([
+            'Tag' => self::TAG,
+            'Tags' => ['type' => 'array', 'items' => ['$ref' => '#/components/schemas/Tag'], 'x-php-collection' => false],
+            'Basket' => ['type' => 'object', 'properties' => [
+                'direct' => $tags,
+                'described' => ['allOf' => [$tags], 'description' => 'The tags.'],
+                'nullable' => ['oneOf' => [$tags, ['type' => 'null']]],
+                'either' => ['anyOf' => [['type' => 'null'], $tags]],
+            ]],
+        ], $this->pattern());
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(
+            ['direct: list<App\Dto\Tag>|null', 'described: list<App\Dto\Tag>|null', 'nullable: list<App\Dto\Tag>|null', 'either: list<App\Dto\Tag>|null'],
+            ModelFixture::classes($output)['App\Dto\Basket'],
+        );
+    }
+
+    /**
+     * @return array<string, array{string|null}>
+     */
+    public static function allOfStrategies(): array
+    {
+        return ['extends' => [null], 'merge' => ['merge']];
+    }
+
+    /**
+     * @dataProvider allOfStrategies
+     */
+    public function testAnAllOfMemberThatOnlyConstrainsAListKeepsItsCollection(?string $strategy): void
+    {
+        $basket = ['allOf' => [
+            ['$ref' => '#/components/schemas/Base'],
+            ['type' => 'object', 'properties' => ['tags' => ['type' => 'array', 'minItems' => 1]]],
+        ]];
+        $schemas = [
+            'Tag' => self::TAG,
+            'Base' => ['type' => 'object', 'properties' => ['tags' => ['type' => 'array', 'items' => ['$ref' => '#/components/schemas/Tag']]]],
+            'Basket' => $strategy === null ? $basket : $basket + ['x-php-all-of' => $strategy],
+        ];
+        $plain = ModelFixture::collections($schemas, null);
+        $output = ModelFixture::collections($schemas, $this->pattern());
+
+        self::assertSame(str_replace('list<App\Dto\Tag>', 'App\Collection\TagList<App\Dto\Tag>', ModelFixture::messages($plain)), ModelFixture::messages($output));
+        self::assertSame(
+            str_replace('list<App\Dto\Tag>', 'App\Collection\TagList<App\Dto\Tag>', ModelFixture::classes($plain)['App\Dto\Basket']),
+            ModelFixture::classes($output)['App\Dto\Basket'],
+        );
+    }
+
+    public function testACollectionClassMayHoldOneItemTypeAndNameNoOtherClass(): void
+    {
+        $output = ModelFixture::collections([
+            'Tag' => self::TAG,
+            'TagList' => ['type' => 'object', 'properties' => ['page' => ['type' => 'integer']]],
+            'Note' => self::TAG,
+            'Basket' => ['type' => 'object', 'properties' => [
+                'tags' => ['type' => 'array', 'items' => ['$ref' => '#/components/schemas/Tag']],
+                'notes' => ['type' => 'array', 'items' => ['$ref' => '#/components/schemas/Note']],
+                'vendorNotes' => ['type' => 'array', 'items' => ['type' => 'object', 'x-php-type' => 'Vendor\Note']],
+                'labels' => ['type' => 'array', 'items' => ['type' => 'string']],
+                'names' => ['type' => 'array', 'items' => ['type' => 'string', 'minLength' => 1]],
+                'bag' => ['type' => 'array', 'items' => ['type' => 'string'], 'x-php-collection' => 'App\Bag'],
+                'otherBag' => ['type' => 'array', 'items' => ['type' => 'integer'], 'x-php-collection' => 'App\Bag'],
+            ]],
+        ], new Collections(CollectionClass::fromPattern('App\Dto\{item}List')));
+
+        self::assertSame([
+            'error ' . self::AT . 'Basket/properties/tags: The collection class App\Dto\TagList is also generated from ' . self::AT . 'TagList; set "x-php-collection" on the property or rename one of them.',
+            'error ' . self::AT . 'Basket/properties/vendorNotes: The collection class App\Dto\NoteList holds Vendor\Note here, but App\Dto\Note at ' . self::AT . 'Basket/properties/notes; set "x-php-collection" on one of them.',
+        ], ModelFixture::messages($output));
+    }
+
+    public function testXPhpCollectionKeepsTheConfiguredTypeArguments(): void
+    {
+        $output = ModelFixture::collections([
+            'Tag' => self::TAG,
+            'Basket' => ['type' => 'object', 'properties' => [
+                'tags' => ['type' => 'array', 'items' => ['$ref' => '#/components/schemas/Tag'], 'x-php-collection' => 'App\Tags\{item}Set'],
+            ]],
+        ], new Collections(CollectionClass::fromPattern('App\Collection\{item}List')->withTypeArguments(['int', 'item'])));
+
+        self::assertSame([], ModelFixture::messages($output));
+        $tags = $output->classes()[1]->model()->property('tags');
+        self::assertNotNull($tags);
+        $type = $tags->type();
+        self::assertSame('App\Tags\TagSet<App\Dto\Tag>|null', $type->describe());
+        $inner = $type instanceof NullableType ? $type->inner() : $type;
+        self::assertInstanceOf(CollectionType::class, $inner);
+        self::assertSame(['int', 'item'], $inner->typeArguments());
+    }
+
+    public function testAnAliasUsedTwiceIsReportedWhereEachPropertyUsesIt(): void
+    {
+        $output = ModelFixture::collections([
+            'Codes' => ['type' => 'array', 'items' => ['type' => ['integer', 'string']], 'x-php-collection' => 'App\{item}List'],
+            'Basket' => ['type' => 'object', 'properties' => [
+                'first' => ['$ref' => '#/components/schemas/Codes'],
+                'second' => ['$ref' => '#/components/schemas/Codes'],
+            ]],
+        ], null);
+
+        $warning = 'This list stays an array: {item} in App\{item}List stands for one class, enum or scalar item type, not int|string.';
+        self::assertSame(
+            ['warning ' . self::AT . 'Basket/properties/first: ' . $warning, 'warning ' . self::AT . 'Basket/properties/second: ' . $warning],
+            ModelFixture::messages($output),
+        );
+    }
+
+    public function testAllOfMembersThatChooseTwoClassesForOneListAreAnError(): void
+    {
+        $output = ModelFixture::collections(['Odd' => ['allOf' => [
+            ['type' => 'object', 'properties' => ['ids' => ['type' => 'array', 'items' => ['type' => 'string']]]],
+            ['type' => 'object', 'properties' => ['ids' => ['type' => 'array', 'items' => ['type' => 'string'], 'x-php-collection' => 'App\Bag']]],
+        ]]], $this->pattern());
+
+        self::assertSame(
+            ['error ' . self::AT . 'Odd/allOf/1/properties/ids: Property "ids" of App\Dto\Odd is App\Bag<string>|null here, but App\Collection\StringList<string>|null in an earlier allOf member.'],
+            ModelFixture::messages($output),
+        );
+    }
+
+    public function testABadXPhpCollectionKeepsTheArrayAlsoBesideTheConfig(): void
+    {
+        $output = ModelFixture::collections(['Basket' => ['type' => 'object', 'properties' => [
+            'labels' => ['type' => 'array', 'items' => ['type' => 'string'], 'x-php-collection' => 'App\{type}'],
+        ]]], $this->pattern());
+
+        self::assertCount(1, ModelFixture::messages($output));
+        self::assertSame(['labels: list<string>|null'], ModelFixture::classes($output)['App\Dto\Basket']);
+    }
+
+    public function testAnAllOfMemberMayDeclineTheCollectionFirst(): void
+    {
+        $output = ModelFixture::collections(['Odd' => ['allOf' => [
+            ['type' => 'object', 'properties' => ['ids' => ['type' => 'array', 'items' => ['type' => 'string'], 'x-php-collection' => false]]],
+            ['type' => 'object', 'properties' => ['ids' => ['type' => 'array', 'items' => ['type' => 'string']]]],
+            ['type' => 'object', 'properties' => ['ids' => ['type' => 'array', 'items' => ['type' => 'string']]]],
+        ]]], $this->pattern());
+
+        $error = 'Property "ids" of App\Dto\Odd is App\Collection\StringList<string>|null here, but list<string>|null in an earlier allOf member.';
+        self::assertSame(['error ' . self::AT . 'Odd/allOf/1/properties/ids: ' . $error, 'error ' . self::AT . 'Odd/allOf/2/properties/ids: ' . $error], ModelFixture::messages($output));
+    }
+
+    public function testAnUntypedFirstMemberTakesTheCollectionOfALaterOne(): void
+    {
+        $output = ModelFixture::collections([
+            'Tag' => self::TAG,
+            'Basket' => ['x-php-all-of' => 'merge', 'allOf' => [
+                ['type' => 'object', 'properties' => ['tags' => ['type' => 'array', 'minItems' => 1]]],
+                ['type' => 'object', 'properties' => ['tags' => ['type' => 'array', 'items' => ['$ref' => '#/components/schemas/Tag']]]],
+            ]],
+        ], $this->pattern());
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(['tags: App\Collection\TagList<App\Dto\Tag>|null'], ModelFixture::classes($output)['App\Dto\Basket']);
+    }
+
+    public function testAMemberThatNarrowsTheItemsOfAFixedCollectionIsAnError(): void
+    {
+        $output = ModelFixture::collections(['Odd' => ['allOf' => [
+            ['type' => 'object', 'properties' => ['ids' => ['type' => 'array', 'items' => ['type' => ['integer', 'string']], 'x-php-collection' => 'App\Bag']]],
+            ['type' => 'object', 'properties' => ['ids' => ['type' => 'array', 'items' => ['type' => 'integer']]]],
+        ]]], null);
+
+        self::assertSame(
+            ['error ' . self::AT . 'Odd/allOf/1/properties/ids: Property "ids" of App\Dto\Odd is list<int>|null here, but App\Bag<int|string>|null in an earlier allOf member.'],
+            ModelFixture::messages($output),
+        );
+    }
+
+    public function testEachClashIsReportedOnceAndEveryPropertyIsChecked(): void
+    {
+        $output = ModelFixture::collections([
+            'Tag' => self::TAG,
+            'TagList' => ['type' => 'object', 'properties' => ['page' => ['type' => 'integer']]],
+            'Note' => self::TAG,
+            'Basket' => ['type' => 'object', 'properties' => [
+                'tags' => ['type' => 'array', 'items' => ['$ref' => '#/components/schemas/Tag']],
+                'moreTags' => ['type' => 'array', 'items' => ['$ref' => '#/components/schemas/Tag']],
+                'bag' => ['type' => 'array', 'items' => ['type' => 'string'], 'x-php-collection' => 'App\Bag'],
+                'notes' => ['type' => 'array', 'items' => ['$ref' => '#/components/schemas/Note']],
+                'vendorNotes' => ['type' => 'array', 'items' => ['type' => 'object', 'x-php-type' => 'Vendor\Note']],
+                'otherNotes' => ['type' => 'array', 'items' => ['type' => 'object', 'x-php-type' => 'Other\Note']],
+            ]],
+        ], new Collections(CollectionClass::fromPattern('App\Dto\{item}List')));
+
+        self::assertSame([
+            'error ' . self::AT . 'Basket/properties/tags: The collection class App\Dto\TagList is also generated from ' . self::AT . 'TagList; set "x-php-collection" on the property or rename one of them.',
+            'error ' . self::AT . 'Basket/properties/vendorNotes: The collection class App\Dto\NoteList holds Vendor\Note here, but App\Dto\Note at ' . self::AT . 'Basket/properties/notes; set "x-php-collection" on one of them.',
+        ], ModelFixture::messages($output));
+    }
+
+    public function testTheConfiguredClassIsMatchedForAnItemWhoseNameMakesNoClass(): void
+    {
+        $output = ModelFixture::collections([
+            'Arr' => self::TAG,
+            'Basket' => ['type' => 'object', 'properties' => [
+                'items' => ['type' => 'array', 'items' => ['$ref' => '#/components/schemas/Arr'], 'x-php-collection' => 'App\Bag'],
+            ]],
+        ], new Collections(CollectionClass::fromPattern('App\{item}ay'), Collections::IMMUTABLE));
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(['App\Dto\Arr' => [], 'App\Dto\Basket' => []], $this->attributes($output));
     }
 
     /**

@@ -128,14 +128,18 @@ final class TypeRenderer
         }
 
         if ($type instanceof CollectionType) {
+            $class = $this->printer->type($this->className($type->className()));
+            // Symfony PropertyInfo reads `Bag<T>` in @var as a list of T, fills it itself and never builds the Bag.
+            if ($portable || $type->typeArguments() === []) {
+                return $class;
+            }
+
             $arguments = [];
             foreach ($type->typeArguments() as $argument) {
-                $arguments[] = $argument === 'int' ? 'int' : $this->render($type->list()->item(), $portable);
+                $arguments[] = $argument === 'int' ? 'int' : $this->render($type->list()->item(), false);
             }
-            $class = $this->printer->type($this->className($type->className()));
 
-            // Symfony PropertyInfo reads `Bag<T>` in @var as a list of T, fills it itself and never builds the Bag.
-            return $arguments === [] || $portable ? $class : $class . '<' . implode(', ', $arguments) . '>';
+            return $class . '<' . implode(', ', $arguments) . '>';
         }
 
         if ($type instanceof ListType) {

@@ -66,24 +66,44 @@ final class TypeMapper
     }
 
     /**
-     * The schema whose x-php-collection decides how a property holds its list: the property's own, or the first along
-     * its $ref chain.
+     * The schema whose x-php-collection decides how a property holds its list: the property's own, or the first of the
+     * schemas it wraps.
      */
     public function collectionCarrier(Schema $schema): ?Schema
     {
         $visited = [];
         while (!$schema->extensions()->has('x-php-collection')) {
             $visited[] = $schema->location()->toString();
-            $ref = $schema->ref();
-            $target = $ref === null ? null : $this->graph->resolve(new ReferenceUse($ref, $schema->location()));
-            if (!$target instanceof ResolvedSchema || in_array($target->location()->toString(), $visited, true)) {
+            $next = $this->wrapped($schema);
+            if (!$next instanceof Schema || in_array($next->location()->toString(), $visited, true)) {
                 return null;
             }
 
-            $schema = $target->schema();
+            $schema = $next;
         }
 
         return $schema;
+    }
+
+    /**
+     * The one schema this one only wraps, as map() reads it: its `$ref`, the one member of an `allOf` beside members
+     * that only say "object", or the one member beside null of a `oneOf` or `anyOf`.
+     */
+    private function wrapped(Schema $schema): ?Schema
+    {
+        $ref = $schema->ref();
+        if ($ref !== null) {
+            $target = $this->graph->resolve(new ReferenceUse($ref, $schema->location()));
+
+            return $target instanceof ResolvedSchema ? $target->schema() : null;
+        }
+
+        $union = array_merge($schema->oneOf(), $schema->anyOf());
+        $members = $union !== []
+            ? array_filter($union, static fn (Schema $member): bool => !SchemaShape::isNull($member))
+            : array_filter($this->typed($schema->allOf(), false), static fn (Schema $member): bool => !SchemaShape::isPlainObject($member));
+
+        return count($members) === 1 ? reset($members) : null;
     }
 
     public function map(Schema $schema, Diagnostics $diagnostics): TypeModel

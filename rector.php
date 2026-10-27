@@ -37,7 +37,7 @@ return RectorConfig::configure()
         // Tests name the attribute classes of tests/Targets/attributes.php, which only the generated code loads.
         // dto-collection's attribute is named, not installed: only tests/Targets/collection-attribute.php declares it.
         StringClassNameToClassConstantRector::class => [__DIR__ . '/tests', __DIR__ . '/src/Domain/Builder/TypedCollections.php'],
-        UseClassKeywordForClassNameResolutionRector::class => [__DIR__ . '/tests/Unit/Application/Service/Model/CollectionsBuildTest.php'],
+        UseClassKeywordForClassNameResolutionRector::class => [__DIR__ . '/tests/Unit/Application/Service/Model/CollectionsBuildTest.php', __DIR__ . '/tests/Unit/Application/Service/Model/EnrichTest.php'],
         NewlineAfterStatementRector::class,
         CatchExceptionNameMatchingTypeRector::class,
         // `@return static` on AbstractEnum factories is what types subclasses; it is not redundant with `: self`.

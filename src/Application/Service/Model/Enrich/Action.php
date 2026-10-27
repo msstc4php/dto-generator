@@ -99,7 +99,8 @@ final class Action
         $diagnostics = $run->diagnostics();
         $context = new ClassContext($class, $schema, $input->target(), $input->packages(), $diagnostics, $inline, $run->references(), $selectingDiscriminator, $input->keywordChecks(), $ancestors);
         $attributes = AttributeRules::admitted($input->registry()->enrichClass($context), $input->target(), $schema->location(), $diagnostics);
-        $run->verify($attributes, $schema->location());
+        // The build adds attributes of its own (dto.collections.typedCollection).
+        $run->verify(array_merge($class->attributes(), $attributes), $schema->location());
 
         $properties = [];
         foreach ($class->properties() as $property) {

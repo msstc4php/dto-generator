@@ -63,6 +63,16 @@ final class TypeMeet
             return !$meet instanceof TypeModel || !$a instanceof NullableType || !$b instanceof NullableType ? $meet : NullableType::of($meet);
         }
 
+        // A member that only constrains the list (`minItems`, or items it leaves untyped) keeps the collection; one that
+        // narrows the items would need the class of another item.
+        $collection = $a instanceof CollectionType ? $a : ($b instanceof CollectionType ? $b : null);
+        $other = $collection === $a ? $b : $a;
+        if ($collection instanceof CollectionType && $other instanceof ListType) {
+            $list = $this->of($collection->list(), $other);
+
+            return $list instanceof TypeModel && $list->describe() === $collection->list()->describe() ? $collection : null;
+        }
+
         if ($a instanceof ListType && $b instanceof ListType) {
             $item = $this->of($a->item(), $b->item());
 
@@ -159,9 +169,11 @@ final class TypeMeet
             return $narrow instanceof ListType && $this->admits($wide->item(), $narrow->item());
         }
 
-        // The class of a collection follows from its items, so two collections compare as their lists do.
+        // The class of a collection follows from its items, so two collections compare as their lists do; two classes
+        // for the same items are a choice of the document no meet makes.
         if ($wide instanceof CollectionType) {
-            return $narrow instanceof CollectionType && $this->admits($wide->list(), $narrow->list());
+            return $narrow instanceof CollectionType && $this->admits($wide->list(), $narrow->list())
+                && ($wide->className()->fqcn() === $narrow->className()->fqcn() || $wide->list()->describe() !== $narrow->list()->describe());
         }
 
         if ($wide instanceof MapType) {

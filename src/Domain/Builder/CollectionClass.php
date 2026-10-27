@@ -8,6 +8,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Exception\InvalidModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\CollectionType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ListType;
+use MSSTC4PHP\DtoGenerator\Domain\Model\MixedType;
 
 /**
  * The class that holds a list instead of an array: a fixed class, or a pattern whose `{item}` becomes the short name
@@ -16,8 +17,6 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\ListType;
 final class CollectionClass
 {
     private const ITEM = '{item}';
-
-    private const TYPE_ARGUMENTS = [[], ['item'], ['int', 'item']];
 
     private string $pattern;
 
@@ -33,10 +32,7 @@ final class CollectionClass
         $this->typeArguments = $typeArguments;
     }
 
-    /**
-     * @param list<string>|null $typeArguments null for the default: none with `{item}`, the item without
-     */
-    public static function fromPattern(string $pattern, ?array $typeArguments = null): self
+    public static function fromPattern(string $pattern): self
     {
         $pattern = ltrim($pattern, '\\');
         $position = strrpos($pattern, '\\');
@@ -52,7 +48,18 @@ final class CollectionClass
             throw new InvalidModel(sprintf('"%s" must be a class name, optionally with {item} for the short name of the item type, such as App\Collection\{item}List.', $pattern));
         }
 
-        return new self($pattern, $typeArguments === null ? null : self::checkedTypeArguments($typeArguments));
+        return new self($pattern, null);
+    }
+
+    /**
+     * @param list<string>|null $typeArguments null for the default: none with `{item}`, the item without
+     */
+    public function withTypeArguments(?array $typeArguments): self
+    {
+        // CollectionType knows which arguments a PHPDoc type may pass.
+        $checked = $typeArguments === null ? null : (new CollectionType(ClassName::fromFqcn('Item'), new ListType(new MixedType()), $typeArguments))->typeArguments();
+
+        return new self($this->pattern, $checked);
     }
 
     /**
@@ -60,7 +67,7 @@ final class CollectionClass
      */
     public function withPattern(string $pattern): self
     {
-        return self::fromPattern($pattern, $this->typeArguments);
+        return new self(self::fromPattern($pattern)->pattern, $this->typeArguments);
     }
 
     public function pattern(): string
@@ -97,21 +104,5 @@ final class CollectionClass
     public function wrap(ListType $list, string $item): CollectionType
     {
         return new CollectionType($this->className($item), $list, $this->typeArguments());
-    }
-
-    /**
-     * @param list<string> $typeArguments
-     *
-     * @return list<'int'|'item'>
-     */
-    private static function checkedTypeArguments(array $typeArguments): array
-    {
-        foreach (self::TYPE_ARGUMENTS as $allowed) {
-            if ($typeArguments === $allowed) {
-                return $allowed;
-            }
-        }
-
-        throw new InvalidModel('Collection type arguments must be [], [item] or [int, item]');
     }
 }

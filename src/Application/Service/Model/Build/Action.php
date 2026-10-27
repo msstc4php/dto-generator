@@ -8,6 +8,7 @@ use LogicException;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\AllOfResolver;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\ClassBuilder;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\ClassLookup;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\CollectionClashes;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\Composition;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\Directions;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\EnumBuilder;
@@ -39,6 +40,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Schema\ResolvedSchema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaGraph;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\VariantOrigin;
+use MSSTC4PHP\DtoGenerator\Domain\Target\Capability;
 
 /**
  * Turns the schema graph into the IR: one class per object schema and one enum per enum schema, including schemas
@@ -252,6 +254,7 @@ final class Action
         [$models, $inherited] = $this->models(new Output($built, $diagnostics, $enums));
         $resolved = [];
         $models = TypedCollections::mark(ObjectDefaults::resolve($models, $inherited, $diagnostics), $input->config()->dto()->collections());
+        CollectionClashes::check($models, array_map(static fn (BuiltEnum $enum): EnumModel => $enum->model(), $enums), $input->target()->supports(Capability::from(Capability::ENUMS)), $diagnostics);
         foreach ($models as $index => $model) {
             $resolved[] = new BuiltClass($model, $built[$index]->source());
         }

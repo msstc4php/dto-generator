@@ -15,6 +15,8 @@ All notable changes to this package are documented here. The format follows
   [configuration](docs/configuration.md#dtocollections).
 - `x-php-collection` on an array schema or a property: the collection class of that list, or `false` to keep an array.
 - `Domain\Model\CollectionType` in the model the SPI exposes, for extensions that read property types.
+  The Symfony bridge writes the serializer context and the constraints of a collection from its 1.9.0 (with
+  dto-generator-bridge-runtime 1.4.0); an older bridge does not know the type and writes neither.
 
 ## [1.16.0] - 2026-10-26
 

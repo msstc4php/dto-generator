@@ -145,8 +145,10 @@ serializer (the Symfony bridge does it).
 
 - **`{item}`** stands for the short name of the item type: a class (`Tag`, `TagRead` in a read model), an enum from
   PHP 8.1 (before, the enum's `String` or `Integer`), or `Integer`, `Float`, `String`, `Boolean`. A list of anything
-  else (a union, nullable items, nested lists, `mixed`) stays an array, with a warning. Without `{item}`, one class
-  holds every list.
+  else (a union, nullable items, nested lists) stays an array, with a warning; an untyped list (`{type: array}`)
+  stays an array quietly. Without `{item}`, one class holds every list. `{item}` is a short name, so `App\Shop\Tag`
+  and `App\Other\Tag` would share `TagList`: a class without `typeArguments` that two item types get, or that the
+  run also generates from a schema, is an error.
 - **`typeArguments`** is what the PHPDoc type passes the class: nothing for a class made for one item type
   (`TagList`), the item for a generic one (`ListOf<Tag>`), or `[int, item]` for Doctrine's
   `ArrayCollection<int, Tag>`. The arguments are written in `@phpstan-var` only, with the refinements of the item:
@@ -155,11 +157,15 @@ serializer (the Symfony bridge does it).
 - **`typedCollection`** writes `#[\MSSTC4PHP\DtoCollection\Attribute\TypedCollection(<class>, Variant::Immutable)]`
   (or `Mutable`) on every generated class a property lists through `class`, so that
   [dto-collection-generator](https://github.com/msstc4php/dto-collection-generator) builds the collection. It needs
-  `{item}` in `class`, a PHP 8.1 target and attributes (`metadata: auto` or `attributes`). Enums carry no attributes,
+  `{item}` in `class`, a PHP 8.1 target and attributes (`metadata: auto` or `attributes`); `verifyClasses` checks that
+  dto-collection is installed. Enums carry no attributes,
   and scalar lists have no class to mark: list their collections in `dto-collection-generator.yaml`.
 - Only a property's own list becomes a collection: lists inside a union, a map or another list stay arrays, and so do
   `additionalProperties`. [`x-php-collection`](x-extensions.md#x-php-collection) picks another class for one list, or
   keeps it an array.
+- In an `allOf`, a member that only constrains the list (`minItems`, untyped items) keeps the other member's
+  collection; two members that choose different classes for the same items, or one with `x-php-collection: false`, are
+  an error.
 - A collection object is no constant expression, so a `default` of the property gives `null`: `[]` silently, any
   other value with a warning.
 - `with*()` copies the reference to the collection object: an immutable DTO wants an immutable collection.
