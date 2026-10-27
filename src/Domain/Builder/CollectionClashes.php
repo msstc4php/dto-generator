@@ -91,7 +91,7 @@ final class CollectionClashes
      */
     private static function key(string $item): string
     {
-        // Between quotes are the literals; a quote inside one (escaped) is rare enough to compare as written.
+        // Between quotes are the literals: LiteralType admits no quote inside one, so the quotes pair up at its edges.
         $parts = explode("'", $item);
         foreach ($parts as $index => $part) {
             if ($index % 2 === 0) {

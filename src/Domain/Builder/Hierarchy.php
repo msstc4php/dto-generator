@@ -596,9 +596,6 @@ final class Hierarchy
     }
 
     /**
-     * PHP lets no subclass declare its parent's property again: one the schema only narrows stays the parent's.
-     */
-    /**
      * Whether the class or any ancestor declines a collection for the property: an ancestor that keeps its parent's
      * declaration still declined.
      */
@@ -613,6 +610,9 @@ final class Hierarchy
         return false;
     }
 
+    /**
+     * PHP lets no subclass declare its parent's property again: one the schema only narrows stays the parent's.
+     */
     private function checkRedeclarations(ClassModel $model): ClassModel
     {
         $names = [];
