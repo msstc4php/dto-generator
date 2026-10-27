@@ -62,6 +62,11 @@ final class FormatsTest extends TestCase
         yield 'address or range' => ['ip-or-cidr', 'string', true];
     }
 
+    public function testKnowsLinodesAddressOrRangeAsAStringFormat(): void
+    {
+        self::assertTrue(Formats::isKnown(Formats::normalize('ipv4|ipv6/prefix_length'), 'string'));
+    }
+
     /**
      * @dataProvider known
      *

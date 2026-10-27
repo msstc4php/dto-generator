@@ -25,10 +25,11 @@ final class Formats
     private const STRINGS = [
         ...self::NUMERIC_STRINGS,
         'date-time', 'date', 'time', 'partial-time', 'duration', 'date-time-rfc-2822', 'email', 'idn-email', 'hostname',
-        'idn-hostname', 'ipv4', 'ipv6', 'ip', 'cidr', 'ipv4-cidr', 'ipv6-cidr', 'ip-or-cidr', 'mac-address', 'uri', 'uri-reference',
-        'iri', 'iri-reference', 'uri-template', 'uuid', 'ulid', 'byte', 'base64url', 'binary', 'password', 'regex',
-        'json-pointer', 'relative-json-pointer', 'json', 'phone', 'currency', 'country', 'language', 'locale',
-        'timezone', 'color', 'hex-color', 'iban', 'bic', 'isbn', 'issn', 'isin', 'http-method', 'mm/yyyy', 'string',
+        'idn-hostname', 'ipv4', 'ipv6', 'ip', 'cidr', 'ipv4-cidr', 'ipv6-cidr', 'ip-or-cidr', 'mac-address', 'uri',
+        'uri-reference', 'iri', 'iri-reference', 'uri-template', 'uuid', 'ulid', 'byte', 'base64url', 'binary',
+        'password', 'regex', 'json-pointer', 'relative-json-pointer', 'json', 'phone', 'currency', 'country',
+        'language', 'locale', 'timezone', 'color', 'hex-color', 'iban', 'bic', 'isbn', 'issn', 'isin', 'http-method',
+        'mm/yyyy', 'string',
     ];
 
     /** @var array{string: list<non-empty-string>, integer: list<non-empty-string>, number: list<non-empty-string>} */
@@ -84,7 +85,7 @@ final class Formats
         'ipv4/prefix-length' => 'ipv4-cidr',
         'ipv6/prefix-length' => 'ipv6-cidr',
         'ipv6/128' => 'ipv6-cidr',
-        // Linode's examples of it have no prefix: an address or a range.
+        // Not cidr: Linode's examples of it have no prefix.
         'ipv4|ipv6/prefix-length' => 'ip-or-cidr',
         'mac' => 'mac-address',
         'macaddress' => 'mac-address',
