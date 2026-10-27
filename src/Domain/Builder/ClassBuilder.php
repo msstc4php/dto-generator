@@ -345,9 +345,7 @@ final class ClassBuilder
             return null;
         }
 
-        $count = $diagnostics->count();
-        $type = $this->types->map($schema, $diagnostics);
-        $type = $this->collections->hold($schema, $type, $diagnostics, $diagnostics->count() > $count);
+        $type = $this->collections->hold($schema, $this->types->map($schema, $diagnostics), $diagnostics);
 
         $required = $required && !$type instanceof NullableType;
         $default = null;

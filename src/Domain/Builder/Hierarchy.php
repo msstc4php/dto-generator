@@ -598,6 +598,21 @@ final class Hierarchy
     /**
      * PHP lets no subclass declare its parent's property again: one the schema only narrows stays the parent's.
      */
+    /**
+     * Whether the class or any ancestor declines a collection for the property: an ancestor that keeps its parent's
+     * declaration still declined.
+     */
+    private function declinesAlong(ClassModel $model, string $wireName): bool
+    {
+        for ($class = $model->name(); $class instanceof ClassName; $class = $this->parents[$class->fqcn()] ?? null) {
+            if ($this->declines->declinedBy($class, $wireName)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private function checkRedeclarations(ClassModel $model): ClassModel
     {
         $names = [];
@@ -621,7 +636,7 @@ final class Hierarchy
                 $meet = $this->meet->of($inherited->type(), $property->type());
             }
 
-            $declined = is_string($byWireName) && ($this->declines->declinedBy(ClassName::fromFqcn($byWireName), $property->wireName()) || $this->declines->declinedBy($model->name(), $property->wireName()));
+            $declined = is_string($byWireName) && $this->declinesAlong($model, $property->wireName());
             if ($meet instanceof TypeModel && $declined && CollectionDeclines::isCollection($meet)) {
                 $this->diagnostics->error(ClassBuilder::declined($property->wireName(), $model->name(), $meet), $property->source());
 

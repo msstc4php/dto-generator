@@ -538,6 +538,44 @@ final class CollectionsBuildTest extends TestCase
         );
     }
 
+    public function testAnotherWarningKeepsTheOneAboutXPhpCollection(): void
+    {
+        $output = ModelFixture::collections(['Basket' => ['type' => 'object', 'properties' => [
+            'code' => ['type' => 'string', 'format' => 'nonsense-format', 'x-php-collection' => 'App\Bag'],
+        ]]], null);
+
+        self::assertContains(
+            'warning ' . self::AT . 'Basket/properties/code/x-php-collection: "x-php-collection" applies to a list only; this property stays as it is.',
+            ModelFixture::messages($output),
+        );
+    }
+
+    public function testAMiddleAncestorsDeclineHolds(): void
+    {
+        $output = ModelFixture::collections([
+            'A' => ['type' => 'object', 'properties' => ['ids' => ['type' => 'array', 'items' => ['type' => 'integer']]]],
+            'B' => ['allOf' => [['$ref' => '#/components/schemas/A'], ['type' => 'object', 'properties' => ['ids' => ['type' => 'array', 'items' => ['type' => 'integer'], 'x-php-collection' => false]]]]],
+            'C' => ['allOf' => [['$ref' => '#/components/schemas/B'], ['type' => 'object', 'properties' => ['ids' => ['type' => 'array', 'items' => ['type' => 'integer'], 'x-php-collection' => 'App\Bag']]]]],
+        ], null);
+
+        self::assertContains(
+            'error ' . self::AT . 'C/allOf/1/properties/ids: Property "ids" of App\Dto\C stays an array by "x-php-collection: false" in one allOf member, but is App\Bag<int>|null in another.',
+            ModelFixture::messages($output),
+        );
+    }
+
+    public function testNestedClassItemsCompareInAnyCase(): void
+    {
+        $output = ModelFixture::collections(['Basket' => ['type' => 'object', 'properties' => [
+            'prices' => ['type' => 'array', 'items' => ['type' => 'array', 'items' => ['type' => 'object', 'x-php-type' => 'Vendor\Money']], 'x-php-collection' => 'App\Prices'],
+            'costs' => ['type' => 'array', 'items' => ['type' => 'array', 'items' => ['type' => 'object', 'x-php-type' => 'vendor\money']], 'x-php-collection' => 'App\Prices'],
+            'tagged' => ['type' => 'array', 'items' => ['oneOf' => [['type' => 'string', 'const' => 'A'], ['type' => 'object', 'x-php-type' => 'Vendor\Money']]], 'x-php-collection' => 'App\Tagged'],
+            'alsoTagged' => ['type' => 'array', 'items' => ['oneOf' => [['type' => 'string', 'const' => 'A'], ['type' => 'object', 'x-php-type' => 'vendor\money']]], 'x-php-collection' => 'App\Tagged'],
+        ]]], new Collections(CollectionClass::fromPattern('App\{item}List')->withTypeArguments([])));
+
+        self::assertSame([], ModelFixture::messages($output));
+    }
+
     public function testConstantItemsOfAnotherCaseAreAnotherItem(): void
     {
         $output = ModelFixture::collections(['Basket' => ['type' => 'object', 'properties' => [
@@ -603,7 +641,7 @@ final class CollectionsBuildTest extends TestCase
         self::assertSame([], ModelFixture::messages($output));
     }
 
-    public function testAMixedTypeGetsNoSecondWarningFromXPhpCollection(): void
+    public function testAMixedTypeHearsAboutItsXPhpCollectionToo(): void
     {
         $output = ModelFixture::collections([
             'Tags' => ['type' => 'array', 'items' => ['type' => 'string'], 'x-php-collection' => 'App\Bag'],
@@ -611,7 +649,10 @@ final class CollectionsBuildTest extends TestCase
         ], null);
 
         self::assertSame(
-            ['error ' . self::AT . 'Basket/properties/tags: An "allOf" member requires an object beside one that can be no object, so no value passes; drop one of them.'],
+            [
+                'error ' . self::AT . 'Basket/properties/tags: An "allOf" member requires an object beside one that can be no object, so no value passes; drop one of them.',
+                'warning ' . self::AT . 'Tags/x-php-collection: "x-php-collection" applies to a list only; this property stays as it is.',
+            ],
             ModelFixture::messages($output),
         );
     }

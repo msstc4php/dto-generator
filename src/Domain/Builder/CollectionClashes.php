@@ -6,7 +6,6 @@ namespace MSSTC4PHP\DtoGenerator\Domain\Builder;
 
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassModel;
-use MSSTC4PHP\DtoGenerator\Domain\Model\ClassType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\CollectionType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumBacking;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumModel;
@@ -75,7 +74,7 @@ final class CollectionClashes
                 }
 
                 $item = self::item($type->list()->item(), $enumsSupported);
-                $itemKey = self::key($type->list()->item(), $item);
+                $itemKey = self::key($item);
                 $holder = $holders[$key] ?? null;
                 if ($holder === null) {
                     $holders[$key] = [$item, $at, $itemKey];
@@ -88,16 +87,24 @@ final class CollectionClashes
     }
 
     /**
-     * The item type as the class name tells it: refinements of a scalar (`non-empty-string`) share its collection.
+     * PHP reads a class name in any case: the item compares in lower case but for its literals (`list<'A'>`).
      */
-    /**
-     * PHP reads a class name in any case, and only a class name: `list<'A'>` and `list<'a'>` stay apart.
-     */
-    private static function key(TypeModel $item, string $described): string
+    private static function key(string $item): string
     {
-        return $item instanceof ClassType || $item instanceof EnumType ? strtolower($described) : $described;
+        // Between quotes are the literals; a quote inside one (escaped) is rare enough to compare as written.
+        $parts = explode("'", $item);
+        foreach ($parts as $index => $part) {
+            if ($index % 2 === 0) {
+                $parts[$index] = strtolower($part);
+            }
+        }
+
+        return implode("'", $parts);
     }
 
+    /**
+     * The item type as the class name tells it: refinements of a scalar (`non-empty-string`) share its collection.
+     */
     private static function item(TypeModel $item, bool $enumsSupported): string
     {
         if ($item instanceof EnumType && !$enumsSupported) {
