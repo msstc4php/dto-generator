@@ -59,6 +59,7 @@ final class FormatsTest extends TestCase
         yield 'number format of an integer' => ['double', 'integer', false];
         yield 'unknown' => ['ssh-key', 'string', false];
         yield 'hex colour' => ['hex-color', 'string', true];
+        yield 'address or range' => ['ip-or-cidr', 'string', true];
     }
 
     /**
