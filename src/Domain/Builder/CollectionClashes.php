@@ -6,6 +6,7 @@ namespace MSSTC4PHP\DtoGenerator\Domain\Builder;
 
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassModel;
+use MSSTC4PHP\DtoGenerator\Domain\Model\ClassType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\CollectionType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumBacking;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumModel;
@@ -42,7 +43,7 @@ final class CollectionClashes
             $generated[strtolower($enum->name()->fqcn())] = $enum->source();
         }
 
-        /** @var array<string, array{string, SchemaLocation}> $holders by lower-cased collection FQCN */
+        /** @var array<string, array{string, SchemaLocation, string}> $holders by lower-cased collection FQCN */
         $holders = [];
         // A list, not a map of true: a mutant writing false would survive isset().
         $reported = [];
@@ -74,10 +75,11 @@ final class CollectionClashes
                 }
 
                 $item = self::item($type->list()->item(), $enumsSupported);
+                $itemKey = self::key($type->list()->item(), $item);
                 $holder = $holders[$key] ?? null;
                 if ($holder === null) {
-                    $holders[$key] = [$item, $at];
-                } elseif (strtolower($holder[0]) !== strtolower($item)) {
+                    $holders[$key] = [$item, $at, $itemKey];
+                } elseif ($holder[2] !== $itemKey) {
                     $reported[] = $key;
                     $diagnostics->error(sprintf('The collection class %s holds %s here, but %s at %s; set "x-php-collection" on one of them.', $fqcn, $item, $holder[0], $holder[1]->toString()), $at);
                 }
@@ -88,6 +90,14 @@ final class CollectionClashes
     /**
      * The item type as the class name tells it: refinements of a scalar (`non-empty-string`) share its collection.
      */
+    /**
+     * PHP reads a class name in any case, and only a class name: `list<'A'>` and `list<'a'>` stay apart.
+     */
+    private static function key(TypeModel $item, string $described): string
+    {
+        return $item instanceof ClassType || $item instanceof EnumType ? strtolower($described) : $described;
+    }
+
     private static function item(TypeModel $item, bool $enumsSupported): string
     {
         if ($item instanceof EnumType && !$enumsSupported) {

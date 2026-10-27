@@ -180,7 +180,7 @@ final class TypeMeet
         // pattern gives both. Two classes the document chose otherwise are no meet of anything.
         if ($wide instanceof CollectionType) {
             return $narrow instanceof CollectionType && $this->admits($wide->list(), $narrow->list())
-                && ($wide->className()->fqcn() === $narrow->className()->fqcn() || ($wide->pattern() !== null && $wide->pattern() === $narrow->pattern() && !$wide->isGeneric()));
+                && ($wide->className()->fqcn() === $narrow->className()->fqcn() || ($wide->pattern() !== null && $wide->pattern() === $narrow->pattern()));
         }
 
         if ($wide instanceof MapType) {

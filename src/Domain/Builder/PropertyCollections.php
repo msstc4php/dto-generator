@@ -44,8 +44,10 @@ final class PropertyCollections
     /**
      * The type with its list held by a collection object, when one is asked for. A list that declines one is recorded
      * by the property's location.
+     *
+     * @param bool $reported whether the mapper reported on the schema, which then needs no word on x-php-collection
      */
-    public function hold(Schema $schema, TypeModel $type, Diagnostics $diagnostics): TypeModel
+    public function hold(Schema $schema, TypeModel $type, Diagnostics $diagnostics, bool $reported = false): TypeModel
     {
         $list = $type instanceof NullableType ? $type->inner() : $type;
         $list = $list instanceof ListType ? $list : null;
@@ -55,8 +57,7 @@ final class PropertyCollections
         $class = $this->collections instanceof Collections ? $this->collections->collectionClass() : null;
         if ($carrier instanceof Schema && $at instanceof SchemaLocation) {
             if (!$list instanceof ListType) {
-                // A type the mapper gave up on (mixed) is reported there.
-                if (!$type instanceof MixedType) {
+                if (!$reported) {
                     $diagnostics->warning('"x-php-collection" applies to a list only; this property stays as it is.', $at);
                 }
 

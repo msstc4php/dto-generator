@@ -496,6 +496,61 @@ final class CollectionsBuildTest extends TestCase
         );
     }
 
+    public function testADeclineHoldsAfterAMemberNarrowsTheList(): void
+    {
+        $members = [
+            ['type' => 'object', 'properties' => ['ids' => ['type' => 'array', 'items' => ['type' => ['integer', 'string']], 'x-php-collection' => false]]],
+            ['type' => 'object', 'properties' => ['ids' => ['type' => 'array', 'items' => ['type' => 'integer']]]],
+        ];
+        $output = ModelFixture::collections([
+            'Odd' => ['x-php-all-of' => 'merge', 'allOf' => [...$members, ['type' => 'object', 'properties' => ['ids' => ['type' => 'array', 'items' => ['type' => 'integer'], 'x-php-collection' => 'App\Bag']]]]],
+            'Base' => ['x-php-all-of' => 'merge', 'allOf' => $members],
+            'Kid' => ['allOf' => [['$ref' => '#/components/schemas/Base'], ['type' => 'object', 'properties' => ['ids' => ['type' => 'array', 'items' => ['type' => 'integer'], 'x-php-collection' => 'App\Bag']]]]],
+        ], null);
+
+        $error = static fn (string $class): string => 'Property "ids" of App\Dto\\' . $class . ' stays an array by "x-php-collection: false" in one allOf member, but is App\Bag<int>|null in another.';
+        self::assertSame(
+            ['error ' . self::AT . 'Odd/allOf/2/properties/ids: ' . $error('Odd'), 'error ' . self::AT . 'Kid/allOf/1/properties/ids: ' . $error('Kid')],
+            ModelFixture::messages($output),
+        );
+    }
+
+    public function testADeclineIsReportedBesideAnotherName(): void
+    {
+        $output = ModelFixture::collections(['Odd' => ['x-php-all-of' => 'merge', 'allOf' => [
+            ['type' => 'object', 'properties' => ['ids' => ['type' => 'array', 'items' => ['type' => 'integer'], 'x-php-collection' => 'App\Bag']]],
+            ['type' => 'object', 'properties' => ['ids' => ['type' => 'array', 'items' => ['type' => 'integer'], 'x-php-collection' => false, 'x-php-name' => 'other']]],
+        ]]], null);
+
+        self::assertSame(
+            ['error ' . self::AT . 'Odd/allOf/1/properties/ids: Property "ids" of App\Dto\Odd has another PHP name or default here than in an earlier allOf member.'],
+            ModelFixture::messages($output),
+        );
+    }
+
+    public function testAnUntypedSchemaHearsAboutItsXPhpCollection(): void
+    {
+        $output = ModelFixture::collections(['Basket' => ['type' => 'object', 'properties' => ['any' => ['x-php-collection' => 'App\Bag']]]], null);
+
+        self::assertSame(
+            ['warning ' . self::AT . 'Basket/properties/any/x-php-collection: "x-php-collection" applies to a list only; this property stays as it is.'],
+            ModelFixture::messages($output),
+        );
+    }
+
+    public function testConstantItemsOfAnotherCaseAreAnotherItem(): void
+    {
+        $output = ModelFixture::collections(['Basket' => ['type' => 'object', 'properties' => [
+            'upper' => ['type' => 'array', 'items' => ['type' => 'array', 'items' => ['type' => 'string', 'const' => 'A']], 'x-php-collection' => 'App\Letters'],
+            'lower' => ['type' => 'array', 'items' => ['type' => 'array', 'items' => ['type' => 'string', 'const' => 'a']], 'x-php-collection' => 'App\Letters'],
+        ]]], new Collections(CollectionClass::fromPattern('App\{item}List')->withTypeArguments([])));
+
+        self::assertSame(
+            ['error ' . self::AT . "Basket/properties/lower: The collection class App\\Letters holds list<'a'> here, but list<'A'> at " . self::AT . 'Basket/properties/upper; set "x-php-collection" on one of them.'],
+            ModelFixture::messages($output),
+        );
+    }
+
     public function testAnExplicitClassIsNoMeetOfAnotherPattern(): void
     {
         $output = ModelFixture::collections([

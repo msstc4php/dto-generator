@@ -621,7 +621,8 @@ final class Hierarchy
                 $meet = $this->meet->of($inherited->type(), $property->type());
             }
 
-            if ($inherited instanceof PropertyModel && $meet instanceof TypeModel && $this->declines->conflict($inherited, $property, $meet)) {
+            $declined = is_string($byWireName) && ($this->declines->declinedBy(ClassName::fromFqcn($byWireName), $property->wireName()) || $this->declines->declinedBy($model->name(), $property->wireName()));
+            if ($meet instanceof TypeModel && $declined && CollectionDeclines::isCollection($meet)) {
                 $this->diagnostics->error(ClassBuilder::declined($property->wireName(), $model->name(), $meet), $property->source());
 
                 continue;

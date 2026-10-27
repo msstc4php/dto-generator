@@ -103,6 +103,7 @@ final class ClassBuilder
         $taken = [];
         $byWireName = [];
         $declined = [];
+        $reported = [];
         $sources = $composition->propertySources();
         ReadWriteMode::check($schema, $diagnostics);
         $view = $this->view instanceof PropertyView && $this->view->appliesTo($schema) ? $this->view : null;
@@ -133,13 +134,11 @@ final class ClassBuilder
             if ($earlier instanceof PropertyModel) {
                 // Every member of the allOf applies: the property has the type of the values both admit.
                 $meet = $this->types->meet()->of($earlier->type(), $property->type());
-                if ($meet instanceof TypeModel && $this->declines->conflict($earlier, $property, $meet)) {
-                    // Once: a member after the declining one conflicts again with what the class keeps.
-                    if (!in_array($wireName, $declined, true)) {
-                        $declined[] = $wireName;
-                        $diagnostics->error(self::declined($wireName, $name, $meet), $propertySchema->location());
-                    }
-                } elseif (!$meet instanceof TypeModel) {
+                // A member that narrows the declining list keeps the decline, though not its location.
+                if ($this->declines->declines($property)) {
+                    $declined[] = $wireName;
+                }
+                if (!$meet instanceof TypeModel) {
                     $diagnostics->error(
                         sprintf(
                             'Property "%s" of %s is %s here, but %s in an earlier allOf member.',
@@ -155,6 +154,12 @@ final class ClassBuilder
                         sprintf('Property "%s" of %s has another PHP name or default here than in an earlier allOf member.', $wireName, $name->fqcn()),
                         $propertySchema->location(),
                     );
+                } elseif (in_array($wireName, $declined, true) && CollectionDeclines::isCollection($meet)) {
+                    // Once: a member after the declining one conflicts again with what the class keeps.
+                    if (!in_array($wireName, $reported, true)) {
+                        $reported[] = $wireName;
+                        $diagnostics->error(self::declined($wireName, $name, $meet), $propertySchema->location());
+                    }
                 } else {
                     $this->superseded->add($earlier->type());
                     $this->superseded->add($property->type());
@@ -180,8 +185,16 @@ final class ClassBuilder
             }
 
             $taken[$key] = $wireName;
+            if ($this->declines->declines($property)) {
+                $declined[] = $wireName;
+            }
+
             $byWireName[$wireName] = $property;
             $properties[] = $property;
+        }
+
+        foreach (array_unique($declined) as $wireName) {
+            $this->declines->addProperty($name, (string) $wireName);
         }
 
         $additional = $this->additionalProperties($schema, $view, isset($taken['additionalproperties']), $diagnostics);
@@ -332,7 +345,10 @@ final class ClassBuilder
             return null;
         }
 
-        $type = $this->collections->hold($schema, $this->types->map($schema, $diagnostics), $diagnostics);
+        $count = $diagnostics->count();
+        $type = $this->types->map($schema, $diagnostics);
+        $type = $this->collections->hold($schema, $type, $diagnostics, $diagnostics->count() > $count);
+
         $required = $required && !$type instanceof NullableType;
         $default = null;
         if (!$required) {
