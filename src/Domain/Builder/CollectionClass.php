@@ -8,7 +8,6 @@ use MSSTC4PHP\DtoGenerator\Domain\Exception\InvalidModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use MSSTC4PHP\DtoGenerator\Domain\Model\CollectionType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ListType;
-use MSSTC4PHP\DtoGenerator\Domain\Model\MixedType;
 
 /**
  * The class that holds a list instead of an array: a fixed class, or a pattern whose `{item}` becomes the short name
@@ -56,8 +55,7 @@ final class CollectionClass
      */
     public function withTypeArguments(?array $typeArguments): self
     {
-        // CollectionType knows which arguments a PHPDoc type may pass.
-        $checked = $typeArguments === null ? null : (new CollectionType(ClassName::fromFqcn('Item'), new ListType(new MixedType()), $typeArguments))->typeArguments();
+        $checked = $typeArguments === null ? null : CollectionType::checkedTypeArguments($typeArguments);
 
         return new self($this->pattern, $checked);
     }
@@ -103,6 +101,6 @@ final class CollectionClass
 
     public function wrap(ListType $list, string $item): CollectionType
     {
-        return new CollectionType($this->className($item), $list, $this->typeArguments());
+        return new CollectionType($this->className($item), $list, $this->typeArguments(), $this->pattern);
     }
 }

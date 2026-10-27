@@ -231,7 +231,7 @@ final class CollectionsBuildTest extends TestCase
             [
                 'warning ' . self::AT . 'Dog/allOf/1/properties/tags/items: Class App\\Dto\\DogTagsItem is already generated from ' . self::AT . 'Dog/allOf/0/properties/tags/items, so this one becomes App\\Dto\\DogTagsItem2; set "x-php-class-name" to name it, in the document or "classNames" of the source.',
                 'warning ' . self::AT . 'Kid/allOf/1/properties/codes: Property "codes" is declared again with a type PHP lets no subclass declare, so the members are merged instead of extending App\\Dto\\Base; "x-php-all-of: merge" says so, "extends" keeps the error.',
-                'error ' . self::AT . 'Odd/allOf/1/properties/ids: Property "ids" of App\Dto\Odd is list<string>|null here, but App\Collection\StringList<string>|null in an earlier allOf member.',
+                'error ' . self::AT . 'Odd/allOf/1/properties/ids: Property "ids" of App\Dto\Odd stays an array by "x-php-collection: false" in one allOf member, but is App\Collection\StringList<string>|null in another.',
             ],
             ModelFixture::messages($output),
         );
@@ -428,8 +428,10 @@ final class CollectionsBuildTest extends TestCase
             ['type' => 'object', 'properties' => ['ids' => ['type' => 'array', 'items' => ['type' => 'string']]]],
         ]]], $this->pattern());
 
-        $error = 'Property "ids" of App\Dto\Odd is App\Collection\StringList<string>|null here, but list<string>|null in an earlier allOf member.';
-        self::assertSame(['error ' . self::AT . 'Odd/allOf/1/properties/ids: ' . $error, 'error ' . self::AT . 'Odd/allOf/2/properties/ids: ' . $error], ModelFixture::messages($output));
+        self::assertSame(
+            ['error ' . self::AT . 'Odd/allOf/1/properties/ids: Property "ids" of App\Dto\Odd stays an array by "x-php-collection: false" in one allOf member, but is App\Collection\StringList<string>|null in another.'],
+            ModelFixture::messages($output),
+        );
     }
 
     public function testAnUntypedFirstMemberTakesTheCollectionOfALaterOne(): void
@@ -446,15 +448,115 @@ final class CollectionsBuildTest extends TestCase
         self::assertSame(['tags: App\Collection\TagList<App\Dto\Tag>|null'], ModelFixture::classes($output)['App\Dto\Basket']);
     }
 
-    public function testAMemberThatNarrowsTheItemsOfAFixedCollectionIsAnError(): void
+    public function testAMemberThatNarrowsTheItemsKeepsAGenericClassOnly(): void
     {
-        $output = ModelFixture::collections(['Odd' => ['allOf' => [
-            ['type' => 'object', 'properties' => ['ids' => ['type' => 'array', 'items' => ['type' => ['integer', 'string']], 'x-php-collection' => 'App\Bag']]],
-            ['type' => 'object', 'properties' => ['ids' => ['type' => 'array', 'items' => ['type' => 'integer']]]],
-        ]]], null);
+        $output = ModelFixture::collections([
+            'Generic' => ['x-php-all-of' => 'merge', 'allOf' => [
+                ['type' => 'object', 'properties' => ['ids' => ['type' => 'array', 'items' => ['type' => ['integer', 'string']], 'x-php-collection' => 'App\Bag']]],
+                ['type' => 'object', 'properties' => ['ids' => ['type' => 'array', 'items' => ['type' => 'integer'], 'x-php-collection' => false]]],
+            ]],
+            'Typed' => ['x-php-all-of' => 'merge', 'allOf' => [
+                ['type' => 'object', 'properties' => ['ids' => ['type' => 'array', 'items' => ['type' => ['integer', 'string']], 'x-php-collection' => 'App\Bag']]],
+                ['type' => 'object', 'properties' => ['ids' => ['type' => 'array', 'items' => ['type' => 'integer']]]],
+            ]],
+            'Bound' => ['x-php-all-of' => 'merge', 'allOf' => [
+                ['type' => 'object', 'properties' => ['ids' => ['type' => 'array', 'items' => ['type' => 'string'], 'x-php-collection' => 'App\{item}Set']]],
+                ['type' => 'object', 'properties' => ['ids' => ['type' => 'array', 'items' => ['type' => ['string', 'null']]]]],
+            ]],
+        ], null);
 
         self::assertSame(
-            ['error ' . self::AT . 'Odd/allOf/1/properties/ids: Property "ids" of App\Dto\Odd is list<int>|null here, but App\Bag<int|string>|null in an earlier allOf member.'],
+            ['error ' . self::AT . 'Generic/allOf/1/properties/ids: Property "ids" of App\Dto\Generic stays an array by "x-php-collection: false" in one allOf member, but is App\Bag<int>|null in another.'],
+            ModelFixture::messages($output),
+        );
+        self::assertSame(['ids: App\Bag<int>|null'], ModelFixture::classes($output)['App\Dto\Typed']);
+        self::assertSame(['ids: App\StringSet<string>|null'], ModelFixture::classes($output)['App\Dto\Bound']);
+    }
+
+    public function testAnExtendingMemberThatDeclinesTheParentsCollectionIsAnError(): void
+    {
+        $output = ModelFixture::collections([
+            'Tag' => self::TAG,
+            'Base' => ['type' => 'object', 'properties' => ['tags' => ['type' => 'array', 'items' => ['$ref' => '#/components/schemas/Tag']], 'note' => ['type' => 'string']]],
+            'Basket' => ['allOf' => [
+                ['$ref' => '#/components/schemas/Base'],
+                ['type' => 'object', 'properties' => [
+                    'tags' => ['type' => 'array', 'items' => ['$ref' => '#/components/schemas/Tag'], 'x-php-collection' => false],
+                    'note' => ['type' => 'integer'],
+                ]],
+            ]],
+        ], $this->pattern());
+
+        self::assertSame(
+            [
+                'error ' . self::AT . 'Basket/allOf/1/properties/tags: Property "tags" of App\Dto\Basket stays an array by "x-php-collection: false" in one allOf member, but is App\Collection\TagList<App\Dto\Tag>|null in another.',
+                'error ' . self::AT . 'Basket/allOf/1/properties/note: Property "note" of App\Dto\Basket is already declared by App\Dto\Base.',
+            ],
+            ModelFixture::messages($output),
+        );
+    }
+
+    public function testAnExplicitClassIsNoMeetOfAnotherPattern(): void
+    {
+        $output = ModelFixture::collections([
+            'Tag' => self::TAG,
+            'SpecialTag' => ['allOf' => [['$ref' => '#/components/schemas/Tag'], ['type' => 'object', 'properties' => ['level' => ['type' => 'integer']]]]],
+            'Basket' => ['x-php-all-of' => 'merge', 'allOf' => [
+                ['type' => 'object', 'properties' => ['tags' => ['type' => 'array', 'items' => ['$ref' => '#/components/schemas/Tag'], 'x-php-collection' => 'App\Tags\{item}Bag']]],
+                ['type' => 'object', 'properties' => ['tags' => ['type' => 'array', 'items' => ['$ref' => '#/components/schemas/SpecialTag']]]],
+            ]],
+            'Narrowed' => ['x-php-all-of' => 'merge', 'allOf' => [
+                ['type' => 'object', 'properties' => ['tags' => ['type' => 'array', 'items' => ['$ref' => '#/components/schemas/Tag']]]],
+                ['type' => 'object', 'properties' => ['tags' => ['type' => 'array', 'items' => ['$ref' => '#/components/schemas/SpecialTag']]]],
+            ]],
+        ], $this->pattern());
+
+        self::assertSame(
+            ['error ' . self::AT . 'Basket/allOf/1/properties/tags: Property "tags" of App\Dto\Basket is App\Collection\SpecialTagList<App\Dto\SpecialTag>|null here, but App\Tags\TagBag<App\Dto\Tag>|null in an earlier allOf member.'],
+            ModelFixture::messages($output),
+        );
+        self::assertSame(['tags: App\Collection\SpecialTagList<App\Dto\SpecialTag>|null'], ModelFixture::classes($output)['App\Dto\Narrowed']);
+    }
+
+    public function testBelowPhp81AnEnumSharesTheCollectionOfItsScalar(): void
+    {
+        $output = ModelFixture::collections([
+            'Colour' => ['type' => 'string', 'enum' => ['red']],
+            'Size' => ['type' => 'integer', 'enum' => [1, 2]],
+            'Basket' => ['type' => 'object', 'properties' => [
+                'labels' => ['type' => 'array', 'items' => ['type' => 'string']],
+                'colours' => ['type' => 'array', 'items' => ['$ref' => '#/components/schemas/Colour']],
+                'counts' => ['type' => 'array', 'items' => ['type' => 'integer']],
+                'sizes' => ['type' => 'array', 'items' => ['$ref' => '#/components/schemas/Size']],
+            ]],
+        ], $this->pattern(), null, '8.0');
+
+        self::assertSame([], ModelFixture::messages($output));
+        self::assertSame(
+            ['labels: App\Collection\StringList<string>|null', 'colours: App\Collection\StringList<App\Dto\Colour>|null', 'counts: App\Collection\IntegerList<int>|null', 'sizes: App\Collection\IntegerList<App\Dto\Size>|null'],
+            ModelFixture::classes($output)['App\Dto\Basket'],
+        );
+    }
+
+    public function testAClassNamedInAnotherCaseIsTheSameItem(): void
+    {
+        $output = ModelFixture::collections(['Basket' => ['type' => 'object', 'properties' => [
+            'prices' => ['type' => 'array', 'items' => ['type' => 'object', 'x-php-type' => 'Vendor\Money'], 'x-php-collection' => 'App\Prices'],
+            'costs' => ['type' => 'array', 'items' => ['type' => 'object', 'x-php-type' => 'vendor\money'], 'x-php-collection' => 'App\Prices'],
+        ]]], new Collections(CollectionClass::fromPattern('App\{item}List')->withTypeArguments([])));
+
+        self::assertSame([], ModelFixture::messages($output));
+    }
+
+    public function testAMixedTypeGetsNoSecondWarningFromXPhpCollection(): void
+    {
+        $output = ModelFixture::collections([
+            'Tags' => ['type' => 'array', 'items' => ['type' => 'string'], 'x-php-collection' => 'App\Bag'],
+            'Basket' => ['type' => 'object', 'properties' => ['tags' => ['allOf' => [['$ref' => '#/components/schemas/Tags'], ['type' => 'object']]]]],
+        ], null);
+
+        self::assertSame(
+            ['error ' . self::AT . 'Basket/properties/tags: An "allOf" member requires an object beside one that can be no object, so no value passes; drop one of them.'],
             ModelFixture::messages($output),
         );
     }

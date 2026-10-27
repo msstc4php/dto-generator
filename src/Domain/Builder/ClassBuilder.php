@@ -57,14 +57,18 @@ final class ClassBuilder
 
     private PropertyCollections $collections;
 
+    private CollectionDeclines $declines;
+
     /**
      * @param list<string> $aliases keys of attributeAliases, which properties may carry
      * @param PropertyView|null $view the view of a direction-dependent class; null keeps every property
      * @param Collections|null $collections `dto.collections`; null keeps lists as arrays unless x-php-collection asks
+     * @param CollectionDeclines|null $declines takes the lists that decline a collection, for Hierarchy to ask too
      */
-    public function __construct(NameResolver $names, TypeMapper $types, TargetProfile $target, array $aliases = [], ?PropertyView $view = null, ?Superseded $superseded = null, ?Collections $collections = null)
+    public function __construct(NameResolver $names, TypeMapper $types, TargetProfile $target, array $aliases = [], ?PropertyView $view = null, ?Superseded $superseded = null, ?Collections $collections = null, ?CollectionDeclines $declines = null)
     {
-        $this->collections = new PropertyCollections($types, $target, $collections);
+        $this->declines = $declines ?? new CollectionDeclines();
+        $this->collections = new PropertyCollections($types, $target, $collections, $this->declines);
         $this->superseded = $superseded ?? new Superseded();
         $this->names = $names;
         $this->types = $types;
@@ -98,7 +102,7 @@ final class ClassBuilder
         $properties = [];
         $taken = [];
         $byWireName = [];
-        $declinedBy = [];
+        $declined = [];
         $sources = $composition->propertySources();
         ReadWriteMode::check($schema, $diagnostics);
         $view = $this->view instanceof PropertyView && $this->view->appliesTo($schema) ? $this->view : null;
@@ -129,9 +133,13 @@ final class ClassBuilder
             if ($earlier instanceof PropertyModel) {
                 // Every member of the allOf applies: the property has the type of the values both admit.
                 $meet = $this->types->meet()->of($earlier->type(), $property->type());
-                // x-php-collection: false in one member is no constraint another member's collection meets.
-                $declinedBy[$wireName] = ($declinedBy[$wireName] ?? false) || $this->collections->declines($propertySchema);
-                if (!$meet instanceof TypeModel || ($declinedBy[$wireName] && PropertyCollections::isCollection($meet))) {
+                if ($meet instanceof TypeModel && $this->declines->conflict($earlier, $property, $meet)) {
+                    // Once: a member after the declining one conflicts again with what the class keeps.
+                    if (!in_array($wireName, $declined, true)) {
+                        $declined[] = $wireName;
+                        $diagnostics->error(self::declined($wireName, $name, $meet), $propertySchema->location());
+                    }
+                } elseif (!$meet instanceof TypeModel) {
                     $diagnostics->error(
                         sprintf(
                             'Property "%s" of %s is %s here, but %s in an earlier allOf member.',
@@ -172,10 +180,6 @@ final class ClassBuilder
             }
 
             $taken[$key] = $wireName;
-            if ($this->collections->declines($propertySchema)) {
-                $declinedBy[$wireName] = true;
-            }
-
             $byWireName[$wireName] = $property;
             $properties[] = $property;
         }
@@ -296,6 +300,15 @@ final class ClassBuilder
         }
 
         return $skipped;
+    }
+
+    /**
+     * The error of a property that one allOf member keeps an array by x-php-collection: false and another holds in a
+     * collection.
+     */
+    public static function declined(string $wireName, ClassName $class, TypeModel $collection): string
+    {
+        return sprintf('Property "%s" of %s stays an array by "x-php-collection: false" in one allOf member, but is %s in another.', $wireName, $class->fqcn(), $collection->describe());
     }
 
     /**

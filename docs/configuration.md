@@ -163,9 +163,10 @@ serializer (the Symfony bridge does it).
 - Only a property's own list becomes a collection: lists inside a union, a map or another list stay arrays, and so do
   `additionalProperties`. [`x-php-collection`](x-extensions.md#x-php-collection) picks another class for one list, or
   keeps it an array.
-- In an `allOf`, a member that only constrains the list (`minItems`, untyped items) keeps the other member's
-  collection; two members that choose different classes for the same items, or one with `x-php-collection: false`, are
-  an error.
+- In an `allOf`, merged or extended, a member that only constrains the list (`minItems`, untyped items) keeps the
+  other member's collection. A member that narrows the items keeps a class without `{item}` over the narrower items,
+  and a class of the same pattern follows the items (`AnimalList` → `DogList`); any other pair of classes, or a
+  member with `x-php-collection: false` beside a collection, is an error.
 - A collection object is no constant expression, so a `default` of the property gives `null`: `[]` silently, any
   other value with a warning.
 - `with*()` copies the reference to the collection object: an immutable DTO wants an immutable collection.

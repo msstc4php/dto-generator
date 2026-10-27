@@ -7,7 +7,6 @@ namespace MSSTC4PHP\DtoGenerator\Domain\Builder;
 use MSSTC4PHP\DtoGenerator\Domain\Diagnostic\Diagnostics;
 use MSSTC4PHP\DtoGenerator\Domain\Exception\InvalidModel;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassType;
-use MSSTC4PHP\DtoGenerator\Domain\Model\CollectionType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumBacking;
 use MSSTC4PHP\DtoGenerator\Domain\Model\EnumType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ListType;
@@ -16,6 +15,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Model\NullableType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ScalarType;
 use MSSTC4PHP\DtoGenerator\Domain\Model\TypeModel;
 use MSSTC4PHP\DtoGenerator\Domain\Schema\Schema;
+use MSSTC4PHP\DtoGenerator\Domain\Schema\SchemaLocation;
 use MSSTC4PHP\DtoGenerator\Domain\Target\Capability;
 use MSSTC4PHP\DtoGenerator\Domain\Target\TargetProfile;
 
@@ -31,30 +31,19 @@ final class PropertyCollections
 
     private ?Collections $collections;
 
-    public function __construct(TypeMapper $types, TargetProfile $target, ?Collections $collections)
+    private CollectionDeclines $declines;
+
+    public function __construct(TypeMapper $types, TargetProfile $target, ?Collections $collections, CollectionDeclines $declines)
     {
         $this->types = $types;
         $this->target = $target;
         $this->collections = $collections;
-    }
-
-    public static function isCollection(TypeModel $type): bool
-    {
-        return ($type instanceof NullableType ? $type->inner() : $type) instanceof CollectionType;
+        $this->declines = $declines;
     }
 
     /**
-     * Whether the schema keeps its list an array by `x-php-collection: false`.
-     */
-    public function declines(Schema $schema): bool
-    {
-        $carrier = $this->types->collectionCarrier($schema);
-
-        return $carrier instanceof Schema && $carrier->extensions()->get('x-php-collection') === false;
-    }
-
-    /**
-     * The type with its list held by a collection object, when one is asked for.
+     * The type with its list held by a collection object, when one is asked for. A list that declines one is recorded
+     * by the property's location.
      */
     public function hold(Schema $schema, TypeModel $type, Diagnostics $diagnostics): TypeModel
     {
@@ -62,17 +51,22 @@ final class PropertyCollections
         $list = $list instanceof ListType ? $list : null;
 
         $carrier = $this->types->collectionCarrier($schema);
+        $at = $carrier instanceof Schema ? $carrier->location()->child('x-php-collection') : null;
         $class = $this->collections instanceof Collections ? $this->collections->collectionClass() : null;
-        if ($carrier instanceof Schema) {
-            $at = $carrier->location()->child('x-php-collection');
+        if ($carrier instanceof Schema && $at instanceof SchemaLocation) {
             if (!$list instanceof ListType) {
-                $diagnostics->warning('"x-php-collection" applies to a list only; this property stays as it is.', $at);
+                // A type the mapper gave up on (mixed) is reported there.
+                if (!$type instanceof MixedType) {
+                    $diagnostics->warning('"x-php-collection" applies to a list only; this property stays as it is.', $at);
+                }
 
                 return $type;
             }
 
             $value = $carrier->extensions()->get('x-php-collection');
             if ($value === false) {
+                $this->declines->add($schema->location());
+
                 return $type;
             }
 
@@ -113,7 +107,7 @@ final class PropertyCollections
         try {
             $collection = $class->wrap($list, $item ?? '');
         } catch (InvalidModel $exception) {
-            $diagnostics->error($exception->getMessage(), $carrier instanceof Schema ? $carrier->location()->child('x-php-collection') : $schema->location());
+            $diagnostics->error($exception->getMessage(), $at ?? $schema->location());
 
             return $type;
         }

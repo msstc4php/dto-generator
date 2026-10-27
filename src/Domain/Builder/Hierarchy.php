@@ -39,6 +39,8 @@ final class Hierarchy
 
     private Merges $merges;
 
+    private CollectionDeclines $declines;
+
     /** @var array<string, string> the variants of the unions, by FQCN */
     private array $variants = [];
 
@@ -47,8 +49,9 @@ final class Hierarchy
     /**
      * @param list<ClassModel> $classes
      */
-    private function __construct(array $classes, Diagnostics $diagnostics, TypeMeet $meet, Superseded $superseded, Merges $merges)
+    private function __construct(array $classes, Diagnostics $diagnostics, TypeMeet $meet, Superseded $superseded, Merges $merges, CollectionDeclines $declines)
     {
+        $this->declines = $declines;
         $this->meet = $meet;
         $this->superseded = $superseded;
         $this->merges = $merges;
@@ -68,9 +71,9 @@ final class Hierarchy
      *
      * @return list<ClassModel> the classes in the given order
      */
-    public static function link(array $classes, array $unions, Diagnostics $diagnostics, TypeMeet $meet, Superseded $superseded, Merges $merges): array
+    public static function link(array $classes, array $unions, Diagnostics $diagnostics, TypeMeet $meet, Superseded $superseded, Merges $merges, ?CollectionDeclines $declines = null): array
     {
-        $hierarchy = new self($classes, $diagnostics, $meet, $superseded, $merges);
+        $hierarchy = new self($classes, $diagnostics, $meet, $superseded, $merges, $declines ?? new CollectionDeclines());
         foreach ($unions as $variants) {
             foreach ($variants->classes() as $variant) {
                 $hierarchy->variants[$variant->fqcn()] = $variant->fqcn();
@@ -616,6 +619,12 @@ final class Hierarchy
             $meet = null;
             if ($inherited instanceof PropertyModel && $this->declaresAlike($inherited, $property)) {
                 $meet = $this->meet->of($inherited->type(), $property->type());
+            }
+
+            if ($inherited instanceof PropertyModel && $meet instanceof TypeModel && $this->declines->conflict($inherited, $property, $meet)) {
+                $this->diagnostics->error(ClassBuilder::declined($property->wireName(), $model->name(), $meet), $property->source());
+
+                continue;
             }
 
             if ($inherited instanceof PropertyModel && $this->keepsTheParents($inherited, $property, $meet)) {

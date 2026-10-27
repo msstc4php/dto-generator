@@ -77,7 +77,7 @@ final class CollectionClashes
                 $holder = $holders[$key] ?? null;
                 if ($holder === null) {
                     $holders[$key] = [$item, $at];
-                } elseif ($holder[0] !== $item) {
+                } elseif (strtolower($holder[0]) !== strtolower($item)) {
                     $reported[] = $key;
                     $diagnostics->error(sprintf('The collection class %s holds %s here, but %s at %s; set "x-php-collection" on one of them.', $fqcn, $item, $holder[0], $holder[1]->toString()), $at);
                 }

@@ -9,6 +9,7 @@ use MSSTC4PHP\DtoGenerator\Domain\Builder\AllOfResolver;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\ClassBuilder;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\ClassLookup;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\CollectionClashes;
+use MSSTC4PHP\DtoGenerator\Domain\Builder\CollectionDeclines;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\Composition;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\Directions;
 use MSSTC4PHP\DtoGenerator\Domain\Builder\EnumBuilder;
@@ -210,6 +211,7 @@ final class Action
         $declarations = $registry->declarationsWithHierarchy($input->graph(), $parents);
         $types = new TypeMapper($input->graph(), $declarations, $input->target(), $input->formats(), $input->knownFormats());
         $superseded = new Superseded();
+        $declines = new CollectionDeclines();
         $builder = new ClassBuilder(
             $this->names,
             $types,
@@ -218,6 +220,7 @@ final class Action
             $registry->properties(),
             $superseded,
             $input->config()->dto()->collections(),
+            $declines,
         );
         $models = [];
         $children = [];
@@ -238,7 +241,7 @@ final class Action
         $unions = $this->unions($input, $registry, $children, $subclasses, $diagnostics);
         $built = [];
         $found = new Merges();
-        foreach (Hierarchy::link($models, $unions, $diagnostics, $types->meet(), $superseded, $found) as $index => $model) {
+        foreach (Hierarchy::link($models, $unions, $diagnostics, $types->meet(), $superseded, $found, $declines) as $index => $model) {
             $built[] = new BuiltClass($model, $registry->planned()[$index][2]);
         }
 

@@ -53,12 +53,12 @@ final class ModelFixture
      *
      * @param array<int|string, array<array-key, mixed>> $schemas components/schemas of the spec
      */
-    public static function collections(array $schemas, ?Collections $collections, ?ViewSuffixes $split = null): Output
+    public static function collections(array $schemas, ?Collections $collections, ?ViewSuffixes $split = null, string $php = '8.2'): Output
     {
         $source = ConfigMother::source(GraphFixture::SPEC);
         $config = ConfigMother::collections($source, $collections, $split);
 
-        return (new Action(new NameResolver()))(new Input($config, self::target(), GraphFixture::load($schemas, [], $source), []));
+        return (new Action(new NameResolver()))(new Input($config, self::target($php), GraphFixture::load($schemas, [], $source), []));
     }
 
     /**
@@ -89,10 +89,10 @@ final class ModelFixture
         return new Output($output->classes(), $diagnostics, $output->enums());
     }
 
-    private static function target(): TargetProfile
+    private static function target(string $php = '8.2'): TargetProfile
     {
         return new TargetProfile(
-            PhpVersion::fromString('8.2'),
+            PhpVersion::fromString($php),
             MetadataMode::from(MetadataMode::NONE),
             Mutability::from(Mutability::IMMUTABLE),
             AccessorStyle::from(AccessorStyle::AUTO),

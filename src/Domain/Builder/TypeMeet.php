@@ -64,13 +64,20 @@ final class TypeMeet
         }
 
         // A member that only constrains the list (`minItems`, or items it leaves untyped) keeps the collection; one that
-        // narrows the items would need the class of another item.
+        // narrows the items keeps a generic class only, as one made for an item type would need the other item's class.
         $collection = $a instanceof CollectionType ? $a : ($b instanceof CollectionType ? $b : null);
         $other = $collection === $a ? $b : $a;
         if ($collection instanceof CollectionType && $other instanceof ListType) {
             $list = $this->of($collection->list(), $other);
+            if (!$list instanceof ListType) {
+                return null;
+            }
 
-            return $list instanceof TypeModel && $list->describe() === $collection->list()->describe() ? $collection : null;
+            if ($list->describe() === $collection->list()->describe()) {
+                return $collection;
+            }
+
+            return $collection->isGeneric() ? $collection->withList($list) : null;
         }
 
         if ($a instanceof ListType && $b instanceof ListType) {
@@ -169,11 +176,11 @@ final class TypeMeet
             return $narrow instanceof ListType && $this->admits($wide->item(), $narrow->item());
         }
 
-        // The class of a collection follows from its items, so two collections compare as their lists do; two classes
-        // for the same items are a choice of the document no meet makes.
+        // Two collections compare as their lists do when the class follows from the items: it is the same, or the same
+        // pattern gives both. Two classes the document chose otherwise are no meet of anything.
         if ($wide instanceof CollectionType) {
             return $narrow instanceof CollectionType && $this->admits($wide->list(), $narrow->list())
-                && ($wide->className()->fqcn() === $narrow->className()->fqcn() || $wide->list()->describe() !== $narrow->list()->describe());
+                && ($wide->className()->fqcn() === $narrow->className()->fqcn() || ($wide->pattern() !== null && $wide->pattern() === $narrow->pattern() && !$wide->isGeneric()));
         }
 
         if ($wide instanceof MapType) {
