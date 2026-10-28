@@ -6,6 +6,8 @@ All notable changes to this package are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.18.0] - 2026-10-28
+
 ### Added
 
 - `dto.collections`: list properties typed as a collection class instead of `array` + `@var list<T>` — one class per
@@ -561,7 +563,8 @@ First release.
 - A manifest per output directory: stale classes are deleted, files without the `@generated` header are never
   overwritten.
 
-[Unreleased]: https://github.com/msstc4php/dto-generator/compare/v1.17.0...HEAD
+[Unreleased]: https://github.com/msstc4php/dto-generator/compare/v1.18.0...HEAD
+[1.18.0]: https://github.com/msstc4php/dto-generator/compare/v1.17.0...v1.18.0
 [1.17.0]: https://github.com/msstc4php/dto-generator/compare/v1.16.0...v1.17.0
 [1.16.0]: https://github.com/msstc4php/dto-generator/compare/v1.15.0...v1.16.0
 [1.15.0]: https://github.com/msstc4php/dto-generator/compare/v1.14.0...v1.15.0
