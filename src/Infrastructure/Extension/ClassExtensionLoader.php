@@ -9,6 +9,7 @@ use MSSTC4PHP\DtoGenerator\Application\Port\ExtensionLoader;
 use MSSTC4PHP\DtoGenerator\Contract\Extension;
 use MSSTC4PHP\DtoGenerator\Domain\Model\ClassName;
 use ReflectionClass;
+use ReflectionMethod;
 use Throwable;
 
 /**
@@ -43,7 +44,7 @@ final class ClassExtensionLoader implements ExtensionLoader
         }
 
         $constructor = $reflection->getConstructor();
-        if ($constructor !== null && $constructor->getNumberOfRequiredParameters() > 0) {
+        if ($constructor instanceof ReflectionMethod && $constructor->getNumberOfRequiredParameters() > 0) {
             throw new ExtensionFailed(sprintf('Class %s needs constructor arguments; an extension is created without any.', $fqcn));
         }
 
